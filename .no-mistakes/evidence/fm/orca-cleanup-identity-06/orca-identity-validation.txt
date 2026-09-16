@@ -1,0 +1,3 @@
+PASS 22ec401f-7dac-404b-b795-9594ac95aba0::/tmp/foo:bar
+PASS 22ec401f-7dac-404b-b795-9594ac95aba0::/tmp/foo::bar
+REFUSE bad::relative

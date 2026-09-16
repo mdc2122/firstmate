@@ -1,0 +1,3 @@
+COMMAND: FM_HOME=<isolated home> bash bin/fm-teardown.sh missing-separator
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+exit=3; metadata and sentinel unchanged=True
