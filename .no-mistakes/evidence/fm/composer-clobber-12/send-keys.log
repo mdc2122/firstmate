@@ -1,0 +1,31 @@
+
+===== MARKER A1-fmsend-restored-cleared-attempt1 =====
+03:16:48 | tmux send-keys -t fmlive:fm-museclear Escape
+03:16:49 | tmux send-keys -t fmlive:fm-museclear C-u
+
+===== MARKER A2-fmsend-fresh-preserved-attempt1 =====
+03:16:52 | tmux send-keys -t fmlive:fm-museclear Escape
+
+===== MARKER A3-fmsend-unprovable-skip-attempt1 =====
+03:16:55 | tmux send-keys -t fmlive:fm-museclear Escape
+
+===== MARKER B1-fmcontrol-fresh-preserved-attempt1 =====
+03:16:58 | tmux send-keys -t fmlive:fm-museclear Escape
+
+===== MARKER B2-fmcontrol-unprovable-refuses-attempt1 =====
+03:17:01 | tmux send-keys -t fmlive:fm-museclear Escape
+
+===== MARKER B3-fmcontrol-restored-cleared-attempt1 =====
+03:17:04 | tmux send-keys -t fmlive:fm-museclear Escape
+03:17:04 | tmux send-keys -t fmlive:fm-museclear C-u
+
+===== MARKER C1-whitespace-restored-cleared-attempt1 =====
+03:17:07 | tmux send-keys -t fmlive:fm-museclear Escape
+03:17:07 | tmux send-keys -t fmlive:fm-museclear C-u
+
+===== MARKER C2-wrapped-long-restored-cleared-attempt1 =====
+03:17:10 | tmux send-keys -t fmlive:fm-museclear Escape
+03:17:10 | tmux send-keys -t fmlive:fm-museclear C-u
+
+===== MARKER D1-never-stabilized-skip-attempt1 =====
+03:17:13 | tmux send-keys -t fmlive:fm-museclear Escape

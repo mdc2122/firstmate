@@ -1,0 +1,1 @@
+interrupt-delivered museclear harness=muse backend=tmux verified=agent-alive cancel=confirmed

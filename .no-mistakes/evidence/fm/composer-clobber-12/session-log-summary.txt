@@ -1,0 +1,20 @@
+started  prompt="live proof alpha: describe this repository in one line"
+terminal completed (duration 8287ms)
+started  prompt="live proof alpha again: describe this repository in one line"
+terminal cancelled (duration 1106ms)
+started  prompt="live proof bravo: summarize the changes"
+terminal cancelled (duration 902ms)
+started  prompt="live proof charlie: list open questions"
+terminal cancelled (duration 848ms)
+started  prompt="live proof delta: review the failing tests"
+terminal cancelled (duration 840ms)
+started  prompt="live proof echo: draft a migration note"
+terminal cancelled (duration 817ms)
+started  prompt="live proof foxtrot: check the build status"
+terminal cancelled (duration 841ms)
+started  prompt="fix  the  flaky  login  flow  before  the  release"
+terminal cancelled (duration 874ms)
+started  prompt="live proof golf: the quick brown fox jumps over the lazy dog while the calm river flows past the quiet village and the patient owl watches the slow moon rise over the sleeping hills again and again until morning comes"
+terminal cancelled (duration 862ms)
+started  prompt="live proof hotel: inspect the release notes"
+terminal cancelled (duration 1371ms)

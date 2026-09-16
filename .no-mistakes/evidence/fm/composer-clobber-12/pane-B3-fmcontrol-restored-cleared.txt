@@ -1,0 +1,50 @@
+
+  Muse Code 1.3.0
+
+  Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.
+
+❯ live proof alpha: describe this repository in one line
+
+◆ echo: live proof alpha: describe this repository in one line
+
+◆ Interrupted · Report issues with /feedback
+
+❯ live proof bravo: summarize the changes
+
+◆ Interrupted · Report issues with /feedback
+
+◆ Interrupted · Report issues with /feedback
+
+❯ live proof delta: review the failing tests
+
+◆ Interrupted · Report issues with /feedback
+
+◆ Interrupted · Report issues with /feedback
+
+◆ Interrupted · Report issues with /feedback
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-clear-live.Fuz91V/ws · YOLO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

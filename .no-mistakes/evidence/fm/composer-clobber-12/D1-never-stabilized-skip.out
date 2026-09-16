@@ -1,0 +1,2 @@
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: the composer for fmlive:fm-museclear never stabilized, so the restored prompt cannot be proven; the muse composer was left untouched
