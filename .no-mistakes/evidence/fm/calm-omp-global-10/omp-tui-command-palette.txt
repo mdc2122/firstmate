@@ -1,0 +1,14 @@
+Live omp 18.2.0 TUI (tmux 120x34), cwd=/tmp/omp-calm-sandbox/neutral (outside any
+firstmate checkout), HOME=/tmp/omp-calm-sandbox/home (user-scope plugin linked by
+bin/fm-omp-calm-install.sh). Typing "/" in the composer opens the command palette;
+fm-calm-omp's registered command is present:
+
+  π > ◒ DeepSeek V4 Pro > 🗑 omp-calm-sandbox/neutral > $0.00 ↑ ▶─1%─────────────────────────────────────────╎─┃───────1M─
+  ╰─ /calm-omp
+  ❯ 🧩 calm-omp    Toggle OMP's native tool activity visibility
+    ↻  loop        Loop: off
+
+Pressing Enter executed it; omp's native status feedback appeared
+("Tool activity: hidden") and `HOME=<sandbox> omp config get
+display.hideToolActivity` flipped false -> true. Running it again printed
+"Tool activity: visible" and flipped the setting back to false.

@@ -1,0 +1,6 @@
+✔ Linked fm-calm-omp from /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2M1FGA53J540QTMHAKPGXG3/extensions/fm-calm-omp
+installed: fm-calm-omp loads in every omp session (linked to /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2M1FGA53J540QTMHAKPGXG3/extensions/fm-calm-omp)
+warning: linked to a git worktree; re-run from the primary checkout after it lands
+npm Plugins:
+
+● fm-calm-omp@0.1.0

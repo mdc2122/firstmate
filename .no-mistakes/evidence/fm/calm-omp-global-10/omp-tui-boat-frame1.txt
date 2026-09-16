@@ -1,0 +1,34 @@
+│                          │ • /calm-omp (just now)                                                │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: Find out which model you emotionally abuse the most with `omp stats`
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.2.1 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Tool activity: hidden
+
+
+ Reply with exactly: ok
+
+
+ ok
+
+
+ Please run this exact bash command: echo boat-evidence
+
+
+ The user wants me
+
+  ⎋ Working…                                                                                       Reply With Exactly Ok
+
+     ◿│◣
+▁▁▁▁╲▁▁▁╱▁▁▁▁▁▂▂▂▃▃▄▄▄▄▄▃▃▃▂▂▁▁▁▁▁▁▂▂▂▃▃▃▄▄▄▄▄▄▄▃▃▃▂▂▂▁▁▁▁▁▁▂▂▃▃▃▄▄▄▄▄▄▃▃▂▂▂▁▁▁▁▁▁▂▂▂▃▃▃▄▄▄▄▄▃▃▂▂▁▁▁▁▁▁▂▂▂▃▃▃▄▄▄▄▄▄▃▃▃▂▂
+ ⠋ 1s > ◒ DeepSeek V4 Pro > 🗑 omp-calm-sandbox/neutral > $0.01 ↑ ▶─2%───────────────────────────────────────╎┃───────1M─
+╰─

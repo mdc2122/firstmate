@@ -1,0 +1,47 @@
+Live verification of fm/calm-omp-global-10 (target ed5310d) on omp 18.2.0, driven 2026-09-15.
+All runs used a sandboxed HOME under /tmp (no user-level omp state touched); omp sessions
+started in /tmp/omp-calm-test/neutral, a plain directory outside any firstmate checkout.
+
+1) Install into user plugin scope (fresh sandbox HOME):
+   $ HOME=$SANDBOX FM_HOME=$SANDBOX bin/fm-omp-calm-install.sh
+   ✔ Linked fm-calm-omp from <worktree>/extensions/fm-calm-omp
+   installed: fm-calm-omp loads in every omp session
+   warning: linked to a git worktree; re-run from the primary checkout after it lands
+   $ HOME=$SANDBOX omp plugin list      -> "● fm-calm-omp@0.1.0"
+   $ HOME=$SANDBOX omp plugin doctor    -> plugin:fm-calm-omp: v0.1.0 ... 3 ok, 0 errors
+
+2) Headless dispatch from a non-firstmate cwd proves global load (no model auth needed):
+   $ time omp -p "/calm-omp" --no-session   -> 0.51s, exits clean (command handled locally)
+   $ time omp -p "/nosuchcmd-xyz" --no-session -> model turn (multi-second, model answers
+     "`/nosuchcmd-xyz` isn't a recognized command") => /calm-omp is registered by the linked
+     plugin; an unregistered command falls through to the model.
+
+3) Interactive TUI session (tmux pty 120x40, sandbox HOME, non-firstmate cwd):
+   - First /calm-omp  -> notify "Tool activity: hidden";  ~/.omp/agent/config.yml gains
+     "display: hideToolActivity: true"   [omp-calm-tui-toggle-hidden.png]
+   - Second /calm-omp -> notify "Tool activity: visible"; setting flips to false (round-trip)
+   - Agent turn while hidden -> animated working boat (sail ◿│◣, hull ╲▁▁▁╱ over wave row)
+     renders under the composer while "Working…", and is cleared when the turn ends
+     (0 boat glyphs after agent_end).  [omp-calm-tui-boat.png / omp-calm-tui-boat.txt]
+
+4) Unload paths, each verified by fresh-session headless dispatch (0.5s local = loaded;
+   >10s model fall-through = not loaded):
+   - omp plugin disable fm-calm-omp -> "✔ Disabled"; list shows "⦸"; /calm-omp no longer
+     dispatched locally. omp plugin enable restores local dispatch (0.51s).  [doc claim TRUE]
+   - delete ~/.omp/plugins/node_modules/fm-calm-omp symlink -> no local dispatch. [doc claim TRUE]
+   - omp plugin uninstall fm-calm-omp -> "✔ Uninstalled", lockfile {"plugins":{}}, symlink
+     LEFT IN PLACE, yet /calm-omp is NOT dispatched locally any more: the model receives the
+     literal text and answers "isn't a recognized command" after checking the empty plugin
+     registry. Reproduced twice, including a virgin sandbox (link -> uninstall -> fresh omp).
+     [doc claim "leaves the symlink, so the extension still loads" is FALSE on omp 18.2.0]
+
+5) Installer regression suite (real omp, sandboxed homes):
+   $ bin/fm-test-run.sh tests/fm-omp-calm-install.test.sh
+   ok - install links package into user plugin scope
+   ok - reinstall is idempotent
+   ok - identical legacy copy removed
+   ok - divergent legacy copy preserved as .bak
+   ok - failed legacy retirement aborts before linking
+   ok - failed legacy removal aborts before linking
+   ok - manifest entry resolves through link
+   FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0
