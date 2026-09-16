@@ -1,0 +1,44 @@
+[
+  {
+    "scenario": "restored",
+    "exit": 0,
+    "stdout": "",
+    "stderr": "\u25cf\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\u25cf  WATCHER DOWN - SUPERVISION IS OFF\n\u25cf  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).\n\u25cf  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.\n\u25cf  This is a supervision warning only; the requested message WILL still be sent.\n\u25cf  repair missing watcher supervision with a foreground checkpoint: bin/fm-watch-checkpoint.sh --seconds 180.\n\u25cf\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n",
+    "last_event": {
+      "kind": "terminal",
+      "terminal": "cancelled",
+      "reason": "cancelled during model step",
+      "turn_duration_ms": 723,
+      "time_to_first_token_ms": 185
+    },
+    "pending_preserved": false
+  },
+  {
+    "scenario": "fresh",
+    "exit": 0,
+    "stdout": "",
+    "stderr": "WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.\nfm-send: the muse composer holds text other than the restored prompt (fresh input survives an interrupt); left untouched - clear or submit it before the next steer\n",
+    "last_event": {
+      "kind": "terminal",
+      "terminal": "cancelled",
+      "reason": "cancelled during model step",
+      "turn_duration_ms": 450,
+      "time_to_first_token_ms": 196
+    },
+    "pending_preserved": true
+  },
+  {
+    "scenario": "unprovable",
+    "exit": 0,
+    "stdout": "",
+    "stderr": "WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.\nfm-send: no muse session log resolves for live, so the restored prompt cannot be proven; the muse composer was left untouched\n",
+    "last_event": {
+      "kind": "terminal",
+      "terminal": "cancelled",
+      "reason": "cancelled during model step",
+      "turn_duration_ms": 435,
+      "time_to_first_token_ms": 188
+    },
+    "pending_preserved": true
+  }
+]

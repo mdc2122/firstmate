@@ -1,0 +1,40 @@
+
+  Muse Code 1.3.0
+
+◆ Interrupted · Report issues with /feedback
+
+❯ validate composer fresh
+
+◆ Interrupted · Report issues with /feedback
+
+❯ validate composer unprovable
+
+◆ Interrupted · Report issues with /feedback
+
+❯ validate composer control-restored
+
+◆ echo: validate composer control-restored
+
+❯ validate composer control-fresh
+
+◆ echo: validate composer control-fresh
+
+❯ validate composer control-unprovable
+
+◇ Working (0s · esc to interrupt)
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────
+❯ Captain pending text KEEP  exact
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/live2/workspace · YOLO
+
+
+
+
+
+
+
+
+
+
+

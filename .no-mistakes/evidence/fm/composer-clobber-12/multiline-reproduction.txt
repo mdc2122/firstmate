@@ -1,0 +1,7 @@
+Muse Code 1.3.0, echo provider with --echo-delay-ms 10000; isolated tmux 120x40.
+Submitted prompt, verified in actual runtime run.started record: "first  line\nsecond line".
+Ran fm-send.sh live --key Escape while run was active.
+Exit status: 0. Runtime terminal: cancelled during model step.
+Actual composer after command and subsequent independent capture: first  line followed by an empty second row.
+Single-line prompts with repeated spaces cleared successfully in the same environment.
+See multiline-after.html and control-results.json for the terminal capture and command results.

@@ -1,0 +1,86 @@
+BEFORE (history-recalled recorded prompt)
+
+  Muse Code 1.3.0
+
+❯ first line composer validation
+
+◆ echo: first line composer validation
+
+❯ first line
+  validate composer restored
+
+◆ echo: first line
+  validate composer restored
+
+❯ validate composer fresh
+
+◆ echo: validate composer fresh
+
+❯ validate composer unprovable
+
+◆ echo: validate composer unprovable
+
+── History 4/4 · Voice input (⌥ + v to start) ──────────────────────────────────────────────────────────────────────────
+❯ validate  composer unprovable
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/live/workspace · YOLO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+COMMAND: fm-send.sh live --key Escape
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+
+AFTER
+
+  Muse Code 1.3.0
+
+❯ first line composer validation
+
+◆ echo: first line composer validation
+
+❯ first line
+  validate composer restored
+
+◆ echo: first line
+  validate composer restored
+
+❯ validate composer fresh
+
+◆ echo: validate composer fresh
+
+❯ validate composer unprovable
+
+◆ echo: validate composer unprovable
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/live/workspace · YOLO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

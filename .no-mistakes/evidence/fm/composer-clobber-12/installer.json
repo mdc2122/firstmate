@@ -1,0 +1,18 @@
+[
+  {
+    "action": "install",
+    "stdout": "\u2714 Linked fm-calm-omp from /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp\ninstalled: fm-calm-omp loads in every omp session (standalone copy at /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp)\n",
+    "stderr": "",
+    "link": "/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp"
+  },
+  {
+    "action": "reinstall",
+    "stdout": "\u2714 Linked fm-calm-omp from /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp\ninstalled: fm-calm-omp loads in every omp session (standalone copy at /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp)\n",
+    "stderr": "",
+    "link": "/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2NHCDJDC0NK3N7EF526H11P/.test-lab/install-live/home/.local/share/fm-calm-omp"
+  },
+  {
+    "unrelated_data": "preserve me",
+    "plugin_refreshed": true
+  }
+]

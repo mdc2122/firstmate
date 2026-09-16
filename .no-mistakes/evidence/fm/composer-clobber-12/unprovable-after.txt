@@ -1,0 +1,40 @@
+
+  Muse Code 1.3.0
+
+◆ Interrupted · Report issues with /feedback
+
+❯ validate composer fresh
+
+◆ Interrupted · Report issues with /feedback
+
+❯ validate composer unprovable
+
+◆ Interrupted · Report issues with /feedback
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────
+❯ Captain pending text KEEP  exact
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /U/M/.n/w/6/0/.t/live2/workspace · YOLO                                                        interrupting run
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
