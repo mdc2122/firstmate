@@ -1,0 +1,59 @@
+[22:31:22] rig: LAB=/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-muse-live.3gdbzy socket=fm-muse-live-54074 muse=Muse Code 1.3.0 (1.3.0-R3057.1) tmux=tmux 3.6b
+[22:31:23] window grid: 140x40, pane: 140x40
+[22:31:23] muse session log: /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/data/muse/sessions/2026/09/15/01a0a844-e484-7e23-887a-0dab821a0721/session.jsonl
+[22:31:23] ==============================================================
+[22:31:23] S1: empty composer at cancel time -> restored prompt IS cleared
+[22:31:23] ==============================================================
+[22:31:24] run in flight; composer state while busy: empty; content: []
+[22:31:25] fm-send muselive --key Escape -> exit 0
+    | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    | ●  WATCHER DOWN - SUPERVISION IS OFF
+    | ●  3 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+    | ●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+    | ●  This is a supervision warning only; the requested message WILL still be sent.
+    | ●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2M1FCQG24633RXEMPSY39H6/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2M1FCQG24633RXEMPSY39H6/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+    | ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[22:31:25] S1 send-keys sequence:
+    | send-keys -t fmsess:fm-muselive -l fleet drill one prove the restored clear
+    | send-keys -t fmsess:fm-muselive Enter
+    | send-keys -t fmsess:fm-muselive Escape
+    | send-keys -t fmsess:fm-muselive C-u
+[22:31:25] S1 result: exit=0 composer_after=[empty] content_after=[]
+[22:31:25] ===================================================================
+[22:31:25] S2: fresh captain input mid-run -> interrupt MUST NOT clobber it
+[22:31:25] ===================================================================
+[22:31:27] mid-run composer state: pending; content: [FRESH captain typing mid-run]
+[22:31:27] fm-send muselive --key Escape -> exit 0
+    | WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+    | fm-send: the muse composer holds text other than the restored prompt (fresh input survives an interrupt); left untouched - clear or submit it before the next steer
+[22:31:27] S2 send-keys sequence:
+    | send-keys -t fmsess:fm-muselive -l fleet drill two guard fresh input
+    | send-keys -t fmsess:fm-muselive Enter
+    | send-keys -t fmsess:fm-muselive -l FRESH captain typing mid-run
+    | send-keys -t fmsess:fm-muselive Escape
+[22:31:28] S2 result: exit=0 composer_after=[pending] content_after=[FRESH captain typing mid-run]
+[22:31:28] S2 PASS: fresh input still present verbatim after the interrupt
+[22:31:28] ====================================================================
+[22:31:28] S3: pane with no provable composer shape -> unreadable warning
+[22:31:28] ====================================================================
+[22:31:29] shellpane composer content read: [<content-read-failed>]
+[22:31:32] fm-send shellprobe --key Escape -> exit 0
+    | WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+    | fm-send: the composer for fmsess:fm-shellprobe is unreadable, so the restored prompt cannot be proven; the muse composer was left untouched
+[22:31:32] S3 result: exit=0
+[22:31:32] =========================================================
+[22:31:32] S4: no muse-session binding -> unprovable, clear skipped
+[22:31:32] =========================================================
+[22:31:32] fm-send museunprov --key Escape -> exit 0
+    | WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+    | fm-send: no muse session log resolves for museunprov, so the restored prompt cannot be proven; the composer was left untouched
+[22:31:32] S4 result: exit=0 composer=[empty]
+    cancelled runs in session log: 2
+[22:31:32] ===== session log tail =====
+    | {"schema_version":1,"id":"47ef4141-c39a-48cf-9b3c-39a19e9498f0","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":92,"recorded_at":1789529487472615,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"task","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","task_id":"01a0a844-f40c-7871-8b90-fbc81e3e7c53","event":{"kind":"cancelled","task_id":"01a0a844-f40c-7871-8b90-fbc81e3e7c53","reason":"model task cancelled"}}}
+    | {"schema_version":1,"id":"2aff952f-fc8f-4bf4-aad6-841881558228","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":93,"recorded_at":1789529487478827,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"reminder.cleanup_effect.started","payload_schema_version":1,"payload":{"kind":"reminder_cleanup","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","record":{"kind":"started","cleanup_effect_id":1,"parent_run_stream":{"kind":"run","id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d"},"mode":"main_run_cancelled","child_task":{"task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","task_stream":{"kind":"task","id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3"}}}}}
+    | {"schema_version":1,"id":"04b0e559-bde5-4c5a-a48b-4a5144e2c2ac","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":94,"recorded_at":1789529487482694,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"task","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","event":{"kind":"cancelled","task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","reason":"main run cancelled"}}}
+    | {"schema_version":1,"id":"3b159991-54dd-43c2-b0b7-38eb9b419804","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":95,"recorded_at":1789529487485785,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"reminder.cleanup_effect.terminal","payload_schema_version":1,"payload":{"kind":"reminder_cleanup","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","record":{"kind":"terminal","cleanup_effect_id":1,"outcome":{"kind":"applied","child_terminal":{"kind":"cancelled","reason":"main run cancelled"}}}}}
+    | {"schema_version":1,"id":"578d1b82-ced1-467c-b3ef-4bb2192bfa6a","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":96,"recorded_at":1789529487489963,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"run","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","event":{"kind":"resource_usage_sampled","usage":{"rss_self_bytes":130072576,"rss_tree_bytes":130072576,"cpu_self_ms":392,"cpu_children_ms":57,"fds_open":320,"procs_live":0,"unified_exec_live_sessions":0}},"source_run_record_id":"61d05e54-1980-48cd-a17b-f30f92ac0261","source_run_record_sequence":18}}
+    | {"schema_version":1,"id":"79e0cb76-412f-4ea3-acc8-2d68b3be863b","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":97,"recorded_at":1789529487498876,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"run","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","event":{"kind":"terminal","terminal":"cancelled","reason":"cancelled during model step","turn_duration_ms":1295,"time_to_first_token_ms":176},"source_run_record_id":"2ffcf5a3-052b-4f3c-a721-8803cf4ade39","source_run_record_sequence":19}}
+[22:31:32] done

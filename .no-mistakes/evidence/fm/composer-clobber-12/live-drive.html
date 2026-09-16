@@ -1,0 +1,362 @@
+<!doctype html><html><head><meta charset="utf-8"><title>fm-send proof-gated clear — live drive</title>
+<style>
+body{background:#0d0f14;color:#cdd3db;font-family:ui-monospace,Menlo,monospace;margin:24px;}
+h1{font-size:18px;color:#e8ebef;} h2{font-size:15px;color:#9fc1ff;border-bottom:1px solid #2a3242;padding-bottom:4px;margin-top:36px;}
+h3{font-size:13px;color:#e8ebef;margin:0 0 2px;} .sub{font-size:12px;color:#8a93a3;margin:0 0 8px;}
+.frame{display:inline-block;vertical-align:top;margin:8px 14px 8px 0;}
+pre{background:#10141b;border:1px solid #262e3d;border-radius:6px;padding:10px 12px;font-size:12.5px;line-height:1.35;white-space:pre;margin:0;}
+.log pre{color:#b9c2cf;max-width:720px;}
+.note{color:#8a93a3;font-size:12px;max-width:900px;}
+</style></head><body>
+<h1>fm-send proof-gated post-interrupt composer clear — live drive against real muse 1.3.0 (1.3.0-R3057.1) in real tmux 3.6b</h1>
+<p class="note">Real muse TUI (echo provider, 90s turns), real tmux server on a dedicated socket, isolated FM_HOME. Every pane below is a verbatim <code>tmux capture-pane</code> of the real muse composer; every key sequence below is the real <code>tmux send-keys</code> traffic fm-send produced (logged by a pass-through tmux wrapper, no stubbing).</p>
+
+<h2>0. What muse 1.3.0 itself does around an interrupt (context for the proof gate)</h2>
+<div class="frame"><h3>During run — composer EMPTY</h3><p class="sub">prompt was submitted; transcript above, empty composer below</p><pre>
+  Muse Code 1.3.0
+
+  warning: local session messaging unavailable: unsafe_registry_root: unsafe local Session registry root
+  /tmp/fmmuse.Reep/data/muse/runtime/muse: root component is unsafe or unreadable
+
+  Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.
+
+❯ show me the restored prompt text
+
+◇ Thinking (2s · esc to interrupt)
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /private/tmp/fmmuse.Reep/ws · YOLO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+<p class="note">During the run the composer is empty (left frame: run in flight, <code>❯</code> empty). Escape cancels; muse restores the cancelled run's prompt into the composer as real text (middle frame: <code>❯ show me the restored prompt text</code>, framed by muse 1.3.0's bottom rule). One C-u clears it (right frame). Screenshots in order: during-run, after-Escape, after-C-u.</p>
+<div class="frame"><h3>After Escape — RESTORED prompt</h3><p class="sub">composer now holds the cancelled run's started prompt verbatim</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(255,225,74)">  warning: local session messaging unavailable: unsafe_registry_root: unsafe local Session registry root</span>
+<span style="color:rgb(255,225,74)">  /tmp/fmmuse.Reep/data/muse/runtime/muse: root component is unsafe or unreadable</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/tmp/fmmuse.Reep/ws · </span><span style="color:rgb(243,139,168)">YOLO</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+<div class="frame"><h3>After C-u — cleared</h3><p class="sub">the manual C-u wipes the restored prompt</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(255,225,74)">  warning: local session messaging unavailable: unsafe_registry_root: unsafe local Session registry root</span>
+<span style="color:rgb(255,225,74)">  /tmp/fmmuse.Reep/data/muse/runtime/muse: root component is unsafe or unreadable</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/tmp/fmmuse.Reep/ws · </span><span style="color:rgb(243,139,168)">YOLO</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+
+<h2>S1 (pass): empty composer at cancel time → restored prompt IS cleared</h2>
+<div class="frame"><h3>Before: run in flight, composer empty</h3><p class="sub">fm-send muselive --key Escape is about to fire</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(90,160,255)"></span><span style="color:rgb(90,160,255)">❯ </span><span style="color:rgb(204,211,219)">fleet drill one prove the restored clear</span>
+
+<span style="color:rgb(154,160,168)"></span><span style="color:rgb(154,160,168)">◈</span><span style="color:rgb(189,196,204)"> </span><span style="color:rgb(204,211,219)">T</span><span style="color:rgb(189,196,204)">h</span><span style="color:rgb(154,160,168)">i</span><span style="color:rgb(118,123,131)">n</span><span style="color:rgb(103,108,116)">king (0s · esc to interrupt)</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/workspace · </span><span style="color:rgb(243,139,168)">YOLO</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+<div class="frame"><h3>After: interrupted, composer empty</h3><p class="sub">Escape landed, proof gate matched the restore, C-u cleared it</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/workspace · </span><span style="color:rgb(243,139,168)">YOLO</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+<div class="frame log"><h3>Real tmux call sequence (fm-send's own keys: Escape then C-u)</h3><pre>22:31:23 tmux capture-pane -p -t fmsess:fm-muselive
+22:31:23 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:23 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:23 tmux send-keys -t fmsess:fm-muselive -l fleet drill one prove the restored clear
+22:31:24 tmux send-keys -t fmsess:fm-muselive Enter
+22:31:24 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -p -t fmsess:fm-muselive -S -14 -E -
+22:31:24 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:24 tmux send-keys -t fmsess:fm-muselive Escape
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:25 tmux send-keys -t fmsess:fm-muselive C-u
+</pre></div>
+
+<h2>S2 (pass): fresh captain input mid-run → interrupt does NOT clobber it</h2>
+<div class="frame"><h3>Before: run in flight + fresh typed input</h3><p class="sub">composer holds FRESH captain typing mid-run</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(90,160,255)"></span><span style="color:rgb(90,160,255)">❯ </span><span style="color:rgb(204,211,219)">fleet drill two guard fresh input</span>
+
+<span style="color:rgb(118,123,131)"></span><span style="color:rgb(118,123,131)">◈</span><span style="color:rgb(154,160,168)"> </span><span style="color:rgb(189,196,204)">T</span><span style="color:rgb(204,211,219)">h</span><span style="color:rgb(189,196,204)">i</span><span style="color:rgb(154,160,168)">n</span><span style="color:rgb(118,123,131)">k</span><span style="color:rgb(103,108,116)">ing (0s · esc to interrupt)</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span><span style="color:rgb(204,211,219)">FRESH captain typing mid-run</span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/workspace · </span><span style="color:rgb(243,139,168)">YOLO</span>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+<div class="frame"><h3>After: run interrupted, fresh input SURVIVES</h3><p class="sub">no C-u was sent; composer still holds the fresh text</p><pre><span style="color:rgb(103,108,116)">  </span>
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(103,108,116)"></span><span style="color:rgb(204,211,219)">Muse Code</span><span style="color:rgb(204,211,219)"> 1.3.0</span>
+
+<span style="color:rgb(103,108,116)">  </span><span style="color:rgb(138,144,152)">Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(90,160,255)"></span><span style="color:rgb(90,160,255)">❯ </span><span style="color:rgb(204,211,219)">fleet drill two guard fresh input</span>
+
+<span style="color:rgb(243,139,168)">◆ </span><span style="color:rgb(243,139,168)">Interrupted · Report issues with /feedback</span>
+
+<span style="color:rgb(103,108,116)">── </span><span style="color:rgb(138,144,152)">Voice input (⌥ + v to start)</span><span style="color:rgb(138,144,152)"></span><span style="color:rgb(103,108,116)"> ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(90,160,255)">❯ </span><span style="color:rgb(204,211,219)">FRESH captain typing mid-run</span>
+<span style="color:rgb(103,108,116)">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+</span><span style="color:rgb(103,108,116)">  </span><span style="color:rgb(90,160,255)">echo</span><span style="color:rgb(138,144,152)"> · /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/workspace · </span><span style="color:rgb(243,139,168)">YOLO</span><span style="color:rgb(103,108,116)">                      </span><span style="color:rgb(138,144,152)">interrupting run
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</span></pre></div>
+<div class="frame log"><h3>Real tmux call sequence (Escape only — no C-u)</h3><pre>22:31:25 tmux capture-pane -p -t fmsess:fm-muselive
+22:31:25 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:25 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux send-keys -t fmsess:fm-muselive -l fleet drill two guard fresh input
+22:31:26 tmux send-keys -t fmsess:fm-muselive Enter
+22:31:26 tmux send-keys -t fmsess:fm-muselive -l FRESH captain typing mid-run
+22:31:27 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -p -t fmsess:fm-muselive -S -14 -E -
+22:31:27 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:27 tmux send-keys -t fmsess:fm-muselive Escape
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+</pre></div>
+<div class="frame log"><h3>fm-send stderr: mismatch skip with warning</h3><pre>WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: the muse composer holds text other than the restored prompt (fresh input survives an interrupt); left untouched - clear or submit it before the next steer
+</pre></div>
+
+<h2>S3 (pass): unreadable composer → loud skip</h2>
+<div class="frame log"><h3>fm-send stderr on a pane with no provable composer shape (plain shell pane)</h3><pre>WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: the composer for fmsess:fm-shellprobe is unreadable, so the restored prompt cannot be proven; the muse composer was left untouched
+</pre></div>
+
+<h2>S4 (pass): no muse-session binding → unprovable, loud skip</h2>
+<div class="frame log"><h3>fm-send stderr with no sidecar binding</h3><pre>WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: no muse session log resolves for museunprov, so the restored prompt cannot be proven; the composer was left untouched
+</pre></div>
+
+<h2>Session log (real muse records)</h2>
+<div class="frame log"><h3>Tail of the real session.jsonl (terminal:cancelled run brackets)</h3><pre>{"schema_version":1,"id":"47ef4141-c39a-48cf-9b3c-39a19e9498f0","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":92,"recorded_at":1789529487472615,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"task","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","task_id":"01a0a844-f40c-7871-8b90-fbc81e3e7c53","event":{"kind":"cancelled","task_id":"01a0a844-f40c-7871-8b90-fbc81e3e7c53","reason":"model task cancelled"}}}
+{"schema_version":1,"id":"2aff952f-fc8f-4bf4-aad6-841881558228","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":93,"recorded_at":1789529487478827,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"reminder.cleanup_effect.started","payload_schema_version":1,"payload":{"kind":"reminder_cleanup","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","record":{"kind":"started","cleanup_effect_id":1,"parent_run_stream":{"kind":"run","id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d"},"mode":"main_run_cancelled","child_task":{"task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","task_stream":{"kind":"task","id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3"}}}}}
+{"schema_version":1,"id":"04b0e559-bde5-4c5a-a48b-4a5144e2c2ac","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":94,"recorded_at":1789529487482694,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"task","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","event":{"kind":"cancelled","task_id":"01a0a844-f3cf-78f2-852f-0c31772b5ee3","reason":"main run cancelled"}}}
+{"schema_version":1,"id":"3b159991-54dd-43c2-b0b7-38eb9b419804","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":95,"recorded_at":1789529487485785,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"reminder.cleanup_effect.terminal","payload_schema_version":1,"payload":{"kind":"reminder_cleanup","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","record":{"kind":"terminal","cleanup_effect_id":1,"outcome":{"kind":"applied","child_terminal":{"kind":"cancelled","reason":"main run cancelled"}}}}}
+{"schema_version":1,"id":"578d1b82-ced1-467c-b3ef-4bb2192bfa6a","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":96,"recorded_at":1789529487489963,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"run","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","event":{"kind":"resource_usage_sampled","usage":{"rss_self_bytes":130072576,"rss_tree_bytes":130072576,"cpu_self_ms":392,"cpu_children_ms":57,"fds_open":320,"procs_live":0,"unified_exec_live_sessions":0}},"source_run_record_id":"61d05e54-1980-48cd-a17b-f30f92ac0261","source_run_record_sequence":18}}
+{"schema_version":1,"id":"79e0cb76-412f-4ea3-acc8-2d68b3be863b","stream":{"kind":"session","id":"01a0a844-e484-7e23-887a-0dab821a0721"},"sequence":97,"recorded_at":1789529487498876,"record_type":"event","durability":"durable","causation_id":null,"payload_type":"runtime.session","payload_schema_version":1,"payload":{"kind":"run","run_id":"fdbaa84c-eb13-4261-905d-d16cd9e4513d","event":{"kind":"terminal","terminal":"cancelled","reason":"cancelled during model step","turn_duration_ms":1295,"time_to_first_token_ms":176},"source_run_record_id":"2ffcf5a3-052b-4f3c-a721-8803cf4ade39","source_run_record_sequence":19}}
+</pre></div>
+</body></html>

@@ -1,0 +1,43 @@
+22:31:25 tmux capture-pane -p -t fmsess:fm-muselive
+22:31:25 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:25 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux send-keys -t fmsess:fm-muselive -l fleet drill two guard fresh input
+22:31:26 tmux send-keys -t fmsess:fm-muselive Enter
+22:31:26 tmux send-keys -t fmsess:fm-muselive -l FRESH captain typing mid-run
+22:31:27 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -p -t fmsess:fm-muselive -S -14 -E -
+22:31:27 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:27 tmux send-keys -t fmsess:fm-muselive Escape
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:27 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:28 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:28 tmux capture-pane -p -t fmsess:fm-muselive -S -14 -E -
+22:31:28 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:28 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:28 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:28 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:28 tmux new-window -d -t fmsess: -n fm-shellprobe -c /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-muse-live.3gdbzy/workspace -- bash --noprofile --norc -i
+22:31:29 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:29 tmux display-message -p -t fmsess:fm-shellprobe #{pane_id}
+22:31:29 tmux send-keys -t fmsess:fm-shellprobe Escape
+22:31:29 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:29 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:30 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:30 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:30 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:31 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:31 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:31 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:32 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:32 tmux capture-pane -e -p -t fmsess:fm-shellprobe -S 0 -E -
+22:31:32 tmux send-keys -t fmsess:fm-muselive C-u
+22:31:32 tmux capture-pane -p -t fmsess:fm-muselive
+22:31:32 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:32 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:32 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:32 tmux send-keys -t fmsess:fm-muselive Escape
+22:31:32 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:32 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -

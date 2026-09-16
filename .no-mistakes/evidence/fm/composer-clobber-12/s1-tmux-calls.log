@@ -1,0 +1,16 @@
+22:31:23 tmux capture-pane -p -t fmsess:fm-muselive
+22:31:23 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:23 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:23 tmux send-keys -t fmsess:fm-muselive -l fleet drill one prove the restored clear
+22:31:24 tmux send-keys -t fmsess:fm-muselive Enter
+22:31:24 tmux display-message -p -t fmsess:fm-muselive #{cursor_y}
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:24 tmux capture-pane -p -t fmsess:fm-muselive -S -14 -E -
+22:31:24 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:24 tmux send-keys -t fmsess:fm-muselive Escape
+22:31:24 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux capture-pane -e -p -t fmsess:fm-muselive -S 0 -E -
+22:31:25 tmux display-message -p -t fmsess:fm-muselive #{pane_id}
+22:31:25 tmux send-keys -t fmsess:fm-muselive C-u

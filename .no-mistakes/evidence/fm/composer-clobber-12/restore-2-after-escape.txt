@@ -1,0 +1,40 @@
+
+  Muse Code 1.3.0
+
+  warning: local session messaging unavailable: unsafe_registry_root: unsafe local Session registry root
+  /tmp/fmmuse.Reep/data/muse/runtime/muse: root component is unsafe or unreadable
+
+  Found personal rules for Claude Code and Codex — import into Muse Code with /rules import.
+
+◆ Interrupted · Report issues with /feedback
+
+── Voice input (⌥ + v to start) ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ show me the restored prompt text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /private/tmp/fmmuse.Reep/ws · YOLO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
