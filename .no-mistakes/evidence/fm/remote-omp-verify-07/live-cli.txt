@@ -1,0 +1,42 @@
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh launch probe-mate notaharness - - herdr
+exit=1
+error: unverified remote secondmate harness: notaharness
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh launch probe-mate omp - bogus herdr
+exit=1
+error: invalid remote secondmate effort: bogus
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh relaunch probe-mate notaharness - -
+exit=1
+error: unverified remote secondmate harness: notaharness
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh relaunch probe-mate omp - bogus
+exit=1
+error: invalid remote secondmate effort: bogus
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh launch probe-mate omp - - tmux
+exit=1
+error: a remote secondmate runs only on the herdr backend, not 'tmux'
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-secondmate-control.sh relaunch probe-mate omp bad model -
+exit=1
+error: invalid remote secondmate model: bad model
+
+Readiness probe uses only real installed tools, exposed through isolated PATH symlinks; omp is the only harness.
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-doctor.sh --worker-tool-probe
+exit=0
+required git=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/git
+required jq=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/jq
+required herdr=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/herdr
+required tasks-axi=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/tasks-axi
+required treehouse=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/treehouse
+required harness=omp:/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/omp
+
+$ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/bin/fm-remote-doctor.sh --worker-tool-probe
+exit=1
+required git=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/git
+required jq=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/jq
+required herdr=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/herdr
+required tasks-axi=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/tasks-axi
+required treehouse=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M2RM0MXFKXFMMB2XP3Z4ZCMF/.test-phase-tmp/manual/tools/treehouse
+required harness=MISSING
