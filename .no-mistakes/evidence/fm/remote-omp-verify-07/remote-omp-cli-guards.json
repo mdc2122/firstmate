@@ -1,0 +1,44 @@
+[
+  {
+    "name": "host launch rejects unknown harness",
+    "command": "bin/fm-remote-secondmate-control.sh launch probe notaharness - - herdr",
+    "exit_code": 1,
+    "output": "error: unverified remote secondmate harness: notaharness\n",
+    "result": "pass"
+  },
+  {
+    "name": "host relaunch rejects unknown harness",
+    "command": "bin/fm-remote-secondmate-control.sh relaunch probe notaharness - -",
+    "exit_code": 1,
+    "output": "error: unverified remote secondmate harness: notaharness\n",
+    "result": "pass"
+  },
+  {
+    "name": "omp launch preserves Herdr-only guard",
+    "command": "bin/fm-remote-secondmate-control.sh launch probe omp - - tmux",
+    "exit_code": 1,
+    "output": "error: a remote secondmate runs only on the herdr backend, not 'tmux'\n",
+    "result": "pass"
+  },
+  {
+    "name": "omp relaunch preserves endpoint identity guard",
+    "command": "bin/fm-remote-secondmate-control.sh relaunch probe omp - -",
+    "exit_code": 1,
+    "output": "error: remote secondmate probe endpoint metadata is invalid; refusing access until it is explicitly migrated\n",
+    "result": "pass"
+  },
+  {
+    "name": "parent omp spawn preserves Herdr-only guard",
+    "command": "bin/fm-spawn.sh probe --secondmate --harness omp --backend tmux",
+    "exit_code": 1,
+    "output": "error: a remote secondmate runs only on the herdr backend, not 'tmux'\n",
+    "result": "pass"
+  },
+  {
+    "name": "parent spawn rejects unknown harness",
+    "command": "bin/fm-spawn.sh probe --secondmate --harness notaharness",
+    "exit_code": 1,
+    "output": "error: remote secondmate spawn requires a verified harness adapter, not a raw launch command: notaharness\n",
+    "result": "pass"
+  }
+]
