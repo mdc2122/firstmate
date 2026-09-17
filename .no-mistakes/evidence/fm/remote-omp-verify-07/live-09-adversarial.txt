@@ -1,0 +1,18 @@
+### adversarial: launch with unverified harness 'notaharness'
+error: unverified remote secondmate harness: notaharness
+rc=1
+### adversarial: relaunch with unverified harness 'notaharness'
+error: unverified remote secondmate harness: notaharness
+rc=1
+### adversarial: launch omp with invalid effort 'bogus'
+error: invalid remote secondmate effort: bogus
+rc=1
+### route intact after refusals
+schema=fm-remote-secondmate-control.v1
+backend=herdr
+target=fm-remote:w1:p2
+herdr_session=fm-remote
+harness=omp
+rc=0
+### state intact after refusals
+aliverc=0

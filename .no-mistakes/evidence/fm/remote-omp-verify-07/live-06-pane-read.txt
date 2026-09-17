@@ -1,0 +1,26 @@
+
+╭─── omp v18.2.0 ──────────────────────────────────────────────────────────────────────────╮
+│                          │ Tips                                                          │
+│      Welcome back!       │ # for prompt actions                                          │
+│                          │ / for commands                                                │
+│       ████████████       │ ! to run bash                                                 │
+│          ██  ██          │ $ to run python                                               │
+│          ██  ██          │ ───────────────────────────────────────────────────────────── │
+│          ▒▒  ██          │ LSP Servers                                                   │
+│              ██          │  vscode-html-language-server .html .htm                      │
+│                          │  vscode-css-language-server .css .scss .sass                 │
+│Fusion (Claude Fable 5.1 …│  vscode-json-language-server .json .jsonc                    │
+│          devin           │  basedpyright .py .pyi                                       │
+│                          │ ───────────────────────────────────────────────────────────── │
+│                          │ Recent sessions                                               │
+│                          │ No recent sessions                                            │
+│                          │                                                               │
+│                          │                                                               │
+│                          │                                                               │
+│                          │                                                               │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────╯
+ Tip: `/shake` rips heavy tool results out of context to reclaim tokens without a full
+      /compact — `/shake images` drops just images
+
+
+────────────────────────────────────────────────────────────────────────────────�

@@ -1,0 +1,15 @@
+window=remote:studio2live2
+harness=omp
+kind=secondmate
+model=devin/fusion-claude-fable-5-1-low-sidekick-swe-2-medium
+home=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/home-studio2live2
+remote_host=remote-mac
+remote_backend=herdr
+remote_herdr_session=fm-remote
+remote_target=fm-remote:w2:p2
+window=fm-remote:w2:p2
+harness=omp
+model=devin/fusion-claude-fable-5-1-low-sidekick-swe-2-medium
+backend=herdr
+herdr_session=fm-remote
+herdr_pane_id=w2:p2

@@ -1,0 +1,19 @@
+### BASE (fa93097) host-local launch with omp
+error: unverified remote secondmate harness: omp
+rc=1
+
+### BASE (fa93097) host-local relaunch with omp
+error: unverified remote secondmate harness: omp
+rc=1
+
+### BASE (fa93097) parent-side remote spawn with omp
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/root-base/.pi/extensions/fm-primary-turnend-guard.ts -e /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/root-base/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: remote secondmate spawn requires a verified harness adapter, not a raw launch command: omp
+rc=1
+ssh hops after base spawn attempt: 0

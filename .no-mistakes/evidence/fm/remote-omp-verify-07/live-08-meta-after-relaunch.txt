@@ -1,0 +1,8 @@
+window=fm-remote:w1:p2
+harness=omp
+model=default
+effort=default
+spawn_gen=s1789630435.20841.30251
+backend=herdr
+herdr_session=fm-remote
+herdr_pane_id=w1:p2

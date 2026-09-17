@@ -1,0 +1,27 @@
+### doctor --fix on a full fixture code root (omp is the ONLY harness tool on PATH)
+mode=fix
+path=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/home/.local/bin:/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin:/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/tools:/usr/bin:/bin:/usr/sbin:/sbin
+entrypoint=no
+note: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.
+platform=linux
+required git=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/tools/git
+required jq=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/tools/jq
+required herdr=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin/herdr
+required tasks-axi=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin/tasks-axi
+required treehouse=/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin/treehouse
+required harness=omp:/private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin/omp
+optional tmux=absent
+optional no-mistakes=absent
+optional gh=absent
+check herdr=ok: /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/bin/herdr
+check gui-session=skip: no Aqua login session applies on linux
+check remote-job-worker=ok: the Linux remote job worker is running
+check remote-job-worker-loaded=skip: Aqua launch agents do not apply on linux
+check remote-job-probe=ok: the remote job worker published a fresh heartbeat
+check launchagent=skip: launch agents apply only on darwin
+check launchagent-scope=skip: launch agents apply only on darwin
+check launchagent-loaded=skip: launch agents apply only on darwin
+check herdr-server=ok: session fm-remote is running
+check entrypoint-link=ok: /private/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T/fm-omp-live.vzFcj5/doctor-fixture/home/.local/bin/fm-remote-entrypoint.sh
+ok: remote second-mate readiness confirmed on this host
+rc=0

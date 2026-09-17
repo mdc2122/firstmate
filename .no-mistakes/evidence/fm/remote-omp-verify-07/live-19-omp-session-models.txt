@@ -1,0 +1,8 @@
+=== model recorded in the real omp session transcript (launch 1: explicit SWE-2 pin) ===
+   1 "model":"devin/fusion-claude-fable-5-1-low-sidekick-swe-2-medium"
+   1 "model":"fusion-claude-fable-5-1-low-sidekick-swe-2-medium"
+   1 "model":"muse-code/muse-spark-1.3"
+   2 "model":"muse-spark-1.3"
+=== launch 2 (relaunch, model default) transcript models ===
+   1 "model":"devin/swe-2"
+   1 "model":"swe-2"
