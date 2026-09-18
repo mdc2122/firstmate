@@ -1,0 +1,4 @@
+$ fm-contributions.sh poll (live GitHub, initial terminal observation)
+{"state":"merged","error":null,"checked_at":"2026-09-17T12:00:00Z"}
+$ fm-contributions.sh poll (later cycle; terminal record should be skipped)
+{"state":"merged","error":null,"checked_at":"2026-09-17T12:00:00Z"}
