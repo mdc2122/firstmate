@@ -1,0 +1,20 @@
+$ bin/fm-omp-calm-install.sh (isolated home)
+✔ Linked fm-calm-omp from /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M33KBZJSR61C628E82P5VVG5/.test-phase-tmp/calm-live/home/.local/share/fm-calm-omp
+installed: fm-calm-omp loads in every omp session (standalone copy at /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M33KBZJSR61C628E82P5VVG5/.test-phase-tmp/calm-live/home/.local/share/fm-calm-omp)
+
+$ omp plugin list
+npm Plugins:
+
+● fm-calm-omp@0.1.0
+
+Lockfile:
+{
+  "plugins": {
+    "fm-calm-omp": {
+      "version": "0.1.0",
+      "enabledFeatures": null,
+      "enabled": true
+    }
+  },
+  "settings": {}
+}

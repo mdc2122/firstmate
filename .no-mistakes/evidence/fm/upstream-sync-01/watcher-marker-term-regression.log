@@ -1,0 +1,1 @@
+ok - TERM during the startup marker wait runs cleanup and releases the watcher lock

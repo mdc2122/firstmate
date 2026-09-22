@@ -1,0 +1,3 @@
+ok - bounded acquire hands ownership to the waiting caller after contention
+ok - interrupted bounded handoff recovers a complete caller ownership record
+ok - stale recheck refuses ownership changed during identity inspection

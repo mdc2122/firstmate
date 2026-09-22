@@ -1,0 +1,23 @@
+[
+  {
+    "event": "watcher trap-ready while real marker lock contended",
+    "watcher_pid": 35585,
+    "watch_lock_pid": "35585",
+    "marker_lock_holder_pid": "35480",
+    "watcher_identity": "Mon Sep 21 22:53:48 2026     bash /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M33KBZJSR61C628E82P5VVG5/bin/fm-watch.sh"
+  },
+  {
+    "event": "second watcher refuses singleton",
+    "returncode": 0,
+    "stdout": "watcher: already running pid 35585\n",
+    "stderr": ""
+  },
+  {
+    "event": "terminate contended watcher",
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "",
+    "watch_lock_removed": true,
+    "marker_state": "pending:downtime:36572.1790049229.19qoGX\n"
+  }
+]

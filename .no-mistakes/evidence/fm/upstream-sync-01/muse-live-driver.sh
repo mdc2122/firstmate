@@ -8,12 +8,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MUSE_BIN=$(command -v muse 2>/dev/null || true)
 REAL_TMUX=$(command -v tmux 2>/dev/null || true)
 LAB=
-SOCKET="fm-muse-signals-$$"
+SOCKET="$ROOT/.ms$$"
 SESSION=muse-signals
-TARGET="$SESSION:fm-live"
+TARGET="$SESSION:muse"
 
 cleanup() {
-  [ -n "$REAL_TMUX" ] && "$REAL_TMUX" -L "$SOCKET" kill-server >/dev/null 2>&1 || true
+  [ -n "$REAL_TMUX" ] && "$REAL_TMUX" -S "$SOCKET" kill-server >/dev/null 2>&1 || true
+  rm -f -- "$SOCKET"
   [ -z "$LAB" ] || rm -rf -- "$LAB"
 }
 
@@ -124,13 +125,15 @@ fm_live_gate opt-in FM_MUSE_SIGNALS_LIVE muse tmux node
 
 LAB=$(mktemp -d "${TMPDIR:-/tmp}/fm-muse-signals.XXXXXX") || fail "could not create the isolated Muse lab"
 trap cleanup EXIT
+mkdir -p "$LAB/cache"
+export XDG_CACHE_HOME="$LAB/cache"
 mkdir -p "$LAB/bin" "$LAB/config" "$LAB/data" "$LAB/workspace"
 git -C "$LAB/workspace" init -q || fail "could not initialize the isolated Muse workspace"
 WORKSPACE=$(cd "$LAB/workspace" && pwd -P) || fail "could not resolve the isolated Muse workspace"
 
 cat > "$LAB/bin/tmux" <<SH
 #!/usr/bin/env bash
-exec "$REAL_TMUX" -L "$SOCKET" "\$@"
+exec "$REAL_TMUX" -S "$SOCKET" "\$@"
 SH
 chmod +x "$LAB/bin/tmux"
 PATH="$LAB/bin:$PATH"
@@ -141,7 +144,7 @@ export PATH
 # shellcheck source=bin/fm-tmux-lib.sh
 . "$ROOT/bin/fm-tmux-lib.sh"
 
-"$REAL_TMUX" -L "$SOCKET" new-session -d -x 110 -y 36 -s "$SESSION" -n control -c "$WORKSPACE" \
+"$REAL_TMUX" -S "$SOCKET" -f /dev/null new-session -d -x 80 -y 30 -s "$SESSION" -n control -c "$WORKSPACE" \
   || fail "could not start the isolated tmux server"
 # Pin the pane's terminal capabilities: the drift guard asserts Muse's real
 # truecolor prompt styling, and Muse downgrades or disables color when the
@@ -149,7 +152,7 @@ export PATH
 # the driving shell). The tmux server passes the ambient environment through
 # to panes, so a host running this guard from a colorless harness would fail
 # the glyph check for environmental rather than drift reasons.
-"$REAL_TMUX" -L "$SOCKET" new-window -d -t "$SESSION:" -n fm-live -c "$WORKSPACE" -- \
+"$REAL_TMUX" -S "$SOCKET" new-window -d -t "$SESSION:" -n muse -c "$WORKSPACE" -- \
   env -u NO_COLOR XDG_CONFIG_HOME="$LAB/config" XDG_DATA_HOME="$LAB/data" \
   TERM=xterm-256color COLORTERM=truecolor \
   MUSE_NO_AUTO_UPDATE=1 MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on \
@@ -208,10 +211,10 @@ pass "Muse's real bright prompt glyph classifies as an empty composer"
 # Exercise the real interrupt path: Ctrl-U only erased the final editable row
 # of a restored multiline prompt, despite a successful send and proof verdict.
 mkdir -p "$LAB/home/state"
-fm_write_meta "$LAB/home/state/live.meta" "window=$TARGET" "kind=ship" "harness=muse" "worktree=$WORKSPACE" "project=$WORKSPACE"
+fm_write_meta "$LAB/home/state/live.meta" "window=$TARGET" "kind=ship" "harness=muse"
 printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=live\n' \
   "$LAB/data/muse/sessions" "$WORKSPACE" > "$LAB/home/state/live.muse-session"
-printf 'first line\n\nsecond line' > "$LAB/prompt"
+printf 'first line\nsecond line' > "$LAB/prompt"
 tmux load-buffer "$LAB/prompt" || fail "could not load multiline prompt"
 tmux paste-buffer -p -t "$TARGET" || fail "could not paste multiline prompt"
 tmux send-keys -t "$TARGET" Enter || fail "could not submit multiline prompt"
@@ -220,7 +223,7 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 [ "$(fm_busy_muse_run_state "$SESSION_LOG")" = busy ] || fail "multiline echo turn never became busy"
-FM_HOME="$LAB/home" "$ROOT/bin/fm-control.sh" live interrupt \
+FM_HOME="$LAB/home" "$ROOT/bin/fm-send.sh" live --key Escape \
   > "$LAB/send.out" 2> "$LAB/send.err" || fail "multiline interrupt failed: $(cat "$LAB/send.err")"
 for _ in $(seq 1 50); do
   [ "$(fm_tmux_composer_state "$TARGET")" = empty ] && break
@@ -229,24 +232,35 @@ done
 [ "$(fm_tmux_composer_state "$TARGET")" = empty ] || fail "multiline restored composer was not completely cleared"
 [ "$(fm_busy_muse_run_state "$SESSION_LOG")" = settled ] || fail "multiline turn was not cancelled"
 tmux display-message -p -t "$TARGET" '#{pane_id}' >/dev/null || fail "composer clear exited Muse"
-pass "Muse blank-line multiline restored prompt clears completely through fm-control"
-EVIDENCE=/Users/Morley/.no-mistakes/evidence/01M33B4QRYNHNE1CQG8VDXWM3Z
-tmux capture-pane -e -p -t "$TARGET" -S 0 -E - > "$EVIDENCE/muse-cleared.ansi"
-cp "$LAB/send.out" "$EVIDENCE/muse-control-interrupt.txt"
-printf 'line' > "$LAB/fresh"
-tmux load-buffer "$LAB/fresh"
-tmux paste-buffer -p -t "$TARGET"
-sleep 0.3
-before=$(fm_tmux_composer_content "$TARGET")
-printf 'Before idle interrupt composer: <%s>\n' "$before"
-FM_HOME="$LAB/home" "$ROOT/bin/fm-control.sh" live interrupt > "$EVIDENCE/muse-fresh-control.txt" 2>&1
-control_status=$?
-after=$(fm_tmux_composer_content "$TARGET")
-printf 'Idle interrupt exit: %s; after composer: <%s>\n' "$control_status" "$after"
-[ "$before" = line ] && [ "$after" = line ] || fail "idle interrupt lost fresh suffix input"
-tmux capture-pane -e -p -t "$TARGET" -S 0 -E - > "$EVIDENCE/muse-fresh-preserved.ansi"
-cp "$SESSION_LOG" "$EVIDENCE/muse-session.jsonl"
-pass "Muse idle interrupt preserves freshly typed suffix of previous prompt"
+pass "Muse multiline restored prompt clears completely through fm-send"
 
+
+EVIDENCE=/Users/Morley/.no-mistakes/evidence/01M33KBZJSR61C628E82P5VVG5
+printf 'review https://example.invalid/' > "$LAB/prompt"
+printf '%0200d' 0 >> "$LAB/prompt"
+printf '\n\nfinal line' >> "$LAB/prompt"
+tmux load-buffer "$LAB/prompt" || fail "load soft-wrap prompt"
+tmux paste-buffer -p -t "$TARGET" || fail "paste soft-wrap prompt"
+sleep 0.5
+tmux capture-pane -p -t "$TARGET" > "$EVIDENCE/muse-wrapped-before.txt"
+tmux send-keys -t "$TARGET" Enter
+for _ in $(seq 1 100); do
+  [ "$(fm_busy_muse_run_state "$SESSION_LOG")" = busy ] && break
+  sleep 0.1
+done
+[ "$(fm_busy_muse_run_state "$SESSION_LOG")" = busy ] || fail "wrapped prompt never busy"
+FM_HOME="$LAB/home" "$ROOT/bin/fm-send.sh" live --key Escape > "$EVIDENCE/muse-wrapped-interrupt.txt" 2>&1 || fail "wrapped prompt interrupt failed"
+[ "$(fm_tmux_composer_state "$TARGET")" = empty ] || fail "wrapped prompt not cleared"
+[ "$(fm_busy_muse_run_state "$SESSION_LOG")" = settled ] || fail "wrapped prompt not cancelled"
+tmux capture-pane -p -t "$TARGET" > "$EVIDENCE/muse-wrapped-after.txt"
+pass "Live Muse long URL with internal blank line cancels and clears"
+tmux send-keys -l -t "$TARGET" 'line'
+sleep 0.5
+FM_HOME="$LAB/home" "$ROOT/bin/fm-send.sh" live --key Escape > "$EVIDENCE/muse-idle-suffix-interrupt.txt" 2>&1 || fail "idle suffix interrupt refused"
+[ "$(fm_tmux_composer_content "$TARGET")" = line ] || fail "idle suffix text lost"
+tmux capture-pane -p -t "$TARGET" > "$EVIDENCE/muse-idle-suffix-after.txt"
+pass "Live Muse idle fresh suffix survives Escape"
+cp "$SESSION_LOG" "$EVIDENCE/muse-live-session.jsonl"
+cp "$CAPTURE" "$EVIDENCE/muse-idle-pane.ansi"
 cleanup
 trap - EXIT

@@ -1,0 +1,16 @@
+ok - fm-send strict: exact task/lane ids resolve through home metadata
+ok - fm-send --key: exit status follows delivery, and an undelivered key never reports success
+ok - fm-send strict: unset FM_HOME fails before target resolution
+ok - fm-send strict: unresolvable selectors do not fall back to tmux
+ok - fm-send strict: prefixless herdr pane ids are rejected before tmux fallback
+ok - fm-send strict: unmatched single-colon explicit targets must verify live before sending
+ok - fm-send strict: fm-prefixed Herdr sessions remain explicit backend targets
+ok - fm-send strict: healthy fm-<id> sends record the steer and ring once
+ok - fm-send --key Escape: muse composer holding the restored prompt is cleared
+ok - fm-send --key Escape: cancellation is required before clearing
+ok - fm-send --key Escape: framed multiline restoration clears only complete matching content
+ok - fm-send --key Escape: muse composer holding fresh input survives the interrupt path
+ok - fm-send --key Escape: muse composer holding fresh input survives the interrupt path
+ok - fm-send --key Escape: muse composer is left untouched when the restored prompt cannot be proven
+ok - fm-send --key Escape: an empty muse composer is left alone
+ok - fm-send --key Escape: an unreadable muse composer skips the clear with a warning

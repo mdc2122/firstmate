@@ -1,0 +1,6 @@
+Product CLI: bin/fm-contributions.sh poll
+Isolation: FM_HOME=.test-contributions-live under gate worktree; no forge writes.
+First poll: real gh read https://github.com/mdc2122/firstmate/pull/9; exit 0; stdout empty.
+Persisted observation: state=merged; head=a8d532af485f9911499d9e15a6d4c7b99bacb835; error=null; checked_at=2026-09-22T03:52:37Z
+Second poll: added live-late-owner to isolated backlog for same URL; exit 0; stdout empty.
+Persisted new owner inherits identical terminal observation and checked_at.

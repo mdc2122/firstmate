@@ -1,0 +1,6 @@
+ok - Muse's real session protocol classifies busy in flight
+ok - Muse's real session protocol emits one matched run bracket
+ok - Muse's real bright prompt glyph classifies as an empty composer
+ok - Muse multiline restored prompt clears completely through fm-send
+ok - Live Muse long URL with internal blank line cancels and clears
+ok - Live Muse idle fresh suffix survives Escape

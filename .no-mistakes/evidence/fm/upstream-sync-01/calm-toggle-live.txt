@@ -1,0 +1,82 @@
+
+╭─── omp v18.2.0 ──────────────────────────────────────────────────────────────────────────────────╮
+│                          │ Tips                                                                  │
+│      Welcome back!       │ # for prompt actions                                                  │
+│                          │ / for commands                                                        │
+│       ████████████       │ ! to run bash                                                         │
+│          ██  ██          │ $ to run python                                                       │
+│          ██  ██          │ ───────────────────────────────────────────────────────────────────── │
+│          ▒▒  ██          │ LSP Servers                                                           │
+│              ██          │ No LSP servers                                                        │
+│                          │                                                                       │
+│     DeepSeek V4 Pro      │                                                                       │
+│         deepseek         │                                                                       │
+│                          │ ───────────────────────────────────────────────────────────────────── │
+│                          │ Recent sessions                                                       │
+│                          │ No recent sessions                                                    │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: No native tool_calling? Inference provider botches parsing them?
+      `PI_DIALECT=glm|kimi|anthropic…` rolls it locally for them!
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.2.8 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Tool activity: hidden
+
+ π > ◒ DeepSeek V4 Pro > 🌳 62b3bc0be3e5/01M33KBZJSR61C628E82P5VVG5 > ⑂ detached ?3 > $0.00 ↑ ▶─3%───────────────╎┃──1M─
+╰─
+
+
+
+
+
+
+
+
+SECOND INVOCATION
+
+╭─── omp v18.2.0 ──────────────────────────────────────────────────────────────────────────────────╮
+│                          │ Tips                                                                  │
+│      Welcome back!       │ # for prompt actions                                                  │
+│                          │ / for commands                                                        │
+│       ████████████       │ ! to run bash                                                         │
+│          ██  ██          │ $ to run python                                                       │
+│          ██  ██          │ ───────────────────────────────────────────────────────────────────── │
+│          ▒▒  ██          │ LSP Servers                                                           │
+│              ██          │ No LSP servers                                                        │
+│                          │                                                                       │
+│     DeepSeek V4 Pro      │                                                                       │
+│         deepseek         │                                                                       │
+│                          │ ───────────────────────────────────────────────────────────────────── │
+│                          │ Recent sessions                                                       │
+│                          │ No recent sessions                                                    │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: No native tool_calling? Inference provider botches parsing them?
+      `PI_DIALECT=glm|kimi|anthropic…` rolls it locally for them!
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.2.8 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Tool activity: visible
+
+ π > ◒ DeepSeek V4 Pro > 🌳 62b3bc0be3e5/01M33KBZJSR61C628E82P5VVG5 > ⑂ detached ?5 > $0.00 ↑ ▶─3%───────────────╎┃──1M─
+╰─
+
+
+
+
+
+
+

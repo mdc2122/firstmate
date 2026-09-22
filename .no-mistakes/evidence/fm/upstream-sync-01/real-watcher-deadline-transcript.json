@@ -1,0 +1,9 @@
+{
+  "event": "real watcher refuses blocked startup within bounded marker waits",
+  "elapsed_seconds": 3.066,
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "watcher: recovery state could not be reopened safely; retaining stale lock evidence\nwatcher: recovery state could not be persisted; retaining stale lock evidence\n",
+  "marker_lock_pid": "48895",
+  "live_holder_pid": 48895
+}
