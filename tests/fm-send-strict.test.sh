@@ -39,6 +39,12 @@ case "${1:-}" in
       && [ "${1:-}" = "$FM_FAKE_TMUX_SEND_KEY_FAIL" ]; then
       exit 1
     fi
+    if [ "${1:-}" = Escape ] && [ -f "${FM_FAKE_TMUX_CAPTURE:-}.restore" ]; then
+      cp "$FM_FAKE_TMUX_CAPTURE.restore" "$FM_FAKE_TMUX_CAPTURE"
+      if [ -f "$FM_FAKE_TMUX_CAPTURE.runlog" ]; then
+        printf '%s\n' '{"payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled"}}}' >> "$(cat "$FM_FAKE_TMUX_CAPTURE.runlog")"
+      fi
+    fi
     exit 0 ;;
   display-message)
     target=
@@ -240,12 +246,9 @@ test_key_send_exit_status_follows_delivery() {
 # muse restores the cancelled prompt into its composer after Escape, but only
 # when the composer was empty at cancel time: fresh typed input survives the
 # interrupt, so an unconditional C-c clobbers a message the captain was typing
-# when the interrupt landed. The clear is proof-gated on the composer's
-# extracted content being a suffix of the cancelled run's recorded started
-# prompt (bin/fm-busy-lib.sh); anything else skips the clear.
 
 # muse_clobber_fixture <dir> <home> <prompt>: a muse task on tmux whose bound
-# session log records one cancelled run carrying <prompt>. Echoes the composer
+# session log records one active run carrying <prompt>. Echoes the composer
 # screen file the stub capture-pane serves.
 muse_clobber_fixture() {
   local dir=$1 home=$2 prompt=$3 root log_dir log
@@ -256,7 +259,7 @@ muse_clobber_fixture() {
   printf '{"schema_version":1,"payload_type":"runtime.session.metadata","payload":{"kind":"metadata","record":{"workspace_root":"%s"}}}\n' "$dir/wt" > "$log"
   printf '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":%s}}}\n' \
     "$(printf '%s' "$prompt" | jq -Rsa .)" >> "$log"
-  printf '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled","reason":null}}}\n' >> "$log"
+  printf '%s\n' "$log" > "$dir/screen.runlog"
   printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=b1\n' "$root" "$dir/wt" \
     > "$home/state/muse-clobber.muse-session"
   fm_write_meta "$home/state/muse-clobber.meta" "window=sess:fm-muse-clobber" "kind=ship" "harness=muse"
@@ -268,7 +271,8 @@ test_muse_interrupt_clears_the_restored_prompt() {
   dir="$TMP_ROOT/muse-clear"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home museclear); log="$dir/tmux.log"; : > "$log"; err="$dir/send.err"
   screen=$(muse_clobber_fixture "$dir" "$home" 'launch brief')
-  printf 'transcript row\n\xe2\x9d\xaf launch brief\n' > "$screen"
+  printf 'transcript row\n\xe2\x9d\xaf launch brief\n' > "$screen.restore"
+  printf 'transcript row\n\xe2\x9d\xaf\n' > "$screen"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
     FM_SEND_SETTLE=0 FM_SEND_RESTORE_WAIT=1 FM_FAKE_TMUX_CAPTURE="$screen" \
@@ -278,36 +282,99 @@ test_muse_interrupt_clears_the_restored_prompt() {
   pass "fm-send --key Escape: muse composer holding the restored prompt is cleared"
 }
 
+test_muse_interrupt_requires_cancellation() {
+  local dir fb home log screen err rc
+  dir="$TMP_ROOT/muse-unconfirmed"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home museunconfirmed); log="$dir/tmux.log"; : > "$log"; err="$dir/send.err"
+  screen=$(muse_clobber_fixture "$dir" "$home" 'launch brief')
+  printf 'transcript row\n\xe2\x9d\xaf launch brief\n' > "$screen.restore"
+  printf 'transcript row\n\xe2\x9d\xaf\n' > "$screen"
+
+  rm "$screen.runlog"
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_SEND_RESTORE_WAIT=1 FM_FAKE_TMUX_CAPTURE="$screen" \
+    "$SEND" muse-clobber --key Escape >/dev/null 2>"$err"; rc=$?
+  expect_code 0 "$rc" "an unconfirmed cancellation should preserve the delivered interrupt status"
+  assert_not_contains "$(cat "$log")" "arg=C-c" "an unconfirmed cancellation must not clear input"
+  pass "fm-send --key Escape: cancellation is required before clearing"
+}
+
 test_muse_interrupt_normalizes_multiline_prompt() {
-  local dir fb home log screen err rc sample expected
+  local dir fb home log screen err rc sample expected content prompt
   dir="$TMP_ROOT/muse-multiline"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home musemultiline); log="$dir/tmux.log"; err="$dir/send.err"
-  screen=$(muse_clobber_fixture "$dir" "$home" $'first  line\n\n  second\tline')
-  for sample in 'first line second line' 'line second line' 'first linesecond line'; do
+  for sample in complete partial mismatched wrapped-url wrapped-path wrapped-words changed-space truncated-url unconfirmed-wrap fresh-wrap; do
     : > "$log"
-    printf 'transcript row\n\xe2\x9d\xaf %s\n' "$sample" > "$screen"
+    prompt=$'first  line\n\n  second\tline'
+    case "$sample" in
+      complete) content=$'first  line\n\n  second\tline' ;;
+      partial) content=$'line\n\n  second line' ;;
+      mismatched) content=$'first line\n\n  different line' ;;
+      wrapped-url|truncated-url|unconfirmed-wrap|fresh-wrap)
+        prompt='review https://example.com/very/long/resource/path'
+        content=$'review https://example.com/very/\nlong/resource/path'
+        [ "$sample" != truncated-url ] || content=$'review https://example.com/very/\nlong/resource'
+        ;;
+      wrapped-path)
+        prompt='review /workspace/long/directory/file.ts now'
+        content=$'review /workspace/long/di\nrectory/file.ts now'
+        ;;
+      wrapped-words)
+        prompt='review this work now'
+        content=$'review this\nwork now'
+        ;;
+      changed-space)
+        prompt='review https://example.com/very/long/resource/path'
+        content=$'review https://example.com/very/\nlong/resource/ path'
+        ;;
+    esac
+    screen=$(muse_clobber_fixture "$dir" "$home" "$prompt")
+    printf '── Voice input (⌥ + v to start) ─────\n❯ %s\n────────────────────────\n  echo · /ws · YOLO\n' "$content" > "$screen.restore"
+    printf '── Voice input (⌥ + v to start) ─────\n❯\n────────────────────────\n  echo · /ws · YOLO\n' > "$screen"
+    [ "$sample" != unconfirmed-wrap ] || rm "$screen.runlog"
+    [ "$sample" != fresh-wrap ] || cp "$screen.restore" "$screen"
     PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
       FM_SEND_SETTLE=0 FM_SEND_RESTORE_WAIT=1 FM_FAKE_TMUX_CAPTURE="$screen" \
       "$SEND" muse-clobber --key Escape >/dev/null 2>"$err"; rc=$?
     expect_code 0 "$rc" "multiline prompt interrupt should be delivered"
     assert_contains "$(cat "$log")" "arg=Escape" "the interrupt should be delivered"
     expected="$(cat "$log")"
-    if [ "$sample" = 'first linesecond line' ]; then
-      assert_not_contains "$expected" "arg=C-c" "fresh joined words must not match a newline boundary"
-      assert_contains "$(cat "$err")" "left untouched" "fresh input should be preserved"
+    if [ "$sample" = complete ] || [ "$sample" = wrapped-url ] \
+       || [ "$sample" = wrapped-path ] || [ "$sample" = wrapped-words ]; then
+      assert_contains "$expected" "arg=C-c" "complete framed multiline restored prompt should be cleared"
     else
-      assert_contains "$expected" "arg=C-c" "multiline restored prompt or suffix should be cleared"
+      assert_not_contains "$expected" "arg=C-c" "$sample multiline content must not be cleared"
+      assert_contains "$(cat "$err")" "left untouched" "$sample multiline content should be preserved"
     fi
   done
-  pass "fm-send --key Escape: multiline prompt boundaries normalize without joining words"
+  pass "fm-send --key Escape: framed multiline restoration clears only complete matching content"
 }
 
 test_muse_interrupt_preserves_fresh_input() {
   local dir fb home log screen err rc
   dir="$TMP_ROOT/muse-clobber"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home museclobber); log="$dir/tmux.log"; : > "$log"; err="$dir/send.err"
-  screen=$(muse_clobber_fixture "$dir" "$home" 'launch brief')
-  printf 'transcript row\n\xe2\x9d\xaf FRESH captain typing\n' > "$screen"
+  screen=$(muse_clobber_fixture "$dir" "$home" 'review this work')
+  printf '%s\n' '{"payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled"}}}' >> "$(cat "$screen.runlog")"
+  printf 'transcript row\n\xe2\x9d\xaf work\n' > "$screen"
+
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_SEND_RESTORE_WAIT=1 FM_FAKE_TMUX_CAPTURE="$screen" \
+    "$SEND" muse-clobber --key Escape >/dev/null 2>"$err"; rc=$?
+  expect_code 0 "$rc" "the interrupt itself was delivered, so the send still succeeds"
+  assert_contains "$(cat "$log")" "arg=Escape" "the interrupt key should have been delivered"
+  assert_not_contains "$(cat "$log")" "arg=C-c" "fresh composer input must never be cleared"
+  assert_contains "$(cat "$err")" "left untouched" "the skipped clear should say why"
+  pass "fm-send --key Escape: muse composer holding fresh input survives the interrupt path"
+}
+
+test_muse_interrupt_preserves_idle_repeated_prompt() {
+  local dir fb home log screen err rc
+  dir="$TMP_ROOT/muse-idle-repeat"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home museidlerepeat); log="$dir/tmux.log"; : > "$log"; err="$dir/send.err"
+  screen=$(muse_clobber_fixture "$dir" "$home" 'review this work')
+  printf '%s\n' '{"payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled"}}}' >> "$(cat "$screen.runlog")"
+  printf 'transcript row\n\xe2\x9d\xaf review this work\n' > "$screen"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
     FM_SEND_SETTLE=0 FM_SEND_RESTORE_WAIT=1 FM_FAKE_TMUX_CAPTURE="$screen" \
@@ -373,6 +440,11 @@ test_muse_interrupt_unreadable_composer_warns() {
   pass "fm-send --key Escape: an unreadable muse composer skips the clear with a warning"
 }
 
+if [ "${1:-}" = --muse-multiline ]; then
+  test_muse_interrupt_normalizes_multiline_prompt
+  exit 0
+fi
+
 test_exact_lane_id_send_still_works
 test_key_send_exit_status_follows_delivery
 test_unset_fm_home_fails
@@ -382,8 +454,10 @@ test_unmatched_single_colon_target_must_exist
 test_fm_prefixed_herdr_session_is_an_explicit_target
 test_healthy_fm_id_send_still_works
 test_muse_interrupt_clears_the_restored_prompt
+test_muse_interrupt_requires_cancellation
 test_muse_interrupt_normalizes_multiline_prompt
 test_muse_interrupt_preserves_fresh_input
+test_muse_interrupt_preserves_idle_repeated_prompt
 test_muse_interrupt_skips_clear_when_unprovable
 test_muse_interrupt_empty_composer_needs_no_clear
 test_muse_interrupt_unreadable_composer_warns

@@ -107,6 +107,9 @@ case "${1:-}" in
          && { [ "$payload" = Escape ] || [ "$payload" = C-c ]; }; then
         printf 'zsh' > "$D/command"
       fi
+      if [ "$payload" = Escape ] && [ -f "$D/pane.restore" ]; then
+        cp "$D/pane.restore" "$D/pane"
+      fi
       if [ "$payload" = Escape ] && [ -n "${FM_FAKE_MUSE_LOG:-}" ]; then
         if [ -n "${FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK:-}" ]; then
           : > "$D/muse-ack-pending"
@@ -654,15 +657,23 @@ test_already_stopped_exit_is_idempotent() {
   pass "fm-control exit: an already-stopped agent is idempotent success with no bytes sent"
 }
 
-test_missing_endpoint_refuses() {
+test_missing_tmux_endpoint_refuses_rather_than_claiming_a_stop() {
   local dir out rc
   dir=$(new_case gone)
   add_task "$dir" t1 claude
   : > "$dir/fake/windows"
   out=$(run_control "$dir" t1 exit); rc=$?
-  expect_code 1 "$rc" "a missing endpoint should refuse"
-  assert_contains "$out" "recorded endpoint is gone" "the refusal should name the missing endpoint"
-  pass "fm-control exit: a vanished endpoint refuses instead of silently succeeding"
+  # `missing` on tmux is not a finding about the endpoint. A task record carries
+  # no socket identity for it, and any inventory describes only the tmux server
+  # this process addresses, so a window that is merely on a server this seat
+  # cannot reach is indistinguishable from one that was destroyed. exit refuses
+  # rather than claim a stop it cannot see, and sends nothing to an address it
+  # cannot trust. Reclaim of a destroyed endpoint is Herdr-only
+  # (docs/agent-control.md "Reclaiming a task whose endpoint is gone").
+  expect_code 1 "$rc" "a tmux endpoint whose absence cannot be proven must refuse"
+  assert_not_contains "$out" "endpoint-gone" "exit must not report a stop it could not prove"
+  [ -z "$(literals "$dir")" ] || fail "nothing may be sent into an endpoint exit cannot trust"
+  pass "fm-control exit: an unprovable tmux endpoint refuses instead of claiming the agent stopped"
 }
 
 test_interrupt_refuses_when_no_agent_runs() {
@@ -775,7 +786,8 @@ test_muse_interrupt_clears_proven_restored_prompt() {
     "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
   # The pane shows the restored prompt in the composer: a transcript row
   # above a muse glyph row holding exactly the recorded prompt.
-  printf 'transcript row\n\342\235\257 work\n' > "$dir/fake/pane"
+  printf 'transcript row\n\342\235\257 work\n' > "$dir/fake/pane.restore"
+  printf 'transcript row\n\342\235\257\n' > "$dir/fake/pane"
   out=$(FM_FAKE_MUSE_LOG="$log" FM_CONTROL_RESTORE_WAIT=2 run_control "$dir" t1 interrupt); rc=$?
   expect_code 0 "$rc" "a proven restored prompt should still be cleared"$'\n'"$out"
   [ "$(keys_sent "$dir")" = "$(printf 'Escape\nC-c')" ] \
@@ -793,12 +805,13 @@ test_muse_interrupt_preserves_fresh_input() {
   mkdir -p "$(dirname "$log")"
   printf '%s\n' \
     "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
-    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"work"}}}' > "$log"
+    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"review this work"}}}' > "$log"
   printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=test\n' \
     "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
   # The composer holds fresh typed input, not the restored prompt: the clear
   # must be skipped so the captain's text survives the interrupt.
-  printf 'transcript row\n\342\235\257 fresh captain typing\n' > "$dir/fake/pane"
+  printf 'transcript row\n\342\235\257 work\n' > "$dir/fake/pane"
+  printf '%s\n' '{"payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled"}}}' >> "$log"
   out=$(FM_FAKE_MUSE_LOG="$log" FM_CONTROL_RESTORE_WAIT=2 run_control "$dir" t1 interrupt); rc=$?
   expect_code 0 "$rc" "the interrupt itself was delivered, so the verb still succeeds"$'\n'"$out"
   [ "$(keys_sent "$dir")" = "Escape" ] \
@@ -983,7 +996,7 @@ test_verb_allowlist_is_closed
 test_resume_is_refused_with_its_reason
 test_relaunch_only_flags_are_rejected_on_other_verbs
 test_already_stopped_exit_is_idempotent
-test_missing_endpoint_refuses
+test_missing_tmux_endpoint_refuses_rather_than_claiming_a_stop
 test_interrupt_refuses_when_no_agent_runs
 test_ambiguous_endpoint_refuses
 test_busy_agent_is_interrupted_before_the_exit_command

@@ -7,7 +7,7 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-fm_live_gate default-on FM_OMP_CALM_INSTALL_TEST omp
+fm_live_gate default-on FM_OMP_CALM_INSTALL_TEST omp jq
 
 TMP_ROOT=$(fm_test_tmproot fm-omp-calm-install)
 trap 'fm_test_cleanup' EXIT
@@ -29,7 +29,13 @@ STANDALONE="$FAKE_HOME/.local/share/fm-calm-omp"
 assert_equals "$STANDALONE" "$(readlink "$LINK")" "link target"
 [ -f "$STANDALONE/lib/fm-calm-working-ship.ts" ] || fail "standalone lib missing"
 assert_absent "$STANDALONE/../../.pi" "standalone copy is not nested under firstmate .pi"
-assert_grep "fm-calm-omp" "$FAKE_HOME/.omp/plugins/omp-plugins.lock.json" "lockfile entry"
+jq -e --slurpfile package "$LINK/package.json" '
+  .plugins["fm-calm-omp"] | type == "object"
+  and .version == $package[0].version
+  and .enabled == true
+  and has("enabledFeatures") and .enabledFeatures == null
+' "$FAKE_HOME/.omp/plugins/omp-plugins.lock.json" >/dev/null \
+  || fail "lockfile must register the installed Calm version with all features enabled"
 pass "install links package into user plugin scope"
 
 # Re-running over an existing link is idempotent.
@@ -59,6 +65,34 @@ run_install >"$TMP_ROOT/divergent.out" 2>"$TMP_ROOT/divergent.err" \
 assert_absent "$FAKE_FM_HOME/.omp/extensions/fm-calm-omp.ts" "divergent legacy copy moved"
 assert_grep "divergent local edit" "$FAKE_FM_HOME/.omp/extensions/fm-calm-omp.ts.bak" "divergent copy preserved"
 pass "divergent legacy copy preserved as .bak"
+
+for BACKUP_KIND in file directory dangling-link; do
+  COLLISION_HOME="$TMP_ROOT/collision-$BACKUP_KIND-home"
+  COLLISION_FM_HOME="$TMP_ROOT/collision-$BACKUP_KIND-fm-home"
+  COLLISION_LEGACY="$COLLISION_FM_HOME/.omp/extensions/fm-calm-omp.ts"
+  mkdir -p "$COLLISION_HOME" "${COLLISION_LEGACY%/*}"
+  printf 'new local edits\n' > "$COLLISION_LEGACY"
+  case "$BACKUP_KIND" in
+    file) printf 'previous local edits\n' > "$COLLISION_LEGACY.bak" ;;
+    directory)
+      mkdir "$COLLISION_LEGACY.bak"
+      printf 'previous local edits\n' > "$COLLISION_LEGACY.bak/fm-calm-omp.ts"
+      ;;
+    dangling-link) ln -s missing-backup "$COLLISION_LEGACY.bak" ;;
+  esac
+  HOME="$COLLISION_HOME" FM_HOME="$COLLISION_FM_HOME" \
+    "$ROOT/bin/fm-omp-calm-install.sh" > "$TMP_ROOT/collision.out" 2> "$TMP_ROOT/collision.err" \
+    && fail "install accepted an occupied backup destination ($BACKUP_KIND)"
+  assert_equals "new local edits" "$(cat "$COLLISION_LEGACY")" "legacy edits retained on backup collision"
+  case "$BACKUP_KIND" in
+    file) assert_equals "previous local edits" "$(cat "$COLLISION_LEGACY.bak")" "existing backup retained" ;;
+    directory) assert_equals "previous local edits" "$(cat "$COLLISION_LEGACY.bak/fm-calm-omp.ts")" "backup directory contents retained" ;;
+    dangling-link) assert_equals "missing-backup" "$(readlink "$COLLISION_LEGACY.bak")" "dangling backup link retained" ;;
+  esac
+  assert_absent "$COLLISION_HOME/.local/share/fm-calm-omp" "no installation after backup collision"
+  assert_absent "$COLLISION_HOME/.omp/plugins/node_modules/fm-calm-omp" "no link after backup collision"
+  pass "occupied backup destination preserves both local versions ($BACKUP_KIND)"
+done
 
 # A retirement step that cannot complete aborts the install before linking,
 # instead of reporting success and leaving the legacy copy to double-load with
@@ -90,6 +124,7 @@ chmod 755 "$RETIRE_FM_HOME/.omp/extensions"
 pass "failed legacy removal aborts before linking"
 
 # The linked package's manifest entry resolves to the tracked extension.
-assert_grep "fm-calm-omp.ts" "$LINK/package.json" "manifest declares extension entry"
-assert_present "$LINK/fm-calm-omp.ts" "extension resolves through link"
+EXTENSION=$(jq -er '.omp.extensions | select(type == "array" and length == 1) | .[0] | select(. == "./fm-calm-omp.ts")' "$LINK/package.json") \
+  || fail "manifest must declare the Calm extension as its sole extension entry"
+assert_present "$LINK/$EXTENSION" "declared extension resolves through link"
 pass "manifest entry resolves through link"

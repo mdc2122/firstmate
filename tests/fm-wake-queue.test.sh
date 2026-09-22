@@ -1569,14 +1569,16 @@ test_interruption_before_and_after_raw_commit() {
 # The guarded self-announced status append (fm_wake_status_append_self_announced)
 # and the seen-signature gate it shares with the watcher's signal scan. Both
 # directions of the dedup contract are pinned through the real library
-# functions: a fully announced file plus the home's own bookkeeping close stays
+# functions: a file this home already knows (seen marker or OPEN DECISIONS
+# fold) plus the home's own bookkeeping close stays
 # announced (no wake), while ANY unannounced byte - a pending foreign line, a
-# missing marker, a later different note - reads as wake-worthy.
+# missing cursor, a later different note - reads as wake-worthy.
 test_self_announced_append_guards() {
-  local dir state status
+  local dir state status folded rc=0
   dir=$(make_case self-announced-append)
   state="$dir/state"
   status="$state/t.status"
+  folded="$state/folded.status"
 
   run_wake_lib() {
     FM_STATE_OVERRIDE="$state" bash -c '
@@ -1589,6 +1591,13 @@ test_self_announced_append_guards() {
   run_wake_lib fm_wake_signal_seen_current "$state" "$status" \
     && fail "a never-announced status file read as already announced"
 
+  # A close over those never-announced bytes must not swallow them.
+  run_wake_lib fm_wake_status_append_self_announced "$state" "$status" \
+    'resolved [key=k0]: answered: too early' || rc=$?
+  [ "$rc" -eq 1 ] || fail "a close over never-announced bytes did not fail toward waking (rc=$rc)"
+  run_wake_lib fm_wake_signal_seen_current "$state" "$status" \
+    && fail "a close over never-announced bytes swallowed the pending wake"
+
   # Prime the marker to current (the watcher just surfaced/absorbed everything).
   prime_status_seen "$state" "$status" || fail "could not prime the seen marker"
 
@@ -1596,7 +1605,7 @@ test_self_announced_append_guards() {
   run_wake_lib fm_wake_status_append_self_announced "$state" "$status" \
     'resolved [key=k1]: answered: closed by this home' \
     || fail "self-announced append on an announced file was not suppressed (rc=$?)"
-  grep -Fq 'resolved [key=k1]: answered: closed by this home' "$status" \
+  sed -E 's/ \[at=[0-9]+\]//' "$status" | grep -Fq 'resolved [key=k1]: answered: closed by this home' \
     || fail "the suppressed close was not appended"
   run_wake_lib fm_wake_signal_seen_current "$state" "$status" \
     || fail "the self-announced close left unannounced bytes behind"
@@ -1608,11 +1617,11 @@ test_self_announced_append_guards() {
 
   # With that foreign line pending, a bookkeeping close must NOT advance the
   # marker over it: the close appends but the file stays wake-worthy.
-  local rc=0
+  rc=0
   run_wake_lib fm_wake_status_append_self_announced "$state" "$status" \
     'resolved [key=k1]: answered: second close' || rc=$?
   [ "$rc" -eq 1 ] || fail "a close over pending foreign bytes did not fail toward waking (rc=$rc)"
-  grep -Fq 'resolved [key=k1]: answered: second close' "$status" \
+  sed -E 's/ \[at=[0-9]+\]//' "$status" | grep -Fq 'resolved [key=k1]: answered: second close' \
     || fail "the fail-toward-waking close was not appended"
   run_wake_lib fm_wake_signal_seen_current "$state" "$status" \
     && fail "a close over pending foreign bytes swallowed the pending wake"
@@ -1624,6 +1633,26 @@ test_self_announced_append_guards() {
     || fail "a multibyte self-announced close was not suppressed (rc=$?)"
   run_wake_lib fm_wake_signal_seen_current "$state" "$status" \
     || fail "multibyte byte accounting broke the self-announce guard"
+
+  # Issue 4767: a drain that folded OPEN DECISIONS has already presented those
+  # bytes to this home even when the watcher has not written a matching seen
+  # marker. The bookkeeping close must stay quiet; a later worker line must not.
+  printf 'needs-decision [key=k3]: pick one\n' > "$folded"
+  run_wake_lib fm_wake_signal_seen_current "$state" "$folded" \
+    && fail "an unfolded file without a seen marker read as announced"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    status_open_decisions_incremental "$2" >/dev/null
+  ' _ "$ROOT/bin/fm-classify-lib.sh" "$folded" \
+    || fail "could not fold the open decision"
+  run_wake_lib fm_wake_status_append_self_announced "$state" "$folded" \
+    'resolved [key=k3]: answered: folded close' \
+    || fail "a close after an OPEN DECISIONS fold was not self-announced (rc=$?)"
+  run_wake_lib fm_wake_signal_seen_current "$state" "$folded" \
+    || fail "the folded close left unannounced bytes behind"
+  printf 'blocked: worker still needs help\n' >> "$folded"
+  run_wake_lib fm_wake_signal_seen_current "$state" "$folded" \
+    && fail "a later worker line after a folded close was swallowed"
 
   pass "self-announced appends suppress only their own bytes and fail toward waking"
 }
@@ -1762,6 +1791,65 @@ SH
   wait "$waiter_pid" || fail "caller could not release its handed-off lock"
   [ ! -e "$lock" ] && [ ! -L "$lock" ] || fail "handed-off lock remained after caller release"
   pass "bounded acquire hands ownership to the waiting caller after contention"
+}
+
+test_bounded_lock_interrupted_handoff() {
+  local dir state lock
+  dir=$(make_case interrupted-lock-handoff)
+  state="$dir/state"
+  lock="$state/.fixture.lock"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    lib=$1 lock=$2
+    fm_current_pid caller
+    export FM_TEST_CALLER="$caller"
+    fm_run_timed() {
+      bash -c '\''
+        . "$1"
+        printf() {
+          builtin printf "$@"
+          if [ "$#" -eq 2 ] && [ "$2" = "$FM_TEST_CALLER" ]; then
+            kill -TERM "$$"
+          fi
+        }
+        _fm_lock_acquire_wait_handoff "$2" "$FM_TEST_CALLER"
+      '\'' _ "$lib" "$lock"
+      return 124
+    }
+    eval "$(declare -f fm_lock_try_acquire | sed "1s/fm_lock_try_acquire/fm_test_real_acquire/")"
+    first=true
+    fm_lock_try_acquire() {
+      if [ "$first" = true ]; then first=false; return 1; fi
+      fm_test_real_acquire "$@"
+    }
+    fm_lock_acquire_wait_bounded "$lock" 2 || exit 10
+    [ "$(cat "$lock/pid")" = "$caller" ] || exit 11
+    fm_lock_holder_alive "$lock" "$caller" || exit 12
+    bash -c '\''. "$1"; ! fm_lock_try_acquire "$2"'\'' _ "$lib" "$lock" || exit 13
+    fm_lock_release "$lock"
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 14
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$lock" || fail "interrupted handoff exposed a stealable successful acquisition"
+  pass "interrupted bounded handoff recovers a complete caller ownership record"
+}
+
+test_stale_recheck_rejects_handoff_during_identity_read() {
+  local dir state lock
+  dir=$(make_case stale-recheck-handoff)
+  state="$dir/state"
+  lock="$state/.fixture.lock"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    lock=$2
+    mkdir "$lock"
+    printf "12345\n" > "$lock/pid"
+    fm_lock_holder_alive() {
+      printf "%s\n" "$$" > "$1/pid"
+      fm_pid_identity "$$" > "$1/pid-identity"
+      return 1
+    }
+    ! fm_lock_recheck_stale_owner "$lock" "" 12345
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$lock" || fail "stale recheck accepted ownership changed during identity inspection"
+  pass "stale recheck refuses ownership changed during identity inspection"
 }
 
 # A live-but-stuck presentation lock must not strand the executable drain. The
@@ -2048,9 +2136,18 @@ test_historical_annotation_skips_announced_status() {
   pass "historical annotations replay nothing already announced and keep everything new"
 }
 
+if [ "${1:-}" = --lock-handoff ]; then
+  test_bounded_lock_handoff_after_contention
+  test_bounded_lock_interrupted_handoff
+  test_stale_recheck_rejects_handoff_during_identity_read
+  exit 0
+fi
+
 test_self_held_lock_reclaims_instead_of_deadlocking
 test_subshell_lock_ownership_without_bashpid
 test_bounded_lock_handoff_after_contention
+test_bounded_lock_interrupted_handoff
+test_stale_recheck_rejects_handoff_during_identity_read
 test_lock_records_pid_identity_and_reclaims_foreign_holder
 test_live_presentation_holder_is_deadlined_without_weakening_ack
 test_malformed_presentation_lock_reports_acquire_failure

@@ -428,6 +428,8 @@ fm_lock_clean_known_files() {
     "$lockdir/pid" \
     "$lockdir/fm-home" \
     "$lockdir/pid-identity" \
+    "$lockdir/handoff-pid" \
+    "$lockdir/handoff-identity" \
     "$lockdir/role" \
     "$lockdir/watcher-path" \
     2>/dev/null || true
@@ -636,7 +638,7 @@ fm_lock_recheck_stale_owner() {
   if fm_lock_mid_acquire_is_fresh "$lockdir" "$actual_pid"; then
     return 1
   fi
-  return 0
+  [ "$(cat "$lockdir/pid" 2>/dev/null || true)" = "$expected_pid" ]
 }
 
 FM_RECOVERY_MARKER_TOKEN=
@@ -1076,20 +1078,26 @@ _fm_lock_acquire_wait_handoff() {  # <lockdir> <caller-pid>
   fm_current_pid current || { fm_lock_release "$lockdir"; return 1; }
   back=$(cat "$ownerdir/pid" 2>/dev/null || true)
   if [ "$back" != "$current" ] \
-    || ! printf '%s\n' "$caller_pid" > "$ownerdir/pid" 2>/dev/null \
-    || [ "$(cat "$ownerdir/pid" 2>/dev/null || true)" != "$caller_pid" ]; then
+    || ! printf '%s\n' "$caller_pid" > "$ownerdir/handoff-pid" 2>/dev/null; then
     fm_lock_release "$lockdir"
     return 1
   fi
-  # The pid record now names the caller, so the identity record must too:
-  # leaving the helper's identity would let the next contender read a foreign
-  # holder and steal a live lock. An uncomputable caller identity drops the
-  # record instead, falling back to the liveness-only verdict.
-  if ! { fm_pid_identity "$caller_pid" > "$ownerdir/pid-identity"; } 2>/dev/null; then
-    if ! rm -f "$ownerdir/pid-identity" 2>/dev/null; then
+  if ! { fm_pid_identity "$caller_pid" > "$ownerdir/handoff-identity"; } 2>/dev/null; then
+    rm -f "$ownerdir/handoff-identity" 2>/dev/null || {
       fm_lock_release "$lockdir"
       return 1
-    fi
+    }
+  fi
+  # Remove the helper identity before publishing the caller PID: an interruption
+  # may leave a liveness-only owner, never a caller PID paired with the helper's
+  # identity that a contender could mistake for a stale owner.
+  if ! rm -f "$ownerdir/pid-identity" 2>/dev/null \
+    || ! mv -f "$ownerdir/handoff-pid" "$ownerdir/pid" 2>/dev/null; then
+    fm_lock_release "$lockdir"
+    return 1
+  fi
+  if [ -f "$ownerdir/handoff-identity" ]; then
+    mv -f "$ownerdir/handoff-identity" "$ownerdir/pid-identity" 2>/dev/null || return 1
   fi
   trap - TERM INT
 }
@@ -1099,9 +1107,9 @@ _fm_lock_acquire_wait_handoff() {  # <lockdir> <caller-pid>
 # Bounded acquire variant. It preserves the ordinary wait/reclaim behavior
 # until fm-timeout-lib.sh's hard deadline, returns 124 when a live holder still
 # owns the lock, and leaves FM_LOCK_HELD_PID naming that holder.
-# Use it where a caller must refuse rather than block: wake presentation, and
-# the guarded remote link clear, whose whole contract is to return a
-# reconciliation refusal instead of wedging an unattended close.
+# Use it where a caller must refuse rather than block: wake presentation,
+# recovery-marker transitions, and the guarded remote link clear, whose contract
+# is to return a reconciliation refusal instead of wedging an unattended close.
 # Mutation-critical callers that can safely block keep fm_lock_acquire_wait.
 fm_lock_acquire_wait_bounded() {
   local lockdir=$1 seconds=$2 caller_pid rc owner_pid
@@ -1126,7 +1134,8 @@ fm_lock_acquire_wait_bounded() {
   fi
 
   owner_pid=$(cat "$lockdir/pid" 2>/dev/null || true)
-  if [ "$owner_pid" = "$caller_pid" ]; then
+  if [ "$rc" -eq 0 ] && [ "$owner_pid" = "$caller_pid" ] \
+    && fm_lock_holder_alive "$lockdir" "$owner_pid"; then
     return 0
   fi
   [ "$rc" -ne 0 ] || rc=1
@@ -2203,43 +2212,79 @@ fm_wake_status_mark_current() {  # <state> <status-file>
   fm_wake_status_seen_commit "$1" "$2" "$size" "$ident"
 }
 
-# Guarded self-announced status append - the one dedup primitive for a status
-# line THIS home's own machinery writes as bookkeeping it has already presented
-# in the very turn or tick that writes it (an answerer-closes resolved line, a
-# pending-reply escalation close, a captain-held transfer). Such a close must
-# not wake the session that wrote it, so this appends the line and then
-# advances the watcher's seen marker to cover exactly the appended bytes and
-# nothing else. The advance is provenance-gated and fails toward waking:
-#   - the marker advances ONLY when the file's pre-append signature matched the
-#     recorded seen marker (every earlier byte was already announced or
-#     deliberately absorbed), AND the post-append size equals the pre-append
-#     size plus exactly the appended bytes (no foreign write interleaved);
-#   - on ANY other condition - missing marker, pending foreign bytes, an
-#     interleaved writer, an unreadable signature - the line is still appended
-#     but the marker is left alone, so the watcher surfaces the file normally.
+# Guarded self-announced status append - the one dedup primitive for the status
+# lines THIS home's own machinery writes as bookkeeping it has already presented
+# in the very turn or tick that writes them (answerer-closes resolved lines, a
+# pending-reply escalation close, captain-held transfers). Such a close must
+# not wake the session that wrote it, so this appends one command's lines
+# together and then advances the watcher's seen marker across the appended
+# bytes and no byte this home has not already read. The advance is
+# provenance-gated and fails toward waking:
+#   - the marker advances only when this home already read every pre-append
+#     byte, the post-append size equals that size plus exactly the appended
+#     bytes (no foreign write interleaved), AND the watcher's own span
+#     classifier finds no actionable event from its classified offset through
+#     the post-append end (classifying after the append keeps the just-closed
+#     decisions from counting as live);
+#   - "already read" means the watcher's classified seen offset equals the
+#     pre-append size, or the OPEN DECISIONS fold cursor does and every
+#     non-blank line the watcher has not classified yet is a keyed
+#     needs-decision or blocked line, which OPEN DECISIONS listed as open. The
+#     fold reads bytes it never prints, so a worker's `failed:`, `paused:`,
+#     `working:`, `resolved` or verb-less line there must still wake, and so
+#     must a captain-held line, which raises the watcher's needs-decision
+#     side-band;
+#   - on ANY other condition - a missing file, pending foreign bytes, an
+#     interleaved writer, an unreadable size or identity - the lines are still
+#     appended but the marker is left alone, so the watcher surfaces the file
+#     normally.
 # A later, different line from any other writer grows the size past the marker
 # and wakes as before: task identity alone can never suppress new content.
+# Each line is stamped with its emission time on the way in (status_stamp_line,
+# bin/fm-classify-lib.sh), so the appended bytes are the stamped ones, not the
+# caller's: a caller that caps a line first must reserve status_stamp_width,
+# and one that suppresses a repeat must ask status_event_recorded rather than
+# compare exact bytes.
 # Returns 0 appended and self-announced, 1 appended but left for the watcher
 # (the safe direction), 2 the append itself failed.
-fm_wake_status_append_self_announced() {  # <state> <status-file> <line>
-  local state=$1 file=$2 line=$3 marker pre_sig='' pre_size='' pre_ident='' post_size post_ident
-  local LC_ALL=C
+fm_wake_status_append_self_announced() {  # <state> <status-file> <line>...
+  local state=$1 file=$2 line appended=0 pre_size='' pre_ident='' post_size post_ident classified folded lag span_rc=0
+  local LC_ALL=C stamped=()
+  shift 2
   _fm_wake_require_classify || return 1
-  marker=$(fm_wake_signal_seen_path "$state" "$file")
+  for line in "$@"; do
+    stamped+=("$(status_stamp_line "$line")")
+  done
   if [ -e "$file" ]; then
-    pre_sig=$(fm_wake_signal_sig "$file") || pre_sig=''
     pre_size=$(_fm_status_file_size "$file") || pre_size=''
     pre_ident=$(_fm_open_decisions_file_ident "$file") || pre_ident=''
   fi
-  printf '%s\n' "$line" >> "$file" || return 2
-  [ -n "$pre_sig" ] || return 1
-  status_presentation_marker_reported_matches "$marker" "$pre_sig" || return 1
-  [ "$(status_presentation_marker_offset "$marker" "$file")" = "$pre_size" ] || return 1
+  printf '%s\n' "${stamped[@]}" >> "$file" || return 2
   post_size=$(_fm_status_file_size "$file") || return 1
   post_ident=$(_fm_open_decisions_file_ident "$file") || return 1
   case "$pre_size$post_size" in ''|*[!0-9]*) return 1 ;; esac
   [ -n "$pre_ident" ] && [ "$post_ident" = "$pre_ident" ] || return 1
-  [ "$post_size" -eq $((pre_size + ${#line} + 1)) ] || return 1
+  for line in "${stamped[@]}"; do appended=$((appended + ${#line} + 1)); done
+  [ "$post_size" -eq $((pre_size + appended)) ] || return 1
+  classified=$(fm_wake_signal_seen_size "$state" "$file")
+  if [ "$classified" != "$pre_size" ]; then
+    folded=$(status_open_decisions_cursor_offset "$file") || folded=0
+    [ "$folded" = "$pre_size" ] && [ "$classified" -lt "$pre_size" ] || return 1
+    lag=$(_fm_status_read_span "$file" "$classified" "$((pre_size - classified))") || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in *[![:space:]]*) ;; *) continue ;; esac
+      case "$(status_line_verb "$line")" in
+        needs-decision|blocked) ;;
+        *) return 1 ;;
+      esac
+      _fm_key_before_colon "$line" || _fm_key_at_note_head "$line" >/dev/null || return 1
+      _fm_decision_key "$line" >/dev/null || return 1
+    done <<EOF
+$lag
+EOF
+  fi
+  status_span_first_actionable_record "$file" "$classified" >/dev/null || span_rc=$?
+  [ "$span_rc" -eq 1 ] || return 1
   fm_wake_status_seen_commit "$state" "$file" "$post_size" "$post_ident" || return 1
   return 0
 }
