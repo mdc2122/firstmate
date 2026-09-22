@@ -1,0 +1,17 @@
+{
+  "schema": "fm-contributions.v1",
+  "task": "unavailable-live",
+  "records": [
+    {
+      "url": "https://github.com/mdc2122/firstmate/pull/999999999",
+      "kind": "pr",
+      "checked_at": "2026-09-22T03:19:49Z",
+      "observation": null,
+      "verdict": null,
+      "seen": [],
+      "pending": [],
+      "notified": [],
+      "error": "forge observation unavailable or changed during read"
+    }
+  ]
+}

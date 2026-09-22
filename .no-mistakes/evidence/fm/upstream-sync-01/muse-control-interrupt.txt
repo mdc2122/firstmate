@@ -1,0 +1,1 @@
+interrupt-delivered live harness=muse backend=tmux verified=agent-alive cancel=confirmed

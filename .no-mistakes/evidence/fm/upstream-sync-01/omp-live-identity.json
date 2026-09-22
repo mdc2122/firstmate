@@ -1,0 +1,7 @@
+{
+  "pid": "75418",
+  "comm": "bun",
+  "args": "bun /Users/Morley/.bun/bin/omp --no-session --no-skills --no-rules --no-lsp --no-title",
+  "classification": "harness_match=0\nagent",
+  "stderr": ""
+}

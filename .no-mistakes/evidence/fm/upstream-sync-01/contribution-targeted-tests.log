@@ -1,0 +1,7 @@
+ok - a twice-failing forge call retries without stale output or a wake (flaky)
+ok - a twice-failing forge call retries without stale output or a wake (partial)
+ok - a persistently failing forge call still errors after exhausting retries
+ok - budget exhausted mid-observation (exhaust) keeps the prior record and stays silent
+ok - budget exhausted mid-observation (hang) keeps the prior record and stays silent
+ok - a genuine forge failure inside the budget still records the error and wakes
+ok - a diverged owner converges onto the terminal observation without a forge read or wake

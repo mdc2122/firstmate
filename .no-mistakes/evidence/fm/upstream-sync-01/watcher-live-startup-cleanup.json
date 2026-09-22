@@ -1,0 +1,26 @@
+[
+  {
+    "step": "Start actual watcher while a real process holds its recovery-marker lock",
+    "watcher_pid": 15854,
+    "lock_owner": "15854",
+    "startup_heartbeat": true,
+    "pid_identity": "Mon Sep 21 22:19:59 2026     bash /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M33B4QRYNHNE1CQG8VDXWM3Z/bin/fm-watch.sh"
+  },
+  {
+    "step": "Start competing actual watcher",
+    "exit": 0,
+    "stdout": "watcher: already running pid 15854\n",
+    "stderr": ""
+  },
+  {
+    "step": "TERM watcher during contended startup; release marker holder and observe cleanup",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "watcher_lock_removed": true,
+    "durable_recovery_marker": "pending:downtime:16962.1790047199.I9mY1I"
+  },
+  {
+    "isolation": "Fresh FM_HOME/state/config inside worktree; actual production shell executables and OS processes, no tmux/Herdr/UI calls or mocks; own process groups reaped, lab removed."
+  }
+]

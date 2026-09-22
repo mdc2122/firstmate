@@ -1,0 +1,59 @@
+{
+  "checks": [
+    {
+      "command": "git show -s --format=%H%n%P%n%s ff61dfbf",
+      "exit": 0,
+      "stdout": "ff61dfbfcd77b19793b65413111b294804608075\n8696eff22ec22fe21fca55fbd558c944bf127df2 aec043c718ef186a1d28c607fd5852b041e24435\nmerge: upstream kunchenguid/firstmate main into fork main",
+      "stderr": ""
+    },
+    {
+      "command": "git rev-list --count ff61dfbf^1..ff61dfbf^2",
+      "exit": 0,
+      "stdout": "48",
+      "stderr": ""
+    },
+    {
+      "command": "git rev-list --count ff61dfbf^2..ff61dfbf^1",
+      "exit": 0,
+      "stdout": "21",
+      "stderr": ""
+    },
+    {
+      "command": "git merge-base --is-ancestor ff61dfbf^1 0e183d7c291f353b6d4501a298155f4c1f0ceedf",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "git merge-base --is-ancestor aec043c718ef186a1d28c607fd5852b041e24435 0e183d7c291f353b6d4501a298155f4c1f0ceedf",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "git remote get-url --push fork",
+      "exit": 0,
+      "stdout": "https://github.com/mdc2122/firstmate.git",
+      "stderr": ""
+    },
+    {
+      "command": "git remote get-url --push origin",
+      "exit": 0,
+      "stdout": "https://github.com/kunchenguid/firstmate.git",
+      "stderr": ""
+    },
+    {
+      "command": "git config --get remote.pushDefault",
+      "exit": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "git config --get branch.fm/upstream-sync-01.pushRemote",
+      "exit": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "interpretation": "Merge first parent is preserved fork history; second parent is upstream base. Both remain ancestors of target. Fork push URL is mdc2122/firstmate; no push attempted. Actual publication destination remains outer executor responsibility; no remote.pushDefault or branch.fm/upstream-sync-01.pushRemote is configured here."
+}

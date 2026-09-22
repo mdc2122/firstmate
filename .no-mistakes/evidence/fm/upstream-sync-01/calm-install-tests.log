@@ -1,0 +1,10 @@
+ok - install links package into user plugin scope
+ok - reinstall is idempotent
+ok - identical legacy copy removed
+ok - divergent legacy copy preserved as .bak
+ok - occupied backup destination preserves both local versions (file)
+ok - occupied backup destination preserves both local versions (directory)
+ok - occupied backup destination preserves both local versions (dangling-link)
+ok - failed legacy retirement aborts before linking
+ok - failed legacy removal aborts before linking
+ok - manifest entry resolves through link

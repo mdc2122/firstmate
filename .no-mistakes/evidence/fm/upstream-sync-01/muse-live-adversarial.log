@@ -1,0 +1,7 @@
+ok - Muse's real session protocol classifies busy in flight
+ok - Muse's real session protocol emits one matched run bracket
+ok - Muse's real bright prompt glyph classifies as an empty composer
+ok - Muse blank-line multiline restored prompt clears completely through fm-control
+Before idle interrupt composer: <line>
+Idle interrupt exit: 0; after composer: <line>
+ok - Muse idle interrupt preserves freshly typed suffix of previous prompt
