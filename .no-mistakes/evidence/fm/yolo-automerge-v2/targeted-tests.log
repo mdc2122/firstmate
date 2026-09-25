@@ -1,0 +1,6 @@
+ok - a yolo task's still-open green PR merges through the guarded path and reports the landing
+ok - non-yolo tasks never attempt a merge and a red PR is refused by the guarded path
+ok - a yolo merge refused by an unreported required check keeps the poll armed
+ok - a queued yolo merge persists its authority and keeps the poll armed
+ok - a yolo merge never retires a poll re-registered for another PR
+ok - a stalled forge read during a yolo merge is bounded and keeps the watcher live
