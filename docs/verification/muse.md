@@ -203,6 +203,31 @@ That is the same terminal shape the `echo`-provider interrupt produced, now conf
 
 `tests/fm-muse-harness.test.sh` pins the resulting classifier behavior: a log settled by either terminal reads `idle`, an open run reads `busy`, and only a resolution failure reads `unknown`.
 
+## Muse 1.4.0 observations (verified 2026-09-25)
+
+Live against `Muse Code 1.4.0 (1.4.0-R4161.1)` on macOS arm64, driven through tmux with `--yolo` (echo provider for turn mechanics, default `meta` provider with model `muse-spark-1.3-contributor` for the interrupt runs), isolated `XDG_CONFIG_HOME`/`XDG_DATA_HOME` in scratch, credential copied from the stored `~/.config/muse/auth.json`.
+Portable counterpart: `tests/fm-muse-harness.test.sh` (interrupt-clear guard, run-prompt extractor, wrapper-first-line binding).
+
+### Composer glyph and styling drift
+
+The idle composer glyph reads `❯` (U+276F), not the 0.1.0 `⟩` (U+27E9).
+It carries no bright truecolor foreground: `tmux capture-pane -e -p` shows `^[[0m❯` on the composer row, so the 0.1.0 luminance evidence above (glyph ~149.9, text ~209.8) no longer describes this build and the ghost-threshold margin is unproven here.
+`FM_MUSE_SIGNALS_LIVE=1 bin/fm-test-run.sh tests/fm-muse-signals-live-e2e.test.sh` passes its session-protocol checks against 1.4.0 (busy in flight, one matched run bracket) but fails its bright-glyph check on this drift; that guard owns the refresh.
+
+### Session-log wrapper first line
+
+Every 1.4.0 session log opens with a `retained_frame` permission-transaction wrapper line ahead of the metadata record, so the binding's first-line-only workspace match found nothing and every muse busy read resolved `unknown`.
+`fm_busy_muse_matching_logs` now scans the leading lines for the first metadata record instead; the 0.1.0 single-line shape resolves identically, and the live 1.4.0 binding resolves to the one non-prior matching log.
+Run lifecycle records stay literal (`"payload":{"kind":"run","run_id":"..."}` with `started`/`terminal` events), so the fold, the active-run lookup, and the terminal read work unchanged, and the escape-wrapped inner JSON never matches the anchored run prefix.
+
+### Interrupt restore and the guarded clear
+
+A turn cancelled during the model step closes with `"terminal":"cancelled","reason":"cancelled during model step"` and restores the prompt into the live composer (titled rule above, `❯ <prompt>`, footer below), exactly the 0.1.0 behavior.
+A turn cancelled mid tool (`"reason":"cancelled after tool result reconciliation"`) leaves the composer empty.
+The guard (`fm_control_composer_guarded_clear`, read by both `fm-send.sh --key Escape` and `fm-control.sh interrupt` after a terminal-settle wait) cleared nothing blind in any live run: fresh input typed into the composer survived the real Escape path with a warning and exit 0, a proven-empty composer skipped silently with exit 0, and an ambiguous pane (transcript echo plus restored prompt, footer joined into the content read) preserved the composer with a warning and exit 0.
+The matching-prompt clear itself is proven by the portable tests; live, the shared content reader rarely isolates the prompt on 1.4.0's footer layout, so clears stay opportunistic until the reader learns that footer (follow-up, not this change).
+Echo-provider turns complete in ~350 ms (a 3 KB prompt took 7.3 s), far under the interrupt path's latency, so interruptable live turns need a real model step or tool loop.
+
 ## Refreshing this record
 
 Run both live guards after any muse upgrade, because the version-suffixed process name, session protocol, and styled composer are vendor-controlled surfaces:

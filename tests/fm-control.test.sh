@@ -304,10 +304,19 @@ test_interrupt_sends_each_harness_verified_key() {
     expect_code 0 "$rc" "interrupt on $harness should succeed"$'\n'"$out"
     IFS=$'\t' read -r expected key repeat clear <<< "$(verified_adapter_contract "$harness")"
     want=$(for _ in $(seq 1 "$repeat"); do printf '%s\n' "$key"; done)
-    [ -z "$clear" ] || want="$want"$'\n'"$clear"
+    if [ "$harness" = muse ]; then
+      # muse's composer clear is conditional now: it fires only when the
+      # composer provably holds the restored prompt, and this bare case
+      # offers no composer proof, so only the interrupt key goes out.
+      # test_muse_interrupt_clears_proven_restored_prompt below owns the C-u
+      # path with a proven composer.
+      :
+    else
+      [ -z "$clear" ] || want="$want"$'\n'"$clear"
+    fi
     got=$(keys_sent "$dir")
     [ "$got" = "$want" ] \
-      || fail "interrupt on $harness should send $repeat x $key${clear:+ then $clear}, got: $got"
+      || fail "interrupt on $harness should send keys [$want], got: [$got]"
     [ -z "$(literals "$dir")" ] \
       || fail "interrupt on $harness must type no text, got: $(literals "$dir")"
   done
@@ -892,6 +901,34 @@ test_muse_interrupt_confirms_adapter_acknowledgement() {
   pass "fm-control interrupt: muse confirms cancellation from its session log"
 }
 
+# The guarded clear through the control plane: with the restored prompt proven
+# in the composer, the interrupt ends with C-u; without that proof (the loop
+# test above) it sends Escape alone.
+test_muse_interrupt_clears_proven_restored_prompt() {
+  local dir root log out rc
+  dir=$(new_case muse-clear)
+  add_task "$dir" t1 muse
+  alive_as "$dir" muse
+  root="$dir/muse-sessions"
+  log="$root/2026/08/08/session-1/session.jsonl"
+  mkdir -p "$(dirname "$log")"
+  printf '%s\n' \
+    "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
+    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"work"}}}' > "$log"
+  printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=test\n' \
+    "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
+  printf 'earlier transcript\n⟩ work\n' > "$dir/fake/pane"
+  out=$(FM_FAKE_MUSE_LOG="$log" run_control "$dir" t1 interrupt); rc=$?
+  expect_code 0 "$rc" "muse interrupt with a proven composer should succeed"$'\n'"$out"
+  [ "$(keys_sent "$dir")" = "$(printf 'Escape\nC-u')" ] \
+    || fail "a proven restored prompt should be cleared after the interrupt, got: $(keys_sent "$dir")"
+  assert_contains "$out" "cancel=confirmed" \
+    "the result should still report muse's cancelled terminal acknowledgement"
+  assert_not_contains "$out" "warning" \
+    "a proven clear must not warn"
+  pass "fm-control interrupt: muse clears the proven restored prompt"
+}
+
 test_interrupt_revalidates_agent_after_acknowledgement_wait() {
   local dir root log out rc
   dir=$(new_case ack-race)
@@ -1064,6 +1101,7 @@ test_busy_agent_is_interrupted_before_the_exit_command
 test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
 test_muse_interrupt_confirms_adapter_acknowledgement
+test_muse_interrupt_clears_proven_restored_prompt
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt
 test_agent_that_does_not_stop_fails_closed

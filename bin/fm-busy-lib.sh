@@ -395,10 +395,21 @@ function metadataWorkspace(file) {
     descriptor = fs.openSync(file, "r");
     const buffer = Buffer.alloc(65536);
     const length = fs.readSync(descriptor, buffer, 0, buffer.length, 0);
-    const newline = buffer.indexOf(10, 0);
-    if (newline < 0 || newline >= length) return null;
-    const record = JSON.parse(buffer.subarray(0, newline).toString("utf8"));
-    return record?.payload?.record?.workspace_root ?? null;
+    // muse 1.4.0 opens every session log with a permission-transaction
+    // wrapper line ahead of the metadata record, so the first line alone no
+    // longer binds a log. Scan the leading lines for the first metadata
+    // record instead; the '"metadata"' pre-check keeps this to the one parse
+    // it always cost on older logs.
+    const text = buffer.subarray(0, length).toString("utf8");
+    for (const line of text.split("\n")) {
+      if (!line || line.indexOf('"metadata"') < 0) continue;
+      let record;
+      try { record = JSON.parse(line); } catch { continue; }
+      if (record?.payload?.kind !== "metadata") continue;
+      const workspace = record?.payload?.record?.workspace_root;
+      if (typeof workspace === "string") return workspace;
+    }
+    return null;
   } catch {
     return null;
   } finally {
@@ -632,6 +643,34 @@ fm_busy_muse_active_run_id() {  # <session-log>
       print active
     }
   '
+}
+
+# fm_busy_muse_run_prompt: the prompt text of one run's started event, or fail.
+# The run Escape is about to cancel carries the exact text muse restores into
+# the composer, so the interrupt-clear guard compares the composer against this
+# before clearing. JSON decoding needs node, the same dependency the session-log
+# matching above already requires; a missing, unreadable, or prompt-free log
+# fails closed to unknown rather than guessing.
+fm_busy_muse_run_prompt() {  # <session-log> <run-id>
+  [ -f "$1" ] && [ -n "${2:-}" ] || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  node - "$1" "$2" <<'NODE'
+const fs = require("fs");
+const [file, wanted] = process.argv.slice(2);
+let prompt = null;
+for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+  let record;
+  try { record = JSON.parse(line); } catch { continue; }
+  const payload = record && record.payload;
+  if (!payload || payload.kind !== "run" || payload.run_id !== wanted) continue;
+  if (payload.event && payload.event.kind === "started"
+      && typeof payload.event.prompt === "string") {
+    prompt = payload.event.prompt;
+  }
+}
+if (prompt === null) process.exit(1);
+process.stdout.write(prompt);
+NODE
 }
 
 fm_busy_muse_run_terminal() {  # <session-log> <run-id>

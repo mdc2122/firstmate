@@ -245,6 +245,8 @@ fi
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
+# shellcheck source=bin/fm-busy-lib.sh
+. "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-marker-lib.sh
 . "$SCRIPT_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
@@ -268,17 +270,55 @@ fm_send_id_from_meta() { # <meta-file>
   printf '%s' "${base%.meta}"
 }
 
-# fm_send_clear_after_interrupt: muse RESTORES the interrupted prompt back into
-# the composer when Escape cancels a turn, as real bright text (verified: fg
-# 38;2;204;211;219, luminance ~210, muse 0.1.0-R708.1), not de-emphasised ghost
-# text. Classifying that as pending input is correct - the text really is
-# unsubmitted - but leaving it there means the NEXT steer types onto the end of
-# it and submits both as one garbled message. Ctrl-U clears the composer
-# (verified), so the interrupt is not complete until it has been sent. A failed
-# clear is loud rather than silent, because the alternative is a corrupted steer.
-# WHICH adapters need that clear, and which key clears them, comes from the one
-# control-plane capability table (bin/fm-control-lib.sh) rather than a second
-# copy here - the same table bin/fm-control.sh's interrupt verb reads.
+# fm_send_prepare_interrupt_prompt: resolve the muse run that Escape is about
+# to cancel, BEFORE the key is sent. After Escape the run closes and the
+# active-run lookup no longer identifies it, so neither the expected prompt
+# nor the settle wait below can resolve it after the fact. Sets
+# FM_SEND_INTERRUPT_LOG/RUN/PROMPT, all empty when the target is not a bound
+# muse task or no run is open - the guard then refuses to clear rather than
+# guessing.
+fm_send_prepare_interrupt_prompt() { # <semantic-key>
+  local family id
+  FM_SEND_INTERRUPT_LOG=
+  FM_SEND_INTERRUPT_RUN=
+  FM_SEND_INTERRUPT_PROMPT=
+  [ "$1" = Escape ] || return 0
+  family=$(fm_control_harness_family "$TARGET_HARNESS" 2>/dev/null) || return 0
+  [ "$family" = muse ] || return 0
+  [ -n "$TARGET_META" ] || return 0
+  [ "$TARGET_BACKEND" != remote ] || return 0
+  id=$(fm_send_id_from_meta "$TARGET_META")
+  FM_SEND_INTERRUPT_LOG=$(fm_busy_muse_session_log "$STATE" "$id" 2>/dev/null) || return 0
+  FM_SEND_INTERRUPT_RUN=$(fm_busy_muse_active_run_id "$FM_SEND_INTERRUPT_LOG" 2>/dev/null) || return 0
+  FM_SEND_INTERRUPT_PROMPT=$(fm_busy_muse_run_prompt "$FM_SEND_INTERRUPT_LOG" "$FM_SEND_INTERRUPT_RUN" 2>/dev/null) \
+    || FM_SEND_INTERRUPT_PROMPT=
+}
+
+# fm_send_await_interrupt_settle: after Escape, wait for the resolved run's
+# terminal record (bounded by FM_SEND_INTERRUPT_WAIT, default 10) plus a
+# one-second paint grace, so the clear guard reads the settled composer -
+# with the restored prompt repainted - rather than the transitional pane.
+# Skipped entirely when no run was resolved or the wait is 0.
+fm_send_await_interrupt_settle() {
+  local wait=${FM_SEND_INTERRUPT_WAIT:-10} elapsed=0 terminal
+  case "$wait" in ''|*[!0-9]*) wait=10 ;; esac
+  [ -n "${FM_SEND_INTERRUPT_RUN:-}" ] || return 0
+  [ "$wait" -gt 0 ] || return 0
+  while [ "$elapsed" -lt "$wait" ]; do
+    terminal=$(fm_busy_muse_run_terminal "$FM_SEND_INTERRUPT_LOG" "$FM_SEND_INTERRUPT_RUN" 2>/dev/null || true)
+    [ -z "$terminal" ] || break
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  sleep 1
+}
+
+# fm_send_clear_after_interrupt: clear the composer muse repollutes with the
+# cancelled prompt ONLY through the shared guard: the composer may now hold
+# the captain's fresh input instead, and an unconditional Ctrl-U would wipe it.
+# The WHICH-adapter/which-key decision still comes from the one control-plane
+# capability table (bin/fm-control-lib.sh) rather than a second copy here -
+# the same table bin/fm-control.sh's interrupt verb reads.
 fm_send_clear_after_interrupt() { # <key>
   local key=$1 family clear
   [ "$key" = Escape ] || return 0
@@ -286,10 +326,7 @@ fm_send_clear_after_interrupt() { # <key>
   clear=$(fm_control_interrupt_clear_key "$family") || return 0
   [ -n "$clear" ] || return 0
   [ "$TARGET_BACKEND" != remote ] || return 0
-  if ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$clear" "$EXPECTED_LABEL"; then
-    echo "error: Escape reached $T, but the $TARGET_HARNESS composer could not be cleared; it still holds the restored prompt. Clear it before sending the next message." >&2
-    return 1
-  fi
+  fm_control_composer_guarded_clear "$TARGET_BACKEND" "$T" "$clear" "$FM_SEND_INTERRUPT_PROMPT" "$EXPECTED_LABEL"
 }
 
 fm_send_normalize_key() { # <key>
@@ -772,6 +809,9 @@ if [ "${1:-}" = "--key" ]; then
   esac
   key=$2
   semantic_key=$(fm_send_normalize_key "$key")
+  # Resolve the cancellable run's prompt BEFORE the key lands: after Escape the
+  # run is closed and the clear guard could no longer identify it.
+  fm_send_prepare_interrupt_prompt "$semantic_key"
   if [ "$TARGET_BACKEND" = remote ]; then
     FM_SEND_REMOTE_BUDGET=${FM_SEND_REMOTE_BUDGET:-30}
     case "$FM_SEND_REMOTE_BUDGET" in
@@ -789,6 +829,9 @@ if [ "${1:-}" = "--key" ]; then
     echo "error: key '$key' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
+  # Let the cancel settle before the clear guard reads: the restored prompt
+  # repaints a second or three after the interrupt lands.
+  fm_send_await_interrupt_settle
   fm_send_clear_after_interrupt "$semantic_key" || exit 1
   fm_send_record_interrupt "$semantic_key" || exit 1
 else

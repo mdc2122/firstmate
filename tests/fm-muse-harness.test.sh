@@ -445,8 +445,12 @@ EOF
 
 # muse RESTORES the interrupted prompt into the composer after Escape, as real
 # bright text. Left there, the next steer types onto the end of it and submits
-# both as one garbled message, so the interrupt is not complete until the
-# composer is cleared.
+# both as one garbled message - but the composer may instead hold the captain's
+# fresh input, which an unconditional Ctrl-U would wipe. The clear is therefore
+# guarded: it fires only when the composer provably holds the restored prompt
+# (resolved from the cancelled run's session-log record before the key lands),
+# and every other composer state - fresh input, unreadable pane, unknown run -
+# preserves the composer with a warning.
 make_send_case() {  # <name> <harness>
   local name=$1 harness=$2 case_dir home fakebin id
   case_dir="$TMP_ROOT/send-$name"
@@ -458,7 +462,11 @@ make_send_case() {  # <name> <harness>
 #!/usr/bin/env bash
 set -u
 case "${1:-}" in
-  display-message) printf 'fakepane\n'; exit 0 ;;
+  display-message)
+    case "$*" in
+    *cursor_y*) printf '%s\n' "${FM_FAKE_CURSOR_ROW:-fakepane}"; exit 0 ;;
+    esac
+    printf 'fakepane\n'; exit 0 ;;
   has-session) exit 0 ;;
   list-panes|list-windows) printf 'fm-send:0\n'; exit 0 ;;
   send-keys)
@@ -467,6 +475,17 @@ case "${1:-}" in
     [ "${FM_FAKE_KEY_FAIL:-}" = "$*" ] && exit 1
     exit 0
     ;;
+  # The interrupt-clear guard reads the composer through the plain capture.
+  # FM_FAKE_CAPTURE_FILE points at the canned pane text; a missing file is an
+  # unreadable pane and fails the read the way a dead endpoint would. The
+  # guard's proven-empty fallback reads the state classifier instead, which
+  # needs the cursor row (FM_FAKE_CURSOR_ROW) and the styled capture
+  # (FM_FAKE_STYLED_CAPTURE_FILE) a real tmux composer read would return.
+  capture-pane)
+    case "$*" in
+    *-e*) cat "${FM_FAKE_STYLED_CAPTURE_FILE:-/dev/null}" 2>/dev/null || exit 1; exit 0 ;;
+    esac
+    cat "${FM_FAKE_CAPTURE_FILE:-/dev/null}" 2>/dev/null || exit 1; exit 0 ;;
 esac
 exit 0
 SH
@@ -477,24 +496,53 @@ SH
   printf '%s\n' "$case_dir|$home|$fakebin|$id"
 }
 
-run_send_key() {  # <home> <fakebin> <id> <key> <keylog>
+run_send_key() {  # <home> <fakebin> <id> <key> <keylog> [capture-file]
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$1" FM_STATE_OVERRIDE="$1/state" \
-    FM_FAKE_KEY_LOG="$5" PATH="$2:$PATH" \
+    FM_FAKE_KEY_LOG="$5" FM_FAKE_CAPTURE_FILE="${6:-/dev/null}" \
+    FM_SEND_INTERRUPT_WAIT=0 PATH="$2:$PATH" \
     "$ROOT/bin/fm-send.sh" "$3" --key "$4" 2>&1
 }
 
+# make_muse_interrupt_case <name> <prompt>: a muse send case whose session log
+# holds one OPEN run carrying <prompt> - the run an Escape is about to cancel.
+# Echoes case_dir|home|fakebin|id. The caller writes the fake pane capture to
+# $case_dir/capture.txt (restored prompt, fresh input, empty, or left absent
+# for an unreadable pane) and passes it as run_send_key's sixth argument.
+make_muse_interrupt_case() {
+  local name=$1 prompt=$2 rec case_dir home fakebin id sessions ws esc
+  rec=$(make_send_case "$name" muse)
+  IFS='|' read -r case_dir home fakebin id <<EOF
+$rec
+EOF
+  sessions="$case_dir/sessions"
+  ws="$case_dir/ws"
+  mkdir -p "$ws"
+  esc=$(printf '%s' "$prompt" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  write_session_log "$sessions" 2026 08 05 "interrupt-$name" "$ws" <<EOF >/dev/null
+{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-open-1","event":{"kind":"started","prompt":"$esc"}}}
+EOF
+  {
+    printf 'sessions_root=%s\n' "$sessions"
+    printf 'workspace_root=%s\n' "$ws"
+    printf 'binding_id=test-binding\n'
+  } > "$home/state/$id.muse-session"
+  printf '%s\n' "$case_dir|$home|$fakebin|$id"
+}
+
 test_muse_escape_aliases_clear_the_composer() {
-  local entry name key rec case_dir home fakebin id keylog out status
+  local entry name key rec case_dir home fakebin id keylog out status capture
   for entry in exact:Escape lower:escape short:Esc short-lower:esc; do
     name=${entry%%:*}
     key=${entry#*:}
-    rec=$(make_send_case "muse-$name" muse)
+    rec=$(make_muse_interrupt_case "muse-$name" "second turn to interrupt")
     IFS='|' read -r case_dir home fakebin id <<EOF
 $rec
 EOF
+    capture="$case_dir/capture.txt"
+    printf 'earlier transcript\n⟩ second turn to interrupt\n' > "$capture"
     keylog="$case_dir/keys.log"
     : > "$keylog"
-    out=$(run_send_key "$home" "$fakebin" "$id" "$key" "$keylog")
+    out=$(run_send_key "$home" "$fakebin" "$id" "$key" "$keylog" "$capture")
     status=$?
     expect_code 0 "$status" "muse $key send should succeed: $out"
     assert_grep "$key" "$keylog" "$key never reached the muse pane"
@@ -519,21 +567,91 @@ EOF
   pass "the composer clear is scoped to muse and does not touch other adapters"
 }
 
-# A silent clear failure would leave the restored prompt in place and corrupt
-# the next steer, so the failure has to be loud.
-test_failed_clear_is_reported() {
-  local rec case_dir home fakebin id keylog out status
-  rec=$(make_send_case clearfail muse)
+# Fresh captain input in the composer is not the restored prompt: the clear
+# must be skipped with a warning, never sent.
+test_muse_interrupt_preserves_fresh_composer_input() {
+  local rec case_dir home fakebin id keylog out status capture
+  rec=$(make_muse_interrupt_case preserve "second turn to interrupt")
   IFS='|' read -r case_dir home fakebin id <<EOF
 $rec
 EOF
+  capture="$case_dir/capture.txt"
+  printf 'earlier transcript\n⟩ my fresh captain input\n' > "$capture"
   keylog="$case_dir/keys.log"
   : > "$keylog"
-  out=$(FM_FAKE_KEY_FAIL='-t fm-send:0 C-u' run_send_key "$home" "$fakebin" "$id" Escape "$keylog")
+  out=$(run_send_key "$home" "$fakebin" "$id" Escape "$keylog" "$capture")
+  status=$?
+  expect_code 0 "$status" "preserving fresh input should still succeed: $out"
+  assert_grep 'Escape' "$keylog" "Escape never reached the muse pane"
+  assert_no_grep 'C-u' "$keylog" "fresh composer input was clobbered by a clear"
+  assert_contains "$out" "holds input that is not the interrupted prompt" "preserving fresh input did not warn"
+  pass "a muse interrupt preserves fresh composer input and warns instead of clearing"
+}
+
+# An unreadable composer fails closed: no clear, a warning, still success.
+test_muse_interrupt_preserves_unreadable_composer() {
+  local rec case_dir home fakebin id keylog out status capture
+  rec=$(make_muse_interrupt_case unreadable "second turn to interrupt")
+  IFS='|' read -r case_dir home fakebin id <<EOF
+$rec
+EOF
+  capture="$case_dir/capture.txt"
+  keylog="$case_dir/keys.log"
+  : > "$keylog"
+  out=$(run_send_key "$home" "$fakebin" "$id" Escape "$keylog" "$capture")
+  status=$?
+  expect_code 0 "$status" "an unreadable composer should still succeed: $out"
+  assert_grep 'Escape' "$keylog" "Escape never reached the muse pane"
+  assert_no_grep 'C-u' "$keylog" "an unreadable composer was cleared blind"
+  assert_contains "$out" "could not be read" "an unreadable composer did not warn"
+  pass "a muse interrupt preserves an unreadable composer and warns instead of clearing"
+}
+
+# A silent clear failure would leave the restored prompt in place and corrupt
+# the next steer, so the failure has to be loud.
+test_failed_clear_is_reported() {
+  local rec case_dir home fakebin id keylog out status capture
+  rec=$(make_muse_interrupt_case clearfail "second turn to interrupt")
+  IFS='|' read -r case_dir home fakebin id <<EOF
+$rec
+EOF
+  capture="$case_dir/capture.txt"
+  printf 'earlier transcript\n⟩ second turn to interrupt\n' > "$capture"
+  keylog="$case_dir/keys.log"
+  : > "$keylog"
+  out=$(FM_FAKE_KEY_FAIL='-t fm-send:0 C-u' run_send_key "$home" "$fakebin" "$id" Escape "$keylog" "$capture")
   status=$?
   [ "$status" -ne 0 ] || fail "a failed muse composer clear was reported as success"
-  assert_contains "$out" "could not be cleared" "the failed clear did not explain the pane state"
+  assert_contains "$out" "still holds the restored prompt" "the failed clear did not explain the pane state"
   pass "a failed muse composer clear fails loudly instead of leaving stale input"
+}
+
+# A composer the state classifier affirmatively proves empty holds nothing to
+# clear, so the guard skips silently instead of warning about chrome the
+# content reader folded in (footers, placeholders) or a transitional pane.
+test_muse_interrupt_empty_composer_skips_silently() {
+  local rec case_dir home fakebin id keylog out status capture styled
+  rec=$(make_muse_interrupt_case provenempty "second turn to interrupt")
+  IFS='|' read -r case_dir home fakebin id <<EOF
+$rec
+EOF
+  # Plain capture the content reader cannot select a composer from, while the
+  # cursor-anchored state read proves the composer empty.
+  capture="$case_dir/capture.txt"
+  printf 'earlier transcript with no composer shape\n' > "$capture"
+  styled="$case_dir/styled.txt"
+  printf 'transcript line\n\n\n⟩\n\n\n' > "$styled"
+  keylog="$case_dir/keys.log"
+  : > "$keylog"
+  out=$(FM_FAKE_CURSOR_ROW=3 FM_FAKE_STYLED_CAPTURE_FILE="$styled" \
+    run_send_key "$home" "$fakebin" "$id" Escape "$keylog" "$capture")
+  status=$?
+  expect_code 0 "$status" "a proven-empty composer should still succeed: $out"
+  assert_grep 'Escape' "$keylog" "Escape never reached the muse pane"
+  assert_no_grep 'C-u' "$keylog" "a proven-empty composer was cleared"
+  printf '%s\n' "$out" > "$case_dir/out.txt"
+  assert_no_grep 'composer' "$case_dir/out.txt" "a proven-empty composer warned instead of skipping silently"
+  pass "a muse interrupt on a proven-empty composer skips silently"
 }
 
 # --- busy source ------------------------------------------------------------
@@ -552,6 +670,44 @@ run_state() {  # <log>
     . "$ROOT/bin/fm-busy-lib.sh"
     fm_busy_muse_run_state "$1"
   )
+}
+
+run_prompt() {  # <log> <run-id>
+  (
+    # shellcheck source=bin/fm-busy-lib.sh
+    . "$ROOT/bin/fm-busy-lib.sh"
+    fm_busy_muse_run_prompt "$1" "$2"
+  )
+}
+
+test_muse_run_prompt_returns_the_started_prompt() {
+  local dir log out
+  dir="$TMP_ROOT/run-prompt"
+  mkdir -p "$dir"
+  log=$(write_session_log "$dir/logs" 2026 08 05 bbbb "$dir/ws" <<EOF
+$(muse_log_run_started run-1)
+$(muse_log_run_terminal run-1 cancelled)
+EOF
+)
+  out=$(run_prompt "$log" run-1)
+  [ "$out" = "launch brief" ] || fail "expected the started prompt, got '$out'"
+  run_prompt "$log" run-9 >/dev/null 2>&1 && fail "a missing run must not produce a prompt"
+  run_prompt /nonexistent run-1 >/dev/null 2>&1 && fail "a missing log must not produce a prompt"
+  pass "the run prompt extractor returns the started prompt and fails closed"
+}
+
+test_muse_run_prompt_decodes_json_escapes() {
+  local dir log out
+  dir="$TMP_ROOT/run-prompt-esc"
+  mkdir -p "$dir"
+  log=$(write_session_log "$dir/logs" 2026 08 05 cccc "$dir/ws" <<'EOF'
+{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-e","event":{"kind":"started","prompt":"line one\nline \"two\""}}}
+EOF
+)
+  out=$(run_prompt "$log" run-e)
+  [ "$out" = 'line one
+line "two"' ] || fail "JSON escapes were not decoded: '$out'"
+  pass "the run prompt extractor decodes JSON escapes"
 }
 
 test_run_fold_tracks_open_and_settled_turns() {
@@ -649,6 +805,28 @@ EOF
   [ "$verdict" = "busy muse-session-log" ] \
     || fail "binding did not fold the workspace it was pointed at: got '$verdict'"
   pass "the session binding folds only the log matching this task's worktree"
+}
+
+test_binding_finds_log_behind_wrapper_first_line() {
+  local dir state id root verdict logdir
+  dir="$TMP_ROOT/binding-wrapper"
+  state="$dir/state"
+  root="$dir/sessions"
+  id=wrappertask
+  mkdir -p "$state"
+  # muse 1.4.0 opens every session log with a permission-transaction wrapper
+  # line ahead of the metadata record; the binding must look past it.
+  logdir="$root/2026/09/25/wrapped"
+  mkdir -p "$logdir"
+  printf '%s\n' '{"retained_frame":"session_permission_transaction","children":[]}' > "$logdir/session.jsonl"
+  muse_log_metadata "$dir/ws" >> "$logdir/session.jsonl"
+  muse_log_run_started wrap-run >> "$logdir/session.jsonl"
+  printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=wrapper-test\n' \
+    "$root" "$dir/ws" > "$state/$id.muse-session"
+  verdict=$(classify_muse "$state" "$id")
+  [ "$verdict" = "busy muse-session-log" ] \
+    || fail "a wrapper first line hid the session from its binding: got '$verdict'"
+  pass "the session binding finds its log behind a wrapper first line"
 }
 
 test_workspace_binding_treats_glob_characters_literally() {
@@ -962,9 +1140,15 @@ test_spawn_writes_busy_binding_and_teardown_removes_it
 test_muse_escape_aliases_clear_the_composer
 test_non_muse_escape_does_not_clear
 test_failed_clear_is_reported
+test_muse_interrupt_preserves_fresh_composer_input
+test_muse_interrupt_preserves_unreadable_composer
+test_muse_interrupt_empty_composer_skips_silently
+test_muse_run_prompt_returns_the_started_prompt
+test_muse_run_prompt_decodes_json_escapes
 test_run_fold_tracks_open_and_settled_turns
 test_nested_terminal_record_does_not_settle_a_run
 test_binding_selects_the_matching_main_log
+test_binding_finds_log_behind_wrapper_first_line
 test_workspace_binding_treats_glob_characters_literally
 test_binding_excludes_preexisting_log_when_mtimes_tie
 test_session_log_cache_reuses_and_refreshes_binding

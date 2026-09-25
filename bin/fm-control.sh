@@ -427,7 +427,8 @@ dismiss_interrupt_hazard() {  # <key> <ere>
 }
 
 # send_interrupt_keys: deliver the harness's interrupt key the verified number
-# of times, then the composer-clear key when the adapter needs one. Refuses
+# of times, then the guarded composer clear when the adapter needs one (the
+# shared guard clears only the restored prompt, never fresh input). Refuses
 # before sending anything when the backend cannot deliver either key, because
 # an interrupt that cancels the turn but leaves the restored prompt in the
 # composer would make the next submitted line concatenate onto it. An adapter
@@ -463,19 +464,50 @@ send_interrupt_keys() {
     fi
   done
   [ -z "$hazard" ] || dismiss_interrupt_hazard "$key" "$hazard"
-  [ -z "$clear" ] || fm_backend_send_key "$BACKEND" "$T" "$clear" "$LABEL" \
+  # Let the cancel settle before the clear guard reads: the restored prompt
+  # repaints a second or three after the interrupt lands.
+  fm_control_await_interrupt_settle
+  # Guarded, never blind: the composer may hold the captain's fresh input
+  # rather than the restored prompt, and an unconditional clear would wipe it.
+  [ -z "$clear" ] || fm_control_composer_guarded_clear "$BACKEND" "$T" "$clear" "$INTERRUPT_EXPECTED_PROMPT" "$LABEL" \
     || die "interrupt key $key reached task $ID, but $clear did not, so its composer still holds the cancelled prompt; clear it before the next lifecycle action"
+}
+
+# fm_control_await_interrupt_settle: wait for the interrupted run's terminal
+# record (bounded by SETTLE_WAIT, the same window the cancel claim below
+# uses) plus a one-second paint grace, so the clear guard above reads the
+# settled composer rather than the transitional pane. No-op unless a muse run
+# was resolved before the keys were sent.
+fm_control_await_interrupt_settle() {
+  local elapsed=0 terminal=
+  case "${INTERRUPT_ACK_RUN:-}" in '' ) return 0 ;; esac
+  while :; do
+    terminal=$(fm_busy_muse_run_terminal "$INTERRUPT_ACK_LOG" "$INTERRUPT_ACK_RUN" 2>/dev/null || true)
+    [ -z "$terminal" ] || break
+    awk -v e="$elapsed" -v t="$SETTLE_WAIT" 'BEGIN{exit !(e < t)}' || break
+    sleep "$POLL"
+    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
+  done
+  sleep 1
 }
 
 prepare_interrupt_ack() {
   INTERRUPT_ACK_SOURCE=$(fm_control_interrupt_ack_source "$HARNESS")
   INTERRUPT_ACK_LOG=
   INTERRUPT_ACK_RUN=
+  INTERRUPT_EXPECTED_PROMPT=
   case "$INTERRUPT_ACK_SOURCE" in
     muse-session-terminal)
       INTERRUPT_ACK_LOG=$(fm_busy_muse_session_log "$STATE" "$ID" 2>/dev/null || true)
       [ -n "$INTERRUPT_ACK_LOG" ] || return 0
       INTERRUPT_ACK_RUN=$(fm_busy_muse_active_run_id "$INTERRUPT_ACK_LOG" 2>/dev/null || true)
+      # The prompt of the run Escape is about to cancel, resolved BEFORE the
+      # key lands: afterwards the run is closed and no longer identifiable.
+      # Empty when unresolvable - the clear guard then refuses to clear rather
+      # than guessing.
+      case "$INTERRUPT_ACK_RUN" in
+        ?*) INTERRUPT_EXPECTED_PROMPT=$(fm_busy_muse_run_prompt "$INTERRUPT_ACK_LOG" "$INTERRUPT_ACK_RUN" 2>/dev/null || true) ;;
+      esac
       ;;
   esac
 }

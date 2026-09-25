@@ -13,11 +13,13 @@
 # here rather than improvised per harness in agent prose.
 #
 # This file owns three capability tables plus their pure artifact-path tables,
-# and ONE named exception to that purity - fm_control_endpoint_absence_verdict,
-# the single owner of the per-backend endpoint-absence proof, which does run
-# backend reads. Everything else has no side effects, runs no backend command,
-# and reads no state, so sourcing this file is still free and the tables can be
-# read by a test as a pure contract:
+# and TWO named exceptions to that purity - fm_control_endpoint_absence_verdict,
+# the single owner of the per-backend endpoint-absence proof, and
+# fm_control_composer_guarded_clear, the interrupt-clear guard that reads the
+# composer and sends the clear key. Both run backend reads. Everything else has
+# no side effects, runs no backend command, and reads no state, so sourcing
+# this file is still free and the tables can be read by a test as a pure
+# contract:
 #
 #   1. Verb allowlist. There is no arbitrary-text and no generic raw-key entry
 #      point on the control plane; a caller either names an allowlisted verb or
@@ -42,6 +44,15 @@
 # `relaunch` covers the same need deterministically for every adapter, because
 # the brief on disk - not a harness-private session - is the durable
 # instruction.
+
+_FM_CONTROL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Both dependencies are canonical lint roots in their own right. Keep them as
+# analysis boundaries here so ShellCheck's external-source traversal does not
+# recursively duplicate the full backend graph for every control consumer.
+# shellcheck source=/dev/null
+. "$_FM_CONTROL_LIB_DIR/fm-backend.sh"
+# shellcheck source=/dev/null
+. "$_FM_CONTROL_LIB_DIR/fm-composer-lib.sh"
 
 # The complete control-plane verb allowlist, one per line.
 fm_control_verbs() {
@@ -191,11 +202,13 @@ fm_control_interrupt_hazard_signal() {  # <harness>
 
 # The key that must follow the interrupt key to leave the composer empty, or
 # nothing when the adapter needs none. muse is the one verified adapter that
-# RESTORES the cancelled prompt into its composer as real bright text, so an
-# interrupt is not complete until Ctrl+U has cleared it; leaving it there would
-# make the next submitted line - a steer, or this plane's own exit command -
-# concatenate onto it. cursor was checked for exactly that behaviour and does
-# NOT repollute: after a single Escape its composer shows only the `Add a
+# RESTORES the cancelled prompt into its composer as real bright text; leaving
+# it there would make the next submitted line - a steer, or this plane's own
+# exit command - concatenate onto it. The clear itself is never unconditional:
+# fm_control_composer_guarded_clear below sends it only when the composer
+# provably holds the restored prompt, because a captain may have typed fresh
+# input there instead. cursor was checked for exactly that repollution
+# behaviour and does NOT repollute: after a single Escape its composer shows only the `Add a
 # follow-up` placeholder, so it needs no clear key. gemini was checked the
 # same way and also does not repollute: after a single Escape it prints
 # `Request cancelled.` and its composer shows only the `Type your message
@@ -208,6 +221,80 @@ fm_control_interrupt_clear_key() {  # <harness>
     claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy|devin) ;;
     *) return 1 ;;
   esac
+}
+
+# fm_control_composer_guarded_clear: send <clear-key> to <target> on <backend>
+# only when the composer provably holds nothing but the interrupted prompt.
+# Reads the composer ONCE through the shared classifier's content extractor
+# (bin/fm-composer-lib.sh over the backend's plain capture - the same surface
+# the delivery guards read), strips one leading agent prompt glyph (the
+# restored text renders behind the composer's own glyph), then clears only
+# when the content matches <expected-prompt> ignoring whitespace. Anything
+# else - fresh input, an empty composer, an unreadable capture, no readable
+# composer shape, or an unknown prompt - skips the clear instead of
+# clobbering. A skip warns on stderr unless the state classifier (the fleet's
+# proven-emptiness owner, consulted on every non-match) affirmatively proves
+# the composer empty - bright restored text can never prove empty, so that
+# silence cannot hide input that needs clearing. A clear that IS sent but
+# fails delivery is an error, because the composer still holds the restored
+# prompt the next line would concatenate onto. Returns 0 cleared or safely
+# skipped, 1 the clear send failed.
+# Callers MUST let the cancel settle before calling: muse repaints the
+# restored prompt a second or three after the interrupt lands, so a read taken
+# in that window catches a transitional pane. Callers resolve
+# <expected-prompt> from the run Escape is about to cancel BEFORE sending the
+# interrupt key (afterwards the run is closed and the active-run lookup no
+# longer identifies it), then wait for that run's terminal record before
+# reading here. Prompt resolution and the settle wait live with the caller
+# (bin/fm-busy-lib.sh's muse session-log helpers), because sourcing the busy
+# classifier here would drag it into this table owner.
+fm_control_composer_guarded_clear() {  # <backend> <target> <clear-key> <expected-prompt> [expected-label]
+  local backend=$1 target=$2 clear=$3 expected=${4:-} label=${5:-}
+  local cap content glyph squash_content squash_expected state
+  if ! cap=$(fm_backend_capture "$backend" "$target" "$FM_COMPOSER_CAPTURE_LINES" "$label" 2>/dev/null) \
+    || [ -z "$cap" ]; then
+    fm_control_composer_skip_unproven "$backend" "$target" "$label"
+    return 0
+  fi
+  if ! content=$(fm_composer_extract_selected_content styled=0 "$cap" 2>/dev/null); then
+    fm_control_composer_skip_unproven "$backend" "$target" "$label"
+    return 0
+  fi
+  if fm_composer_leading_agent_glyph_var glyph "$content"; then
+    content=${content#*"$glyph"}
+  fi
+  squash_content=$(printf '%s' "$content" | tr -d '[:space:]')
+  squash_expected=$(printf '%s' "$expected" | tr -d '[:space:]')
+  if [ -z "$squash_content" ]; then
+    return 0
+  fi
+  if [ -n "$squash_expected" ] && [ "$squash_content" = "$squash_expected" ]; then
+    if ! fm_backend_send_key "$backend" "$target" "$clear" "$label"; then
+      echo "error: the interrupt reached $target, but $clear was not delivered, so its composer still holds the restored prompt; clear it before the next message." >&2
+      return 1
+    fi
+    return 0
+  fi
+  # The content is not the interrupted prompt - or no prompt is known - but
+  # the shared reader also folds composer chrome (footers, placeholders) into
+  # content, so a mismatch alone does not prove fresh input. Ask the state
+  # classifier, the fleet's proven-emptiness owner: an affirmatively empty
+  # composer holds nothing to clear and skips silently, while every other
+  # verdict keeps the loud fail-closed warning. Bright restored text can never
+  # prove empty, so this silence cannot hide input that needs clearing.
+  state=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null || true)
+  [ "$state" = empty ] || echo "warning: $target's composer holds input that is not the interrupted prompt; leaving it alone rather than clearing. Clear it by hand before the next message if it holds the restored prompt." >&2
+  return 0
+}
+
+# fm_control_composer_skip_unproven: the guard's unreadable-pane path. A
+# capture or shape failure proves nothing either way, so the composer is
+# preserved with a warning - except when the state classifier affirmatively
+# proves the composer empty, which skips silently per the note above.
+fm_control_composer_skip_unproven() {  # <backend> <target> [expected-label]
+  local backend=$1 target=$2 label=${3:-} state
+  state=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null || true)
+  [ "$state" = empty ] || echo "warning: $target's composer could not be read after the interrupt; leaving it alone rather than clearing. Clear it by hand if it holds the restored prompt." >&2
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
