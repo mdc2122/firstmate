@@ -1,0 +1,590 @@
+{
+  "settled": {
+    "schema": "fm-contributions.v1",
+    "task": "settled",
+    "records": [
+      {
+        "url": "https://github.com/kunchenguid/firstmate/pull/5695",
+        "kind": "pr",
+        "checked_at": "2026-09-25T21:10:30Z",
+        "error": null,
+        "pending": [
+          {
+            "token": "comment:5837377335:2026-09-25T18:21:40Z:",
+            "type": "comment",
+            "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837377335",
+            "head": null,
+            "author": "kunchenguid",
+            "body": "Speaking as Kun's firstmate:\n\n<!-- triage: 2026-09-25T18:21:32Z outcome=merge class=restore attestation=MATCH head=cb4199e296dd157ca76313ffbc68296655f5a1e4 ci=36170124546 nm=36170124458 -->\n\n**Verdict:** Diff reviewed (`bin/fm-git-strip-ai-trailers.sh` commit-msg strip + spawn `GIT_CONFIG` hooksPath install for every launch kind; teardown/test cleanup). Tip only strips known AI `Co-authored-by` product names/bot addresses; human co-authors and author identity untouched; project hooks chained. Cl"
+          },
+          {
+            "token": "comment:5837379186:2026-09-25T18:21:48Z:",
+            "type": "comment",
+            "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837379186",
+            "head": null,
+            "author": "kunchenguid",
+            "body": "Speaking as Kun's firstmate: this is merged. Thank you @tiago-peixoto \u2014 really appreciate you taking the time on this."
+          }
+        ],
+        "seen": [
+          "comment:5837377335:2026-09-25T18:21:40Z:",
+          "comment:5837379186:2026-09-25T18:21:48Z:"
+        ],
+        "notified": [
+          "comment:5837377335:2026-09-25T18:21:40Z:",
+          "comment:5837379186:2026-09-25T18:21:48Z:"
+        ],
+        "verdict": null,
+        "observation": {
+          "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+          "state": "merged",
+          "draft": false,
+          "mergeable": "unknown",
+          "can_merge": false,
+          "review_decision": "",
+          "reviews": [],
+          "checks": [
+            {
+              "name": "Behavior timing aggregate",
+              "id": 108193509779,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T18:13:00Z"
+            },
+            {
+              "name": "Behavior portable serial 9",
+              "id": 108187343260,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 7",
+              "id": 108187343210,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 8",
+              "id": 108187343194,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 2",
+              "id": 108187343152,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 5",
+              "id": 108187343055,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 4",
+              "id": 108187343054,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 6",
+              "id": 108187342993,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 3",
+              "id": 108187342979,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Lint 2",
+              "id": 108187342939,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:50Z"
+            },
+            {
+              "name": "Stock macOS Bash snapshot compatibility",
+              "id": 108187342907,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:19Z"
+            },
+            {
+              "name": "Repo invariants",
+              "id": 108187342903,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior tests (Herdr)",
+              "id": 108187342862,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable serial 1",
+              "id": 108187342829,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior portable parallel 1",
+              "id": 108187342793,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Test coverage guard",
+              "id": 108187342757,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Lint 1",
+              "id": 108187342734,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "PR must be raised via no-mistakes",
+              "id": 108187342726,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable parallel 2",
+              "id": 108187342622,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            }
+          ],
+          "events": [
+            {
+              "token": "comment:5837377335:2026-09-25T18:21:40Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837377335",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate:\n\n<!-- triage: 2026-09-25T18:21:32Z outcome=merge class=restore attestation=MATCH head=cb4199e296dd157ca76313ffbc68296655f5a1e4 ci=36170124546 nm=36170124458 -->\n\n**Verdict:** Diff reviewed (`bin/fm-git-strip-ai-trailers.sh` commit-msg strip + spawn `GIT_CONFIG` hooksPath install for every launch kind; teardown/test cleanup). Tip only strips known AI `Co-authored-by` product names/bot addresses; human co-authors and author identity untouched; project hooks chained. Cl"
+            },
+            {
+              "token": "comment:5837379186:2026-09-25T18:21:48Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837379186",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate: this is merged. Thank you @tiago-peixoto \u2014 really appreciate you taking the time on this."
+            }
+          ],
+          "absent_checks": []
+        }
+      }
+    ]
+  },
+  "diverged": {
+    "schema": "fm-contributions.v1",
+    "task": "diverged",
+    "records": [
+      {
+        "url": "https://github.com/kunchenguid/firstmate/pull/5695",
+        "kind": "pr",
+        "checked_at": "2026-09-25T21:10:30Z",
+        "error": null,
+        "pending": [
+          {
+            "token": "owner-pending",
+            "body": "retain this signal"
+          }
+        ],
+        "seen": [
+          "owner-seen"
+        ],
+        "notified": [
+          "owner-pending"
+        ],
+        "verdict": {
+          "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+          "source": "https://github.com/kunchenguid/firstmate/pull/5695",
+          "actor": "fleet",
+          "summary": "retain owner judgment"
+        },
+        "observation": {
+          "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+          "state": "merged",
+          "draft": false,
+          "mergeable": "unknown",
+          "can_merge": false,
+          "review_decision": "",
+          "reviews": [],
+          "checks": [
+            {
+              "name": "Behavior timing aggregate",
+              "id": 108193509779,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T18:13:00Z"
+            },
+            {
+              "name": "Behavior portable serial 9",
+              "id": 108187343260,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 7",
+              "id": 108187343210,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 8",
+              "id": 108187343194,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 2",
+              "id": 108187343152,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 5",
+              "id": 108187343055,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 4",
+              "id": 108187343054,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 6",
+              "id": 108187342993,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 3",
+              "id": 108187342979,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Lint 2",
+              "id": 108187342939,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:50Z"
+            },
+            {
+              "name": "Stock macOS Bash snapshot compatibility",
+              "id": 108187342907,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:19Z"
+            },
+            {
+              "name": "Repo invariants",
+              "id": 108187342903,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior tests (Herdr)",
+              "id": 108187342862,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable serial 1",
+              "id": 108187342829,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior portable parallel 1",
+              "id": 108187342793,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Test coverage guard",
+              "id": 108187342757,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Lint 1",
+              "id": 108187342734,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "PR must be raised via no-mistakes",
+              "id": 108187342726,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable parallel 2",
+              "id": 108187342622,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            }
+          ],
+          "events": [
+            {
+              "token": "comment:5837377335:2026-09-25T18:21:40Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837377335",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate:\n\n<!-- triage: 2026-09-25T18:21:32Z outcome=merge class=restore attestation=MATCH head=cb4199e296dd157ca76313ffbc68296655f5a1e4 ci=36170124546 nm=36170124458 -->\n\n**Verdict:** Diff reviewed (`bin/fm-git-strip-ai-trailers.sh` commit-msg strip + spawn `GIT_CONFIG` hooksPath install for every launch kind; teardown/test cleanup). Tip only strips known AI `Co-authored-by` product names/bot addresses; human co-authors and author identity untouched; project hooks chained. Cl"
+            },
+            {
+              "token": "comment:5837379186:2026-09-25T18:21:48Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837379186",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate: this is merged. Thank you @tiago-peixoto \u2014 really appreciate you taking the time on this."
+            }
+          ],
+          "absent_checks": []
+        }
+      }
+    ]
+  },
+  "errored": {
+    "schema": "fm-contributions.v1",
+    "task": "errored",
+    "records": [
+      {
+        "url": "https://github.com/kunchenguid/firstmate/pull/5695",
+        "kind": "pr",
+        "checked_at": "2026-09-25T21:10:30Z",
+        "error": null,
+        "pending": [
+          {
+            "token": "owner-pending",
+            "body": "retain this signal"
+          }
+        ],
+        "seen": [
+          "owner-seen"
+        ],
+        "notified": [
+          "owner-pending"
+        ],
+        "verdict": {
+          "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+          "source": "https://github.com/kunchenguid/firstmate/pull/5695",
+          "actor": "fleet",
+          "summary": "retain owner judgment"
+        },
+        "observation": {
+          "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+          "state": "merged",
+          "draft": false,
+          "mergeable": "unknown",
+          "can_merge": false,
+          "review_decision": "",
+          "reviews": [],
+          "checks": [
+            {
+              "name": "Behavior timing aggregate",
+              "id": 108193509779,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T18:13:00Z"
+            },
+            {
+              "name": "Behavior portable serial 9",
+              "id": 108187343260,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 7",
+              "id": 108187343210,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 8",
+              "id": 108187343194,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 2",
+              "id": 108187343152,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 5",
+              "id": 108187343055,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 4",
+              "id": 108187343054,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 6",
+              "id": 108187342993,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Behavior portable serial 3",
+              "id": 108187342979,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Lint 2",
+              "id": 108187342939,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:50Z"
+            },
+            {
+              "name": "Stock macOS Bash snapshot compatibility",
+              "id": 108187342907,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:19Z"
+            },
+            {
+              "name": "Repo invariants",
+              "id": 108187342903,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior tests (Herdr)",
+              "id": 108187342862,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable serial 1",
+              "id": 108187342829,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:15Z"
+            },
+            {
+              "name": "Behavior portable parallel 1",
+              "id": 108187342793,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:14Z"
+            },
+            {
+              "name": "Test coverage guard",
+              "id": 108187342757,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Lint 1",
+              "id": 108187342734,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "PR must be raised via no-mistakes",
+              "id": 108187342726,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            },
+            {
+              "name": "Behavior portable parallel 2",
+              "id": 108187342622,
+              "status": "completed",
+              "conclusion": "success",
+              "started_at": "2026-09-25T17:55:13Z"
+            }
+          ],
+          "events": [
+            {
+              "token": "comment:5837377335:2026-09-25T18:21:40Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837377335",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate:\n\n<!-- triage: 2026-09-25T18:21:32Z outcome=merge class=restore attestation=MATCH head=cb4199e296dd157ca76313ffbc68296655f5a1e4 ci=36170124546 nm=36170124458 -->\n\n**Verdict:** Diff reviewed (`bin/fm-git-strip-ai-trailers.sh` commit-msg strip + spawn `GIT_CONFIG` hooksPath install for every launch kind; teardown/test cleanup). Tip only strips known AI `Co-authored-by` product names/bot addresses; human co-authors and author identity untouched; project hooks chained. Cl"
+            },
+            {
+              "token": "comment:5837379186:2026-09-25T18:21:48Z:",
+              "type": "comment",
+              "source": "https://github.com/kunchenguid/firstmate/pull/5695#issuecomment-5837379186",
+              "head": null,
+              "author": "kunchenguid",
+              "body": "Speaking as Kun's firstmate: this is merged. Thank you @tiago-peixoto \u2014 really appreciate you taking the time on this."
+            }
+          ],
+          "absent_checks": []
+        }
+      }
+    ]
+  }
+}

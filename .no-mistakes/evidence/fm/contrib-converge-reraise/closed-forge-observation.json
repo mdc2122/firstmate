@@ -1,0 +1,28 @@
+{
+  "schema": "fm-contributions.v1",
+  "task": "settled",
+  "records": [
+    {
+      "url": "https://github.com/kunchenguid/firstmate/pull/4802",
+      "kind": "pr",
+      "checked_at": "2026-09-25T21:10:25Z",
+      "error": null,
+      "pending": [],
+      "seen": [],
+      "notified": [],
+      "verdict": null,
+      "observation": {
+        "head": "d62520f13155cf5b43a6fe0c73f7178fa3af8409",
+        "state": "closed",
+        "draft": false,
+        "mergeable": "mergeable",
+        "can_merge": false,
+        "review_decision": "",
+        "reviews": [],
+        "checks": [],
+        "events": [],
+        "absent_checks": []
+      }
+    }
+  ]
+}

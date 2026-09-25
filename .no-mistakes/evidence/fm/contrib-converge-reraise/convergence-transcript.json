@@ -1,0 +1,78 @@
+[
+  {
+    "command": "bin/fm-contributions.sh poll",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "bash /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/.test-base-contributions.sh poll",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "baseline": "closed",
+    "observed": "Unchanged base leaves duplicate owner open after poll"
+  },
+  {
+    "command": "bin/fm-fleet-snapshot.sh --contribution-input",
+    "exit": 0,
+    "stdout": "{\n  \"backlog\": {\n    \"path\": \"/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/backlog.md\",\n    \"present\": true,\n    \"records\": []\n  },\n  \"tasks\": []\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": "bin/fm-contributions.sh snapshot /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/input.json --all",
+    "exit": 0,
+    "stdout": "{\n  \"known\": 1,\n  \"checked\": 1,\n  \"counts\": {\n    \"captain\": 0,\n    \"fleet\": 0,\n    \"maintainer\": 0,\n    \"nobody\": 1\n  },\n  \"unmeasured\": 0,\n  \"complete\": true,\n  \"proven_clear\": true,\n  \"stale_verdicts\": 0,\n  \"missing_verdicts\": 0,\n  \"unreadable_records\": 0,\n  \"valid_until\": 1790371530,\n  \"captain\": [],\n  \"captain_omitted\": 0,\n  \"rows\": [\n    {\n      \"task\": \"diverged\",\n      \"url\": \"https://github.com/kunchenguid/firstmate/pull/4802\",\n      \"kind\": \"pr\",\n      \"checked_at\": \"2026-09-25T21:10:25Z\",\n      \"checked\": true,\n      \"final\": true,\n      \"head\": \"d62520f13155cf5b43a6fe0c73f7178fa3af8409\",\n      \"verdict\": {\n        \"head\": \"d62520f13155cf5b43a6fe0c73f7178fa3af8409\",\n        \"source\": \"https://github.com/kunchenguid/firstmate/pull/4802\",\n        \"actor\": \"fleet\",\n        \"summary\": \"retain owner judgment\",\n        \"freshness\": \"current\"\n      },\n      \"reviews\": [],\n      \"distinct_checks\": 0,\n      \"missing_verdicts\": 0,\n      \"pending_checks\": 0,\n      \"failed_checks\": 0,\n      \"stale_verdicts\": 0,\n      \"signals\": [\n        {\n          \"token\": \"owner-pending\",\n          \"body\": \"retain this signal\"\n        }\n      ],\n      \"actor\": \"nobody\",\n      \"reason\": \"forge reports closed\",\n      \"tasks\": [\n        \"diverged\",\n        \"errored\",\n        \"settled\"\n      ]\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": "bin/fm-contributions.sh poll",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "scenario": "closed",
+    "result": "Converged both divergent and errored owners; retained owner signals and verdict; no forge call or wake; snapshot reports nobody; repeat poll performed no record rewrite."
+  },
+  {
+    "command": "bin/fm-contributions.sh poll",
+    "exit": 0,
+    "stdout": "contribution-wake: check: contributions settled 2b914c0dda1ce3b708e831cc572ea068b9de6b366f666dbc5bf8516474e435e9\ncontribution-wake: check: contributions settled aeba4c8d5f1e9bebd1acc1033c15e93cb19b614b93736f8dcf5b104c6f71a8e8\n",
+    "stderr": ""
+  },
+  {
+    "command": "bash /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/.test-base-contributions.sh poll",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "baseline": "merged",
+    "observed": "Unchanged base leaves duplicate owner open after poll"
+  },
+  {
+    "command": "bin/fm-fleet-snapshot.sh --contribution-input",
+    "exit": 0,
+    "stdout": "{\n  \"backlog\": {\n    \"path\": \"/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/merged/data/backlog.md\",\n    \"present\": true,\n    \"records\": []\n  },\n  \"tasks\": []\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": "bin/fm-contributions.sh snapshot /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/merged/input.json --all",
+    "exit": 0,
+    "stdout": "{\n  \"known\": 1,\n  \"checked\": 1,\n  \"counts\": {\n    \"captain\": 0,\n    \"fleet\": 0,\n    \"maintainer\": 0,\n    \"nobody\": 1\n  },\n  \"unmeasured\": 0,\n  \"complete\": true,\n  \"proven_clear\": true,\n  \"stale_verdicts\": 0,\n  \"missing_verdicts\": 0,\n  \"unreadable_records\": 0,\n  \"valid_until\": 1790371536,\n  \"captain\": [],\n  \"captain_omitted\": 0,\n  \"rows\": [\n    {\n      \"task\": \"diverged\",\n      \"url\": \"https://github.com/kunchenguid/firstmate/pull/5695\",\n      \"kind\": \"pr\",\n      \"checked_at\": \"2026-09-25T21:10:30Z\",\n      \"checked\": true,\n      \"final\": true,\n      \"head\": \"cb4199e296dd157ca76313ffbc68296655f5a1e4\",\n      \"verdict\": {\n        \"head\": \"cb4199e296dd157ca76313ffbc68296655f5a1e4\",\n        \"source\": \"https://github.com/kunchenguid/firstmate/pull/5695\",\n        \"actor\": \"fleet\",\n        \"summary\": \"retain owner judgment\",\n        \"freshness\": \"current\"\n      },\n      \"reviews\": [],\n      \"distinct_checks\": 19,\n      \"missing_verdicts\": 0,\n      \"pending_checks\": 0,\n      \"failed_checks\": 0,\n      \"stale_verdicts\": 0,\n      \"signals\": [\n        {\n          \"token\": \"owner-pending\",\n          \"body\": \"retain this signal\"\n        }\n      ],\n      \"actor\": \"nobody\",\n      \"reason\": \"forge reports merged\",\n      \"tasks\": [\n        \"diverged\",\n        \"errored\",\n        \"settled\"\n      ]\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  {
+    "command": "bin/fm-contributions.sh poll",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "scenario": "merged",
+    "result": "Converged both divergent and errored owners; retained owner signals and verdict; no forge call or wake; snapshot reports nobody; repeat poll performed no record rewrite."
+  }
+]

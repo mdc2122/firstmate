@@ -1,0 +1,56 @@
+{
+  "known": 1,
+  "checked": 1,
+  "counts": {
+    "captain": 0,
+    "fleet": 0,
+    "maintainer": 0,
+    "nobody": 1
+  },
+  "unmeasured": 0,
+  "complete": true,
+  "proven_clear": true,
+  "stale_verdicts": 0,
+  "missing_verdicts": 0,
+  "unreadable_records": 0,
+  "valid_until": 1790371536,
+  "captain": [],
+  "captain_omitted": 0,
+  "rows": [
+    {
+      "task": "diverged",
+      "url": "https://github.com/kunchenguid/firstmate/pull/5695",
+      "kind": "pr",
+      "checked_at": "2026-09-25T21:10:30Z",
+      "checked": true,
+      "final": true,
+      "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+      "verdict": {
+        "head": "cb4199e296dd157ca76313ffbc68296655f5a1e4",
+        "source": "https://github.com/kunchenguid/firstmate/pull/5695",
+        "actor": "fleet",
+        "summary": "retain owner judgment",
+        "freshness": "current"
+      },
+      "reviews": [],
+      "distinct_checks": 19,
+      "missing_verdicts": 0,
+      "pending_checks": 0,
+      "failed_checks": 0,
+      "stale_verdicts": 0,
+      "signals": [
+        {
+          "token": "owner-pending",
+          "body": "retain this signal"
+        }
+      ],
+      "actor": "nobody",
+      "reason": "forge reports merged",
+      "tasks": [
+        "diverged",
+        "errored",
+        "settled"
+      ]
+    }
+  ]
+}

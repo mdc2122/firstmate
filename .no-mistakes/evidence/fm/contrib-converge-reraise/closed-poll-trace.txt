@@ -1,0 +1,501 @@
++ set -eu
++++ dirname bin/fm-contributions.sh
+++ cd bin
+++ pwd
++ SCRIPT_DIR=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin
+++ cd /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/..
+++ pwd
++ FM_ROOT=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4
++ FM_HOME=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed
++ STATE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
++ DATA=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data
++ export FM_HOME FM_STATE_OVERRIDE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
++ FM_STATE_OVERRIDE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
++ . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/fm-pr-lib.sh
+++ FM_PR_PROVIDER=
+++ FM_PR_URL=
+++ FM_PR_HOST=
+++ FM_PR_PATH=
+++ FM_PR_OWNER=
+++ FM_PR_REPO=
+++ FM_PR_NUMBER=
+++ FM_PR_DATA_PROVIDER=
+++ FM_PR_DATA_URL=
+++ FM_PR_DATA_HOST=
+++ FM_PR_DATA_PATH=
+++ FM_PR_DATA_NUMBER=
+++ FM_PR_META_PROVIDER=
+++ FM_PR_META_URL=
+++ FM_PR_META_HOST=
+++ FM_PR_META_PATH=
+++ FM_PR_META_NUMBER=
+++ FM_PR_REG_ID=
+++ FM_PR_REG_PROVIDER=
+++ FM_PR_REG_URL=
+++ FM_PR_REG_HOST=
+++ FM_PR_REG_PATH=
+++ FM_PR_REG_NUMBER=
+++ FM_PR_REG_DATA_HASH=
+++ FM_PR_REG_TEMPLATE_HASH=
+++ FM_PR_REG_DATA_IDENTITY=
+++ FM_PR_REG_CHECK_IDENTITY=
+++ FM_PR_POLL_DATA_TMP=
+++ FM_PR_POLL_CHECK_TMP=
+++ FM_PR_POLL_REG_TMP=
+++ FM_PR_POLL_DATA_DEST=
+++ FM_PR_POLL_CHECK_DEST=
+++ FM_PR_POLL_REG_DEST=
+++ FM_PR_POLL_EXPECT_ID=
+++ FM_PR_POLL_EXPECT_PROVIDER=
+++ FM_PR_POLL_EXPECT_URL=
+++ FM_PR_POLL_EXPECT_HOST=
+++ FM_PR_POLL_EXPECT_PATH=
+++ FM_PR_POLL_EXPECT_NUMBER=
+++ FM_PR_POLL_EXPECT_DATA_HASH=
+++ FM_PR_POLL_EXPECT_TEMPLATE_HASH=
+++ FM_PR_POLL_EXPECT_DATA_IDENTITY=
+++ FM_PR_POLL_EXPECT_CHECK_IDENTITY=
+++ FM_PR_POLL_TEMPLATE=
+++ FM_PR_POLL_STATE_DEVICE=
+++ FM_PR_POLL_SNAPSHOT_ID=
+++ FM_PR_POLL_SNAPSHOT_PROVIDER=
+++ FM_PR_POLL_SNAPSHOT_URL=
+++ FM_PR_POLL_SNAPSHOT_HOST=
+++ FM_PR_POLL_SNAPSHOT_PATH=
+++ FM_PR_POLL_SNAPSHOT_NUMBER=
+++ FM_PR_POLL_SNAPSHOT_DATA_HASH=
+++ FM_PR_POLL_SNAPSHOT_TEMPLATE_HASH=
+++ FM_PR_POLL_SNAPSHOT_DATA_IDENTITY=
+++ FM_PR_POLL_SNAPSHOT_CHECK_IDENTITY=
+++ FM_PR_POLL_SNAPSHOT_REG_HASH=
+++ FM_PR_POLL_SNAPSHOT_REG_IDENTITY=
+++ FM_PR_POLL_REARM_DATA_IDENTITY=
+++ FM_PR_POLL_REARM_CHECK_IDENTITY=
+++ FM_PR_RETIRE_ID=
+++ FM_PR_RETIRE_PROVIDER=
+++ FM_PR_RETIRE_URL=
+++ FM_PR_RETIRE_HOST=
+++ FM_PR_RETIRE_PATH=
+++ FM_PR_RETIRE_NUMBER=
+++ FM_PR_RETIRE_DATA_HASH=
+++ FM_PR_RETIRE_TEMPLATE_HASH=
+++ FM_PR_RETIRE_DATA_IDENTITY=
+++ FM_PR_RETIRE_CHECK_IDENTITY=
+++ FM_PR_RETIRE_REG_HASH=
+++ FM_PR_RETIRE_REG_IDENTITY=
+++ FM_PR_RETIRE_RECEIPT_HASH=
+++ FM_PR_RETIRE_RECEIPT_IDENTITY=
+++ FM_PR_RECORD_STATE=
+++ FM_PR_RECORD_MERGED=
+++ FM_PR_POLL_RETIREMENT_REJECTED=
++ . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/fm-timeout-lib.sh
+++ set -u
++ case "${1:-}" in
++ command -v jq
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ NOW=2026-09-25T21:10:29Z
+++ jq -nr --arg now 2026-09-25T21:10:29Z '$now | fromdateiso8601'
++ EPOCH=1790370629
++ MAX_AGE=900
++ BUDGET=20
++ case "$MAX_AGE" in
++ case "$BUDGET" in
++ '[' 20 -ge 1 ']'
++ '[' 20 -le 25 ']'
+++ mktemp -d /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.XXXXXX
++ TMP=/var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC
++ LOCK_HELD=0
++ trap cleanup EXIT
++ trap 'exit 1' HUP INT TERM
++ case "${1:-}" in
++ poll
++ local task url old kind error observed
++ local -a row
++ acquire
++ '[' -d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state ']'
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state ']'
++ '[' -d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data ']'
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data ']'
++ FM_WAKE_QUEUE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.wake-queue
++ FM_WAKE_QUEUE_LOCK=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.wake-queue.lock
++ . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/fm-wake-lib.sh
+++++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/fm-wake-lib.sh
++++ cd /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin
++++ pwd
+++ FM_WAKE_LIB_DIR=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin
++++ cd /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/..
++++ pwd
+++ FM_WAKE_DEFAULT_ROOT=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4
+++ FM_ROOT=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4
+++ FM_HOME=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed
+++ STATE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
+++ FM_WAKE_QUEUE=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.wake-queue
+++ FM_WAKE_QUEUE_LOCK=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.wake-queue.lock
+++ FM_LOCK_STALE_AFTER=2
++++ uname
+++ _FM_UNAME=Darwin
+++ mkdir -p /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
+++ FM_WATCHER_MATCHED_IDENTITY=
+++ FM_WATCHER_HEALTHY_PID=
+++ FM_WATCHER_HEALTHY_IDENTITY=
+++ FM_WATCHER_VERDICT_OK=false
+++ FM_WATCHER_VERDICT_REASON=stale-beacon
+++ FM_RECOVERY_MARKER_TOKEN=
+++ FM_RECOVERY_MARKER_ACTION=none
+++ FM_WAKE_STATUS_KEY=
+++ FM_WAKE_STATUS_HISTORICAL=false
+++ FM_WAKE_EVENT_LINE=
+++ FM_WAKE_UNREAD_LINES=
++ fm_lock_acquire_wait /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ fm_lock_try_acquire /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock pid steal cur rc steal_owner primary_owner current
++ FM_LOCK_HELD_PID=
++ FM_LOCK_OWNER_DIR=
++ FM_LOCK_RECOVERED_PID=
++ fm_lock_try_create /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock allowed_steal_owner= ownerdir
++ FM_LOCK_OWNER_DIR=
+++ fm_lock_owner_dir /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
+++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock lock_abs
++++ fm_lock_abs_path /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock dir base
+++++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++++ dir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
+++++ basename /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++++ base=.contributions.lock
+++++ cd /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
+++++ pwd -P
++++ dir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state
++++ printf '%s/%s\n' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state .contributions.lock
+++ lock_abs=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
+++ mktemp -d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.XXXXXX
++ ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ']'
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ']'
++ fm_lock_prepare_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx mypid back
++ fm_current_pid mypid
++ local fm_pid
+++ exec sh -c 'printf "%s\n" "$PPID"'
++ fm_pid=79431
++ case "$fm_pid" in
++ '[' 1 -gt 0 ']'
++ printf -v mypid %s 79431
++ printf '%s\n' 79431
+++ cat /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/pid
++ back=79431
++ '[' 79431 = 79431 ']'
++ ln -s /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ fm_lock_points_to_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx actual
+++ readlink /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ actual=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx = /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ']'
++ fm_lock_claim /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ''
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx allowed_steal_owner= mypid back
++ fm_current_pid mypid
++ local fm_pid
+++ exec sh -c 'printf "%s\n" "$PPID"'
++ fm_pid=79431
++ case "$fm_pid" in
++ '[' 1 -gt 0 ']'
++ printf -v mypid %s 79431
+++ cat /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/pid
++ back=79431
++ '[' 79431 '!=' 79431 ']'
++ fm_lock_points_to_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx actual
+++ readlink /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ actual=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx = /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ']'
++ fm_lock_claim_blocked_by_steal /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ''
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock allowed_steal_owner= steal
++ steal=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.steal
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.steal ']'
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.steal ']'
++ return 1
++ return 0
++ FM_LOCK_OWNER_DIR=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ return 0
++ return 0
++ LOCK_HELD=1
++ get_input
++ /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin/fm-fleet-snapshot.sh --contribution-input
++ read_saved
++ local file
++ :
++ ERRORS=0
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data ']'
++ for file in '"$DATA"/*/contributions.json'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged ']'
++ '[' '!' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ wc -c
++ '[' '    1022' -gt 1048576 ']'
++ jq_lib -ne --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json '($record | length) == 1 and ($record[0] | valid_record)'
++++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
+++ basename /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged
++ jq -e --arg task diverged '.task == $task' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ jq -c . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ for file in '"$DATA"/*/contributions.json'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored ']'
++ '[' '!' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ wc -c
++ '[' '    1045' -gt 1048576 ']'
++ jq_lib -ne --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json '($record | length) == 1 and ($record[0] | valid_record)'
++++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
+++ basename /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored
++ jq -e --arg task errored '.task == $task' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ jq -c . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ for file in '"$DATA"/*/contributions.json'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json ']'
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json ']'
+++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled ']'
++ '[' '!' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json ']'
+++ wc -c
++ '[' '     656' -gt 1048576 ']'
++ jq_lib -ne --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json '($record | length) == 1 and ($record[0] | valid_record)'
++++ dirname /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json
+++ basename /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled
++ jq -e --arg task settled '.task == $task' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json
++ jq -c . /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/settled/contributions.json
++ jq -s . /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.jsonl
++ '[' 0 -eq 0 ']'
++ jq_lib -nr --slurpfile input /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/input.json --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json '
+    known($input[0];$saved[0]) | map(. as $k | . + {at:([$saved[0][] | select(.task == $k.task) | .records[] | select(.url == $k.url) | .checked_at] | first // "")})
+    | group_by(.url) | map({url:.[0].url,at:(map(.at) | min),tasks:(map(.task) | unique)})
+    | sort_by(.at,.tasks[0],.url)[] | [.url] + .tasks | @tsv'
++ local 'program=
+    known($input[0];$saved[0]) | map(. as $k | . + {at:([$saved[0][] | select(.task == $k.task) | .records[] | select(.url == $k.url) | .checked_at] | first // "")})
+    | group_by(.url) | map({url:.[0].url,at:(map(.at) | min),tasks:(map(.task) | unique)})
+    | sort_by(.at,.tasks[0],.url)[] | [.url] + .tasks | @tsv'
++ set -- -nr --slurpfile input /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/input.json --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json
++ jq -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin -nr --slurpfile input /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/input.json --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json 'include "fm-contributions"; 
+    known($input[0];$saved[0]) | map(. as $k | . + {at:([$saved[0][] | select(.task == $k.task) | .records[] | select(.url == $k.url) | .checked_at] | first // "")})
+    | group_by(.url) | map({url:.[0].url,at:(map(.at) | min),tasks:(map(.task) | unique)})
+    | sort_by(.at,.tasks[0],.url)[] | [.url] + .tasks | @tsv'
+++ date +%s
++ DEADLINE=1790370649
++ OBSERVATION_RESERVE=15
++ BUDGET_EXHAUSTED=0
++ IFS='	'
++ read -r -a row
++ '[' 4 -ge 2 ']'
+++ date +%s
++ '[' 20 -ge 15 ']'
++ url=https://github.com/kunchenguid/firstmate/pull/4802
++ jq -ne --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json --arg url https://github.com/kunchenguid/firstmate/pull/4802 --args 'any($ARGS.positional[] as $task | [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first;
+        . != null and (.observation.state | IN("merged","closed")))' diverged errored settled
++ settle_final https://github.com/kunchenguid/firstmate/pull/4802 diverged errored settled
++ local url=https://github.com/kunchenguid/firstmate/pull/4802 task
++ shift
++ jq -n --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json --arg url https://github.com/kunchenguid/firstmate/pull/4802 '
+    [$saved[0][] | .records[] | select(.url == $url
+      and (.observation.state | IN("merged","closed")))] as $final
+    | ([$final[] | select(.error == null)] | first) // ($final | first)'
++ for task in '"$@"'
++ fm_pr_task_id_valid diverged
++ local id=diverged
++ fm_task_id_path_safe diverged
++ local id=diverged
++ local LC_ALL=C
++ case "$id" in
++ jq -n --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json --arg task diverged --arg url https://github.com/kunchenguid/firstmate/pull/4802 '
+      [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first'
++ jq -e '. == null' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ jq -e --slurpfile final /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/final.json '.error != null or .observation != $final[0].observation' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ jq --slurpfile final /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/final.json '. + {observation:$final[0].observation,checked_at:$final[0].checked_at,error:null}' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ write_record diverged /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/row.json
++ local task=diverged file dir device staged
++ fm_pr_task_id_valid diverged
++ local id=diverged
++ fm_task_id_path_safe diverged
++ local id=diverged
++ local LC_ALL=C
++ case "$id" in
++ dir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged ']'
++ mkdir -p /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged
++ file=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged
++ device=16777234
++ fm_pr_regular_destination_on_device_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json 16777234
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json device=16777234
++ fm_pr_regular_destination_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ fm_pr_file_link_count /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %l /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' 1 = 1 ']'
++ '[' '!' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' 16777234 = 16777234 ']'
+++ umask 077
+++ mktemp /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/.contributions.XXXXXX
++ staged=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/.contributions.MTiDVL
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ jq_lib -ne --arg task diverged --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json '$record[0] | valid_record and .task == $task'
++ local 'program=$record[0] | valid_record and .task == $task'
++ set -- -ne --arg task diverged --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ jq -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin -ne --arg task diverged --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json 'include "fm-contributions"; $record[0] | valid_record and .task == $task'
++ jq --slurpfile row /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/row.json '.records = ([.records[] | select(.url != $row[0].url)] + $row)' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ chmod 600 /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/.contributions.MTiDVL
++ fm_pr_regular_destination_on_device_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json 16777234
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json device=16777234
++ fm_pr_regular_destination_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ fm_pr_file_link_count /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %l /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' 1 = 1 ']'
++ '[' '!' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json ']'
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ '[' 16777234 = 16777234 ']'
++ mv -f -- /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/.contributions.MTiDVL /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/diverged/contributions.json
++ for task in '"$@"'
++ fm_pr_task_id_valid errored
++ local id=errored
++ fm_task_id_path_safe errored
++ local id=errored
++ local LC_ALL=C
++ case "$id" in
++ jq -n --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json --arg task errored --arg url https://github.com/kunchenguid/firstmate/pull/4802 '
+      [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first'
++ jq -e '. == null' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ jq -e --slurpfile final /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/final.json '.error != null or .observation != $final[0].observation' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ jq --slurpfile final /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/final.json '. + {observation:$final[0].observation,checked_at:$final[0].checked_at,error:null}' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ write_record errored /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/row.json
++ local task=errored file dir device staged
++ fm_pr_task_id_valid errored
++ local id=errored
++ fm_task_id_path_safe errored
++ local id=errored
++ local LC_ALL=C
++ case "$id" in
++ dir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored ']'
++ mkdir -p /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored
++ file=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored
++ device=16777234
++ fm_pr_regular_destination_on_device_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json 16777234
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json device=16777234
++ fm_pr_regular_destination_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ fm_pr_file_link_count /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %l /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' 1 = 1 ']'
++ '[' '!' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' 16777234 = 16777234 ']'
+++ umask 077
+++ mktemp /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/.contributions.XXXXXX
++ staged=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/.contributions.rR37CR
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ jq_lib -ne --arg task errored --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json '$record[0] | valid_record and .task == $task'
++ local 'program=$record[0] | valid_record and .task == $task'
++ set -- -ne --arg task errored --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ jq -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/bin -ne --arg task errored --slurpfile record /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json 'include "fm-contributions"; $record[0] | valid_record and .task == $task'
++ jq --slurpfile row /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/row.json '.records = ([.records[] | select(.url != $row[0].url)] + $row)' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ chmod 600 /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/.contributions.rR37CR
++ fm_pr_regular_destination_on_device_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json 16777234
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json device=16777234
++ fm_pr_regular_destination_or_absent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ local path=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' '!' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ '[' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
++ '[' -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ fm_pr_file_link_count /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %l /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' 1 = 1 ']'
++ '[' '!' -e /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json ']'
+++ fm_pr_file_device /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++++ uname
+++ '[' Darwin = Darwin ']'
+++ /usr/bin/stat -f %d /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ '[' 16777234 = 16777234 ']'
++ mv -f -- /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/.contributions.rR37CR /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/data/errored/contributions.json
++ for task in '"$@"'
++ fm_pr_task_id_valid settled
++ local id=settled
++ fm_task_id_path_safe settled
++ local id=settled
++ local LC_ALL=C
++ case "$id" in
++ jq -n --slurpfile saved /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/saved.json --arg task settled --arg url https://github.com/kunchenguid/firstmate/pull/4802 '
+      [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first'
++ jq -e '. == null' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ jq -e --slurpfile final /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/final.json '.error != null or .observation != $final[0].observation' /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC/old.json
++ continue
++ IFS='	'
++ read -r -a row
++ cleanup
++ '[' 1 = 0 ']'
++ fm_lock_release /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock pid current ownerdir
++ fm_current_pid current
++ local fm_pid
+++ exec sh -c 'printf "%s\n" "$PPID"'
++ fm_pid=79431
++ case "$fm_pid" in
++ '[' 1 -gt 0 ']'
++ printf -v current %s 79431
++ '[' -L /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ']'
+++ fm_lock_link_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' -n /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ']'
+++ cat /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/pid
++ pid=79431
++ '[' 79431 = 79431 ']'
++ fm_lock_points_to_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx actual
+++ readlink /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ actual=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx = /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ']'
++ rm -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock
++ fm_lock_discard_owner /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local ownerdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ '[' -n /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx ']'
++ fm_lock_clean_known_files /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ local lockdir=/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ rm -f /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/pid /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/fm-home /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/pid-identity /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/role /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx/watcher-path
++ rmdir /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D6B3RZT50EQAG3RCHPJVP4/.convergence-live-xop9h9rm/closed/state/.contributions.lock.owner.t7SBsx
++ return 0
++ rm -rf -- /var/folders/2y/z9f083zn25j1rsfvpcntplcm0000gp/T//fm-contributions.TmIfZC
