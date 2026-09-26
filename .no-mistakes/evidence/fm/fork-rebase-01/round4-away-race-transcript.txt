@@ -1,0 +1,145 @@
+Real watcher and merge scripts; simulated forge and terminal dependencies. This is regression evidence, not a live forge merge.
+
+SCENARIO: yolo-poll-merge
+
+watch.out
+check: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/fm-pr-check-security.cTYBkh/yolo-poll-merge/home/state/task-a.check.sh: merged
+
+
+watch.err
+
+
+gh.log
+pr view https://github.com/o/r/pull/1 --json state -q .state
+pr view https://github.com/o/r/pull/1 --json headRefOid -q .headRefOid
+pr view https://github.com/o/r/pull/1 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup
+api repos/o/r/branches/main
+api --paginate repos/o/r/rules/branches/main
+pr merge 1 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash
+api graphql -f query=query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}} -F owner=o -F repo=r -F number=1 --jq .data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")
+
+
+home/state/.wake-queue
+1790390924	1	check	merged-task-a-https://github.com/o/r/pull/1	check: merge landed: task-a https://github.com/o/r/pull/1 yolo
+
+
+SCENARIO: yolo-poll-away-record
+
+watch.out
+check: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/fm-pr-check-security.cTYBkh/yolo-poll-away-record/home/state/z-stop.check.sh: stop-cycle
+
+
+watch.err
+
+
+gh.log
+pr view https://github.com/o/r/pull/1 --json state -q .state
+pr view https://github.com/o/r/pull/1 --json headRefOid -q .headRefOid
+pr view https://github.com/o/r/pull/1 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup
+api repos/o/r/branches/main
+api --paginate repos/o/r/rules/branches/main
+
+
+home/state/.watch-triage.log
+[2026-09-25T21:48:48-0500] yolo merge attempt for task-a refused or failed (rc=2): armed: state/task-a.check.sh
+verified: https://github.com/o/r/pull/1 is open and mergeable, with every unwaived required check reported and every unwaived check green at head 0123456789abcdef0123456789abcdef01234567
+error: automatic merge refused - the away-posture record exists at merge time; nothing was merged
+
+
+home/state/.afk-contract
+version: 2
+entered: 2026-09-26T02:48:46Z
+entered_epoch: 1790390926
+expected_return: -
+reach_channels: none
+reach_announced: No phone channel is configured; anything that needs you waits for your return.
+spend_max_concurrent_workers: 4
+confirmed: 2026-09-26T02:48:46Z
+confirmed_epoch: 1790390926
+words: |-
+  do not merge task-a while I am away
+
+
+home/state/.wake-queue
+
+
+SCENARIO: yolo-admission-away-lock
+
+watch.out
+check: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/fm-pr-check-security.cTYBkh/yolo-admission-away-lock/home/state/z-stop.check.sh: stop-cycle
+
+
+watch.err
+
+
+gh.log
+pr view https://github.com/o/r/pull/1 --json state -q .state
+pr view https://github.com/o/r/pull/1 --json headRefOid -q .headRefOid
+pr view https://github.com/o/r/pull/1 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup
+api repos/o/r/branches/main
+api --paginate repos/o/r/rules/branches/main
+
+
+home/state/.watch-triage.log
+[2026-09-25T21:48:54-0500] yolo merge attempt for task-a refused or failed (rc=1): armed: state/task-a.check.sh
+verified: https://github.com/o/r/pull/1 is open and mergeable, with every unwaived required check reported and every unwaived check green at head 0123456789abcdef0123456789abcdef01234567
+fm-afk-contract: the away-posture record is locked by live process 14254 (an in-flight merge, or another change to this record); nothing was changed
+error: PR merge refused - the away-posture record could not be locked for the merge; nothing was merged
+
+
+home/state/.afk-contract
+version: 2
+entered: 2026-09-26T02:48:50Z
+entered_epoch: 1790390930
+expected_return: -
+reach_channels: none
+reach_announced: No phone channel is configured; anything that needs you waits for your return.
+spend_max_concurrent_workers: 4
+confirmed: 2026-09-26T02:48:50Z
+confirmed_epoch: 1790390930
+words: |-
+  do not merge task-a while I am away
+
+
+home/state/.wake-queue
+
+
+SCENARIO: yolo-poll-away-record-race
+
+watch.out
+check: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/fm-pr-check-security.cTYBkh/yolo-poll-away-record-race/home/state/z-stop.check.sh: stop-cycle
+
+
+watch.err
+
+
+gh.log
+pr view https://github.com/o/r/pull/1 --json state -q .state
+pr view https://github.com/o/r/pull/1 --json headRefOid -q .headRefOid
+pr view https://github.com/o/r/pull/1 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup
+api repos/o/r/branches/main
+api --paginate repos/o/r/rules/branches/main
+
+
+home/state/.watch-triage.log
+[2026-09-25T21:48:59-0500] yolo merge attempt for task-a refused or failed (rc=2): armed: state/task-a.check.sh
+verified: https://github.com/o/r/pull/1 is open and mergeable, with every unwaived required check reported and every unwaived check green at head 0123456789abcdef0123456789abcdef01234567
+error: automatic merge refused - the away-posture record exists at merge time; nothing was merged
+
+
+home/state/.afk-contract
+version: 2
+entered: 2026-09-26T02:48:58Z
+entered_epoch: 1790390938
+expected_return: -
+reach_channels: none
+reach_announced: No phone channel is configured; anything that needs you waits for your return.
+spend_max_concurrent_workers: 4
+confirmed: 2026-09-26T02:48:58Z
+confirmed_epoch: 1790390938
+words: |-
+  do not merge task-a while I am away
+
+
+home/state/.wake-queue
+

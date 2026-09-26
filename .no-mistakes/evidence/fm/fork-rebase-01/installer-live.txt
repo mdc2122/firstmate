@@ -1,0 +1,23 @@
+✔ Linked fm-calm-omp from /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/install-live/home/.local/share/fm-calm-omp
+installed: fm-calm-omp loads in every omp session (standalone copy at /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/install-live/home/.local/share/fm-calm-omp)
+{
+  "npm": [
+    {
+      "name": "fm-calm-omp",
+      "version": "0.1.0",
+      "path": "/Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/install-live/home/.omp/plugins/node_modules/fm-calm-omp",
+      "manifest": {
+        "extensions": [
+          "./fm-calm-omp.ts"
+        ],
+        "version": "0.1.0"
+      },
+      "enabledFeatures": null,
+      "enabled": true
+    }
+  ],
+  "marketplace": []
+}
+error: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/install-live/fm/.omp/extensions/fm-calm-omp.ts.bak already exists; resolve it and the divergent /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-phase-tmp/install-live/fm/.omp/extensions/fm-calm-omp.ts by hand, then re-run
+Backup after refusal: earlier local edit
+Current legacy copy after refusal: later local edit

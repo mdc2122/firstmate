@@ -1,0 +1,2 @@
+✔ Linked fm-calm-omp from /tmp/fm-lab.6s711rrn/user/.local/share/fm-calm-omp
+installed: fm-calm-omp loads in every omp session (standalone copy at /tmp/fm-lab.6s711rrn/user/.local/share/fm-calm-omp)

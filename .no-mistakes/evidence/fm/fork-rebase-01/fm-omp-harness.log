@@ -1,0 +1,1 @@
+not ok - 'ompd' merely contains omp and must not detect as omp, got 'codex'

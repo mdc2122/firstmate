@@ -1,0 +1,12 @@
+ok - fm-harness: omp detects by its anchored name; the marker is a precedence override that needs real omp ancestry
+ok - session lock and shared liveness: omp is anchored in both shapes, decoys stay out
+ok - fm-harness: bun running the omp launcher detects as omp
+ok - fm-harness ancestry: the bun-launcher argv rule accepts the launcher and rejects decoys, bare runs, and flag mentions
+ok - fm-harness: OMPCODE=1 identifies omp, outranks CLAUDECODE, and yields to another harness's own marker
+ok - fm-harness: a structural claude ancestor outranks a leaked OMPCODE
+lock acquired: harness pid 58603
+ok - fm-lock acquires from bun-launcher ancestry, recognizes the live holder, and refuses a bare bun
+ok - fm-spawn: the omp launch line clears markers, pins posture, and wires the state-resident extension
+ok - fm-spawn: omp model validation is scoped to providers the listing can prove
+not ok - omp secondmate spawn should succeed: error: secondmate home cannot be inside the firstmate repo: /Users/Morley/.no-mistakes/worktrees/62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ/.test-tmp/fm-omp-harness.QIqY9o/secondmate/sm: expected exit 0, got 1
+exit=1

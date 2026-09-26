@@ -1,0 +1,32 @@
+
+╭─── omp v18.3.1 ──────────────────────────────────────────────────────────────────────────────────╮
+│                          │ Tips                                                                  │
+│      Welcome back!       │ # for prompt actions                                                  │
+│                          │ / for commands                                                        │
+│       ████████████       │ ! to run bash                                                         │
+│          ██  ██          │ $ to run python                                                       │
+│          ██  ██          │ ───────────────────────────────────────────────────────────────────── │
+│          ▒▒  ██          │ LSP Servers                                                           │
+│              ██          │ No LSP servers                                                        │
+│                          │                                                                       │
+│     DeepSeek V4 Pro      │                                                                       │
+│         deepseek         │                                                                       │
+│                          │ ───────────────────────────────────────────────────────────────────── │
+│                          │ Recent sessions                                                       │
+│                          │ No recent sessions                                                    │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: Try task isolation to create CoW worktrees
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.3.2 is available. Run: omp update
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Warning: /calm-omp: OMP's focused editor visibility action is unavailable. Use Ctrl+Shift+O or /settings >
+ Appearance > Display > Hide Tool Activity.
+
+ π > ◒ DeepSeek V4 Pro > 🌳 62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ > ⑂ detached ?1 > $0.00 ↓ ▶─3%───────┃─1M─
+╰─

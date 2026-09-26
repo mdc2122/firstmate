@@ -1,0 +1,4 @@
+ok - empty prefix mate cleanup preserves another mate's stall receipt
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 13 --recovery-generation 70116.1790384053.K9omj0
+grep: out of memory
+not ok - the oversized unread status line was truncated or omitted

@@ -1,0 +1,5 @@
+ok - a yolo task's still-open green PR merges through the guarded path and reports the landing
+ok - a yolo task's green PR is never auto-merged while a valid away record stands
+ok - automatic admission uses the merge authority boundary's away-record lock
+ok - an away record published during merge verification refuses the automatic merge
+ok - non-yolo tasks never attempt a merge and a red PR is refused by the guarded path

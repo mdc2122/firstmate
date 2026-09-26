@@ -1,0 +1,18 @@
+{
+  "npm": [
+    {
+      "name": "fm-calm-omp",
+      "version": "0.1.0",
+      "path": "/tmp/fm-lab.6s711rrn/user/.omp/plugins/node_modules/fm-calm-omp",
+      "manifest": {
+        "extensions": [
+          "./fm-calm-omp.ts"
+        ],
+        "version": "0.1.0"
+      },
+      "enabledFeatures": null,
+      "enabled": true
+    }
+  ],
+  "marketplace": []
+}

@@ -1,0 +1,32 @@
+
+  Muse Code 1.4.0
+
+❯ firstmate Muse signal drift guard
+
+◆ Interrupted · Report issues with /feedback
+
+── Voice input (⌥ + v to start) ──────────────────────────────────────────────────────────────────────────────
+❯ fresh unsent note
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  echo · /U/M/.n/w/6/0/.t/fm-muse-signals.gnsQSH/workspace · YOLO                             interrupting run
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

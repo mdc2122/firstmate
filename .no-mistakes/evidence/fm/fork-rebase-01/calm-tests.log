@@ -1,0 +1,8 @@
+ok - install links package into user plugin scope
+ok - reinstall is idempotent
+ok - identical legacy copy removed
+ok - divergent legacy copy preserved as .bak
+ok - an existing .bak is never overwritten
+ok - failed legacy retirement aborts before linking
+ok - failed legacy removal aborts before linking
+ok - omp discovers the linked package with the tracked extension entry

@@ -1,0 +1,4 @@
+[2026-09-25T21:34:30-0500] yolo merge attempt for task-a refused or failed (rc=1): armed: state/task-a.check.sh
+verified: https://github.com/o/r/pull/1 is open and mergeable, with every unwaived required check reported and every unwaived check green at head 0123456789abcdef0123456789abcdef01234567
+fm-afk-contract: the away-posture record is locked by live process 74679 (an in-flight merge, or another change to this record); nothing was changed
+error: PR merge refused - the away-posture record could not be locked for the merge; nothing was merged

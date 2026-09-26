@@ -1,0 +1,3 @@
+ok - empty prefix mate cleanup preserves another mate's stall receipt
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 13 --recovery-generation 50184.1790384105.MdgV9K
+ok - every readable unread status line is annotated in full while invalid status files preserve their raw wakes

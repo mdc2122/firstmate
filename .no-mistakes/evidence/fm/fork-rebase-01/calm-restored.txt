@@ -1,0 +1,32 @@
+│                          │ ───────────────────────────────────────────────────────────────────── │
+│                          │ Recent sessions                                                       │
+│                          │ • CALM_USER_VISIBLE (just now)                                        │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: Need a cheap nested model call? Use `completion(x...)`. Have a big batch of tasks? Ask clanker
+      to use it!
+
+
+
+ CALM_USER_VISIBLE
+
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ $ echo CALM_TOOL_VISIBLE                                                                                   │
+├─── Output ─────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ CALM_TOOL_VISIBLE                                                                                          │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+ CALM_END_VISIBLE
+
+
+ Warning: Could not restore model openai/gpt-4o. Using ollama/all-minilm:latest
+
+ Tool activity: visible
+
+ π > ⬢ all-minilm:latest > 🌳 62b3bc0be3e5/01M3D8P5E7FPTP6VHHKC2V69JQ > ⑂ detached ?1 ▶╎──────────┃─256─11261%
+╰─
