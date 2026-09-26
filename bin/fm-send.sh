@@ -268,28 +268,33 @@ fm_send_id_from_meta() { # <meta-file>
   printf '%s' "${base%.meta}"
 }
 
-# fm_send_clear_after_interrupt: muse RESTORES the interrupted prompt back into
+# fm_send_warn_after_interrupt: muse RESTORES the interrupted prompt back into
 # the composer when Escape cancels a turn, as real bright text (verified: fg
 # 38;2;204;211;219, luminance ~210, muse 0.1.0-R708.1), not de-emphasised ghost
-# text. Classifying that as pending input is correct - the text really is
-# unsubmitted - but leaving it there means the NEXT steer types onto the end of
-# it and submits both as one garbled message. Ctrl-U clears the composer
-# (verified), so the interrupt is not complete until it has been sent. A failed
-# clear is loud rather than silent, because the alternative is a corrupted steer.
-# WHICH adapters need that clear, and which key clears them, comes from the one
-# control-plane capability table (bin/fm-control-lib.sh) rather than a second
-# copy here - the same table bin/fm-control.sh's interrupt verb reads.
-fm_send_clear_after_interrupt() { # <key>
-  local key=$1 family clear
+# text. Firstmate deliberately never clears it: any automatic composer wipe
+# could erase fresh input the captain typed after the interrupt, and matching
+# the restored prompt proved too fragile to gate a destructive key on. Instead
+# this helper warns once when the composer provably holds text after the
+# interrupt (a short settle first, because the repaint lags the terminal
+# record by a second or three), and the typed steer path plus the doorbell's
+# pending-composer skip make sure nothing is typed onto the restored prompt.
+# A composer that reads empty or unknown at this single read is not warned:
+# protection belongs to the refuse-to-type guards, not to this advisory line.
+# WHICH adapters restore a prompt comes from the one control-plane capability
+# table (bin/fm-control-lib.sh) rather than a second copy here.
+fm_send_warn_after_interrupt() { # <key>
+  local key=$1 family cstate
   [ "$key" = Escape ] || return 0
   family=$(fm_control_harness_family "$TARGET_HARNESS") || return 0
-  clear=$(fm_control_interrupt_clear_key "$family") || return 0
-  [ -n "$clear" ] || return 0
+  [ "$family" = muse ] || return 0
   [ "$TARGET_BACKEND" != remote ] || return 0
-  if ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$clear" "$EXPECTED_LABEL"; then
-    echo "error: Escape reached $T, but the $TARGET_HARNESS composer could not be cleared; it still holds the restored prompt. Clear it before sending the next message." >&2
-    return 1
-  fi
+  sleep "${FM_SEND_INTERRUPT_SETTLE:-2}"
+  cstate=$(fm_backend_composer_state "$TARGET_BACKEND" "$T" "$EXPECTED_LABEL" 2>/dev/null) || cstate=unknown
+  case "$cstate" in
+    pending|pending-unproven)
+      echo "warning: $T's composer still holds text after the interrupt - the restored prompt, or fresh input. The composer is never cleared automatically; clear it yourself, or leave it: steers refuse to type while it holds text." >&2
+      ;;
+  esac
 }
 
 fm_send_normalize_key() { # <key>
@@ -789,7 +794,7 @@ if [ "${1:-}" = "--key" ]; then
     echo "error: key '$key' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
-  fm_send_clear_after_interrupt "$semantic_key" || exit 1
+  fm_send_warn_after_interrupt "$semantic_key" || exit 1
   fm_send_record_interrupt "$semantic_key" || exit 1
 else
   MESSAGE=$*
@@ -1123,6 +1128,25 @@ else
     *) retries=${FM_SEND_RETRIES:-3} ;;
   esac
   sleep_s=${FM_SEND_SLEEP:-0.4}
+  # muse restores the cancelled prompt into its composer after Escape and
+  # firstmate never clears it (never-clobber: any automatic wipe could erase
+  # fresh input the captain typed). A muse composer that provably holds text
+  # therefore REFUSES new typed text here - typing would concatenate onto the
+  # restored prompt or someone's half-entered input, the exact clobber this
+  # change exists to end. The doorbell plane carries the same guarantee
+  # without this check: its pending-composer skip types nothing. Scoped to
+  # muse so adapters with a legitimate typed-while-busy queue keep it.
+  case "$(fm_control_harness_family "$TARGET_HARNESS" 2>/dev/null || true)" in
+    muse)
+      muse_cstate=$(fm_backend_composer_state "$TARGET_BACKEND" "$T" "$EXPECTED_LABEL" 2>/dev/null) || muse_cstate=unknown
+      case "$muse_cstate" in
+        pending|pending-unproven)
+          echo "error: text not sent to $T: its muse composer holds pending text (the restored prompt or fresh input); firstmate never clears it automatically - clear it yourself, then resend" >&2
+          exit 1
+          ;;
+      esac
+      ;;
+  esac
   # Type once, submit, verify. Only exact empty confirms delivery; every other
   # verdict preserves the loud refusal boundary. Only LOCAL targets reach this
   # block: remote text rides the inbox leg above, and remote --key exits

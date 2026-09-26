@@ -203,6 +203,31 @@ That is the same terminal shape the `echo`-provider interrupt produced, now conf
 
 `tests/fm-muse-harness.test.sh` pins the resulting classifier behavior: a log settled by either terminal reads `idle`, an open run reads `busy`, and only a resolution failure reads `unknown`.
 
+## Muse 1.4.0 never-clobber interrupt behavior (verified 2026-09-26)
+
+Driven live on Muse Code 1.4.0 (1.4.0-R4161.1) under tmux (`muselive:fm-live1`),
+with `bin/fm-send.sh` resolving the pane through a task meta
+(`harness=muse`, `window=muselive:fm-live1`) so the real send paths ran:
+
+1. Escape delivered mid-model-step via `fm-send.sh live1 --key Escape` recorded
+   `terminal: cancelled` for the run and muse restored the submitted prompt
+   (`write a very long detailed essay...`) into the composer as real text.
+   fm-send printed the composer-held warning and sent **no** clear key -
+   the pane's composer kept the restored prompt, byte-identical.
+2. With that restored prompt still in the composer, an explicit-target typed
+   steer `fm-send.sh muselive:fm-live1 'fresh typed steer'` exited 1 with
+   `its muse composer holds pending text` and typed nothing; a task-selector
+   steer `fm-send.sh live1 'inbox steer'` recorded its inbox record and the
+   doorbell skipped the pending composer, again typing nothing.
+3. After one manual Ctrl-U emptied the composer, a typed steer landed and
+   submitted normally.
+
+`tests/fm-muse-harness.test.sh` pins the same contract through the fake
+backend: every muse Escape alias sends only Escape and warns on a proven
+non-empty composer, and a typed steer refuses a pending composer and sends
+once empty. `tests/fm-control.test.sh` pins `fm-control interrupt` to a lone
+Escape plus the same warning.
+
 ## Refreshing this record
 
 Run both live guards after any muse upgrade, because the version-suffixed process name, session protocol, and styled composer are vendor-controlled surfaces:

@@ -12,7 +12,7 @@ The router owns Muse's task-kind boundary.
 | Models | `--model <model>`; only provider `meta`. |
 | Busy | Durable session event log folded by `../../../bin/fm-busy-lib.sh`; no hook or plugin writer, arming, or seeded busy record. |
 | Exit | `/exit`, one Enter; prints `To continue this session, run muse resume <session-uuid>`. |
-| Interrupt | Single Escape records `terminal: cancelled` and restores bright prompt text, so control follows with `Ctrl+U`; the legacy typed key path uses the same clear table. |
+| Interrupt | Single Escape records `terminal: cancelled` and restores bright prompt text into the composer; firstmate never clears it (any automatic wipe could erase fresh operator input). Interrupt warns once when the composer provably holds text, and typed steers refuse while it does. |
 | Skill | `/<skill>`, the Claude or Grok form. |
 | Resume | `muse resume --last` or `muse resume <session-uuid>`; bare `muse resume` opens a picker. |
 | Autonomy | `--yolo` disables approval and sandbox and trusts the workspace. |

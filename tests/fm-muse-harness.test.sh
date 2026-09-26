@@ -444,9 +444,10 @@ EOF
 # --- interrupt --------------------------------------------------------------
 
 # muse RESTORES the interrupted prompt into the composer after Escape, as real
-# bright text. Left there, the next steer types onto the end of it and submits
-# both as one garbled message, so the interrupt is not complete until the
-# composer is cleared.
+# bright text. Firstmate never clears it: an automatic wipe could erase fresh
+# input typed after the interrupt, so the interrupt leaves the composer alone,
+# warns when it provably holds text, and a pending composer refuses typed
+# steers (and skips the doorbell) instead of concatenating onto it.
 make_send_case() {  # <name> <harness>
   local name=$1 harness=$2 case_dir home fakebin id
   case_dir="$TMP_ROOT/send-$name"
@@ -458,9 +459,22 @@ make_send_case() {  # <name> <harness>
 #!/usr/bin/env bash
 set -u
 case "${1:-}" in
-  display-message) printf 'fakepane\n'; exit 0 ;;
+  display-message)
+    for a in "$@"; do
+      case "$a" in
+        *cursor_y*) printf '%s\n' "${FM_FAKE_CURSOR_Y:-1}"; exit 0 ;;
+      esac
+    done
+    printf 'fakepane\n'; exit 0 ;;
   has-session) exit 0 ;;
   list-panes|list-windows) printf 'fm-send:0\n'; exit 0 ;;
+  capture-pane)
+    if [ -f "${FM_FAKE_PANE:-/nonexistent}" ]; then
+      cat "$FM_FAKE_PANE"
+    else
+      printf 'earlier transcript\n'
+    fi
+    exit 0 ;;
   send-keys)
     shift
     printf '%s\n' "$*" >> "$FM_FAKE_KEY_LOG"
@@ -477,13 +491,25 @@ SH
   printf '%s\n' "$case_dir|$home|$fakebin|$id"
 }
 
-run_send_key() {  # <home> <fakebin> <id> <key> <keylog>
+run_send_key() {  # <home> <fakebin> <id> <key> <keylog> [extra env handled by caller]
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$1" FM_STATE_OVERRIDE="$1/state" \
-    FM_FAKE_KEY_LOG="$5" PATH="$2:$PATH" \
+    FM_FAKE_KEY_LOG="$5" FM_SEND_INTERRUPT_SETTLE=0 PATH="$2:$PATH" \
     "$ROOT/bin/fm-send.sh" "$3" --key "$4" 2>&1
 }
 
-test_muse_escape_aliases_clear_the_composer() {
+run_send_text() {  # <home> <fakebin> <target> <message> <keylog>
+  FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$1" FM_STATE_OVERRIDE="$1/state" \
+    FM_FAKE_KEY_LOG="$5" PATH="$2:$PATH" \
+    "$ROOT/bin/fm-send.sh" "$3" "$4" 2>&1
+}
+
+# The fake pane's composer row: muse's bare glyph plus content, cursor parked
+# on it (FM_FAKE_CURSOR_Y=1), classifies pending.
+muse_pending_pane() {  # <dir> <composer-text>
+  printf 'earlier transcript\n\342\237\251 %s\n' "$2" > "$1/fake/pane"
+}
+
+test_muse_escape_never_clears_the_composer() {
   local entry name key rec case_dir home fakebin id keylog out status
   for entry in exact:Escape lower:escape short:Esc short-lower:esc; do
     name=${entry%%:*}
@@ -494,18 +520,19 @@ $rec
 EOF
     keylog="$case_dir/keys.log"
     : > "$keylog"
-    out=$(run_send_key "$home" "$fakebin" "$id" "$key" "$keylog")
+    muse_pending_pane "$case_dir" 'restored prompt'
+    out=$(FM_FAKE_PANE="$case_dir/fake/pane" run_send_key "$home" "$fakebin" "$id" "$key" "$keylog")
     status=$?
     expect_code 0 "$status" "muse $key send should succeed: $out"
     assert_grep "$key" "$keylog" "$key never reached the muse pane"
-    assert_grep 'C-u' "$keylog" "muse $key did not clear the restored composer"
-    [ "$(grep -c . "$keylog")" -ge 2 ] || fail "expected both the interrupt and the clear for $key"
-    head -1 "$keylog" | grep -q "$key" || fail "the clear was sent before the $key interrupt"
+    assert_no_grep 'C-u' "$keylog" "muse $key sent a composer clear, which must never happen"
+    [ "$(grep -c . "$keylog")" -eq 1 ] || fail "expected exactly the interrupt key for $key, got: $(cat "$keylog")"
+    assert_contains "$out" "still holds text" "a proven non-empty composer after $key did not warn"
   done
-  pass "every accepted muse Escape alias clears the restored composer"
+  pass "every accepted muse Escape alias leaves the composer untouched and warns"
 }
 
-test_non_muse_escape_does_not_clear() {
+test_non_muse_escape_sends_only_the_interrupt() {
   local rec case_dir home fakebin id keylog
   rec=$(make_send_case codex codex)
   IFS='|' read -r case_dir home fakebin id <<EOF
@@ -515,25 +542,34 @@ EOF
   : > "$keylog"
   run_send_key "$home" "$fakebin" "$id" Escape "$keylog" >/dev/null
   assert_grep 'Escape' "$keylog" "Escape never reached the codex pane"
-  assert_no_grep 'C-u' "$keylog" "a non-muse interrupt sent a composer clear it does not need"
-  pass "the composer clear is scoped to muse and does not touch other adapters"
+  [ "$(grep -c . "$keylog")" -eq 1 ] || fail "a non-muse interrupt must send exactly Escape, got: $(cat "$keylog")"
+  pass "the interrupt path sends a lone Escape on adapters that do not restore"
 }
 
-# A silent clear failure would leave the restored prompt in place and corrupt
-# the next steer, so the failure has to be loud.
-test_failed_clear_is_reported() {
+# A typed steer to a muse endpoint whose composer provably holds text refuses
+# BEFORE typing: any text typed there concatenates onto the restored prompt or
+# the operator's half-entered input. Once the composer is empty the same send
+# types normally.
+test_muse_typed_steer_refuses_pending_composer() {
   local rec case_dir home fakebin id keylog out status
-  rec=$(make_send_case clearfail muse)
+  rec=$(make_send_case steer muse)
   IFS='|' read -r case_dir home fakebin id <<EOF
 $rec
 EOF
   keylog="$case_dir/keys.log"
   : > "$keylog"
-  out=$(FM_FAKE_KEY_FAIL='-t fm-send:0 C-u' run_send_key "$home" "$fakebin" "$id" Escape "$keylog")
+  muse_pending_pane "$case_dir" 'restored prompt'
+  out=$(FM_FAKE_PANE="$case_dir/fake/pane" run_send_text "$home" "$fakebin" fm-send:0 'do the thing' "$keylog")
   status=$?
-  [ "$status" -ne 0 ] || fail "a failed muse composer clear was reported as success"
-  assert_contains "$out" "could not be cleared" "the failed clear did not explain the pane state"
-  pass "a failed muse composer clear fails loudly instead of leaving stale input"
+  expect_code 1 "$status" "a typed steer into a pending muse composer must refuse"$'\n'"$out"
+  assert_contains "$out" "composer holds pending text" "the refusal did not name the pending composer"
+  [ ! -s "$keylog" ] || fail "a refused steer must type nothing, got: $(cat "$keylog")"
+  printf 'earlier transcript\n\342\237\251\n' > "$case_dir/fake/pane"
+  out=$(FM_FAKE_PANE="$case_dir/fake/pane" FM_SEND_RETRIES=1 run_send_text "$home" "$fakebin" fm-send:0 'do the thing' "$keylog")
+  status=$?
+  expect_code 0 "$status" "an empty muse composer must accept the typed steer"$'\n'"$out"
+  assert_grep 'do the thing' "$keylog" "the accepted steer was never typed"
+  pass "a typed muse steer refuses a pending composer and sends once empty"
 }
 
 # --- busy source ------------------------------------------------------------
@@ -959,9 +995,9 @@ test_spawn_accepts_stored_credential
 test_spawn_resolves_relative_xdg_roots
 test_spawn_refuses_secondmate
 test_spawn_writes_busy_binding_and_teardown_removes_it
-test_muse_escape_aliases_clear_the_composer
-test_non_muse_escape_does_not_clear
-test_failed_clear_is_reported
+test_muse_escape_never_clears_the_composer
+test_non_muse_escape_sends_only_the_interrupt
+test_muse_typed_steer_refuses_pending_composer
 test_run_fold_tracks_open_and_settled_turns
 test_nested_terminal_record_does_not_settle_a_run
 test_binding_selects_the_matching_main_log

@@ -430,9 +430,15 @@ dismiss_interrupt_hazard() {  # <key> <ere>
 # of times, then the composer-clear key when the adapter needs one. Refuses
 # before sending anything when the backend cannot deliver either key, because
 # an interrupt that cancels the turn but leaves the restored prompt in the
-# composer would make the next submitted line concatenate onto it. An adapter
-# with an arm signal (fm_control_interrupt_arm_signal) gets each later press
-# only after the viewport proves the first one armed a running turn, and never
+# composer would make the next submitted line concatenate onto it. No verified
+# adapter currently needs a clear key: muse restores the cancelled prompt but
+# firstmate deliberately never clears it - any automatic composer wipe could
+# erase fresh input the operator typed after the interrupt, and matching the
+# restored prompt proved too fragile to gate a destructive key on. muse's
+# retained prompt is surfaced by the post-interrupt warning in do_interrupt,
+# and its typed steers refuse while the composer holds text. An adapter with
+# an arm signal (fm_control_interrupt_arm_signal) gets each later press only
+# after the viewport proves the first one armed a running turn, and never
 # sooner than its press gap; without that proof INTERRUPT_ARMED=no and no
 # further press is sent. Its hazard surface is then closed before returning.
 send_interrupt_keys() {
@@ -465,6 +471,27 @@ send_interrupt_keys() {
   [ -z "$hazard" ] || dismiss_interrupt_hazard "$key" "$hazard"
   [ -z "$clear" ] || fm_backend_send_key "$BACKEND" "$T" "$clear" "$LABEL" \
     || die "interrupt key $key reached task $ID, but $clear did not, so its composer still holds the cancelled prompt; clear it before the next lifecycle action"
+}
+
+# warn_nonempty_composer_after_interrupt: muse restores the cancelled prompt
+# into its composer on Escape and firstmate never clears it (see
+# fm_control_interrupt_clear_key), so an interrupt that provably left the
+# composer holding text reports it once here. The composer read happens after
+# the cancel claim's terminal-record wait, which already bounds the repaint
+# window; a transitional read yields no warning and protection stays with the
+# muse steer refusal (bin/fm-send.sh) rather than this advisory line.
+warn_nonempty_composer_after_interrupt() {
+  local cstate
+  case "$(fm_control_harness_family "$HARNESS" 2>/dev/null || true)" in
+    muse) ;;
+    *) return 0 ;;
+  esac
+  cstate=$(fm_backend_composer_state "$BACKEND" "$T" "$LABEL" 2>/dev/null) || cstate=unknown
+  case "$cstate" in
+    pending|pending-unproven)
+      echo "warning: task $ID's composer still holds text after the interrupt - the restored prompt, or fresh input. It is never cleared automatically; clear it yourself, or leave it: steers refuse to type while it holds text." >&2
+      ;;
+  esac
 }
 
 prepare_interrupt_ack() {
@@ -544,6 +571,7 @@ verify_interrupt_running() {
 do_interrupt() {
   local proof cancel
   cancel=$(deliver_interrupt) || return $?
+  warn_nonempty_composer_after_interrupt
   proof=$(verify_interrupt_running) || return $?
   printf '%s cancel=%s' "$proof" "$cancel"
 }

@@ -45,10 +45,8 @@ An interrupt whose first press shows no running turn stops there and reports `ca
 [`bin/fm-control-lib.sh`](../bin/fm-control-lib.sh) owns the arm signal, press gap, and picker signal.
 muse's session log records `terminal=cancelled` for the interrupted run, so the control plane reports `cancel=confirmed` only after observing that exact acknowledgement.
 
-An interrupt is not complete until the composer is empty.
-muse is the one verified adapter that restores the cancelled prompt back into its composer as real text, so its interrupt key is followed by a Ctrl+U clear; without it the next submitted line - including this plane's own exit command - would concatenate onto the restored prompt and submit both as one line.
-The clear is refused before anything is sent when the recorded backend cannot deliver it.
-
+An interrupt never clears the composer.
+muse is the one verified adapter that restores the cancelled prompt back into its composer as real text; firstmate deliberately leaves it there because any automatic composer wipe could erase input the operator typed after the interrupt. A `pending` or `pending-unproven` composer after the interrupt reports one warning, and the typed steer path refuses to concatenate onto it (`bin/fm-send.sh`'s muse pre-type refusal; the doorbell plane skips a pending composer without typing).
 `exit` reads the composer's state before typing the exit command and requires the exact `empty` verdict; a `pending` verdict refuses by naming the pending text, and any other verdict (`unknown`, `pending-unproven`, or an unreadable read) refuses as not proven empty, matching the fail-safe contract every other consumer that can overwrite composer input follows.
 
 **Teardown and discard are not verbs and will not become verbs.**

@@ -39,8 +39,9 @@ VERIFIED_HARNESSES="claude codex opencode pi pi-signed grok kimi cursor muse omp
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
-# clear that must FOLLOW the interrupt key, empty for every adapter that leaves
-# its composer empty on cancel.
+# clear that must FOLLOW the interrupt key, empty for every adapter: none is
+# allowed to wipe composer text. muse once carried C-u here; it now keeps the
+# restored prompt and refuses to type over it instead.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat, clear key
   case "$1" in
     claude) printf '/exit\tEscape\t1\t\n' ;;
@@ -53,7 +54,7 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     grok) printf '/exit\tC-c\t1\t\n' ;;
     kimi) printf '/exit\tEscape\t1\t\n' ;;
     cursor) printf '/exit\tEscape\t1\t\n' ;;
-    muse) printf '/exit\tEscape\t1\tC-u\n' ;;
+    muse) printf '/exit\tEscape\t1\t\n' ;;
     *) return 1 ;;
   esac
 }
@@ -892,6 +893,36 @@ test_muse_interrupt_confirms_adapter_acknowledgement() {
   pass "fm-control interrupt: muse confirms cancellation from its session log"
 }
 
+# muse keeps the restored prompt after Escape; the interrupt must warn when
+# the composer provably still holds text and must never send C-u.
+test_muse_interrupt_warns_nonempty_composer_never_clears() {
+  local dir root log out rc
+  dir=$(new_case muse-warn)
+  add_task "$dir" t1 muse
+  alive_as "$dir" muse
+  root="$dir/muse-sessions"
+  log="$root/2026/08/08/session-1/session.jsonl"
+  mkdir -p "$(dirname "$log")"
+  printf '%s\n' \
+    "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
+    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"work"}}}' > "$log"
+  printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=test\n' \
+    "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
+  # The composer still holds the restored prompt: muse's bare `⟩` glyph row
+  # with real text classifies pending (the stub's display-message reports the
+  # cursor on that row).
+  printf 'earlier transcript\n\342\237\251 work\n' > "$dir/fake/pane"
+  out=$(FM_FAKE_MUSE_LOG="$log" run_control "$dir" t1 interrupt); rc=$?
+  expect_code 0 "$rc" "muse interrupt should still observe its acknowledgement"$'\n'"$out"
+  [ "$(keys_sent "$dir")" = Escape ] \
+    || fail "a muse interrupt must send only Escape, never a composer clear, got: $(keys_sent "$dir")"
+  assert_contains "$out" "cancel=confirmed" \
+    "the result should still report muse's cancelled terminal acknowledgement"
+  assert_contains "$out" "still holds text" \
+    "a proven non-empty composer after the interrupt must warn"
+  pass "fm-control interrupt: muse keeps the restored prompt and warns once"
+}
+
 test_interrupt_revalidates_agent_after_acknowledgement_wait() {
   local dir root log out rc
   dir=$(new_case ack-race)
@@ -1064,6 +1095,7 @@ test_busy_agent_is_interrupted_before_the_exit_command
 test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
 test_muse_interrupt_confirms_adapter_acknowledgement
+test_muse_interrupt_warns_nonempty_composer_never_clears
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt
 test_agent_that_does_not_stop_fails_closed

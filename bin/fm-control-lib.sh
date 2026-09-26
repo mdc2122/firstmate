@@ -190,22 +190,25 @@ fm_control_interrupt_hazard_signal() {  # <harness>
 }
 
 # The key that must follow the interrupt key to leave the composer empty, or
-# nothing when the adapter needs none. muse is the one verified adapter that
-# RESTORES the cancelled prompt into its composer as real bright text, so an
-# interrupt is not complete until Ctrl+U has cleared it; leaving it there would
-# make the next submitted line - a steer, or this plane's own exit command -
-# concatenate onto it. cursor was checked for exactly that behaviour and does
-# NOT repollute: after a single Escape its composer shows only the `Add a
-# follow-up` placeholder, so it needs no clear key. gemini was checked the
-# same way and also does not repollute: after a single Escape it prints
-# `Request cancelled.` and its composer shows only the `Type your message
-# or @path/to/file` placeholder. Prints the key or nothing;
-# a harness with no verified mechanics returns nonzero, matching the tables
-# above.
+# nothing when the adapter needs none. NO adapter currently gets a clear key.
+# muse is the one verified adapter that RESTORES the cancelled prompt into
+# its composer as real bright text, but firstmate deliberately never clears
+# it: a blind Ctrl+U would erase input the operator typed after the interrupt,
+# and matching the restored prompt proved too fragile to gate a destructive
+# key on (the previous matching approach accumulated five same-theme review
+# findings). The composer keeps the restored prompt; a pending-composer
+# warning reports it, and the muse steer path refuses to type while the
+# composer holds text (bin/fm-send.sh's muse pre-type refusal plus the
+# doorbell's pending-composer skip). cursor was checked for exactly that
+# repollution hazard and shows none: after a single Escape its composer shows
+# only the `Add a follow-up` placeholder. gemini was checked the same way and
+# also does not repollute: after a single Escape it prints `Request
+# cancelled.` and its composer shows only the `Type your message or
+# @path/to/file` placeholder. Prints the key or nothing; a harness with no
+# verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    muse) printf 'C-u' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy|devin) ;;
+    muse|claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy|devin) ;;
     *) return 1 ;;
   esac
 }
