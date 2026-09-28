@@ -101,6 +101,11 @@
 #   check: rejected unauthenticated PR poll retirement receipts: <paths>
 #                          invalid pending retirements were preserved without
 #                          running a check or removing poll artifacts
+#   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
+#                          an armed GitHub merge poll's pull request has had every
+#                          check green but could not merge for
+#                          FM_PR_GREEN_BLOCKED_SECS (default 30 minutes); one wake
+#                          per episode (pr_green_blocked_tick)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
@@ -223,6 +228,10 @@ HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
+PR_GREEN_BLOCKED_SECS=${FM_PR_GREEN_BLOCKED_SECS:-1800}  # green-but-unmergeable PR age before its one wake
+case "$PR_GREEN_BLOCKED_SECS" in
+  ''|*[!0-9]*) PR_GREEN_BLOCKED_SECS=1800 ;;
+esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
   ''|*[!0-9]*|0) HOME_SUMMARY_INTERVAL=300 ;;
@@ -2081,7 +2090,10 @@ if ! fm_pr_poll_retirement_recover_all "$STATE" "$SCRIPT_DIR/fm-pr-poll.sh"; the
 fi
 
 # Shared by both the first-notification and already-notified paths below so
-# the retirement sequence (bin/fm-pr-lib.sh) is stated once.
+# the retirement sequence (bin/fm-pr-lib.sh) is stated once. The green-
+# unmergeable episode record (pr_green_blocked_tick below) retires with the
+# poll: a merged pull request never reaches the tick's clear reading, so
+# nothing else would end its episode before task teardown.
 retire_merged_pr_poll() {  # <id>
   local id=$1
   if fm_pr_poll_retirement_publish "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" merged; then
@@ -2090,6 +2102,76 @@ retire_merged_pr_poll() {  # <id>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
+  rm -f "$STATE/$id.pr-green-blocked"
+}
+
+# A green pull request that cannot merge raises no merge poll output, so an
+# armed yolo merge can sit refused (behind its base, conflicting, protection)
+# with nobody told. bin/fm-pr-green-blocked.sh reads the forge; this owns the
+# episode: state/<id>.pr-green-blocked records "<url> <head-sha>
+# <first-seen-epoch> <alerted>" from the first blocked reading, one wake fires
+# once the episode is PR_GREEN_BLOCKED_SECS old, and a clear reading (closed,
+# a red or pending check, an unreported required check, waiting in the base
+# branch's merge queue, or mergeable again) ends it, so a later block is a new
+# episode; a merge ends it through retire_merged_pr_poll, which runs before
+# this tick would. An episode is keyed by URL and head: a re-pushed head that
+# is blocked again before any clear reading (a rebase whose CI went green
+# between two sweeps while the base advanced) starts a fresh episode with its
+# own timer rather than hiding inside the alerted one. An unknown reading
+# changes nothing. The wake row is queued before the episode is marked
+# alerted, preferring a rare duplicate over silence.
+# Runs after the poll's own capture in the check loop. It holds the caller's
+# PR poll control lock only when that loop still does: the yolo merge path
+# releases the lock before bin/fm-pr-merge.sh runs and retakes it only for a
+# landed merge, so after a refused yolo merge this tick runs unlocked and its
+# release is a no-op. The record is written atomically by the single watcher
+# instance, so no lock is retaken for it. Wakes (and exits) only when due.
+pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
+  local tmp
+  tmp=$(mktemp "$STATE/.pr-green-blocked.XXXXXX") || return 1
+  if printf '%s %s %s %s\n' "$2" "$3" "$4" "$5" > "$tmp" && mv -f -- "$tmp" "$1"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+pr_green_blocked_tick() {  # <id> <check-path> <url>
+  local id=$1 c=$2 url=$3 file probe verdict head detail now age reason
+  local rec_url='' rec_head='' first='' alerted=''
+  file="$STATE/$id.pr-green-blocked"
+  probe="$SCRIPT_DIR/fm-pr-green-blocked.sh"
+  [ -f "$probe" ] || return 0
+  run_check_capture "$probe" "$url" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    clear) rm -f "$file"; return 0 ;;
+    'blocked '*' '*)
+      detail=${verdict#blocked }
+      head=${detail%% *}
+      detail=${detail#* }
+      ;;
+    *) return 0 ;;
+  esac
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    read -r rec_url rec_head first alerted < "$file" || true
+  fi
+  case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
+  if [ "$rec_url" != "$url" ] || [ "$rec_head" != "$head" ]; then
+    first=$now
+    alerted=0
+    pr_green_blocked_record "$file" "$url" "$head" "$first" 0 || return 0
+  fi
+  [ "$alerted" = 1 ] && return 0
+  age=$((now - first))
+  [ "$age" -ge "$PR_GREEN_BLOCKED_SECS" ] || return 0
+  reason="check: $c: green-unmergeable $url for $((age / 60))m: $detail"
+  fm_wake_append check "$c" "$reason" || exit 1
+  pr_green_blocked_record "$file" "$url" "$head" "$first" 1 || exit 1
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
 }
 
 resurface_after_downtime() {
@@ -2330,6 +2412,9 @@ EOF
         fm_wake_append check "$c" "$reason" || exit 1
         touch "$STATE/.last-check"
         wake "$reason"
+      fi
+      if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
+        pr_green_blocked_tick "$id" "$c" "$url"
       fi
       pr_poll_control_release || exit 1
     done

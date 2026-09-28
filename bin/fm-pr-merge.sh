@@ -11,8 +11,9 @@
 # A GitHub merge is refused unless every pre-merge condition holds, each read
 # live at merge time rather than taken from recorded metadata: the pull request
 # is open, not a draft, mergeable, free of conflicts, and every unwaived check
-# is green at the exact current head commit, where github_checks_not_green below
-# owns what makes a check green and judges each one by its current run.
+# is green at the exact current head commit, where bin/fm-pr-lib.sh's
+# fm_pr_github_checks_not_green owns what makes a check green and judges each
+# one by its current run.
 # Every failing condition is reported, not
 # just the first. The verified head is then passed to gh as
 # --match-head-commit, so a push that lands between that read and the merge
@@ -492,84 +493,6 @@ FIELDS
   FM_PR_GITLAB_ASYNC_CONFIGURED=$async_configured
 }
 
-# Every GitHub check that is not green in the given live pull-request JSON, one
-# name per line. An entry is green when it is a status context whose state is
-# SUCCESS, or a check run that completed with SUCCESS, NEUTRAL, or SKIPPED (so
-# a pending check is not green either). Exits nonzero when the rollup cannot be
-# read, so a malformed answer is a failed read and never an empty red set.
-#
-# The rollup can hold several runs of one check name at the same head, because
-# GitHub cancels a pull request's in-flight run when the base branch advances
-# and re-triggers it; the cancelled run stays in the rollup beside the passing
-# re-run. A check is therefore judged by its current run rather than by any run
-# that a later one superseded, which is what makes this agree with GitHub's own
-# CLEAN mergeStateStatus instead of refusing a pull request GitHub considers
-# mergeable.
-#
-# Supersession applies only among check runs with the same reported name. A
-# name is dropped from the red set only when every non-green run is COMPLETED,
-# has a whole-second UTC startedAt, and started strictly before a green run.
-# Status contexts are never grouped or superseded, and every non-green one is
-# reported independently. A still-running, queued, undated, or tied check run
-# stays red. A name whose runs are all green needs no timestamp, while a name
-# with no green run stays red.
-#
-# The reported name is also what --allow-red matches. An unnamed check run is
-# grouped alone and can neither supersede nor be superseded, because unrelated
-# unnamed checks must not be treated as one.
-github_checks_not_green() {
-  local json=$1
-  printf '%s' "$json" | jq -r '
-    def settled_at:
-      if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
-      then . else null end;
-    if (.statusCheckRollup | type) != "array" then error("no check rollup") else . end
-    | [ .statusCheckRollup
-        | to_entries[]
-        | .key as $i
-        | .value
-        | if .__typename == "CheckRun" then
-            {
-              kind: "check_run",
-              name: (.name // ""),
-              completed: (.status == "COMPLETED"),
-              ok: (.status == "COMPLETED" and (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED")),
-              at: (.startedAt | settled_at)
-            }
-            | . + {group: (if .name == "" then ["", $i] else [.name, -1] end)}
-          else
-            {kind: "status_context", name: (.context // ""), ok: (.state == "SUCCESS")}
-          end
-      ]
-    | . as $entries
-    | (
-        ($entries[]
-          | select(.kind == "status_context" and (.ok | not))
-          | .name
-        ),
-        ($entries
-          | [.[] | select(.kind == "check_run")]
-          | group_by(.group)[]
-          | {
-              name: .[0].name,
-              reds: [.[] | select(.ok | not)],
-              newest_green: ([.[] | select(.ok) | .at | select(. != null)] | max)
-            }
-          | select(
-              (.reds | length) > 0
-              and (
-                .newest_green == null
-                or any(.reds[]; (.completed | not) or .at == null)
-                or ([.reds[] | .at] | max) >= .newest_green
-              )
-            )
-          | .name
-        )
-      )
-    | if . == "" then "(unnamed check)" else . end
-  ' 2>/dev/null || return 1
-}
-
 # Pre-merge conditions for a GitHub pull request, read from one live view.
 # Sets FM_PR_MERGE_HEAD to the verified head on success.
 github_verify_mergeable() {
@@ -620,7 +543,7 @@ FIELDS
     echo "error: could not read the GitHub pull request head commit before merging" >&2
     return 1
   fi
-  if ! red=$(github_checks_not_green "$json"); then
+  if ! red=$(fm_pr_github_checks_not_green "$json"); then
     echo "error: could not read the GitHub pull request state before merging" >&2
     return 1
   fi
@@ -672,56 +595,13 @@ EOF
   FM_PR_GITHUB_BASE=$base
 }
 
-# Read one live GitHub pull request view after gh returns. The selected
-# fields distinguish a landed pull request from a merge-queue entry and retain
-# the concrete state needed for a refusal. gh supplies the complete queue-aware
-# view; if that post-merge read becomes unavailable, gh-axi is the degradation
-# path that can prove only a landed merge. gh remains a pre-merge prerequisite.
-FM_PR_GITHUB_STATE=
-FM_PR_GITHUB_MERGED=
-FM_PR_GITHUB_QUEUED=
-FM_PR_GITHUB_BASE=
-FM_PR_GITHUB_QUEUE_OBSERVED=false
-github_read_outcome_with_gh() {
-  local fields line
-  local total=0 named=0
-  local state='' merged='' queued='' base=''
-
-  # shellcheck disable=SC2016  # GraphQL variables are literal query syntax.
-  if ! fields=$(gh api graphql \
-    -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}}' \
-    -F "owner=$PR_OWNER" -F "repo=$PR_REPO" -F "number=$PR_NUMBER" \
-    --jq '.data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")' \
-    2>/dev/null) || [ -z "$fields" ]; then
-    return 1
-  fi
-  while IFS= read -r line; do
-    total=$((total + 1))
-    case "$line" in
-      state=*) state=${line#state=} ;;
-      merged=*) merged=${line#merged=} ;;
-      queued=*) queued=${line#queued=} ;;
-      base=*) base=${line#base=} ;;
-      *) continue ;;
-    esac
-    named=$((named + 1))
-  done <<FIELDS
-$fields
-FIELDS
-  if [ "$named" -ne 4 ] || [ "$total" -ne 4 ] || [ -z "$state" ] \
-    || { [ "$merged" != true ] && [ "$merged" != false ]; } \
-    || { [ "$queued" != true ] && [ "$queued" != false ]; } \
-    || [ -z "$base" ]; then
-    return 1
-  fi
-
-  FM_PR_GITHUB_STATE=$state
-  FM_PR_GITHUB_MERGED=$merged
-  FM_PR_GITHUB_QUEUED=$queued
-  FM_PR_GITHUB_BASE=$base
-  FM_PR_GITHUB_QUEUE_OBSERVED=true
-}
-
+# Read one live GitHub pull request view after gh returns
+# (bin/fm-pr-lib.sh fm_pr_github_read_outcome_with_gh, which
+# bin/fm-pr-green-blocked.sh shares). The selected fields distinguish a landed
+# pull request from a merge-queue entry and retain the concrete state needed
+# for a refusal. gh supplies the complete queue-aware view; if that post-merge
+# read becomes unavailable, gh-axi is the degradation path that can prove only
+# a landed merge. gh remains a pre-merge prerequisite.
 github_read_outcome_with_gh_axi() {
   local output state
   if ! output=$(gh-axi pr view "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" 2>/dev/null); then
@@ -761,30 +641,12 @@ github_read_outcome() {
   # pull request as neither merged nor queued is a concrete outcome, not a
   # missing one, so it keeps its own refusal. The gh-axi view cannot observe the
   # merge queue, so it can only turn this into a proved merge or into a refusal.
-  github_read_outcome_with_gh && return 0
+  fm_pr_github_read_outcome_with_gh "$PR_OWNER" "$PR_REPO" "$PR_NUMBER" && return 0
   if github_read_outcome_with_gh_axi && [ "$FM_PR_GITHUB_MERGED" = true ]; then
     return 0
   fi
   echo "error: could not read the GitHub pull request outcome after the merge attempt: the gh read failed and the gh-axi view could not prove the outcome either; PR metadata and merge poll remain recorded" >&2
   return 1
-}
-
-github_urlencode_path_segment() {
-  local LC_ALL=C input=$1 encoded='' char octet hex
-  while [ -n "$input" ]; do
-    char=${input%"${input#?}"}
-    input=${input#?}
-    case "$char" in
-      [-._~a-zA-Z0-9]) encoded=$encoded$char ;;
-      *)
-        printf -v octet '%d' "'$char"
-        [ "$octet" -ge 0 ] || octet=$((octet + 256))
-        printf -v hex '%02X' "$octet"
-        encoded=$encoded%$hex
-        ;;
-    esac
-  done
-  printf '%s' "$encoded"
 }
 
 # Read the effective merge-queue method for the observed base branch. The four
@@ -803,7 +665,7 @@ github_read_queue_method() {
   FM_PR_GITHUB_QUEUE_STATUS=unreadable
   command -v gh >/dev/null 2>&1 || return 0
   [ -n "$FM_PR_GITHUB_BASE" ] || return 0
-  branch_path=$(github_urlencode_path_segment "$FM_PR_GITHUB_BASE")
+  branch_path=$(fm_pr_github_urlencode_path_segment "$FM_PR_GITHUB_BASE")
   api_err=$(mktemp "${TMPDIR:-/tmp}/fm-pr-merge-queue-rules.XXXXXX") || return 0
   if ! methods=$(gh api \
     --paginate "repos/$PR_OWNER/$PR_REPO/rules/branches/$branch_path" \
