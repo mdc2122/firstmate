@@ -2111,16 +2111,21 @@ retire_merged_pr_poll() {  # <id>
 # episode: state/<id>.pr-green-blocked records "<url> <head-sha>
 # <first-seen-epoch> <alerted>" from the first blocked reading, one wake fires
 # once the episode is PR_GREEN_BLOCKED_SECS old, and a clear reading (closed,
-# a red or pending check, an unreported required check, or mergeable again)
-# ends it, so a later block is a new episode; a merge ends it through
-# retire_merged_pr_poll, which runs before this tick would. An episode is
-# keyed by URL and head: a re-pushed head that is blocked again before any
-# clear reading (a rebase whose CI went green between two sweeps while the
-# base advanced) starts a fresh episode with its own timer rather than hiding
-# inside the alerted one. An unknown
-# reading changes nothing. The wake row is queued before the episode is
-# marked alerted, preferring a rare duplicate over silence.
-# Runs under the caller's PR poll control lock; wakes (and exits) only when due.
+# a red or pending check, an unreported required check, waiting in the base
+# branch's merge queue, or mergeable again) ends it, so a later block is a new
+# episode; a merge ends it through retire_merged_pr_poll, which runs before
+# this tick would. An episode is keyed by URL and head: a re-pushed head that
+# is blocked again before any clear reading (a rebase whose CI went green
+# between two sweeps while the base advanced) starts a fresh episode with its
+# own timer rather than hiding inside the alerted one. An unknown reading
+# changes nothing. The wake row is queued before the episode is marked
+# alerted, preferring a rare duplicate over silence.
+# Runs after the poll's own capture in the check loop. It holds the caller's
+# PR poll control lock only when that loop still does: the yolo merge path
+# releases the lock before bin/fm-pr-merge.sh runs and retakes it only for a
+# landed merge, so after a refused yolo merge this tick runs unlocked and its
+# release is a no-op. The record is written atomically by the single watcher
+# instance, so no lock is retaken for it. Wakes (and exits) only when due.
 pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
   local tmp
   tmp=$(mktemp "$STATE/.pr-green-blocked.XXXXXX") || return 1
@@ -2169,28 +2174,6 @@ pr_green_blocked_tick() {  # <id> <check-path> <url>
   wake "$reason"
 }
 
-# A poll armed before a state volume remount can fail capture only because its
-# registration names the old device number; bin/fm-pr-lib.sh
-# fm_pr_poll_registration_rerecord_device owns the proof and the rewrite.
-# Returns 0 when a re-record was attempted under the control lock, so the caller
-# captures again whatever the outcome: a concurrent re-arm may have published a
-# valid poll instead, and the strict capture decides either way.
-rerecord_device_shifted_pr_poll() {  # <id>
-  local id=$1
-  fm_pr_poll_registration_device_shifted "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" || return 1
-  PR_POLL_CONTROL_LOCK="$STATE/.control-$id.lock"
-  fm_lock_acquire_wait "$PR_POLL_CONTROL_LOCK" || exit 1
-  PR_POLL_PUBLISH_LOCK="$STATE/.pr-poll-publish-$id.lock"
-  fm_lock_acquire_wait "$PR_POLL_PUBLISH_LOCK" || exit 1
-  if fm_pr_poll_registration_rerecord_device "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh"; then
-    triage_log "re-recorded PR poll identity for $id after its state volume device number changed"
-  else
-    triage_log "PR poll identity for $id was not re-recorded; the locked proof or rewrite did not hold"
-  fi
-  pr_poll_publish_release || exit 1
-  pr_poll_control_release || exit 1
-  return 0
-}
 resurface_after_downtime() {
   # Handling successors already have a predecessor-delivered wake on the way.
   # Re-announcing from this cycle is what turned a lost handshake into an

@@ -1025,6 +1025,68 @@ FIELDS
   FM_PR_RECORD_MERGED=$merged
 }
 
+# Read one live GitHub pull request outcome: its state, whether it merged,
+# whether it is waiting in its base branch's merge queue, and its base branch.
+# bin/fm-pr-merge.sh reads it after a merge attempt to tell a landed pull
+# request from a queued one, and bin/fm-pr-green-blocked.sh reads it so a
+# queued pull request, which GitHub reports as BLOCKED, is never called stuck.
+# Returns 1 when the read failed or the payload was not the four named fields;
+# the outputs are then unchanged.
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+FM_PR_GITHUB_STATE=
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+FM_PR_GITHUB_MERGED=
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh and bin/fm-pr-green-blocked.sh.
+FM_PR_GITHUB_QUEUED=
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+FM_PR_GITHUB_BASE=
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+FM_PR_GITHUB_QUEUE_OBSERVED=false
+fm_pr_github_read_outcome_with_gh() {  # <owner> <repo> <number>
+  local owner=$1 repo=$2 number=$3 fields line
+  local total=0 named=0
+  local state='' merged='' queued='' base=''
+
+  # shellcheck disable=SC2016  # GraphQL variables are literal query syntax.
+  if ! fields=$(gh api graphql \
+    -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}}' \
+    -F "owner=$owner" -F "repo=$repo" -F "number=$number" \
+    --jq '.data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")' \
+    2>/dev/null) || [ -z "$fields" ]; then
+    return 1
+  fi
+  while IFS= read -r line; do
+    total=$((total + 1))
+    case "$line" in
+      state=*) state=${line#state=} ;;
+      merged=*) merged=${line#merged=} ;;
+      queued=*) queued=${line#queued=} ;;
+      base=*) base=${line#base=} ;;
+      *) continue ;;
+    esac
+    named=$((named + 1))
+  done <<FIELDS
+$fields
+FIELDS
+  if [ "$named" -ne 4 ] || [ "$total" -ne 4 ] || [ -z "$state" ] \
+    || { [ "$merged" != true ] && [ "$merged" != false ]; } \
+    || { [ "$queued" != true ] && [ "$queued" != false ]; } \
+    || [ -z "$base" ]; then
+    return 1
+  fi
+
+  # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+  FM_PR_GITHUB_STATE=$state
+  # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+  FM_PR_GITHUB_MERGED=$merged
+  # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh and bin/fm-pr-green-blocked.sh.
+  FM_PR_GITHUB_QUEUED=$queued
+  # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+  FM_PR_GITHUB_BASE=$base
+  # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+  FM_PR_GITHUB_QUEUE_OBSERVED=true
+}
+
 fm_pr_github_read_record_with_gh_axi() {  # <owner> <repo> <number>
   local owner=$1 repo=$2 number=$3 output state
   FM_PR_RECORD_STATE=

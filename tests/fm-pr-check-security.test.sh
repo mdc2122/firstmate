@@ -1606,10 +1606,11 @@ test_green_unmergeable_pr_alerts_once_per_episode() {
 
 # A required check that has not reported is absent from the rollup rather than
 # red, so a behind-its-base PR with an empty-looking green rollup has not
-# passed CI. The probe consults the base branch's required set (the same read
-# bin/fm-pr-merge.sh gates on) and treats an unreported required check as
-# clear: no episode starts and no alert fires, however long it sits. Once that
-# check reports green the PR is genuinely stuck and the alert fires.
+# passed CI. The probe consults the base branch's required set (a read only
+# the probe makes; bin/fm-pr-merge.sh shares just the check-green rule) and
+# treats an unreported required check as clear: no episode starts and no alert
+# fires, however long it sits. Once that check reports green the PR is
+# genuinely stuck and the alert fires.
 test_green_pr_with_unreported_required_check_does_not_alert() {
   local dir state url=https://github.com/o/r/pull/1
   dir=$(make_case green-unreported-required)
@@ -1637,6 +1638,50 @@ test_green_pr_with_unreported_required_check_does_not_alert() {
   esac
   unset FM_TEST_GH_BRANCH_JSON
   pass "an unreported required check keeps a behind-its-base PR out of the green-unmergeable alert until it reports"
+}
+
+# GitHub reports a pull request waiting in its base branch's merge queue as
+# BLOCKED, and bin/fm-pr-merge.sh keeps the merge poll armed for a queued
+# outcome, so to the view read alone a long queue wait looks like a protection
+# block. The probe reads the queue state and treats a queued pull request as
+# clear: no episode starts, an open one ends, and no alert fires; once it is
+# out of the queue and still blocked, a fresh episode alerts.
+test_green_pr_in_merge_queue_does_not_alert() {
+  local dir state url=https://github.com/o/r/pull/1
+  dir=$(make_case green-merge-queued)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_poll_meta "$state" task-a "$url"
+  seed_canonical_poll "$dir" task-a "$url"
+  add_stop_custom_check "$dir"
+  export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false
+
+  green_blocked_cycle "$dir" "$dir/w1.out" BLOCKED SUCCESS 1800
+  case "$(cat "$dir/w1.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a protection-blocked PR under the threshold raised an alert: $(cat "$dir/w1.out")" ;; esac
+  [ -f "$state/task-a.pr-green-blocked" ] || fail "a protection-blocked green PR opened no episode"
+
+  export FM_TEST_GH_GRAPHQL_QUEUED=true
+  green_blocked_cycle "$dir" "$dir/w2.out" BLOCKED SUCCESS 0
+  case "$(cat "$dir/w2.out")" in
+    check:*z-stop.check.sh:*stop-cycle) ;;
+    *) fail "a green PR waiting in the merge queue raised an alert: $(cat "$dir/w2.out")" ;;
+  esac
+  [ ! -e "$state/task-a.pr-green-blocked" ] || fail "a queued PR kept its green-unmergeable episode open"
+  grep -F 'api graphql' "$dir/gh.log" >/dev/null || fail "the probe did not read the merge queue state"
+
+  green_blocked_cycle "$dir" "$dir/w3.out" BLOCKED SUCCESS 0
+  case "$(cat "$dir/w3.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a PR still waiting in the merge queue raised an alert: $(cat "$dir/w3.out")" ;; esac
+  [ ! -e "$state/task-a.pr-green-blocked" ] || fail "a queued PR opened a green-unmergeable episode"
+
+  unset FM_TEST_GH_GRAPHQL_QUEUED
+  green_blocked_cycle "$dir" "$dir/w4.out" BLOCKED SUCCESS 0
+  case "$(cat "$dir/w4.out")" in
+    *"task-a.check.sh: green-unmergeable $url for "*"m: base-branch protection refuses the merge"*) ;;
+    *) fail "a PR blocked after leaving the merge queue did not alert: $(cat "$dir/w4.out")" ;;
+  esac
+  ! grep -F ' pr merge' "$dir/gh.log" >/dev/null || fail "the merge-queue reading attempted a merge"
+  unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED
+  pass "a green PR waiting in the merge queue is clear, never a green-unmergeable episode"
 }
 
 # A merged pull request never reaches the tick's clear reading: the watcher
@@ -2791,6 +2836,7 @@ test_gitlab_merge_watch
 test_merged_poll_retires_once
 test_green_unmergeable_pr_alerts_once_per_episode
 test_green_pr_with_unreported_required_check_does_not_alert
+test_green_pr_in_merge_queue_does_not_alert
 test_merged_poll_leaves_no_green_blocked_record
 test_merged_poll_reregistration_after_notification_is_absorbed
 test_merged_poll_retries_a_failed_upward_report

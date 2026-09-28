@@ -6,24 +6,32 @@
 #
 # Prints exactly one line:
 #   blocked <head-sha> <reason>
-#                     every check is green and every check the base branch
-#                     requires has reported (bin/fm-pr-lib.sh's
-#                     fm_pr_github_checks_not_green and
-#                     fm_pr_github_read_required_contexts own those rules, the
-#                     same ones bin/fm-pr-merge.sh gates on) and the pull
-#                     request still cannot merge: a draft, conflicts with its
-#                     base, a branch behind its base, or base-branch protection
-#                     such as a missing review; <head-sha> is the head commit
-#                     the reading describes, so the caller can tell a re-pushed
+#                     every check is green (bin/fm-pr-lib.sh's
+#                     fm_pr_github_checks_not_green, the check-green rule
+#                     bin/fm-pr-merge.sh also gates on), every check the base
+#                     branch requires has reported (bin/fm-pr-lib.sh's
+#                     fm_pr_github_read_required_contexts; only this probe
+#                     reads it), the pull request is not waiting in the base
+#                     branch's merge queue (bin/fm-pr-lib.sh's
+#                     fm_pr_github_read_outcome_with_gh, the read
+#                     bin/fm-pr-merge.sh makes after a merge attempt), and it
+#                     still cannot merge: a draft, conflicts with its base, a
+#                     branch behind its base, or base-branch protection such as
+#                     a missing review; <head-sha> is the head commit the
+#                     reading describes, so the caller can tell a re-pushed
 #                     head that is blocked again from the same stuck head
 #   clear             the stuck condition does not hold: the pull request is
 #                     merged or closed, a check is red or pending, a required
 #                     check has not reported (its CI has not passed, however
-#                     green the rollup looks), or GitHub reports it mergeable
+#                     green the rollup looks), it is waiting in the base
+#                     branch's merge queue (GitHub reports a queued pull
+#                     request as BLOCKED while nothing is stuck), or GitHub
+#                     reports it mergeable
 # and nothing when the answer is unknown: a failed read, an unreadable payload,
-# a missing head commit or base branch, an unreadable required-check source, a
-# missing jq, or mergeability GitHub has not computed yet. The caller keeps its
-# episode unchanged on silence, so a flaky read neither opens nor ends one.
+# a missing head commit or base branch, an unreadable merge-queue state or
+# required-check source, a missing jq, or mergeability GitHub has not computed
+# yet. The caller keeps its episode unchanged on silence, so a flaky read
+# neither opens nor ends one.
 # It never merges, updates a branch, or writes anything. GitLab and Gerrit are
 # not probed: this is GitHub-only.
 #
@@ -79,6 +87,15 @@ else
   case "$merge_state" in
     CLEAN|HAS_HOOKS|UNSTABLE) echo clear ;;
   esac
+  exit 0
+fi
+
+# A pull request waiting in the base branch's merge queue reads as BLOCKED
+# until the queue lands it; bin/fm-pr-merge.sh keeps its poll armed for that
+# outcome, so it is clear here, never stuck.
+fm_pr_github_read_outcome_with_gh "$FM_PR_OWNER" "$FM_PR_REPO" "$FM_PR_NUMBER" || exit 0
+if [ "$FM_PR_GITHUB_QUEUED" = true ]; then
+  echo clear
   exit 0
 fi
 

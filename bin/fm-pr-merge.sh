@@ -595,56 +595,13 @@ EOF
   FM_PR_GITHUB_BASE=$base
 }
 
-# Read one live GitHub pull request view after gh returns. The selected
-# fields distinguish a landed pull request from a merge-queue entry and retain
-# the concrete state needed for a refusal. gh supplies the complete queue-aware
-# view; if that post-merge read becomes unavailable, gh-axi is the degradation
-# path that can prove only a landed merge. gh remains a pre-merge prerequisite.
-FM_PR_GITHUB_STATE=
-FM_PR_GITHUB_MERGED=
-FM_PR_GITHUB_QUEUED=
-FM_PR_GITHUB_BASE=
-FM_PR_GITHUB_QUEUE_OBSERVED=false
-github_read_outcome_with_gh() {
-  local fields line
-  local total=0 named=0
-  local state='' merged='' queued='' base=''
-
-  # shellcheck disable=SC2016  # GraphQL variables are literal query syntax.
-  if ! fields=$(gh api graphql \
-    -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}}' \
-    -F "owner=$PR_OWNER" -F "repo=$PR_REPO" -F "number=$PR_NUMBER" \
-    --jq '.data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")' \
-    2>/dev/null) || [ -z "$fields" ]; then
-    return 1
-  fi
-  while IFS= read -r line; do
-    total=$((total + 1))
-    case "$line" in
-      state=*) state=${line#state=} ;;
-      merged=*) merged=${line#merged=} ;;
-      queued=*) queued=${line#queued=} ;;
-      base=*) base=${line#base=} ;;
-      *) continue ;;
-    esac
-    named=$((named + 1))
-  done <<FIELDS
-$fields
-FIELDS
-  if [ "$named" -ne 4 ] || [ "$total" -ne 4 ] || [ -z "$state" ] \
-    || { [ "$merged" != true ] && [ "$merged" != false ]; } \
-    || { [ "$queued" != true ] && [ "$queued" != false ]; } \
-    || [ -z "$base" ]; then
-    return 1
-  fi
-
-  FM_PR_GITHUB_STATE=$state
-  FM_PR_GITHUB_MERGED=$merged
-  FM_PR_GITHUB_QUEUED=$queued
-  FM_PR_GITHUB_BASE=$base
-  FM_PR_GITHUB_QUEUE_OBSERVED=true
-}
-
+# Read one live GitHub pull request view after gh returns
+# (bin/fm-pr-lib.sh fm_pr_github_read_outcome_with_gh, which
+# bin/fm-pr-green-blocked.sh shares). The selected fields distinguish a landed
+# pull request from a merge-queue entry and retain the concrete state needed
+# for a refusal. gh supplies the complete queue-aware view; if that post-merge
+# read becomes unavailable, gh-axi is the degradation path that can prove only
+# a landed merge. gh remains a pre-merge prerequisite.
 github_read_outcome_with_gh_axi() {
   local output state
   if ! output=$(gh-axi pr view "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" 2>/dev/null); then
@@ -684,7 +641,7 @@ github_read_outcome() {
   # pull request as neither merged nor queued is a concrete outcome, not a
   # missing one, so it keeps its own refusal. The gh-axi view cannot observe the
   # merge queue, so it can only turn this into a proved merge or into a refusal.
-  github_read_outcome_with_gh && return 0
+  fm_pr_github_read_outcome_with_gh "$PR_OWNER" "$PR_REPO" "$PR_NUMBER" && return 0
   if github_read_outcome_with_gh_axi && [ "$FM_PR_GITHUB_MERGED" = true ]; then
     return 0
   fi
