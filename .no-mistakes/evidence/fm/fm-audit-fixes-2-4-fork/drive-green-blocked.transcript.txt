@@ -1,0 +1,137 @@
+
+### SCENARIO 1: yolo-armed green PR behind main; forge refuses the merge; one green-unmergeable wake after the threshold
+
+### 1a. first sweep, threshold 1800s: yolo merge attempted and refused, episode opens, no alert
+--- what the guarded merge gate says for this PR (bin/fm-pr-merge.sh run directly):
+    ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ●  WATCHER DOWN - SUPERVISION IS OFF
+    ●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+    ●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+    ●  This is a supervision warning only; the guarded operation WILL still run.
+    ●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+    ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    armed: state/task-a.check.sh
+    verified: https://github.com/o/r/pull/1 is open and mergeable, with every required check green at head aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    X Pull request #1 is not mergeable: the base branch was modified; update the branch and try again.
+    error: GitHub merge outcome was not successful: state=OPEN, merged=false, isInMergeQueue=false
+    merge gate rc=1
+--- forge merge calls made by that direct attempt: 1
+--- priming sweep: the merge attempt armed the contributions check, whose one-time "observation unavailable" wake (the fake forge holds no contribution data) is absorbed here so later sweeps reach the PR poll:
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/contributions.check.sh: contributions: observation unavailable for https://github.com/o/r/pull/1
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/z-stop.check.sh: stop-cycle
+--- fake gh saw pr merge calls: 1
+--- triage: [2026-09-28T14:26:01-0500] yolo merge attempt for task-a refused or failed (rc=1): armed: state/task-a.check.sh
+--- state/task-a.pr-green-blocked: https://github.com/o/r/pull/1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1790623561 0
+PASS: no alert before the 30-minute threshold
+PASS: episode record opened with alerted=0
+
+### 1b. 31 minutes later (episode record's first-seen epoch backdated by 1860s, default threshold 1800s kept): the one wake fires naming the PR and reason
+--- state/task-a.pr-green-blocked: https://github.com/o/r/pull/1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1790621701 0
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/task-a.check.sh: green-unmergeable https://github.com/o/r/pull/1 for 31m: branch is behind the base branch
+--- state/task-a.pr-green-blocked: https://github.com/o/r/pull/1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1790621701 1
+PASS: wake names the PR URL, age, and 'branch is behind the base branch'
+--- durable wake row: 1790623565	3	check	/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/task-a.check.sh	check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/task-a.check.sh: green-unmergeable https://github.com/o/r/pull/1 for 31m: branch is behind the base branch
+
+### 1c. sweep again, still blocked: no second wake for the same episode
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/z-stop.check.sh: stop-cycle
+PASS: no repeat wake for the same episode
+
+### 1d. worker re-pushes a new head (rebase), still behind: fresh episode, its own timer, no immediate alert
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/z-stop.check.sh: stop-cycle
+--- state/task-a.pr-green-blocked: https://github.com/o/r/pull/1 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 1790623573 0
+PASS: re-pushed head started a fresh episode (record shows new head, alerted=0)
+
+### 1e. PR becomes mergeable (CLEAN) but the forge merge still fails: clear reading ends the episode
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/z-stop.check.sh: stop-cycle
+--- state/task-a.pr-green-blocked: (absent)
+PASS: clear reading removed the episode record
+PASS: no alert for a mergeable PR
+
+### 1f. adversarial: FM_PR_GREEN_BLOCKED_SECS=abc (garbage) falls back to 1800, so a fresh block does not alert at once
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/z-stop.check.sh: stop-cycle
+--- state/task-a.pr-green-blocked: https://github.com/o/r/pull/1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1790623581 0
+PASS: garbage threshold fell back to the default, no alert
+
+### 1g. the merge lands (forge merge succeeds, GraphQL says MERGED): poll retires and takes the episode record with it
+--- watcher rc=0; stdout (wake lines):
+    check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/drive-green-blocked.vDqRla/yolo-behind/home/state/task-a.check.sh: merged
+--- state/task-a.pr-green-blocked: (absent)
+PASS: merged poll retirement removed the episode record
+PASS: merge poll retired
+
+### SCENARIO 2: probe classification matrix (bin/fm-pr-green-blocked.sh run directly against the fake forge)
+green, BEHIND                                                                  -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa branch is behind the base branch
+PASS: green, BEHIND
+green, DIRTY (conflicts)                                                       -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa merge conflicts with the base branch
+PASS: green, DIRTY (conflicts)
+green, draft                                                                   -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pull request is a draft
+PASS: green, draft
+green, BLOCKED by protection, not queued                                       -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa base-branch protection refuses the merge (a required review or another branch rule)
+PASS: green, BLOCKED by protection, not queued
+green, BLOCKED but waiting in merge queue                                      -> clear
+PASS: green, BLOCKED but waiting in merge queue
+green, BEHIND, queued (queue wins even when behind)                            -> clear
+PASS: green, BEHIND, queued (queue wins even when behind)
+green rollup (ci) but base requires ci+lint, lint unreported                   -> clear
+PASS: green rollup (ci) but base requires ci+lint, lint unreported
+same, lint now reported green                                                  -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa branch is behind the base branch
+PASS: same, lint now reported green
+ruleset requires lint (app-bound 15), lint unreported                          -> clear
+PASS: ruleset requires lint (app-bound 15), lint unreported
+ci red (FAILURE), BEHIND                                                       -> clear
+PASS: ci red (FAILURE), BEHIND
+ci pending (IN_PROGRESS), BEHIND                                               -> clear
+PASS: ci pending (IN_PROGRESS), BEHIND
+green, CLEAN (mergeable)                                                       -> clear
+PASS: green, CLEAN (mergeable)
+green, UNSTABLE                                                                -> clear
+PASS: green, UNSTABLE
+PR CLOSED                                                                      -> clear
+PASS: PR CLOSED
+PR MERGED                                                                      -> clear
+PASS: PR MERGED
+
+### 2b. adversarial: unknown answers are silence (caller keeps its episode unchanged)
+mergeability not computed yet (UNKNOWN)                                        -> (silence)
+PASS: mergeability not computed yet (UNKNOWN)
+gh pr view fails                                                               -> (silence)
+PASS: gh pr view fails
+malformed payload                                                              -> (silence)
+PASS: malformed payload
+payload with no rollup                                                         -> (silence)
+PASS: payload with no rollup
+BEHIND but head sha missing                                                    -> (silence)
+PASS: BEHIND but head sha missing
+BEHIND but branch-protection read unreadable                                   -> (silence)
+PASS: BEHIND but branch-protection read unreadable
+BEHIND but rules read unreadable                                               -> (silence)
+PASS: BEHIND but rules read unreadable
+GitLab URL is never probed                                                     -> (silence)
+PASS: GitLab URL is never probed
+malformed URL                                                                  -> (silence)
+PASS: malformed URL
+PASS: no argument -> silence
+PASS: two arguments -> silence
+--- probe forge calls that could write (pr merge, api -X, or --method): 0
+PASS: probe made only read calls across the whole matrix
+--- distinct gh commands the probe issued:
+    api --paginate repos/o/r/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs
+    api --paginate repos/o/r/rules/branches/main
+    api graphql -f query=query($owner:String!,$repo:String!,$number:Int!){repository(owner:$ow
+    api repos/o/r/branches/main
+    pr view --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheck
+
+### 2c. --help prints the contract
+    Read-only probe: is one open GitHub pull request green but unable to merge?
+    bin/fm-watch.sh runs it beside an armed merge poll and owns the 30-minute
+    episode timer and the single wake per episode; this script only reads the
+    forge once and classifies what it saw.
+
+==== driver result: 0 failures ====

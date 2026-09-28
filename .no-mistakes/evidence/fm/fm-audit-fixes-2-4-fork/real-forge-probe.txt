@@ -1,0 +1,26 @@
+## Read-only probe against the real GitHub forge (gh account: mdc2122)
+## 2026-09-28T19:25:00Z
+
+### The PR from the intent: https://github.com/mdc2122/viral-moment/pull/311
+state=MERGED mergedAt=2026-09-28T13:27:18Z mergeStateStatus=UNKNOWN
+probe -> clear
+
+### Public open PRs GitHub reports as checks-passing with review required (gh search prs --checks success --review required)
+https://github.com/Neue-Konzepte-BaaS/backend/pull/80
+  forge view: state=OPEN draft=false mergeable=MERGEABLE mergeStateStatus=BLOCKED head=00e070d69feb base=main rollup=SUCCESSx5
+  probe -> blocked 00e070d69feb09227838ccede694f6c6e43cefa6 base-branch protection refuses the merge (a required review or another branch rule)
+https://github.com/FA26SE142-GFA26SE04-AI-Storytelling/AI_Storytelling_Backend/pull/59
+  forge view: state=OPEN draft=false mergeable=MERGEABLE mergeStateStatus=BLOCKED head=8a0511688ef9 base=main rollup=SUCCESSx3
+  probe -> blocked 8a0511688ef9f72764bffda17f5949a960e888d8 base-branch protection refuses the merge (a required review or another branch rule)
+https://github.com/Significant-Gravitas/AutoGPT/pull/15007
+  forge view: state=OPEN draft=false mergeable=MERGEABLE mergeStateStatus=BLOCKED head=e1ca4be7b84f base=dev rollup=NEUTRALx1,PENDINGx1,SUCCESSx48
+  probe -> clear
+https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pull/671
+  forge view: state=OPEN draft=false mergeable=CONFLICTING mergeStateStatus=DIRTY head=4c604e1db0a9 base=master rollup=SKIPPEDx4,SUCCESSx15
+  probe -> blocked 4c604e1db0a927fd422fce29b31f1106e41c34ab merge conflicts with the base branch
+https://github.com/mqlens/mqlens-mongodb/pull/449
+  forge view: state=OPEN draft=false mergeable=MERGEABLE mergeStateStatus=BLOCKED head=d31f5509553d base=dev rollup=SUCCESSx9
+  probe -> blocked d31f5509553d331d436acaf7fd05eb17b4b2ae88 base-branch protection refuses the merge (a required review or another branch rule)
+https://github.com/jellyfin/jellyfin/pull/17271
+  forge view: state=OPEN draft=false mergeable=MERGEABLE mergeStateStatus=BLOCKED head=f32d299b838d base=master rollup=SUCCESSx3
+  probe -> blocked f32d299b838d10e3354163da4c8394979d7b2a11 base-branch protection refuses the merge (a required review or another branch rule)
