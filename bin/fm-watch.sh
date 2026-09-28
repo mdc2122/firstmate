@@ -101,6 +101,11 @@
 #   check: rejected unauthenticated PR poll retirement receipts: <paths>
 #                          invalid pending retirements were preserved without
 #                          running a check or removing poll artifacts
+#   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
+#                          an armed GitHub merge poll's pull request has had every
+#                          check green but could not merge for
+#                          FM_PR_GREEN_BLOCKED_SECS (default 30 minutes); one wake
+#                          per episode (pr_green_blocked_tick)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
@@ -223,6 +228,10 @@ HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
+PR_GREEN_BLOCKED_SECS=${FM_PR_GREEN_BLOCKED_SECS:-1800}  # green-but-unmergeable PR age before its one wake
+case "$PR_GREEN_BLOCKED_SECS" in
+  ''|*[!0-9]*) PR_GREEN_BLOCKED_SECS=1800 ;;
+esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
   ''|*[!0-9]*|0) HOME_SUMMARY_INTERVAL=300 ;;
@@ -2092,6 +2101,82 @@ retire_merged_pr_poll() {  # <id>
   fi
 }
 
+# A green pull request that cannot merge raises no merge poll output, so an
+# armed yolo merge can sit refused (behind its base, conflicting, protection)
+# with nobody told. bin/fm-pr-green-blocked.sh reads the forge; this owns the
+# episode: state/<id>.pr-green-blocked records "<url> <first-seen-epoch>
+# <alerted>" from the first blocked reading, one wake fires once the episode
+# is PR_GREEN_BLOCKED_SECS old, and a clear reading (merged, closed, a red or
+# pending check, or mergeable again) ends it, so a later block is a new
+# episode. An unknown reading changes nothing. The wake row is queued before
+# the episode is marked alerted, preferring a rare duplicate over silence.
+# Runs under the caller's PR poll control lock; wakes (and exits) only when due.
+pr_green_blocked_record() {  # <file> <url> <first-epoch> <alerted>
+  local tmp
+  tmp=$(mktemp "$STATE/.pr-green-blocked.XXXXXX") || return 1
+  if printf '%s %s %s\n' "$2" "$3" "$4" > "$tmp" && mv -f -- "$tmp" "$1"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+pr_green_blocked_tick() {  # <id> <check-path> <url>
+  local id=$1 c=$2 url=$3 file probe verdict detail now age reason
+  local rec_url='' first='' alerted=''
+  file="$STATE/$id.pr-green-blocked"
+  probe="$SCRIPT_DIR/fm-pr-green-blocked.sh"
+  [ -f "$probe" ] || return 0
+  run_check_capture "$probe" "$url" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    clear) rm -f "$file"; return 0 ;;
+    'blocked '*) detail=${verdict#blocked } ;;
+    *) return 0 ;;
+  esac
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    read -r rec_url first alerted < "$file" || true
+  fi
+  case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
+  if [ "$rec_url" != "$url" ]; then
+    first=$now
+    alerted=0
+    pr_green_blocked_record "$file" "$url" "$first" 0 || return 0
+  fi
+  [ "$alerted" = 1 ] && return 0
+  age=$((now - first))
+  [ "$age" -ge "$PR_GREEN_BLOCKED_SECS" ] || return 0
+  reason="check: $c: green-unmergeable $url for $((age / 60))m: $detail"
+  fm_wake_append check "$c" "$reason" || exit 1
+  pr_green_blocked_record "$file" "$url" "$first" 1 || exit 1
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
+}
+
+# A poll armed before a state volume remount can fail capture only because its
+# registration names the old device number; bin/fm-pr-lib.sh
+# fm_pr_poll_registration_rerecord_device owns the proof and the rewrite.
+# Returns 0 when a re-record was attempted under the control lock, so the caller
+# captures again whatever the outcome: a concurrent re-arm may have published a
+# valid poll instead, and the strict capture decides either way.
+rerecord_device_shifted_pr_poll() {  # <id>
+  local id=$1
+  fm_pr_poll_registration_device_shifted "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" || return 1
+  PR_POLL_CONTROL_LOCK="$STATE/.control-$id.lock"
+  fm_lock_acquire_wait "$PR_POLL_CONTROL_LOCK" || exit 1
+  PR_POLL_PUBLISH_LOCK="$STATE/.pr-poll-publish-$id.lock"
+  fm_lock_acquire_wait "$PR_POLL_PUBLISH_LOCK" || exit 1
+  if fm_pr_poll_registration_rerecord_device "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh"; then
+    triage_log "re-recorded PR poll identity for $id after its state volume device number changed"
+  else
+    triage_log "PR poll identity for $id was not re-recorded; the locked proof or rewrite did not hold"
+  fi
+  pr_poll_publish_release || exit 1
+  pr_poll_control_release || exit 1
+  return 0
+}
 resurface_after_downtime() {
   # Handling successors already have a predecessor-delivered wake on the way.
   # Re-announcing from this cycle is what turned a lost handshake into an
@@ -2330,6 +2415,9 @@ EOF
         fm_wake_append check "$c" "$reason" || exit 1
         touch "$STATE/.last-check"
         wake "$reason"
+      fi
+      if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
+        pr_green_blocked_tick "$id" "$c" "$url"
       fi
       pr_poll_control_release || exit 1
     done
