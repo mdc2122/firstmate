@@ -1,0 +1,44 @@
+lab home: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS
+
+===== A. clear reading ends a stale already-alerted episode
+armed poll task-a -> https://github.com/kunchenguid/firstmate/pull/6010
+  gh: state=OPEN draft=false mergeable=MERGEABLE mergeState=CLEAN head=7ab9ef576b3ee20118446b261e0150043046216c checks=SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS,SUCCESS
+seeded stale record before the cycle:
+state/task-a.pr-green-blocked: https://github.com/kunchenguid/firstmate/pull/6010 7ab9ef576b3ee20118446b261e0150043046216c 1790608222 1
+--- watcher cycle: A: green and CLEAN pull request (no alert; record removed)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-a.pr-green-blocked: (absent)
+
+===== B. behind its base but with a red check is not green-unmergeable
+armed poll task-b -> https://github.com/mdc2122/viral-moment/pull/312
+  gh: state=OPEN draft=false mergeable=MERGEABLE mergeState=BEHIND head=3265735e1ba7543eb028f5c4a701acb0879d0f6d checks=FAILURE,SUCCESS,SUCCESS
+--- watcher cycle: B1: red+BEHIND (no episode expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-b.pr-green-blocked: (absent)
+backdating would need a record; there is none, so a second cycle must also stay silent
+--- watcher cycle: B2: red+BEHIND again (no alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-b.pr-green-blocked: (absent)
+
+===== C. green draft pull request alerts with the draft reason after 30 minutes
+armed poll task-c -> https://github.com/mdc2122/viral-moment/pull/223
+  gh: state=OPEN draft=true mergeable=MERGEABLE mergeState=BEHIND head=bbdc78a908a6f5b7301bc8ba8128d47854c70572 checks=SUCCESS
+--- watcher cycle: C1: first blocked reading opens the episode (no alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-c.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/223 bbdc78a908a6f5b7301bc8ba8128d47854c70572 1790615437 0
+backdated first-seen by 31 minutes:
+state/task-c.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/223 bbdc78a908a6f5b7301bc8ba8128d47854c70572 1790613577 0
+--- watcher cycle: C2: episode 31 minutes old (ONE alert with the draft reason expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/task-c.check.sh: green-unmergeable https://github.com/mdc2122/viral-moment/pull/223 for 31m: pull request is a draft
+watcher exit: 0
+state/task-c.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/223 bbdc78a908a6f5b7301bc8ba8128d47854c70572 1790613577 1
+--- watcher cycle: C3: same head, already alerted (no repeat expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-c.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/223 bbdc78a908a6f5b7301bc8ba8128d47854c70572 1790613577 1
+
+lab removed: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.TP5EaS

@@ -1,0 +1,44 @@
+lab home: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW
+armed poll artifacts:
+  task-a.check.sh
+  task-a.meta
+  task-a.pr-poll
+  task-a.pr-poll-registration
+  z-stop.check-trust
+  z-stop.check.sh
+PR under watch: https://github.com/mdc2122/viral-moment/pull/302
+  gh: state=OPEN draft=false mergeable=CONFLICTING mergeState=DIRTY head=5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d checks=SUCCESS,SUCCESS
+
+--- watcher cycle: 1: default 30-minute threshold, first blocked reading opens the episode (no alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-a.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790615343 0
+
+--- watcher cycle: 2: default threshold again a moment later (still under 30 minutes, no alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-a.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790615343 0
+
+--- backdating the episode's first-seen epoch by 31 minutes to stand in for the wait
+state/task-a.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613483 0
+
+--- watcher cycle: 3: default threshold, episode now 31 minutes old (ONE alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/task-a.check.sh: green-unmergeable https://github.com/mdc2122/viral-moment/pull/302 for 31m: merge conflicts with the base branch
+watcher exit: 0
+state/task-a.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613483 1
+
+--- watcher cycle: 4: default threshold, same episode and head (no repeat alert expected)
+watcher stdout (the wake firstmate receives): check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+state/task-a.pr-green-blocked: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613483 1
+
+--- wake rows persisted in the lab home (state/wake*):
+  /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/.wake-queue:
+  /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW/state/.wake-queue.seq:
+    4
+
+--- forge writes attempted by the lab: gh commands other than 'pr view' would show here
+(the lab PATH only exposes the real gh; the probe and poll are read-only by contract)
+PR after the run:
+  gh: state=OPEN mergeState=DIRTY head=5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d
+lab removed: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.SS7PRW

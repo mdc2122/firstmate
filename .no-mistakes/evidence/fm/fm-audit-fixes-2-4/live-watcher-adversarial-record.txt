@@ -1,0 +1,43 @@
+lab home: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e
+PR under watch: https://github.com/mdc2122/viral-moment/pull/302 head=5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d
+
+===== 1. unreadable forge: gh absent from PATH, episode already 31 minutes old
+planted:
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613626 0
+--- watcher cycle: 1: no gh on PATH (expect no alert, record byte-identical)
+watcher stdout: check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613626 0
+
+===== 2. symlinked record planted 31 minutes old
+planted:
+record: SYMLINK -> /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/planted-record
+--- watcher cycle: 2: symlinked record (expect no alert, fresh regular-file record with a new first-seen and alerted=0)
+watcher stdout: check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790615490 0
+record is now a regular file: yes
+
+===== 3. corrupted record: non-numeric first-seen epoch
+planted:
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d notanumber 0
+--- watcher cycle: 3: corrupted record (expect no alert, replaced by a fresh episode)
+watcher stdout: check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790615494 0
+
+===== 4. FM_PR_GREEN_BLOCKED_SECS=abc with a record that is 31 minutes old (default 1800 applies: alert)
+planted:
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613626 0
+--- watcher cycle: 4: invalid threshold falls back to 1800s (expect ONE alert at 31m)
+watcher stdout: check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/state/task-a.check.sh: green-unmergeable https://github.com/mdc2122/viral-moment/pull/302 for 31m: merge conflicts with the base branch
+watcher exit: 0
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613626 1
+
+===== 5. FM_PR_GREEN_BLOCKED_SECS=0 with a fresh record already alerted: still no second alert
+--- watcher cycle: 5: threshold 0, same head already alerted (expect no alert)
+watcher stdout: check: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e/state/z-stop.check.sh: stop-cycle
+watcher exit: 0
+record: https://github.com/mdc2122/viral-moment/pull/302 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d 1790613626 1
+
+lab removed: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-lab.umyj6e

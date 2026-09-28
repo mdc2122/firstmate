@@ -1,0 +1,23 @@
+== https://github.com/mdc2122/viral-moment/pull/302
+gh says: state=OPEN draft=false mergeable=CONFLICTING mergeState=DIRTY head=5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d
+probe:   blocked 5d147f82ef292c00f2bbc634a70cfacbd1bd9b0d merge conflicts with the base branch (exit=0)
+== https://github.com/mdc2122/viral-moment/pull/223
+gh says: state=OPEN draft=true mergeable=MERGEABLE mergeState=BEHIND head=bbdc78a908a6f5b7301bc8ba8128d47854c70572
+probe:   blocked bbdc78a908a6f5b7301bc8ba8128d47854c70572 pull request is a draft (exit=0)
+== https://github.com/mdc2122/viral-moment/pull/312
+gh says: state=OPEN draft=false mergeable=MERGEABLE mergeState=BEHIND head=3265735e1ba7543eb028f5c4a701acb0879d0f6d
+probe:   clear (exit=0)
+== https://github.com/kunchenguid/firstmate/pull/6010
+gh says: state=OPEN draft=false mergeable=MERGEABLE mergeState=CLEAN head=7ab9ef576b3ee20118446b261e0150043046216c
+probe:   clear (exit=0)
+== https://github.com/kunchenguid/firstmate/pull/6001
+gh says: state=OPEN draft=false mergeable=MERGEABLE mergeState=CLEAN head=4852855313b45fc24b0fa9624083479a4922ce33
+probe:   clear (exit=0)
+== https://github.com/mdc2122/viral-moment/pull/311
+gh says: state=MERGED draft=false mergeable=UNKNOWN mergeState=UNKNOWN head=345592ee66fcd6829e28d2ee3f3bd814568ab5ed
+probe:   clear (exit=0)
+== non-GitHub / bogus inputs
+probe 'https://gitlab.com/o/r/-/merge_requests/1': <silent> (exit=0)
+probe 'https://github.com/mdc2122/viral-moment/pull/999999': <silent> (exit=0)
+probe 'not a url': <silent> (exit=0)
+probe with no args: <silent> (exit=0)

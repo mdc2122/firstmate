@@ -1,0 +1,6 @@
+$ gh pr view https://github.com/mdc2122/viral-moment/pull/311 --json state,mergeable,mergeStateStatus,headRefOid,isDraft
+{"headRefOid":"345592ee66fcd6829e28d2ee3f3bd814568ab5ed","isDraft":false,"mergeStateStatus":"UNKNOWN","mergeable":"UNKNOWN","state":"MERGED"}
+
+$ bin/fm-pr-green-blocked.sh https://github.com/mdc2122/viral-moment/pull/311
+clear
+(exit=0)
