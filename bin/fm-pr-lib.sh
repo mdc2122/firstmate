@@ -347,22 +347,19 @@ fm_pr_github_branch_rules_unavailable_on_plan() {
 # Unbound requirements match by name.
 #
 # Sets FM_PR_GITHUB_REQUIRED to a JSON array of {context, app_id} and returns
-# 0 when every required source was read. Returns 1 with the unreadable
-# sources named one per line in FM_PR_GITHUB_REQUIRED_ERROR; the requirements
-# that were read stay in FM_PR_GITHUB_REQUIRED so a caller can still report
-# the known missing checks. fm_pr_github_branch_rules_unavailable_on_plan owns
-# the one exception: a plan that cannot expose branch rules has no rulesets.
+# 0 when every required source was read. Returns 1, with FM_PR_GITHUB_REQUIRED
+# empty, when any source could not be read; the answer is then unknown.
+# fm_pr_github_branch_rules_unavailable_on_plan owns the one exception: a plan
+# that cannot expose branch rules has no rulesets.
 FM_PR_GITHUB_REQUIRED=
-FM_PR_GITHUB_REQUIRED_ERROR=
 fm_pr_github_read_required_contexts() {  # <owner> <repo> <base-branch>
-  local owner=$1 repo=$2 base=$3 branch_path branch_json rules_json classic='' ruleset='' api_err api_err_text
-  FM_PR_GITHUB_REQUIRED='[]'
-  FM_PR_GITHUB_REQUIRED_ERROR=
+  local owner=$1 repo=$2 base=$3 branch_path branch_json rules_json classic ruleset='' api_err api_err_text
+  FM_PR_GITHUB_REQUIRED=
   branch_path=$(fm_pr_github_urlencode_path_segment "$base")
 
-  if ! branch_json=$(gh api "repos/$owner/$repo/branches/$branch_path" 2>/dev/null) \
-    || [ -z "$branch_json" ] \
-    || ! classic=$(printf '%s' "$branch_json" | jq -c '
+  branch_json=$(gh api "repos/$owner/$repo/branches/$branch_path" 2>/dev/null) || return 1
+  [ -n "$branch_json" ] || return 1
+  classic=$(printf '%s' "$branch_json" | jq -c '
       if type != "object" or (.protected | type) != "boolean" then
         error("branch payload is unreadable")
       elif .protected == false then
@@ -379,22 +376,17 @@ fm_pr_github_read_required_contexts() {  # <owner> <repo> <base-branch>
              and (.app_id == null or (.app_id | type) == "number")
           then . else error("invalid required check") end
         | if .app_id == -1 then .app_id = null else . end
-      end' 2>/dev/null); then
-    classic=''
-    FM_PR_GITHUB_REQUIRED_ERROR="the branch protection summary for base branch $base could not be read"
-  fi
+      end' 2>/dev/null) || return 1
 
-  if ! api_err=$(mktemp "${TMPDIR:-/tmp}/fm-pr-required-rules.XXXXXX"); then
-    FM_PR_GITHUB_REQUIRED_ERROR="${FM_PR_GITHUB_REQUIRED_ERROR:+$FM_PR_GITHUB_REQUIRED_ERROR
-}the branch rules for base branch $base could not be read"
+  api_err=$(mktemp "${TMPDIR:-/tmp}/fm-pr-required-rules.XXXXXX") || return 1
+  if ! rules_json=$(gh api --paginate "repos/$owner/$repo/rules/branches/$branch_path" 2>"$api_err"); then
+    api_err_text=$(cat "$api_err" 2>/dev/null)
+    rm -f "$api_err"
+    fm_pr_github_branch_rules_unavailable_on_plan "$api_err_text" || return 1
   else
-    if ! rules_json=$(gh api --paginate "repos/$owner/$repo/rules/branches/$branch_path" 2>"$api_err"); then
-      api_err_text=$(cat "$api_err" 2>/dev/null)
-      if ! fm_pr_github_branch_rules_unavailable_on_plan "$api_err_text"; then
-        FM_PR_GITHUB_REQUIRED_ERROR="${FM_PR_GITHUB_REQUIRED_ERROR:+$FM_PR_GITHUB_REQUIRED_ERROR
-}the branch rules for base branch $base could not be read"
-      fi
-    elif [ -z "$rules_json" ] || ! ruleset=$(printf '%s' "$rules_json" | jq -c '
+    rm -f "$api_err"
+    [ -n "$rules_json" ] || return 1
+    ruleset=$(printf '%s' "$rules_json" | jq -c '
         if type != "array" then error("rules payload is unreadable") else .[] end
         | select(type != "object" or .type == "required_status_checks")
         | if type == "object" and (.parameters.required_status_checks | type) == "array"
@@ -402,12 +394,7 @@ fm_pr_github_read_required_contexts() {  # <owner> <repo> <base-branch>
         | if type == "object" and (.context | type) == "string" and (.context | length) > 0
              and (.integration_id == null or (.integration_id | type) == "number")
           then {context, app_id: .integration_id} else error("invalid required check rule") end
-        | if .app_id == -1 then .app_id = null else . end' 2>/dev/null); then
-      ruleset=''
-      FM_PR_GITHUB_REQUIRED_ERROR="${FM_PR_GITHUB_REQUIRED_ERROR:+$FM_PR_GITHUB_REQUIRED_ERROR
-}the branch rules for base branch $base could not be read"
-    fi
-    rm -f "$api_err"
+        | if .app_id == -1 then .app_id = null else . end' 2>/dev/null) || return 1
   fi
 
   # Consumed by bin/fm-pr-green-blocked.sh.
@@ -415,7 +402,6 @@ fm_pr_github_read_required_contexts() {  # <owner> <repo> <base-branch>
   FM_PR_GITHUB_REQUIRED=$(printf '%s\n%s\n' "$classic" "$ruleset" | jq -sc '
     unique_by([.context, .app_id]) | group_by(.context)
     | map(if any(.[]; .app_id != null) then map(select(.app_id != null)) else . end) | add // []')
-  [ -z "$FM_PR_GITHUB_REQUIRED_ERROR" ]
 }
 
 # The check runs reported at one head, as the producers an app-bound
