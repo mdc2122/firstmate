@@ -1566,7 +1566,7 @@ SH
   echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
 
   set +e
-  FM_TEST_WATCH_ALARM=3 FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_STALE_ESCALATE_SECS=240 \
+  FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_STALE_ESCALATE_SECS=240 \
     run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/w1.out" 2> "$dir/w1.err"
   rc=$?
   set -e
