@@ -1530,6 +1530,15 @@ confirm_launched_runners() {  # <source-id><TAB><registration-identity><TAB><lau
       if [ -n "$mark" ] && [ "$mark" != "$before" ]; then
         continue
       fi
+      # A registration retired or replaced since this launch leaves nothing to
+      # confirm: the runner correctly declines a generation that is gone (a
+      # terminal result can retire its own source while a concurrent cycle is
+      # relaunching it), and reporting that as a failed launch would announce
+      # a problem with a source that no longer exists.
+      if [ -n "$identity" ] \
+        && [ "$(fm_pr_file_identity "$(source_file "$id")" 2>/dev/null || true)" != "$identity" ]; then
+        continue
+      fi
       remaining+=("$entry")
     done
     pending=("${remaining[@]+"${remaining[@]}"}")
