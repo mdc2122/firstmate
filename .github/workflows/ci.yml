@@ -23,12 +23,21 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Full source-following ShellCheck over the canonical set, split into
+  # complete, disjoint partitions across runners. The whole set in one or two
+  # ShellCheck processes outgrew the 16 GB hosted runner and the runner was
+  # killed mid-lint with no findings. Heavy single roots alone peak near
+  # 10 GB, so each partition runs one root at a time (FM_LINT_JOBS=1).
   lint:
-    name: Lint
+    name: Lint ${{ matrix.partition }}
     runs-on: ubuntu-latest
     # Hang tripwire only: lint executions measured at 14-16 minutes in the
     # September 12 starvation report, so this leaves deliberate margin.
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v6
       - name: Install pinned ShellCheck
@@ -45,7 +54,9 @@ jobs:
       # and GitHub workflow lint). Do not re-spell the checks here; keep CI
       # and the pre-push gate on this script so a self-broken ci.yml still
       # fails locally before merge.
-      - run: bin/fm-lint.sh
+      - run: bin/fm-lint.sh --partition ${{ matrix.partition }}of${{ strategy.job-total }}
+        env:
+          FM_LINT_JOBS: '1'
 
   # Deterministic proof that portable parallel shards + portable serial + Herdr
   # equal the complete tests/*.test.sh inventory with no missing or duplicates,

@@ -41,10 +41,19 @@
 # invocations in the core bin/ and bin/backends/ scripts so every configured
 # backlog backend follows the same tasks-axi lifecycle path.
 #
-# Canonical lint defaults to two bounded workers over two stable logical shards.
-# Each shard writes separate diagnostics, and the parent replays those outputs in
-# deterministic shard and root order after every worker finishes. FM_LINT_JOBS=1
-# runs the same shards serially with byte-identical diagnostics and exit selection.
+# Canonical lint defaults to two bounded workers over two stable logical shards,
+# and each worker runs one root per ShellCheck process, so a run holds at most
+# two ShellCheck processes. Each shard writes separate diagnostics, and the
+# parent replays those outputs in deterministic shard and root order after
+# every worker finishes. FM_LINT_JOBS=1 runs the same shards serially with
+# byte-identical diagnostics and exit selection.
+#
+# --partition <k>of<n> lints only partition k of the full canonical set split
+# into n byte-weight-balanced partitions, so CI can spread the ShellCheck pass
+# across n runners. Partitions are complete and disjoint, always use full
+# source-aware analysis (never changed-file mode or --fast), and do not accept
+# explicit paths. Each partition still runs the backend-purity check and
+# workflow lint. --list-files with --partition prints that partition's roots.
 #
 # Optional quiet telemetry writes one bounded TSV snapshot of content and source
 # graph identity, wall/CPU/RSS, shard load, and competing ShellCheck processes.
@@ -54,6 +63,7 @@
 #   fm-lint.sh --fast [path]...       local lint with extended analysis disabled
 #   fm-lint.sh <path>...               lint explicit roots with the same config
 #   fm-lint.sh --jobs <1|2> [path]...  override bounded worker count
+#   fm-lint.sh --partition <k>of<n>    lint one full-analysis canonical partition
 #   fm-lint.sh --telemetry <path> ...  write a quiet metrics snapshot
 #   fm-lint.sh --required-version      print the ShellCheck pin
 #   fm-lint.sh --list-files            print the file set that would be linted
@@ -103,23 +113,19 @@ fm_lint_worker() {  # <manifest> <output-dir> <shard-index>
       shellcheck_args+=(--extended-analysis=false)
     fi
     : > "$output.out"
-    if [ "${FM_LINT_INTERNAL_FOLLOW_SOURCES:-1}" -eq 1 ]; then
-      "$FM_LINT_SHELLCHECK" "${shellcheck_args[@]}" -- "${roots[@]}" >> "$output.out" 2>&1 &
+    # One root per ShellCheck process: a single process given many
+    # source-following roots retains memory across them and outgrows a
+    # 16 GiB hosted runner, while the heaviest root alone peaks near 10 GiB.
+    for path in "${roots[@]}"; do
+      invocation_rc=0
+      "$FM_LINT_SHELLCHECK" "${shellcheck_args[@]}" -- "$path" >> "$output.out" 2>&1 &
       FM_LINT_WORKER_SHELLCHECK_PID=$!
-      wait "$FM_LINT_WORKER_SHELLCHECK_PID" || rc=$?
+      wait "$FM_LINT_WORKER_SHELLCHECK_PID" || invocation_rc=$?
       FM_LINT_WORKER_SHELLCHECK_PID=
-    else
-      for path in "${roots[@]}"; do
-        invocation_rc=0
-        "$FM_LINT_SHELLCHECK" "${shellcheck_args[@]}" -- "$path" >> "$output.out" 2>&1 &
-        FM_LINT_WORKER_SHELLCHECK_PID=$!
-        wait "$FM_LINT_WORKER_SHELLCHECK_PID" || invocation_rc=$?
-        FM_LINT_WORKER_SHELLCHECK_PID=
-        if [ "$rc" -eq 0 ] && [ "$invocation_rc" -ne 0 ]; then
-          rc=$invocation_rc
-        fi
-      done
-    fi
+      if [ "$rc" -eq 0 ] && [ "$invocation_rc" -ne 0 ]; then
+        rc=$invocation_rc
+      fi
+    done
     trap - HUP INT TERM
   else
     : > "$output.out"
@@ -397,8 +403,21 @@ TELEMETRY=${FM_LINT_TELEMETRY:-}
 FAST=0
 ANALYSIS_MODE=full
 LIST_FILES=0
+PARTITION=
+PARTITION_GIVEN=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --partition)
+      [ "$#" -ge 2 ] || { printf 'fm-lint.sh: --partition requires <k>of<n>.\n' >&2; exit 2; }
+      PARTITION=$2
+      PARTITION_GIVEN=1
+      shift 2
+      ;;
+    --partition=*)
+      PARTITION=${1#*=}
+      PARTITION_GIVEN=1
+      shift
+      ;;
     --jobs)
       [ "$#" -ge 2 ] || { printf 'fm-lint.sh: --jobs requires 1 or 2.\n' >&2; exit 2; }
       JOBS=$2
@@ -448,6 +467,51 @@ if [ "$FAST" -eq 1 ] && { [ "${GITHUB_ACTIONS:-}" = true ] || [ "${CI:-}" = true
   exit 2
 fi
 
+PARTITION_INDEX=0
+PARTITION_COUNT=0
+if [ "$PARTITION_GIVEN" -eq 1 ]; then
+  case "$PARTITION" in
+    [1-9]of[1-9]|[1-9]of[1-9][0-9]|[1-9][0-9]of[1-9][0-9])
+      PARTITION_INDEX=${PARTITION%%of*}
+      PARTITION_COUNT=${PARTITION##*of}
+      ;;
+  esac
+  if [ "$PARTITION_INDEX" -lt 1 ] || [ "$PARTITION_INDEX" -gt "$PARTITION_COUNT" ]; then
+    printf 'fm-lint.sh: --partition must be <k>of<n> with 1 <= k <= n <= 99, got %s.\n' "$PARTITION" >&2
+    exit 2
+  fi
+  if [ "$FAST" -eq 1 ]; then
+    printf 'fm-lint.sh: --partition always uses full analysis and rejects --fast.\n' >&2
+    exit 2
+  fi
+  if [ "$#" -gt 0 ]; then
+    printf 'fm-lint.sh: --partition lints the canonical set and rejects explicit paths.\n' >&2
+    exit 2
+  fi
+fi
+
+# fm_lint_partition_roots <k> <n> <root>...: print partition k's roots in their
+# given order. Largest-first greedy assignment by byte size to the least-loaded
+# partition (lowest index on ties) is deterministic for a given file set.
+fm_lint_partition_roots() {
+  local want=$1 count=$2 position=0 path weight tab
+  shift 2
+  tab=$(printf '\t')
+  for path in "$@"; do
+    position=$((position + 1))
+    weight=$(wc -c < "$path" 2>/dev/null | tr -d '[:space:]')
+    case "$weight" in ''|*[!0-9]*) weight=1 ;; esac
+    printf '%s\t%s\t%s\n' "$weight" "$position" "$path"
+  done | LC_ALL=C sort -t "$tab" -k1,1nr -k2,2n | awk -F '\t' -v want="$want" -v count="$count" '
+    {
+      best=1
+      for (i=2; i <= count; i++) if (load[i] + 0 < load[best] + 0) best=i
+      load[best] += $1
+      if (best == want) print $2 "\t" $3
+    }
+  ' | LC_ALL=C sort -t "$tab" -k1,1n | cut -f2-
+}
+
 # fm_lint_changed_base_ref prints the ref to diff the working branch against:
 # the local origin/main tracking ref when present, else local main. Returns
 # nonzero when neither is resolvable, which the caller treats as "no
@@ -492,7 +556,7 @@ if [ "$#" -gt 0 ]; then
   ROOTS=("$@")
 else
   full_lint=1
-  if [ "${GITHUB_ACTIONS:-}" != true ] && [ "${CI:-}" != true ] \
+  if [ -z "$PARTITION" ] && [ "${GITHUB_ACTIONS:-}" != true ] && [ "${CI:-}" != true ] \
     && command -v git >/dev/null 2>&1 \
     && git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
     && [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" != main ]; then
@@ -504,6 +568,17 @@ else
 
   if [ "$full_lint" -eq 1 ]; then
     ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
+    if [ -n "$PARTITION" ]; then
+      partition_roots=()
+      while IFS= read -r partition_path; do
+        partition_roots+=("$partition_path")
+      done < <(fm_lint_partition_roots "$PARTITION_INDEX" "$PARTITION_COUNT" "${ROOTS[@]}")
+      [ "${#partition_roots[@]}" -gt 0 ] || {
+        printf 'fm-lint.sh: partition %s holds no lint roots.\n' "$PARTITION" >&2
+        exit 2
+      }
+      ROOTS=("${partition_roots[@]}")
+    fi
   else
     CHANGED_MODE=1
     ROOTS=()
@@ -741,7 +816,7 @@ else
 fi
 
 # Replay both stable shards in deterministic order and select the first nonzero
-# shard status. ShellCheck processes every root in a shard after earlier findings.
+# shard status. Each worker lints every root in its shard after earlier findings.
 overall_rc=0
 worker=0
 while [ "$worker" -lt "$SHARD_COUNT" ]; do

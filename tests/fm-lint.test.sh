@@ -157,6 +157,7 @@ test_help_reports_the_complete_interface() {
   assert_contains "$help" "--telemetry" "fm-lint.sh --help omitted --telemetry"
   assert_contains "$help" "--required-version" "fm-lint.sh --help omitted --required-version"
   assert_contains "$help" "--list-files" "fm-lint.sh --help omitted --list-files"
+  assert_contains "$help" "--partition" "fm-lint.sh --help omitted --partition"
   assert_contains "$help" "--help" "fm-lint.sh --help omitted --help"
   assert_contains "$help" "--fast" "fm-lint.sh --help omitted --fast"
   assert_contains "$help" "SC1091" "fm-lint.sh --help omitted the local SC1091 exclusion"
@@ -561,6 +562,88 @@ test_changed_mode_invokes_shellcheck_once_per_root() {
     || fail "changed-mode lint used $invocation_count ShellCheck calls for two roots"
   fm_lint_assert_flag_log "$flag_log" no "SC1091,SC2034,SC2153,SC2329"
   pass "fm-lint.sh changed mode invokes ShellCheck once per root"
+}
+
+test_ci_invokes_shellcheck_once_per_root() {
+  local tmp fakebin log flag_log first second third out invocation_count
+  tmp=$(fm_test_tmproot fm-lint-ci-per-root)
+  fakebin=$(fm_fakebin "$tmp")
+  log="$tmp/shellcheck.log"
+  flag_log="$tmp/flags.log"
+  fm_lint_stub_shellcheck "$fakebin" "$log"
+  first="bin/fm-install-shellcheck.sh"
+  second="bin/fm-lint-workflows.sh"
+  third="bin/fm-lint.sh"
+
+  out=$(PATH="$fakebin:$PATH" CI=true GITHUB_ACTIONS=true FM_LINT_JOBS=1 \
+    FM_TEST_FLAG_LOG="$flag_log" "$LINT" "$first" "$second" "$third" 2>&1) \
+    || fail "CI per-root lint failed"$'\n'"$out"
+  [ "$(LC_ALL=C sort "$log")" = "$first"$'\n'"$second"$'\n'"$third" ] \
+    || fail "CI lint did not analyze every root"$'\n'"logged: $(cat "$log")"
+  invocation_count=$(grep -c '^external-sources=yes$' "$flag_log" || true)
+  [ "$invocation_count" -eq 3 ] \
+    || fail "CI source-following lint used $invocation_count ShellCheck calls for three roots"
+  pass "fm-lint.sh CI source-following mode invokes ShellCheck once per root"
+}
+
+test_partitions_are_complete_and_disjoint() {
+  local count index listed combined expected rc bad
+  expected=$(CI=true "$LINT" --list-files | LC_ALL=C sort)
+  for count in 1 2 6; do
+    combined=
+    index=1
+    while [ "$index" -le "$count" ]; do
+      listed=$("$LINT" --partition "${index}of$count" --list-files) \
+        || fail "--partition ${index}of$count --list-files failed"
+      [ -n "$listed" ] || fail "partition ${index}of$count is empty"
+      combined="$combined$listed"$'\n'
+      index=$((index + 1))
+    done
+    [ "$(printf '%s' "$combined" | LC_ALL=C sort)" = "$expected" ] \
+      || fail "$count partitions are not a complete, disjoint cover of the canonical set"
+  done
+  for bad in 0of2 3of2 2 1of0 x ''; do
+    rc=0
+    "$LINT" --partition "$bad" --list-files >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 2 ] || fail "--partition '$bad' expected exit 2, got $rc"
+  done
+  rc=0
+  "$LINT" --partition= --list-files >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "--partition= expected exit 2, got $rc"
+  rc=0
+  "$LINT" --partition 1of2 bin/fm-lint.sh >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "--partition accepted explicit paths"
+  rc=0
+  GITHUB_ACTIONS='' CI='' "$LINT" --partition 1of2 --fast >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "--partition accepted --fast"
+  pass "fm-lint.sh --partition splits the canonical set into complete, disjoint partitions"
+}
+
+test_partition_keeps_full_analysis_on_a_local_branch() {
+  local tmp fakebin log flag_log mode_log diff_file out expected
+  tmp=$(fm_test_tmproot fm-lint-partition-full)
+  fakebin=$(fm_fakebin "$tmp")
+  fm_lint_stub_git "$fakebin"
+  log="$tmp/shellcheck.log"
+  flag_log="$tmp/flags.log"
+  mode_log="$tmp/mode.log"
+  fm_lint_stub_shellcheck "$fakebin" "$log"
+  diff_file="$tmp/diff.nul"
+  fm_lint_write_diff_file "$diff_file" "bin/fm-install-shellcheck.sh"
+  expected=$(CI=true "$LINT" --partition 2of6 --list-files | LC_ALL=C sort)
+
+  out=$(PATH="$fakebin:$PATH" GITHUB_ACTIONS='' CI='' FM_LINT_JOBS=1 \
+    FM_TEST_GIT_BRANCH=feature FM_TEST_GIT_DIFF_FILE="$diff_file" \
+    FM_TEST_FLAG_LOG="$flag_log" FM_TEST_MODE_LOG="$mode_log" \
+    "$LINT" --partition 2of6 2>&1) \
+    || fail "partition lint on a local branch failed"$'\n'"$out"
+  [ "$(LC_ALL=C sort "$log")" = "$expected" ] \
+    || fail "partition lint on a local branch did not lint exactly its partition"
+  [ "$(grep -c '^external-sources=' "$flag_log")" -eq "$(printf '%s\n' "$expected" | wc -l | tr -d ' ')" ] \
+    || fail "partition lint did not invoke ShellCheck once per root"
+  fm_lint_assert_flag_log "$flag_log" yes none
+  ! grep -qx off "$mode_log" || fail "partition lint disabled dataflow analysis"
+  pass "fm-lint.sh --partition keeps full source-aware analysis outside CI"
 }
 
 test_ci_keeps_external_sources_without_local_exclusions() {
@@ -1393,6 +1476,9 @@ test_zero_changed_files_exits_clean
 test_list_files_respects_changed_mode
 test_changed_mode_drops_external_sources_and_excludes_cross_file_codes
 test_changed_mode_invokes_shellcheck_once_per_root
+test_ci_invokes_shellcheck_once_per_root
+test_partitions_are_complete_and_disjoint
+test_partition_keeps_full_analysis_on_a_local_branch
 test_ci_keeps_external_sources_without_local_exclusions
 test_main_branch_keeps_external_sources
 test_merge_base_less_keeps_external_sources
