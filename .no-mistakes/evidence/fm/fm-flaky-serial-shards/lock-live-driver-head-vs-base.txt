@@ -1,0 +1,25 @@
+$ bash lock-live-driver.sh <worktree @ d52de83>   and   bash lock-live-driver.sh <git archive of base 9b11db8>
+=== HEAD d52de83 ===
+A: holder pid=44358 now running: sleep 30
+A: recorded identity: Mon Sep 28 22:14:23 2026     bash /Users/studio2/.no-mistakes/evidence/01M3NHKVPJF6WEC3D3BKJZR5KZ/lock-live-driver.sh /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NHKVPJF6WEC3D3BKJZR5KZ
+A: contender -> BLOCKED held_pid=44358
+A: PASS live exec'd holder kept its lock
+C: after holder death contender -> ACQUIRED pid=48092
+C: PASS dead holder reclaimed
+B: recycled-pid (54631, mismatched start time) contender -> ACQUIRED pid=57054
+B: PASS recycled pid reclaimed
+D: bounded contender return codes under churn: 124 124 124 124 124 124 124 124
+D: PASS churned contention never reported unsafe (1)
+exit=0
+=== BASE 9b11db8 ===
+A: holder pid=64006 now running: sleep 30
+A: recorded identity: Mon Sep 28 22:17:28 2026     bash /Users/studio2/.no-mistakes/evidence/01M3NHKVPJF6WEC3D3BKJZR5KZ/lock-live-driver.sh /tmp/fm-base.WXVi
+A: contender -> STOLEN
+A: FAIL
+C: after holder death contender -> ACQUIRED pid=65446
+C: PASS dead holder reclaimed
+B: recycled-pid (66322, mismatched start time) contender -> ACQUIRED pid=66746
+B: PASS recycled pid reclaimed
+D: bounded contender return codes under churn: 1 1 124 124 124 0 124 124
+D: FAIL
+exit=1

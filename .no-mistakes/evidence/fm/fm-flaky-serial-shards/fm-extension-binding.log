@@ -1,0 +1,25 @@
+ok - unknown extension conformance section selectors fail before setup
+not-autohandled: example-file (left for the handler; still unacknowledged)
+not-autohandled: flow-source (left for the handler; still unacknowledged)
+ok - the shipped file-signal package is a runnable end-to-end external adapter
+tests/fm-extension-binding.test.sh: line 402: 60457 Killed: 9               FM_EXTENSION_BINDING_SECTION_CHILD=1 FM_EXTENSION_BINDING_SEGMENT="$section" bash "$0"
+ok - the section coordinator propagates ordered failures and bounded cleanup
+ok - one external adapter registers, invokes, captures unhandled evidence, classifies, and terminally retires end to end
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-extension-binding.iqYBcD/remote-root/bin/fm-wake-lib.sh: line 39: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-extension-binding.iqYBcD/remote-root/bin/fm-timeout-lib.sh: No such file or directory
+not-autohandled: example-symlinked (left for the handler; still unacknowledged)
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-extension-binding.iqYBcD/remote-root/bin/fm-wake-lib.sh: line 39: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-extension-binding.iqYBcD/remote-root/bin/fm-timeout-lib.sh: No such file or directory
+not-autohandled: remote-source (left for the handler; still unacknowledged)
+ok - a home reached through a symlinked ancestor captures external evidence normally
+ok - serialized remote binding crosses fm-on through addressed-home capture and retirement
+
+all extension-binding tests passed
+ok - handshake execution rejects and reaps foreground descendants
+
+all extension-binding tests passed
+ok - inner result.silent host crash releases the parent lifecycle lock before terminal retry
+ok - local binding retirement requires its exact identity and disables invocation
+
+all extension-binding tests passed
+ok - independent extension conformance sections complete through isolated public homes
+
+all extension-binding tests passed
