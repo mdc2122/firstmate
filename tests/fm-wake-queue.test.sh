@@ -1780,7 +1780,7 @@ test_lock_holder_survives_empty_exec_cmdline() {
   state="$dir/state"
   lock="$state/.fixture.lock"
   proc="$dir/proc"
-  key=proc-starttime
+  key='proc-starttime'
   [ "$(uname)" != Linux ] || key=linux-starttime
   mkdir -p "$lock" "$proc/$pid"
   printf '%s\n' "$pid" > "$lock/pid"

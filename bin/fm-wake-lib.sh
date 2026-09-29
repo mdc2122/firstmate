@@ -116,7 +116,7 @@ fm_pid_starttime_alive() {
     return 0
   fi
   state=$(ps -p "$pid" -o stat= 2>/dev/null) || return 1
-  state=${state#${state%%[![:space:]]*}}
+  state=${state#"${state%%[![:space:]]*}"}
   case "$state" in ''|Z*) return 1 ;; esac
   out=$(LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null) || return 1
   [ -n "$out" ] || return 1
