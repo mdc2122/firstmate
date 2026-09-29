@@ -1772,6 +1772,39 @@ SH
 # contender can prove a live pid is NOT the recorded holder - a recycled pid,
 # or a zombie whose identity no longer matches - and reclaim instead of
 # wedging forever on a bare kill -0 verdict.
+test_lock_holder_survives_empty_exec_cmdline() {
+  local dir state lock proc pid key
+  sleep 30 &
+  pid=$!
+  dir=$(make_case lock-exec-cmdline)
+  state="$dir/state"
+  lock="$state/.fixture.lock"
+  proc="$dir/proc"
+  key=proc-starttime
+  [ "$(uname)" != Linux ] || key=linux-starttime
+  mkdir -p "$lock" "$proc/$pid"
+  printf '%s\n' "$pid" > "$lock/pid"
+  printf '%s=987654 cmdline-hex=62617368\n' "$key" > "$lock/pid-identity"
+  printf '%s\n' "$pid (holder) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 987654 20" > "$proc/$pid/stat"
+  : > "$proc/$pid/cmdline"
+  FM_PROC_ROOT_OVERRIDE="$proc" FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_holder_alive "$2" "$3" || exit 1
+    fm_lock_try_acquire "$2" && exit 2
+    [ "$FM_LOCK_HELD_PID" = "$3" ]
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$lock" "$pid" \
+    || { kill "$pid" 2>/dev/null || true; fail "empty exec cmdline caused a live holder to lose its lock"; }
+  printf '%s\n' "$pid (holder) Z 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 987654 20" > "$proc/$pid/stat"
+  FM_PROC_ROOT_OVERRIDE="$proc" FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    ! fm_lock_holder_alive "$2" "$3"
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$lock" "$pid" \
+    || { kill "$pid" 2>/dev/null || true; fail "zombie holder was treated as live"; }
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  pass "lock honors a live exec window but rejects a zombie"
+}
+
 test_lock_records_pid_identity_and_reclaims_foreign_holder() {
   local dir state lock holder_pid holder_identity i rc
   dir=$(make_case lock-identity-reclaim)
@@ -2051,6 +2084,7 @@ test_historical_annotation_skips_announced_status() {
 test_self_held_lock_reclaims_instead_of_deadlocking
 test_subshell_lock_ownership_without_bashpid
 test_bounded_lock_handoff_after_contention
+test_lock_holder_survives_empty_exec_cmdline
 test_lock_records_pid_identity_and_reclaims_foreign_holder
 test_live_presentation_holder_is_deadlined_without_weakening_ack
 test_malformed_presentation_lock_reports_acquire_failure

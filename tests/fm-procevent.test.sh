@@ -237,7 +237,7 @@ wait_for "$FM_PROCEVENT_CLAIM_ROOT/symlinked-src.claim" \
 : > "$SYM_TRIGGER"
 # Poll for the committed result row itself: on a slow runner reconcile can
 # legitimately queue a launch-confirmation wake before the result lands.
-for _ in $(seq 1 300); do
+for _ in $(seq 1 "$READY_TRIES"); do
   wake_payloads "$HSYM" | grep -F "procevent lavish symlinked-src 1" >/dev/null && break
   sleep 0.1
 done

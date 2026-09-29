@@ -97,6 +97,32 @@ fm_pid_identity() {
   printf '%s\n' "$out" | sed 's/^[[:space:]]*//'
 }
 
+fm_pid_starttime_alive() {
+  local pid=$1 proc_root stat_line starttime state out identity_key
+  local -a stat_fields
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  proc_root=${FM_PROC_ROOT_OVERRIDE:-/proc}
+  if [ -r "$proc_root/$pid/stat" ]; then
+    stat_line=$(cat "$proc_root/$pid/stat" 2>/dev/null) || return 1
+    read -r -a stat_fields <<< "${stat_line##*)}"
+    [ "${#stat_fields[@]}" -ge 20 ] || return 1
+    state=${stat_fields[0]}
+    [ "$state" != Z ] && [ -n "$state" ] || return 1
+    starttime=${stat_fields[19]}
+    case "$starttime" in ''|*[!0-9]*) return 1 ;; esac
+    identity_key=proc-starttime
+    [ "$_FM_UNAME" != Linux ] || identity_key=linux-starttime
+    printf '%s=%s\n' "$identity_key" "$starttime"
+    return 0
+  fi
+  state=$(ps -p "$pid" -o stat= 2>/dev/null) || return 1
+  state=${state#${state%%[![:space:]]*}}
+  case "$state" in ''|Z*) return 1 ;; esac
+  out=$(LC_ALL=C ps -p "$pid" -o lstart= 2>/dev/null) || return 1
+  [ -n "$out" ] || return 1
+  printf '%s\n' "$out" | sed 's/^[[:space:]]*//'
+}
+
 fm_path_mtime() {
   if [ "$_FM_UNAME" = Darwin ]; then
     /usr/bin/stat -f %m "$1" 2>/dev/null
@@ -611,7 +637,7 @@ fm_lock_mid_acquire_is_fresh() {
 # treating either as live wedges every waiter forever. When the owner record
 # carries a pid-identity (written by fm_lock_prepare_owner/fm_lock_claim), the
 # pid's CURRENT start time must match the recorded one; an absent or empty
-# record keeps the legacy liveness-only verdict.
+# record keeps a start-time-independent liveness verdict, but still rejects zombies.
 # Only the start-time component is compared, never the command line: a holder
 # may legitimately exec while it holds the lock (fm-procevent.sh hands its
 # lifecycle lock to the extension host by exec, and bash execs a subshell's
@@ -619,21 +645,12 @@ fm_lock_mid_acquire_is_fresh() {
 # replacing its command line. A recycled pid gets a new start time; a zombie
 # is rejected explicitly because it keeps its original one.
 fm_lock_holder_alive() {
-  local lockdir=$1 pid=$2 recorded current stat
+  local lockdir=$1 pid=$2 recorded current
   fm_pid_alive "$pid" || return 1
+  current=$(fm_pid_starttime_alive "$pid" 2>/dev/null) || return 1
   recorded=$(cat "$lockdir/pid-identity" 2>/dev/null || true)
   [ -n "$recorded" ] || return 0
-  current=$(fm_pid_identity "$pid" 2>/dev/null) || return 1
-  [ "$(_fm_pid_identity_start "$current")" = "$(_fm_pid_identity_start "$recorded")" ] || return 1
-  case "$current" in
-    # The /proc form cannot be computed for a zombie (its cmdline is empty).
-    *-starttime=*) return 0 ;;
-  esac
-  stat=$(ps -p "$pid" -o stat= 2>/dev/null || true)
-  case "$stat" in
-    *Z*) return 1 ;;
-  esac
-  return 0
+  [ "$(_fm_pid_identity_start "$current")" = "$(_fm_pid_identity_start "$recorded")" ]
 }
 
 # _fm_pid_identity_start <identity>
