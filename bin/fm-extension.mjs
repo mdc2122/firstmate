@@ -2059,6 +2059,11 @@ async function releaseLifecycleLock() {
   const { lockPath, ownerPath } = activeLifecycleLock;
   await unlink(lockPath);
   await unlink(path.join(ownerPath, "pid"));
+  // The shell lock library records the holder's process identity beside its
+  // pid (fm_lock_prepare_owner); it belongs to this same exec'd holder.
+  await unlink(path.join(ownerPath, "pid-identity")).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
   await rmdir(ownerPath);
   activeLifecycleLock = null;
 }
