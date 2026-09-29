@@ -1967,6 +1967,138 @@ test_nonterminal_stale_not_working_surfaced() {
   pass "a not-provably-working non-terminal stale is surfaced immediately (never left to wait out the timer)"
 }
 
+# --- Orca endpoints: a terminal the backend proves closed is not a stale pane --
+# Orca answers `terminal read` for a closed terminal with ok:true, status
+# `exited`, and an empty tail. Read as a live empty pane, that hashed the same
+# every poll and re-alarmed "stopped responding" for a terminal that no longer
+# existed. A proven-absent endpoint retires its pane markers instead and raises
+# at most one notice, and only for a worker whose latest status is unfinished;
+# an unreadable read and a live idle pane keep today's handling.
+
+# Install a fake `orca` CLI whose `terminal read` prints $FM_FAKE_ORCA_READ
+# (a file) and exits $FM_FAKE_ORCA_READ_RC, and a symlinked real node, which the
+# Orca adapter uses to parse the JSON.
+add_fake_orca() {  # <fakebin>
+  local fakebin=$1 node
+  node=$(command -v node) || fail "the Orca adapter parses JSON with node, which was not found"
+  ln -sf "$node" "$fakebin/node"
+  cat > "$fakebin/orca" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-} ${2:-}" = "terminal read" ]; then
+  [ -z "${FM_FAKE_ORCA_READ:-}" ] || cat "$FM_FAKE_ORCA_READ"
+  exit "${FM_FAKE_ORCA_READ_RC:-0}"
+fi
+exit 1
+SH
+  chmod +x "$fakebin/orca"
+}
+
+orca_read_json() {  # <file> <status> [tail-line]
+  if [ -n "${3-}" ]; then
+    printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"%s","tail":["%s"]}}}\n' "$2" "$3" > "$1"
+  else
+    printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"%s","tail":[]}}}\n' "$2" > "$1"
+  fi
+}
+
+seed_orca_task() {  # <state> <id> <terminal> <status-line> <pane-text>
+  local state=$1 id=$2 terminal=$3 line=$4 text=$5 key
+  fm_write_meta "$state/$id.meta" "window=fm-$id" "endpoint_task_id=$id" \
+    "terminal=$terminal" "kind=ship" "backend=orca"
+  printf '%s\n' "$line" > "$state/$id.status"
+  printf '%s' "$(seen_sig "$state/$id.status")" > "$state/.seen-${id}_status"
+  key=$(printf '%s' "$terminal" | tr ':/.' '___')
+  printf '%s' "$(hash_text "$text")" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+}
+
+test_orca_closed_terminal_unfinished_task_notices_once() {
+  local dir state fakebin out read key pid n
+  dir=$(make_case orca-closed-unfinished); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; read="$dir/read.json"
+  add_fake_orca "$fakebin"
+  orca_read_json "$read" exited
+  seed_orca_task "$state" gone term_gone1 'working: implementing' ''
+  key=term_gone1
+  PATH="$fakebin:$PATH" FM_FAKE_ORCA_READ="$read" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "a closed terminal on an unfinished task raised no notice"
+  grep -F "stale: term_gone1 (endpoint gone:" "$out" >/dev/null \
+    || fail "the closed-terminal notice did not name the gone endpoint: $(cat "$out")"
+  for f in hash count stale stale-since; do
+    [ ! -e "$state/.$f-$key" ] || fail "a proven-absent endpoint kept its .$f- marker"
+  done
+  ack_stopped_cycle "$state" || fail "could not acknowledge the closed-terminal notice"
+
+  : > "$out"
+  PATH="$fakebin:$PATH" FM_FAKE_ORCA_READ="$read" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    fail "the closed terminal was announced again after its one notice: $(cat "$out")"
+  fi
+  reap "$pid"
+  [ ! -s "$out" ] || fail "the closed terminal printed another wake: $(cat "$out")"
+  n=$(awk -F '\t' '$3 == "stale" && $4 == "term_gone1" { n++ } END { print n + 0 }' "$state/.wake-queue" 2>/dev/null || echo 0)
+  [ "$n" -eq 0 ] || fail "the closed terminal queued $n further stale wakes"
+  [ ! -e "$state/.hash-$key" ] || fail "the closed terminal was hashed again after its notice"
+  pass "a closed Orca terminal on an unfinished task raises exactly one notice and retires its pane markers"
+}
+
+test_orca_unreadable_read_keeps_existing_handling() {
+  local dir state fakebin out read key pid before
+  dir=$(make_case orca-unreadable); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; read="$dir/read.json"
+  add_fake_orca "$fakebin"
+  seed_orca_task "$state" hazy term_hazy1 'working: implementing' 'idle'
+  key=term_hazy1
+  before=$(cat "$state/.hash-$key" "$state/.count-$key" "$state/.stale-since-$key")
+  # ok:false (terminal_handle_stale is also raised for a live terminal's
+  # renderer change) and a CLI that fails outright are both unreadable reads.
+  printf '{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}\n' > "$read"
+  for rc in 0 1; do
+    : > "$out"
+    PATH="$fakebin:$PATH" FM_FAKE_ORCA_READ="$read" FM_FAKE_ORCA_READ_RC="$rc" FM_STATE_OVERRIDE="$state" \
+      FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+    pid=$!
+    wait_poll_cycle "$state" "$pid" || fail "an unreadable Orca read (rc=$rc) raised a wake: $(cat "$out")"
+    reap "$pid"
+    [ ! -s "$out" ] || fail "an unreadable Orca read (rc=$rc) printed a wake: $(cat "$out")"
+    [ "$(cat "$state/.hash-$key" "$state/.count-$key" "$state/.stale-since-$key")" = "$before" ] \
+      || fail "an unreadable Orca read (rc=$rc) changed the pane markers"
+    [ ! -e "$state/.endpoint-gone-$key" ] || fail "an unreadable Orca read (rc=$rc) was taken as proof of absence"
+    ack_stopped_cycle "$state" 2>/dev/null || true
+  done
+  pass "an unreadable Orca read never proves absence and leaves the pane markers untouched"
+}
+
+test_orca_live_idle_pane_surfaces_as_before() {
+  local dir state fakebin out read key pid
+  dir=$(make_case orca-live-idle); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; read="$dir/read.json"
+  add_fake_orca "$fakebin"
+  orca_read_json "$read" running 'idle prompt, finished'
+  seed_orca_task "$state" idle term_idle1 'working: implementing' 'idle prompt, finished'
+  key=term_idle1
+  rm -f "$state/.stale-since-$key"
+  PATH="$fakebin:$PATH" FM_FAKE_ORCA_READ="$read" FM_STATE_OVERRIDE="$state" \
+    FM_FAKE_CREW_STATE='state: unknown · source: none · no current-state source available' \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "a live idle Orca pane was not surfaced"
+  grep -Fx "stale: term_idle1" "$out" >/dev/null || fail "a live idle Orca pane did not raise the ordinary stale wake: $(cat "$out")"
+  [ "$(cat "$state/.stale-$key" 2>/dev/null || true)" = "$(hash_text 'idle prompt, finished')" ] \
+    || fail "a live idle Orca pane did not advance the stale suppressor"
+  [ ! -e "$state/.endpoint-gone-$key" ] || fail "a live idle Orca pane was taken for a closed terminal"
+  pass "a live idle Orca pane keeps the ordinary stale handling"
+}
+
 # --- non-terminal stale, crew DECLARED a pause: absorbed, re-surfaced on a long
 #     cadence, never wedge-escalated ------------------------------------------
 # The live 2026-07-09/10 case: a crew intentionally held awaiting an upstream tool
@@ -5128,6 +5260,9 @@ test_busy_declared_pause_is_rechecked_not_wedge_escalated
 test_afk_busy_declared_pause_hands_off_plain_stale
 test_afk_busy_declared_pause_ticking_pane_hands_off_once
 test_nonterminal_stale_not_working_surfaced
+test_orca_closed_terminal_unfinished_task_notices_once
+test_orca_unreadable_read_keeps_existing_handling
+test_orca_live_idle_pane_surfaces_as_before
 test_nonterminal_stale_paused_absorbed_then_resurfaced
 test_exited_declared_pause_is_bounded_but_live_gate_surfaces
 test_absorbed_replacement_wait_does_not_inherit_the_old_throttle

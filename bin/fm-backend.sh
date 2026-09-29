@@ -721,7 +721,14 @@ fm_backend_resolve_selector() {  # <raw-target> <state-dir>
 # at every call site. Each verified backend adds its own arm here, without
 # changing call sites.
 
-# fm_backend_capture: bounded plain-text session capture.
+# fm_backend_capture: bounded plain-text session capture. Exit 0 is a readable
+# endpoint (possibly with an empty screen); exit FM_BACKEND_CAPTURE_ABSENT means
+# the backend itself positively reported the recorded endpoint gone, which only
+# an adapter with a verified absence signal may return (today Orca's `exited`
+# terminal status, bin/backends/orca.sh); every other nonzero exit is an
+# unreadable read and never proves absence.
+# shellcheck disable=SC2034 # Consumed by adapters and sourcing callers.
+FM_BACKEND_CAPTURE_ABSENT=3
 fm_backend_capture() {  # <backend> <target> <lines> [expected-label]
   local backend=$1
   shift
