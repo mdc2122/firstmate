@@ -1,0 +1,36 @@
+===== target f3083c6, mode=retire =====
+$ fm-procevent.sh register lavish drive-src -- blocker.sh trigger
+registered: drive-src (lavish)
+$ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=60 fm-procevent.sh reconcile   (background; runner held before claiming)
+$ fm-procevent.sh retire drive-src   (while launch unconfirmed)
+retired: drive-src
+--- reconcile output (exit 0) ---
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+--- launch-failed wakes in wake queue ---
+(count: 0)
+--- claim file present? ---
+no claim
+===== target f3083c6, mode=reregister =====
+$ fm-procevent.sh register lavish drive-src -- blocker.sh trigger
+registered: drive-src (lavish)
+$ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=60 fm-procevent.sh reconcile   (background; runner held before claiming)
+$ fm-procevent.sh retire + register drive-src   (new generation while launch unconfirmed)
+registered: drive-src (lavish)
+--- reconcile output (exit 0) ---
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+--- launch-failed wakes in wake queue ---
+(count: 0)
+--- claim file present? ---
+no claim
+===== target f3083c6, mode=hold =====
+$ fm-procevent.sh register lavish drive-src -- blocker.sh trigger
+registered: drive-src (lavish)
+$ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=2 fm-procevent.sh reconcile   (background; runner held before claiming)
+(registration left untouched; runner held past the 2s window)
+--- reconcile output (exit 1) ---
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=1
+--- launch-failed wakes in wake queue ---
+procevent:drive-src:launch-failed:16777234-530640447-2804225155 | check: process-event source drive-src is registered but its launch did not prove it took the source's claim within FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS, so nothing is confirmed to be collecting from it; reconcile reports that as failed= and keeps launching it every supervision cycle. If it stays that way, check the source command and the adapter binary the registration names, and run an attached bin/fm-procevent.sh start drive-src to reproduce a refusal on its stderr - the detached launch discards it, and a hand-run reconcile only counts it as failed=. A later cycle that finds the source owned ends this episode on its own, so a runner that was merely slow to claim needs nothing from you.
+(count: 1)
+--- claim file present? ---
+no claim

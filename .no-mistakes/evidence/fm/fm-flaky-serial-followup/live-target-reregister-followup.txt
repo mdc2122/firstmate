@@ -1,0 +1,13 @@
+$ fm-procevent.sh register lavish drive-src -- blocker.sh trigger
+registered: drive-src (lavish)
+$ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=60 fm-procevent.sh reconcile   (background; runner held before claiming)
+$ fm-procevent.sh retire + register drive-src   (new generation while launch unconfirmed)
+registered: drive-src (lavish)
+--- reconcile output (exit 0) ---
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+--- launch-failed wakes in wake queue ---
+(count: 0)
+--- claim file present after up to 5s? ---
+/tmp/fm-drive.zKO51K/claims/drive-src.claim
+--- next reconcile ---
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0

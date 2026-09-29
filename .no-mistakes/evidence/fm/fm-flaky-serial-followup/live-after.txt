@@ -1,0 +1,15 @@
+== Scenario 1: healthy launch ==
+reconcile rc=0: reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+launch-failed wakes: 0
+result wake rows:
+  check | procevent:healthy-src:1 | check: procevent lavish healthy-src 1
+== Scenario 2: registration retired while launch is unconfirmed ==
+runner held before claim: yes
+retired: retired-src
+retire rc=0
+reconcile rc=0: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+launch-failed wakes: 0
+claim file present: no
+== Scenario 3 (adversarial): live registration, runner never claims inside window ==
+reconcile rc=1: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=1
+launch-failed wakes: 1
