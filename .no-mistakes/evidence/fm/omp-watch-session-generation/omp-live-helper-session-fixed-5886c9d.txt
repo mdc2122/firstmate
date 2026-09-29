@@ -1,0 +1,41 @@
+
+## startup: omp omp/18.2.6 in rpc mode, scripted model, lab clone at /tmp/fm-omp-helper-lab.Rg9UXe/project
+extension at 5886c9d no-mistakes(review): Log helper session events and label inert helpers distinctly writes session-generations.log: yes
+watch extension auto-discovered; lab session lock now names omp pid 39260 (bun)
+
+## p1: main session arms the watcher through fm_watch_arm_omp
+tool result: watcher: started omp extension arm child 1; future ordinary re-arms are automatic; call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy
+watcher pid=59123 alive=yes
+
+## p2: main spawns one in-process task helper; the helper's model calls fm_watch_arm_omp itself
+task tool result (first line): Spawned agent `helper` (job `helper`). Its result auto-delivers on yield unless a settled `hub jobs`/`wait` snapshot consumes it first. DM `helper` via `hub` send to coordinate while it runs; use `hub` only to inspect (`jobs`), wait, or cancel a stuck task.
+helper session_shutdown observed 3s after spawn (task.agentIdleTtlMs=3000 lets omp dispose the idle helper)
+helper's own fm_watch_arm_omp result, taken from the helper's next model request: watcher: unchanged - another live omp session in this process owns the watcher
+omp's own log for pid 39260:
+{"timestamp":"2026-09-28T21:04:06.275-05:00","message":"Session exit recorded","sessionId":"01a0eae7-9a91-7000-8f12-127afbe6fca6","reason":"dispose","kind":"normal"}
+watcher pid=59123 alive=yes (same pid as after p1: yes)
+
+## p3: main calls fm_watch_arm_omp again after the helper started and was disposed
+tool result: watcher: unchanged - omp extension already owns an arm child; no manual re-arm needed; call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy
+watcher pid=59123 alive=yes (same pid as after p1: yes)
+
+## session-generations.log before owner shutdown
+2026-09-29T02:03:57.989Z pid=39260 instance=1/1 gen=1 load owner
+2026-09-29T02:03:58.540Z pid=39260 instance=1/1 gen=1 session_start owner
+2026-09-29T02:04:02.087Z pid=39260 instance=2/2 gen=2 load inert
+2026-09-29T02:04:02.105Z pid=39260 instance=2/2 gen=2 session_start inert
+2026-09-29T02:04:06.275Z pid=39260 instance=2/2 gen=2 session_shutdown inert
+
+## shutdown: rpc close command, then close rpc stdin, then SIGINT if omp lingers
+no owner shutdown 30s after stdin close; sending SIGINT to omp pid 39260
+WARN: owner session_shutdown never logged
+watcher pid=none alive=no after owner shutdown
+
+## session-generations.log final
+2026-09-29T02:03:57.989Z pid=39260 instance=1/1 gen=1 load owner
+2026-09-29T02:03:58.540Z pid=39260 instance=1/1 gen=1 session_start owner
+2026-09-29T02:04:02.087Z pid=39260 instance=2/2 gen=2 load inert
+2026-09-29T02:04:02.105Z pid=39260 instance=2/2 gen=2 session_start inert
+2026-09-29T02:04:06.275Z pid=39260 instance=2/2 gen=2 session_shutdown inert
+
+## omp stderr tail

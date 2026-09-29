@@ -1,0 +1,33 @@
+
+## startup: omp omp/18.2.6 in rpc mode, scripted model, lab clone at /tmp/fm-omp-helper-lab.Rg9UXe/project
+extension at 9b11db8 feat(bin): Alert on green-but-unmergeable PRs and track captain asks with verify conditions (#12) writes session-generations.log: no
+watch extension auto-discovered; lab session lock now names omp pid 67602 (bun)
+
+## p1: main session arms the watcher through fm_watch_arm_omp
+tool result: watcher: started omp extension arm child 1; future ordinary re-arms are automatic; call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy
+watcher pid=14781 alive=yes
+
+## p2: main spawns one in-process task helper; the helper's model calls fm_watch_arm_omp itself
+task tool result (first line): Spawned agent `helper` (job `helper`). Its result auto-delivers on yield unless a settled `hub jobs`/`wait` snapshot consumes it first. DM `helper` via `hub` send to coordinate while it runs; use `hub` only to inspect (`jobs`), wait, or cancel a stuck task.
+WARN: helper session_shutdown not observed within 120s
+helper's own fm_watch_arm_omp result, taken from the helper's next model request: watcher: unchanged - omp extension already owns an arm child; no manual re-arm needed; call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy
+omp's own log for pid 67602:
+{"timestamp":"2026-09-28T21:02:19.967-05:00","message":"Session exit recorded","sessionId":"01a0eae5-fa8d-7000-84ef-5ba5c3f94120","reason":"dispose","kind":"normal"}
+watcher pid=none alive=no (same pid as after p1: NO)
+
+## p3: main calls fm_watch_arm_omp again after the helper started and was disposed
+tool result: watcher: not armed - omp session is shutting down
+watcher pid=none alive=no (same pid as after p1: NO)
+
+## session-generations.log before owner shutdown
+(no session-generations.log at this commit)
+
+## shutdown: rpc close command, then close rpc stdin, then SIGINT if omp lingers
+no owner shutdown 30s after stdin close; sending SIGINT to omp pid 67602
+WARN: owner session_shutdown never logged
+watcher pid=none alive=no after owner shutdown
+
+## session-generations.log final
+(no session-generations.log at this commit)
+
+## omp stderr tail

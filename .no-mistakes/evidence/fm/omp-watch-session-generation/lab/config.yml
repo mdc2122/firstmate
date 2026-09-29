@@ -1,0 +1,12 @@
+modelRoles:
+  default: fake/fake-model
+  task: fake/fake-model
+  smol: fake/fake-model
+  slow: fake/fake-model
+  plan: fake/fake-model
+  advisor: fake/fake-model
+  vision: fake/fake-model
+  commit: fake/fake-model
+  tiny: fake/fake-model
+task:
+  agentIdleTtlMs: 3000
