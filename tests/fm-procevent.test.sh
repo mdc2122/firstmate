@@ -1520,8 +1520,12 @@ awk '/^argv:$/ { print; exit } { print }' "$EP_SOURCE" > "$TMP_ROOT/episode-bad.
 ep_damage() { cat "$TMP_ROOT/episode-bad.source" > "$EP_SOURCE"; }
 ep_repair() { cat "$TMP_ROOT/episode-good.source" > "$EP_SOURCE"; }
 ep_reconcile() {  # <expected-fragment> <expected-exit-nonzero:0|1> <msg>; sets ep_out
-  local rc=0
-  ep_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=2 pe "$HEP" reconcile) || rc=$?
+  local rc=0 window=2
+  # A launch expected to fail waits out its whole window, so keep that short;
+  # a launch expected to confirm returns as soon as it does, so give it a
+  # window a loaded CI runner cannot plausibly exceed.
+  [ "$2" -eq 1 ] || window=60
+  ep_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$window" pe "$HEP" reconcile) || rc=$?
   assert_contains "$ep_out" "$1" "$3: $ep_out"
   if [ "$2" -eq 1 ]; then
     [ "$rc" -ne 0 ] || fail "$3 (reconcile exited 0): $ep_out"
@@ -2570,7 +2574,8 @@ pe_register "$HFLOOR" lavish floor-src -- \
   "$STORM_SOURCE" "$TMP_ROOT/launch-times" "$HFLOOR" "$ROOT"
 FM_PROCEVENT_OWNER_LEASE_SECONDS=4 FM_PROCEVENT_OWNER_CHECK_SECONDS=1 \
   FM_PROCEVENT_LAUNCH_FLOOR_SECONDS=1 pe "$HFLOOR" reconcile >/dev/null
-floor_deadline=$((SECONDS + 12))
+# Hang bound only: the launch-rate assertions below are what pin the floor.
+floor_deadline=$((SECONDS + ${FM_TEST_RACE_WAIT_SECONDS:-120}))
 while :; do
   floor_count=0
   [ ! -f "$TMP_ROOT/launch-times" ] \
