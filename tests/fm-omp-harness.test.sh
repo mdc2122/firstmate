@@ -763,7 +763,7 @@ SH
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 \
     EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
 import { pathToFileURL } from "node:url";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
 const mod = await import(pathToFileURL(process.env.EXT).href);
 // omp binds the factory once per session in one process: the owner, then an
@@ -787,7 +787,8 @@ const helper = bind();
 await helper.handlers.get("session_start")({}, {});
 text = await arm(owner);
 if (!/^watcher: unchanged - omp extension already owns an arm child/.test(text)) throw new Error(`a helper session_start displaced the owner: ${text}`);
-if (!/^watcher: not armed - omp session is shutting down$/.test(await arm(helper))) throw new Error("a helper session must never own the watcher");
+text = await arm(helper);
+if (!/^watcher: unchanged - another live omp session in this process owns the watcher$/.test(text)) throw new Error(`a helper session must stay inert without claiming to shut down: ${text}`);
 await helper.handlers.get("session_shutdown")({}, {});
 text = await arm(owner);
 if (!/^watcher: unchanged - omp extension already owns an arm child/.test(text)) throw new Error(`a helper session_shutdown stopped the owner: ${text}`);
@@ -798,13 +799,27 @@ const replacement = bind();
 await replacement.handlers.get("session_start")({}, {});
 text = await arm(replacement);
 if (!/^watcher: unchanged - omp extension already owns an arm child/.test(text)) throw new Error(`the replacement did not take over: ${text}`);
+// The diagnostic log records the start and stop of every session with its role.
+const log = readFileSync(`${process.env.FM_HOME}/state/extensions/omp-primary-watch/session-generations.log`, "utf8")
+  .trim().split("\n").map((line) => line.replace(/^\S+ pid=\d+ /, ""));
+const expected = [
+  "instance=1/1 gen=1 load owner",
+  "instance=1/1 gen=1 session_start owner",
+  "instance=2/2 gen=2 load inert",
+  "instance=2/2 gen=2 session_start inert",
+  "instance=2/2 gen=2 session_shutdown inert",
+  "instance=1/2 gen=1 session_shutdown owner",
+  "instance=3/3 gen=3 load owner",
+  "instance=3/3 gen=3 session_start owner",
+];
+if (JSON.stringify(log) !== JSON.stringify(expected)) throw new Error(`session log mismatch:\n${log.join("\n")}`);
 process.exit(0);
 EOF
 )
   status=$?
   expect_code 0 "$status" "omp watch extension helper-session contract: $out"
   [ -z "$out" ] || fail "omp watch helper-session test printed output: $out"
-  pass ".omp watch extension: an in-process helper session's start and shutdown leave the owner armed; a genuine replacement still takes over"
+  pass ".omp watch extension: an in-process helper session's start and shutdown leave the owner armed and are logged as inert; a genuine replacement still takes over"
 }
 
 test_detection_anchored_name_and_marker_precedence
