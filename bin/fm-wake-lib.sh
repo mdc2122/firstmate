@@ -1187,13 +1187,16 @@ fm_lock_acquire_wait_bounded() {
     # holder's pid record and see no live owner. Sample a few times: acquiring
     # wins, any observed live holder is contention (124), and only a lock that
     # never shows a live holder across the samples falls through as unsafe.
+    # Stale-owner recovery already had its chance just above, so a sample
+    # only needs the plain create; a looped fm_lock_try_acquire also
+    # multiplies ShellCheck's extended analysis of every sourcing script past
+    # a hosted runner's memory.
     local sample=0
     while [ "$sample" -lt 10 ]; do
-      if fm_lock_try_acquire "$lockdir"; then
+      if fm_lock_try_create "$lockdir"; then
         return 0
       fi
-      owner_pid=${FM_LOCK_HELD_PID:-}
-      fm_pid_alive "$owner_pid" || owner_pid=$(cat "$lockdir/pid" 2>/dev/null || true)
+      owner_pid=$(cat "$lockdir/pid" 2>/dev/null || true)
       case "$owner_pid" in
         ''|*[!0-9]*|0) ;;
         *)
