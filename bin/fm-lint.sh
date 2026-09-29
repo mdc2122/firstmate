@@ -2,9 +2,10 @@
 # fm-lint.sh - the single owner of firstmate's lint definition.
 #
 # Runs its file set with ShellCheck's default severity, extended analysis,
-# ambient configuration disabled, and one exact ShellCheck version. CI and
-# no-mistakes both invoke this script with no arguments, so this owner selects
-# the context-appropriate rule set without duplicating lint configuration.
+# ambient configuration disabled, and one exact ShellCheck version. no-mistakes
+# invokes this script with no arguments and CI invokes it with only
+# --partition, so this owner selects the context-appropriate rule set without
+# duplicating lint configuration.
 # The explicit --fast mode is local-only and disables ShellCheck's extended
 # dataflow analysis while preserving ordinary shell lint checks and source
 # following. CI, main, and merge-base-less runs keep --norc --external-sources
