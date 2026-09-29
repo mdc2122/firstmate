@@ -1728,6 +1728,55 @@ pe "$HFC" retire aa-fast-src >/dev/null 2>&1 || true
 pe "$HFC" retire zz-hold-src >/dev/null 2>&1 || true
 pass "a launch that finished before confirmation looked is still reported as started"
 
+# --- a launch whose registration is retired before it claims is not a result --
+# A terminal result can retire its own source while a concurrent cycle is
+# relaunching it, and the runner then correctly declines a generation that is
+# gone. That launch neither started nor failed, so reconcile must not count it
+# either way or announce it as a launch failure. The runner calls `ps` to prove
+# its process group before it takes the source lock, so a `ps` shim holds the
+# detached runner there until the registration has been retired underneath it.
+HRT="$TMP_ROOT/hrt"; new_home "$HRT"
+fm_test_track_procevent_home "$HRT"
+RT_BIN="$TMP_ROOT/retired-launch-bin"; mkdir -p "$RT_BIN"
+RT_ENTERED="$TMP_ROOT/retired-launch-entered"; RT_GATE="$TMP_ROOT/retired-launch-gate"
+RT_REAL_PS=$(command -v ps)
+cat > "$RT_BIN/ps" <<SH
+#!/usr/bin/env bash
+if [ -n "\${FM_PROCEVENT_RUNNER_GROUP:-}" ]; then
+  printf "entered\n" > "$RT_ENTERED"
+  for _ in \$(seq 1 $READY_TRIES); do
+    [ -e "$RT_GATE" ] && break
+    sleep 0.1
+  done
+fi
+exec "$RT_REAL_PS" "\$@"
+SH
+chmod +x "$RT_BIN/ps"
+RT_TRIGGER="$TMP_ROOT/retired-launch-trigger"
+pe_register "$HRT" lavish retired-launch-src -- "$BLOCKER" "$RT_TRIGGER" "retired launch" >/dev/null
+rt_rc=0
+PATH="$RT_BIN:$PATH" pe "$HRT" reconcile > "$TMP_ROOT/retired-launch.out" 2>&1 &
+RT_RECONCILE=$!
+if ! wait_for "$RT_ENTERED"; then
+  : > "$RT_GATE"
+  fail "the retired-launch fixture never saw reconcile detach its runner"
+fi
+pe "$HRT" retire retired-launch-src >/dev/null \
+  || { : > "$RT_GATE"; fail "could not retire the source while its launch was unconfirmed"; }
+: > "$RT_GATE"
+wait "$RT_RECONCILE" || rt_rc=$?
+rt_out=$(cat "$TMP_ROOT/retired-launch.out")
+assert_contains "$rt_out" "started=0" \
+  "reconcile counted a launch whose registration was retired as a start: $rt_out"
+assert_contains "$rt_out" "failed=0" \
+  "reconcile reported a launch whose registration was retired as failed: $rt_out"
+[ "$rt_rc" -eq 0 ] || fail "reconcile exited $rt_rc for a launch whose registration was retired: $rt_out"
+[ "$(launch_failed_wake_count "$HRT" retired-launch-src)" = 0 ] \
+  || fail "a launch whose registration was retired was announced as a launch failure"
+[ ! -e "$FM_PROCEVENT_CLAIM_ROOT/retired-launch-src.claim" ] \
+  || fail "the runner claimed a source whose registration had been retired"
+pass "a launch whose registration is retired before it claims is neither started nor failed"
+
 # --- a zero-padded confirm window is read as base 10 -------------------------
 # The window's validator reads base 10, so `08` is a value it accepts. Read as
 # octal in arithmetic it is not a number at all, which under `set -u` takes the
