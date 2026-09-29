@@ -29,6 +29,14 @@
 // handoff carries actionable closes that were still pending delivery; its
 // durable state lives at state/extensions/omp-primary-watch/session-replacement-actionable.json.
 // Stale callbacks from a prior generation are no-ops against the active replacement.
+// omp also binds this module's factory for every in-process task subagent
+// (verified omp 18.2.6; the advisor binds no extensions), and that helper's
+// session_start and session_shutdown arrive while the owner is still live. A
+// generation therefore claims the process only when no live generation owns
+// it; a helper that finds a live owner stays inert and its shutdown touches
+// nothing, while a genuine replacement follows the owner's shutdown and claims.
+// Every instance appends one line per load, session_start, and session_shutdown,
+// tagged owner or inert, to state/extensions/omp-primary-watch/session-generations.log.
 //
 // Delivery versus consumption (stated once here):
 // A main follow-up is delivered once omp accepts it (sendUserMessage returns).
@@ -42,7 +50,7 @@
 // replacement handoff.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
@@ -140,9 +148,11 @@ const armReadyTimeoutMs = positiveInteger(
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const repairOnlyHint = "call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - omp session is shutting down";
+const inertHelperMessage = "watcher: unchanged - another live omp session in this process owns the watcher";
 
 let nextGenerationId = 0;
 let nextHandoffId = 0;
+let loadedInstances = 0;
 let activeGeneration: SessionGeneration | null = null;
 let replacementHandoff: PendingActionableClose[] | null = null;
 type ReplacementActionableReceiver = (pending: PendingActionableClose) => void;
@@ -416,12 +426,38 @@ function createGeneration(): SessionGeneration {
   };
 }
 
-function activateGeneration(generation: SessionGeneration): void {
+// A generation takes over the process's watcher only when no other live
+// generation owns it. omp binds this module's factory again for every
+// in-process task subagent (prepared-extension rebind, verified omp 18.2.6)
+// while the owner is still live; such a helper must never displace the owner.
+// A genuine replacement always follows the owner's session_shutdown, which
+// marks the owner stopping first, so it can claim.
+function claimGeneration(generation: SessionGeneration): boolean {
+  if (activeGeneration === generation) return true;
+  if (activeGeneration && !activeGeneration.stopping) return false;
   activeGeneration = generation;
+  return true;
+}
+
+function recordSessionEvent(generation: SessionGeneration, instance: number, event: string): void {
+  const role = activeGeneration === generation ? "owner" : "inert";
+  try {
+    mkdirSync(handoffDir, { recursive: true });
+    appendFileSync(
+      `${handoffDir}/session-generations.log`,
+      `${new Date().toISOString()} pid=${process.pid} instance=${instance}/${loadedInstances} gen=${generation.id} ${event} ${role}\n`,
+    );
+  } catch {
+    // Diagnostics never affect watcher continuity.
+  }
 }
 
 function generationIsLive(generation: SessionGeneration): boolean {
   return activeGeneration === generation && !generation.stopping;
+}
+
+function refusalMessage(generation: SessionGeneration): string {
+  return generation.stopping ? shuttingDownMessage : inertHelperMessage;
 }
 
 function stopGeneration(generation: SessionGeneration): ChildProcess | null {
@@ -483,8 +519,10 @@ const cleanupOnProcessExit = () => {
 process.once("exit", cleanupOnProcessExit);
 
 export default function (pi: ExtensionAPI) {
+  const instance = ++loadedInstances;
   let generation = createGeneration();
-  activateGeneration(generation);
+  claimGeneration(generation);
+  recordSessionEvent(generation, instance, "load");
 
   async function sendWake(
     owner: SessionGeneration,
@@ -860,7 +898,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function startArm(owner: SessionGeneration, predecessorArmPid = ""): ArmResult {
-    if (!generationIsLive(owner)) return { ok: false, message: shuttingDownMessage };
+    if (!generationIsLive(owner)) return { ok: false, message: refusalMessage(owner) };
     const ownership = lockOwnership();
     if (ownership === "other") return { ok: false, message: "watcher: read-only - session lock is held by another firstmate session" };
     if (ownership === "missing") {
@@ -989,7 +1027,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function activateOwnedWatch(owner: SessionGeneration): ArmResult {
-    if (!generationIsLive(owner)) return { ok: false, message: shuttingDownMessage };
+    if (!generationIsLive(owner)) return { ok: false, message: refusalMessage(owner) };
     if (lockOwnership() !== "owned") return startArm(owner);
     replacementCoordinator.receiver = receiveReplacementActionable;
     let pending: PendingActionableClose[] = [];
@@ -1029,12 +1067,23 @@ export default function (pi: ExtensionAPI) {
 
   pi.on?.("session_start", async () => {
     if (generation.stopping) generation = createGeneration();
-    activateGeneration(generation);
+    // A helper session (an in-process task subagent) finds the owner live and
+    // stays inert: it neither arms, replays handoffs, nor takes the receiver.
+    const claimed = claimGeneration(generation);
+    recordSessionEvent(generation, instance, "session_start");
+    if (!claimed) return;
     markLoaded();
     if (lockOwnership() !== "owned") return;
     activateOwnedWatch(generation);
   });
   pi.on?.("session_shutdown", async () => {
+    // A helper's shutdown never touches the owner: its own generation holds no
+    // child, pending close, or receiver.
+    recordSessionEvent(generation, instance, "session_shutdown");
+    if (activeGeneration !== generation) {
+      generation.stopping = true;
+      return;
+    }
     // omp carries no shutdown reason (verified: `reason` is undefined), so the
     // replacement handoff is always persisted when anything is pending; a
     // terminal quit then merely replays an already-drained wake next start.
