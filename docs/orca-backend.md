@@ -54,6 +54,7 @@ On the typed plane, `fm-send.sh` verifies composer clearance through the fleet-w
 The composer read is one bounded tail of the live terminal and never pages backward into scrollback, so a stale startup banner cannot compete with the bottom-anchored composer.
 A bare shell row is `unknown`, not an empty agent composer, and plain-text captures degrade a glyph row carrying trailing text to `unknown` rather than a false `pending`.
 The watcher has no native Orca busy signal, so each harness adapter's semantic lifecycle supplies worker state.
+A terminal Orca reports `exited`, such as a tab closed by hand or by firstmate after a finished worker, is a proven-absent endpoint rather than a stale pane; [`architecture.md`](architecture.md#event-driven-supervision) owns that handling and its single-notice policy.
 Grok alone retains its isolated rendered-tail fallback.
 
 Cleanup keeps all shared Firstmate safety checks.

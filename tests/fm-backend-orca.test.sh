@@ -837,8 +837,33 @@ test_target_exists_rejects_orca_error_json() {
   pass "fm_backend_target_exists: Orca ok:false read JSON is not live"
 }
 
+# A closed Orca terminal still answers `terminal read` with ok:true, status
+# `exited`, and an empty tail. Capture reports that as the dispatcher's proven
+# absence code, never as a readable empty pane; ok:false and `unknown` status
+# stay ordinary unreadable failures, and a running terminal still reads.
+test_capture_reports_exited_terminal_as_proven_absent() {
+  local status out
+  orca_case capture-exited
+  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"exited","tail":[]}}}\n' > "$RESP/1.out"
+  printf '{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}\n' > "$RESP/2.out"
+  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"unknown","tail":[]}}}\n' > "$RESP/3.out"
+  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"running","tail":["$ "]}}}\n' > "$RESP/4.out"
+  out=$(PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" bash -c '
+    . "$0/bin/fm-backend.sh"
+    for i in 1 2 3 4; do
+      text=$(fm_backend_capture orca term-x 40 2>/dev/null); rc=$?
+      printf "%s:%s:%s\n" "$i" "$rc" "$([ "$rc" -eq "$FM_BACKEND_CAPTURE_ABSENT" ] && echo absent || echo "$text")"
+    done' "$ROOT")
+  status=$?
+  [ "$status" -eq 0 ] || fail "capture probe failed to run"
+  assert_contains "$out" "1:3:absent" "an exited Orca terminal was not reported as proven absent"
+  case "$out" in *"2:3:"*|*"3:3:"*) fail "an unreadable or unknown Orca read was reported as proven absent: $out" ;; esac
+  assert_contains "$out" "4:0:\$ " "a running Orca terminal did not read as a live pane"
+  pass "fm_backend_capture: only an exited Orca terminal is proven absent"
+}
+
 test_scout_teardown_removes_orca_worktree_via_helper() {
-  local proj wt data state config id out rc neutral
+  local proj wt data state config id out rc neutral f
   id="orcateardownz3"
   proj="$TMP_ROOT/teardown-project"
   wt="$TMP_ROOT/teardown-wt"
@@ -855,6 +880,10 @@ test_scout_teardown_removes_orca_worktree_via_helper() {
     "backend=orca" "orca_worktree_id=22ec401f-7dac-404b-b795-9594ac95aba0::$wt" \
     "decisions_reviewed=1" "decision_keys="
   orca_case teardown
+  for f in hash count stale stale-since wedge-escalations; do
+    printf 'x\n' > "$state/.$f-term-teardown"
+  done
+  printf 'x\n' > "$state/.hash-term-neighbor"
   printf '{"ok":true,"result":{"worktree":{"id":"22ec401f-7dac-404b-b795-9594ac95aba0::%s","path":"%s"}}}\n' "$wt" "$wt" > "$RESP/1.out"
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
   set +e
@@ -869,7 +898,11 @@ test_scout_teardown_removes_orca_worktree_via_helper() {
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:22ec401f-7dac-404b-b795-9594ac95aba0::'"$wt"$'\x1f''--force'$'\x1f''--json' \
     "teardown did not remove the Orca worktree through orca worktree rm"
   assert_absent "$state/$id.meta" "teardown should remove task metadata"
-  pass "fm-teardown.sh backend=orca: scout report gate then helper-backed worktree removal"
+  for f in hash count stale stale-since wedge-escalations; do
+    assert_absent "$state/.$f-term-teardown" "teardown left the closed terminal's .$f- watcher marker"
+  done
+  [ -e "$state/.hash-term-neighbor" ] || fail "teardown removed another endpoint's watcher marker"
+  pass "fm-teardown.sh backend=orca: scout report gate then helper-backed worktree removal, retiring the closed terminal's watcher markers"
 }
 
 test_scout_teardown_refuses_orca_id_path_mismatch() {
@@ -1453,6 +1486,7 @@ test_spawn_releases_orca_resources_when_metadata_write_fails
 test_peek_send_and_crew_state_route_through_orca_meta
 test_peek_and_crew_state_fail_closed_on_orca_error_json
 test_target_exists_rejects_orca_error_json
+test_capture_reports_exited_terminal_as_proven_absent
 test_scout_teardown_removes_orca_worktree_via_helper
 test_scout_teardown_refuses_orca_id_path_mismatch
 test_teardown_removes_orca_worktree_when_path_missing

@@ -401,19 +401,9 @@ window_label() {
   [ -n "$task" ] && printf 'fm-%s' "$task"
 }
 
-# The ONE derivation of a window's per-window marker key: `:`, `/` and `.` become
-# `_` so a window name is usable as a filename suffix. Every per-window file the
-# watcher keeps is named by it (.hash-, .count-, .stale-, .stale-since-,
-# .wedge-escalations-, .paused-*, .writing-*, .waiting-*), and live homes hold those markers on
-# disk under the current format, so the format lives here alone: a second copy is
-# how a future change to it silently orphans a window's markers instead of clearing
-# them. The helpers below take the derived key rather than re-deriving it, so one
-# poll of one window derives it once.
-window_key() {  # <window>
-  local key=${1//:/_}
-  key=${key//\//_}
-  printf '%s' "${key//./_}"
-}
+# window_key and the full per-window marker set live in bin/fm-classify-lib.sh
+# (window_key, watch_window_markers_retire), shared with bin/fm-teardown.sh so a
+# task's cleanup retires exactly the markers this watcher keeps for its endpoint.
 
 inbox_steer_escalate_unavailable() {  # <window> <task> <record>
   local w=$1 task=$2 rec=$3 reason
@@ -447,7 +437,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # too: their pane-staleness exemption is about quiet panes being healthy,
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state capture_rc
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -467,7 +457,13 @@ inbox_steer_check() {  # <window> <task>
       return 0
       ;;
   esac
-  tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
+  capture_rc=0
+  tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || capture_rc=$?
+  if [ "$capture_rc" -eq "$FM_BACKEND_CAPTURE_ABSENT" ]; then
+    inbox_steer_escalate_unavailable "$w" "$task" "$rec"
+    return 0
+  fi
+  [ "$capture_rc" -eq 0 ] || tail40=
   if window_is_busy "$w" "$tail40"; then
     return 0
   fi
@@ -1482,6 +1478,42 @@ surface_nonterminal_stale() {  # <window> <hash>
     return 0
   fi
   wake "stale: $win"
+}
+
+# A recorded endpoint the backend PROVES absent (fm_backend_capture returned
+# FM_BACKEND_CAPTURE_ABSENT) has no pane left to go stale: hashing the empty
+# read of a closed terminal is what made one gone endpoint re-alarm as
+# "stopped responding" every few minutes. Its pane-staleness markers are retired
+# instead, and only the task-keyed duties that do not read the pane - the
+# armed PR merge poll, the steering inbox, status signals - keep running for as
+# long as the task's metadata remains.
+# Notice policy, decided once per absence episode and remembered in
+# .endpoint-gone-<key> until the endpoint reads again or the task is torn down:
+#   - latest status `done:` or `failed:` - silent. The worker finished and
+#     already reported it through its status log, and firstmate closing a
+#     finished worker's terminal while keeping its record (to keep a PR merge
+#     poll armed) is the ordinary lifecycle, not a stuck worker.
+#   - anything else, including no status, `working:`, a declared wait, or an
+#     open decision - exactly one stale wake naming the closed endpoint, so a
+#     worker whose terminal vanished mid-task is never hidden.
+# A read that fails or cannot be classified never reaches here, so an
+# unreadable backend keeps its ordinary conservative stale handling.
+endpoint_gone_check() {  # <window> <task> <window-key> <last-status-line>
+  local win=$1 task=$2 key=$3 last=$4 marker reason
+  marker="$STATE/.endpoint-gone-$key"
+  [ ! -e "$marker" ] || return 0
+  watch_window_markers_retire "$STATE" "$key" || return 0
+  case "$(status_line_verb "$last")" in
+    done|failed)
+      printf 'silent\n' > "$marker"
+      triage_log "retired stale tracking for a proven-absent endpoint of finished task $task: $win"
+      return 0
+      ;;
+  esac
+  reason="stale: $win (endpoint gone: the backend reports the recorded terminal of $task closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)"
+  fm_wake_append stale "$win" "$reason" || exit 1
+  printf 'notified\n' > "$marker"
+  wake "$reason"
 }
 
 # Check and heartbeat cadence must survive actionable exits and restarts: the
@@ -2581,7 +2613,15 @@ EOF
     if [ "$kind" = secondmate ] && ! status_is_paused_or_captain_held "$last"; then
       continue
     fi
-    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
+    capture_rc=0
+    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) \
+      || capture_rc=$?
+    if [ "$capture_rc" -eq "$FM_BACKEND_CAPTURE_ABSENT" ]; then
+      endpoint_gone_check "$w" "$task" "$key" "$last"
+      continue
+    fi
+    [ "$capture_rc" -eq 0 ] || continue
+    [ ! -e "$STATE/.endpoint-gone-$key" ] || rm -f "$STATE/.endpoint-gone-$key"
     h=$(printf '%s' "$tail40" | hash_pane)
     hf="$STATE/.hash-$key"
     cf="$STATE/.count-$key"

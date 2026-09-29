@@ -671,7 +671,8 @@ run_watcher_bounded() {
   local home=$1 fakebin=$2 check_interval=${FM_TEST_CHECK_INTERVAL:-0} watch_root=${FM_TEST_WATCH_ROOT:-$ROOT}
   local check_timeout=${FM_TEST_CHECK_TIMEOUT:-1}
   shift 2
-  perl -e 'use POSIX qw(setpgid); my $pid=fork; die unless defined $pid; if (!$pid) { setpgid(0, 0); exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", -$pid; alarm 2; local $SIG{ALRM}=sub { kill "KILL", -$pid }; waitpid $pid, 0; exit 124 }; alarm 10; waitpid $pid, 0; alarm 0; exit($? >> 8)' \
+  FM_TEST_WATCH_ALARM=${FM_TEST_WATCH_ALARM:-10} \
+  perl -e 'use POSIX qw(setpgid); my $pid=fork; die unless defined $pid; if (!$pid) { setpgid(0, 0); exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", -$pid; alarm 2; local $SIG{ALRM}=sub { kill "KILL", -$pid }; waitpid $pid, 0; exit 124 }; alarm $ENV{FM_TEST_WATCH_ALARM}; waitpid $pid, 0; alarm 0; exit($? >> 8)' \
     env FM_HOME="$home" FM_ROOT_OVERRIDE="$watch_root" FM_CHECK_INTERVAL="$check_interval" FM_CHECK_TIMEOUT="$check_timeout" \
       FM_POLL=0.02 FM_HEARTBEAT=999999 FM_SIGNAL_GRACE=0 PATH="$fakebin:$BASE_PATH" "$WATCH" "$@"
 }
@@ -1532,6 +1533,68 @@ test_merged_poll_retires_once() {
   ! grep "$(printf '\tcheck\ttask-a.check.sh\t')" "$state/.wake-queue" >/dev/null 2>&1 \
     || fail "handled merged notification remained queued after acknowledgement"
   pass "validated merged polls notify once and retire before the next watcher cycle"
+}
+
+# Firstmate closes a finished PR worker's terminal while keeping its record so
+# the armed merge poll stays alive. Orca then answers the recorded terminal as
+# `exited`; the watcher must neither hash that gone pane into repeated
+# "stopped responding" wakes nor stop polling the PR: a done worker's closed
+# terminal is silent, its pane markers are retired, and the merge still lands
+# as a check wake.
+test_closed_terminal_done_task_keeps_pr_poll_without_stale_wakes() {
+  local dir state url=https://github.com/o/r/pull/7 key=term_done1 node rc f attempt
+  dir=$(make_case closed-terminal-pr-poll)
+  state="$dir/home/state"
+  node=$(command -v node) || fail "the Orca adapter parses JSON with node, which was not found"
+  ln -sf "$node" "$dir/fakebin/node"
+  cat > "$dir/fakebin/orca" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-} ${2:-}" = "terminal read" ] || exit 1
+printf '{"ok":true,"result":{"terminal":{"handle":"%s","status":"exited","tail":[]}}}\n' "$4"
+SH
+  chmod +x "$dir/fakebin/orca"
+  write_poll_meta "$state" task-a "$url" "endpoint_task_id=task-a" "terminal=$key" \
+    "kind=ship" "backend=orca" "yolo=off"
+  seed_canonical_poll "$dir" task-a "$url"
+  printf 'done: PR %s\n' "$url" > "$state/task-a.status"
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_wake_status_mark_current "$2" "$3"' \
+    _ "$ROOT/bin/fm-wake-lib.sh" "$state" "$state/task-a.status" \
+    || fail "could not mark the done status as already surfaced"
+  printf 'd41d8cd98f00b204e9800998ecf8427e' > "$state/.hash-$key"
+  printf '486\n' > "$state/.count-$key"
+  printf 'd41d8cd98f00b204e9800998ecf8427e' > "$state/.stale-$key"
+  echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
+
+  set +e
+  FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_STALE_ESCALATE_SECS=240 \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/w1.out" 2> "$dir/w1.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 124 ] || fail "a done worker's closed terminal ended the watcher cycle (rc=$rc): $(cat "$dir/w1.out")"
+  [ ! -s "$dir/w1.out" ] || fail "a done worker's closed terminal raised a wake: $(cat "$dir/w1.out")"
+  ! grep "$(printf '\tstale\t')" "$state/.wake-queue" >/dev/null 2>&1 \
+    || fail "a done worker's closed terminal queued a stale wake"
+  for f in hash count stale stale-since; do
+    [ ! -e "$state/.$f-$key" ] || fail "a done worker's closed terminal kept its .$f- marker"
+  done
+  grep -F "pr view $url" "$dir/gh.log" >/dev/null || fail "the armed PR poll did not run while the terminal was closed"
+
+  # The bounded first run ended by timeout, which the next watcher reports once
+  # as a re-arm after downtime; acknowledge that before reading the merge.
+  for attempt in 1 2; do
+    rm -f "$state/.last-check"
+    set +e
+    FM_TEST_GH_STATE=MERGED run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/w2.out" 2> "$dir/w2.err"
+    rc=$?
+    set -e
+    [ "$rc" -eq 0 ] || fail "the merged poll did not end the cycle (rc=$rc): $(cat "$dir/w2.err")"
+    case "$(cat "$dir/w2.out")" in
+      check:*task-a.check.sh:*merged) break ;;
+      'check: rearm-resurface') [ "$attempt" -eq 1 ] && ack_watcher_cycle "$state" && continue ;;
+    esac
+    fail "the closed-terminal task's merge was not reported: $(cat "$dir/w2.out")"
+  done
+  pass "a done worker's closed terminal is silent while its armed PR poll keeps running to the merge"
 }
 
 # A green pull request that GitHub refuses to merge (here: behind its base) is
@@ -2834,6 +2897,7 @@ SH
 test_parser_matrix
 test_gitlab_merge_watch
 test_merged_poll_retires_once
+test_closed_terminal_done_task_keeps_pr_poll_without_stale_wakes
 test_green_unmergeable_pr_alerts_once_per_episode
 test_green_pr_with_unreported_required_check_does_not_alert
 test_green_pr_in_merge_queue_does_not_alert

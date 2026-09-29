@@ -3518,6 +3518,10 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" \
   "$STATE/.$ID.branch-outcome-index"
+# The watcher's per-window pane markers for the endpoint this teardown closed
+# (bin/fm-classify-lib.sh owns the key and the marker set), so a gone endpoint
+# leaves no hash, stale, or wedge bookkeeping behind for a later reader.
+[ -z "$T" ] || watch_window_markers_retire "$STATE" "$(window_key "$T")" || true
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
 # retired endpoint; teardown only runs after landing is confirmed, so any
 # leftover unhandled steer here is moot rather than unlanded work.

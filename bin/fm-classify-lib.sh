@@ -1600,6 +1600,35 @@ window_to_task() {
   t="${w##*:}"; t="${t#fm-}"; printf '%s' "$t"
 }
 
+# The ONE derivation of a window's per-window watcher marker key: `:`, `/` and
+# `.` become `_` so a window name is usable as a filename suffix. Every
+# per-window file bin/fm-watch.sh keeps is named by it, and live homes hold
+# those markers on disk under the current format, so the format lives here
+# alone: a second copy is how a future change to it silently orphans a window's
+# markers instead of clearing them.
+window_key() {  # <window>
+  local key=${1//:/_}
+  key=${key//\//_}
+  printf '%s' "${key//./_}"
+}
+
+# Retire every per-window marker bin/fm-watch.sh keeps for one window key: the
+# pane hash and its repeat count, the stale suppressor and its wedge timer and
+# escalation count, the pause, write-deferral, wait-deferral, and churn-deferral
+# bookkeeping, and the proven-absent endpoint marker. Used by the watcher when
+# the backend proves the endpoint gone and by teardown for the endpoint it
+# closes, so neither leaves a gone endpoint's markers behind to be re-read.
+watch_window_markers_retire() {  # <state-dir> <window-key>
+  local state=$1 key=$2
+  [ -n "$state" ] && [ -n "$key" ] || return 1
+  rm -f "$state/.hash-$key" "$state/.count-$key" "$state/.stale-$key" \
+    "$state/.stale-since-$key" "$state/.wedge-escalations-$key" \
+    "$state/.paused-$key" "$state/.paused-rechecked-$key" "$state/.paused-resurfaced-$key" \
+    "$state/.writing-since-$key" "$state/.writing-resurfaced-$key" \
+    "$state/.waiting-resurfaced-$key" "$state/.churn-since-$key" \
+    "$state/.endpoint-gone-$key"
+}
+
 # Capture the bytes of an append-only status log at or after <start-offset> under
 # one size-and-identity snapshot.
 # The record form produces `<endpoint>\t<identity>\t<events>` and returns 0 when

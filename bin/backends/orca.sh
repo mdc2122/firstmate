@@ -196,14 +196,26 @@ fm_backend_orca_worktree_path() {
   printf '%s' "$path"
 }
 
+# fm_backend_orca_capture: one bounded tail read of the recorded terminal.
+# Returns FM_BACKEND_CAPTURE_ABSENT (bin/fm-backend.sh) only when Orca answers
+# the read successfully and reports the terminal `exited`: Orca derives that
+# status from a disconnected PTY with a recorded exit code, which is positive
+# proof the endpoint is gone (a closed tab reads this way, with an empty tail).
+# Every other failure - a CLI error, ok:false (including terminal_handle_stale,
+# which Orca also raises for a renderer or generation change while a terminal
+# may still be live), an unparseable answer, or status `unknown` - stays an
+# ordinary read failure, because an unreadable read never proves absence.
 fm_backend_orca_capture() {  # <terminal-id> <lines>
-  local terminal=$1 lines=${2:-40} out
+  local terminal=$1 lines=${2:-40} out rc
   fm_backend_orca_tool_check || return 1
   out=$(orca terminal read --terminal "$terminal" --limit "$lines" --json) || return 1
   fm_backend_orca_json_text "$out"
+  rc=$?
+  [ "$rc" -ne 3 ] || return "$FM_BACKEND_CAPTURE_ABSENT"
+  return "$rc"
 }
 
-fm_backend_orca_json_text() {  # <json>
+fm_backend_orca_json_text() {  # <json> ; exit 2 = ok:false, 3 = terminal exited
   printf '%s' "$1" | node -e '
 const fs = require("fs");
 const data = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -213,6 +225,10 @@ if (data.ok === false) {
   process.exit(2);
 }
 const r = data.result || {};
+if (data.ok === true && r.terminal && r.terminal.status === "exited") {
+  console.error("terminal exited");
+  process.exit(3);
+}
 if (r.terminal && Array.isArray(r.terminal.tail)) {
   process.stdout.write(r.terminal.tail.join("\n"));
 } else if (Array.isArray(r.tail)) {
