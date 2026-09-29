@@ -610,15 +610,43 @@ fm_lock_mid_acquire_is_fresh() {
 # zombie or a pid recycled by an unrelated process from the real holder, and
 # treating either as live wedges every waiter forever. When the owner record
 # carries a pid-identity (written by fm_lock_prepare_owner/fm_lock_claim), the
-# recorded identity must match the pid's CURRENT identity, exactly as
-# fm_watcher_lock_matches_pid requires for .watch.lock; an absent or empty
+# pid's CURRENT start time must match the recorded one; an absent or empty
 # record keeps the legacy liveness-only verdict.
+# Only the start-time component is compared, never the command line: a holder
+# may legitimately exec while it holds the lock (fm-procevent.sh hands its
+# lifecycle lock to the extension host by exec, and bash execs a subshell's
+# final command), and exec keeps the process and its start time while
+# replacing its command line. A recycled pid gets a new start time; a zombie
+# is rejected explicitly because it keeps its original one.
 fm_lock_holder_alive() {
-  local lockdir=$1 pid=$2 recorded
+  local lockdir=$1 pid=$2 recorded current stat
   fm_pid_alive "$pid" || return 1
   recorded=$(cat "$lockdir/pid-identity" 2>/dev/null || true)
   [ -n "$recorded" ] || return 0
-  [ "$(fm_pid_identity "$pid" 2>/dev/null || true)" = "$recorded" ]
+  current=$(fm_pid_identity "$pid" 2>/dev/null) || return 1
+  [ "$(_fm_pid_identity_start "$current")" = "$(_fm_pid_identity_start "$recorded")" ] || return 1
+  case "$current" in
+    # The /proc form cannot be computed for a zombie (its cmdline is empty).
+    *-starttime=*) return 0 ;;
+  esac
+  stat=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+  case "$stat" in
+    *Z*) return 1 ;;
+  esac
+  return 0
+}
+
+# _fm_pid_identity_start <identity>
+# The start-time component of an fm_pid_identity value: the leading
+# "<kind>-starttime=N" token of the /proc form, or the five-field lstart date
+# of the ps form, whitespace-normalized so column padding cannot differ.
+_fm_pid_identity_start() {
+  local a='' b='' c='' d='' e='' rest=''
+  read -r a b c d e rest <<< "$1"
+  case "$a" in
+    *-starttime=*) printf '%s\n' "$a" ;;
+    *) printf '%s %s %s %s %s\n' "$a" "$b" "$c" "$d" "$e" ;;
+  esac
 }
 
 fm_lock_recheck_stale_owner() {
@@ -1075,21 +1103,21 @@ _fm_lock_acquire_wait_handoff() {  # <lockdir> <caller-pid>
   fi
   fm_current_pid current || { fm_lock_release "$lockdir"; return 1; }
   back=$(cat "$ownerdir/pid" 2>/dev/null || true)
-  if [ "$back" != "$current" ] \
+  # Drop the helper's identity BEFORE the pid record changes hands, then record
+  # the caller's after: a contender reading between two writes must never pair
+  # one process's pid with another's identity, which reads as a foreign holder
+  # and steals a live lock. With no record the holder check is liveness-only,
+  # and both the helper and the caller are live throughout the transfer.
+  if [ "$back" != "$current" ] || ! rm -f "$ownerdir/pid-identity" 2>/dev/null \
     || ! printf '%s\n' "$caller_pid" > "$ownerdir/pid" 2>/dev/null \
     || [ "$(cat "$ownerdir/pid" 2>/dev/null || true)" != "$caller_pid" ]; then
     fm_lock_release "$lockdir"
     return 1
   fi
-  # The pid record now names the caller, so the identity record must too:
-  # leaving the helper's identity would let the next contender read a foreign
-  # holder and steal a live lock. An uncomputable caller identity drops the
-  # record instead, falling back to the liveness-only verdict.
+  # An uncomputable caller identity leaves no record, keeping the
+  # liveness-only verdict.
   if ! { fm_pid_identity "$caller_pid" > "$ownerdir/pid-identity"; } 2>/dev/null; then
-    if ! rm -f "$ownerdir/pid-identity" 2>/dev/null; then
-      fm_lock_release "$lockdir"
-      return 1
-    fi
+    rm -f "$ownerdir/pid-identity" 2>/dev/null || true
   fi
   trap - TERM INT
 }

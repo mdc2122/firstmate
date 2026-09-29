@@ -1371,7 +1371,10 @@ let finishReplacementPrompt;
 globalThis.__fmOnBranchPrompt = () => new Promise((resolve) => { finishReplacementPrompt = resolve; });
 const replacementOffer = dispatch("signal: after replacement");
 if (!replacementOffer.accepted) throw new Error("branch refused a wake after the replacement");
-await settle(() => (globalThis.__fmSessions ?? []).length === 2, "replacement branch session");
+// Wait for the wake prompt itself, not just the session: the report must land
+// inside the prompt, after the branch has taken its pre-prompt report baseline.
+await settle(() => (globalThis.__fmPrompts ?? []).length === 2, "replacement branch prompt");
+if ((globalThis.__fmSessions ?? []).length !== 2) throw new Error("the replacement wake did not run in a replacement branch session");
 const report2 = globalThis.__fmSessions[1].options.customTools.find((tool) => tool.name === "fm_branch_report");
 const beforePair = requests().length;
 const second = await report2.execute("captain-2", { task: "branch-driver", verdict: "captain", summary: "PR https://example.com/pr/e is ready for review" }, undefined, undefined, {});

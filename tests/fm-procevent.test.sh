@@ -226,8 +226,12 @@ pe "$HSYM" reconcile >/dev/null
 wait_for "$FM_PROCEVENT_CLAIM_ROOT/symlinked-src.claim" \
   || fail "a home reached through a symlinked ancestor never claimed its source"
 : > "$SYM_TRIGGER"
-wait_for "$HSYM/state/.wake-queue" \
-  || fail "a home reached through a symlinked ancestor published no event"
+# Poll for the committed result row itself: on a slow runner reconcile can
+# legitimately queue a launch-confirmation wake before the result lands.
+for _ in $(seq 1 300); do
+  wake_payloads "$HSYM" | grep -F "procevent lavish symlinked-src 1" >/dev/null && break
+  sleep 0.1
+done
 assert_contains "$(wake_payloads "$HSYM")" "procevent lavish symlinked-src 1" \
   "the symlinked-ancestor home publishes the committed result sequence"
 SYM_RESULT=$(first_result "$HSYM" symlinked-src || true)
@@ -1118,8 +1122,26 @@ for _ in $(seq 1 24); do
   pe "$HR" start race-src >/dev/null &
   race_pids+=("$!")
 done
-wait_for "$RACE_LOG" || fail "no contender acquired the stale claim"
-sleep 0.5
+# Synchronize on the race's own completion signals rather than wall-clock
+# windows: exactly one contender becomes the runner and blocks on the trigger,
+# while every other contender must finish (as "already owned") without ever
+# starting the source. Once at most the one blocked winner remains, no later
+# start can happen, so the execution count is final. The bound only catches a
+# hang; 24-way contention on a shared CI runner can take tens of seconds.
+race_deadline=$(( $(date +%s) + ${FM_TEST_RACE_WAIT_SECONDS:-180} ))
+while :; do
+  race_live=0
+  for race_pid in "${race_pids[@]}"; do
+    kill -0 "$race_pid" 2>/dev/null && race_live=$((race_live + 1))
+  done
+  [ -s "$RACE_LOG" ] && [ "$race_live" -le 1 ] && break
+  if [ "$(date +%s)" -ge "$race_deadline" ]; then
+    : > "$RACE_TRIGGER"
+    [ -s "$RACE_LOG" ] || fail "no contender acquired the stale claim"
+    fail "stale-claim race left $race_live contenders running"
+  fi
+  sleep 0.1
+done
 [ "$(wc -l < "$RACE_LOG" | tr -d ' ')" = 1 ] || fail "stale-claim race started more than one runner"
 : > "$RACE_TRIGGER"
 for race_pid in "${race_pids[@]}"; do wait "$race_pid" 2>/dev/null || true; done
