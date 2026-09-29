@@ -22,6 +22,11 @@ TMP_ROOT=$(fm_test_tmproot fm-wake-tests)
 # its deadline can stop the watcher mid-startup and leave stale-lock recovery
 # evidence that the next checkpoint reports ahead of the wake under test.
 QUIET_CHECKPOINT_SECONDS=${FM_TEST_QUIET_CHECKPOINT_SECONDS:-3}
+# A drain with a 1s lock deadline must finish well before a live holder lets
+# go. The bound is generous so a loaded runner does not trip it, and each
+# holder outlives it by a wide margin so a drain that waited still fails.
+BOUNDED_DRAIN_MAX_SECONDS=${FM_TEST_BOUNDED_DRAIN_MAX_SECONDS:-15}
+BOUNDED_DRAIN_HOLDER_SECONDS=$((BOUNDED_DRAIN_MAX_SECONDS * 2 + 10))
 
 
 test_concurrent_append_and_drain() {
@@ -1892,8 +1897,8 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     . "$1"
     fm_lock_acquire_wait "$2"
     printf "ready\n" > "$3"
-    sleep 30 & wait
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.wake-queue.lock" "$dir/queue.ready" &
+    sleep "$4" & wait
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.wake-queue.lock" "$dir/queue.ready" "$BOUNDED_DRAIN_HOLDER_SECONDS" &
   queue_holder=$!
   i=0
   while [ "$i" -lt 100 ] && [ ! -s "$dir/queue.ready" ]; do
@@ -1908,7 +1913,7 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     "$DRAIN" > "$queue_out" 2> "$queue_err" \
     || { kill "$queue_holder" 2>/dev/null || true; fail "bounded queue presentation drain failed"; }
   elapsed=$(( $(date +%s) - start ))
-  [ "$elapsed" -le 4 ] \
+  [ "$elapsed" -le "$BOUNDED_DRAIN_MAX_SECONDS" ] \
     || { kill "$queue_holder" 2>/dev/null || true; fail "queue lock delayed the drain for ${elapsed}s"; }
   advisory_count=$(grep -Fc \
     "WAKE DRAIN SKIPPED: queue lock remains held by live pid $queue_holder" \
@@ -1932,8 +1937,8 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     . "$1"
     fm_lock_acquire_wait "$2"
     printf "ready\n" > "$3"
-    sleep 30 & wait
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.status-presentation-lock" "$dir/presentation.ready" &
+    sleep "$4" & wait
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.status-presentation-lock" "$dir/presentation.ready" "$BOUNDED_DRAIN_HOLDER_SECONDS" &
   presentation_holder=$!
   i=0
   while [ "$i" -lt 100 ] && [ ! -s "$dir/presentation.ready" ]; do
@@ -1948,7 +1953,7 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     "$DRAIN" > "$first_out" 2> "$first_err" \
     || { kill "$presentation_holder" 2>/dev/null || true; fail "bounded presentation drain failed"; }
   elapsed=$(( $(date +%s) - start ))
-  [ "$elapsed" -le 4 ] \
+  [ "$elapsed" -le "$BOUNDED_DRAIN_MAX_SECONDS" ] \
     || { kill "$presentation_holder" 2>/dev/null || true; fail "presentation lock delayed the drain for ${elapsed}s"; }
   advisory_count=$(grep -Fc \
     "STATUS PRESENTATION SKIPPED: lock remains held by live pid $presentation_holder" \
