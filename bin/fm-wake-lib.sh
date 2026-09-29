@@ -1109,7 +1109,16 @@ _fm_lock_acquire_wait_handoff() {  # <lockdir> <caller-pid>
   case "$caller_pid" in ''|*[!0-9]*) return 1 ;; esac
   fm_pid_alive "$caller_pid" || return 1
   trap 'fm_lock_release "$lockdir"; exit 143' TERM INT
-  fm_lock_acquire_wait "$lockdir" || return 1
+  # A signal can cut the caller's wait short and orphan an earlier helper,
+  # which still hands the lock over to the caller. The caller then already
+  # owns it, so waiting here would only stall the caller until its deadline.
+  while ! fm_lock_try_acquire "$lockdir"; do
+    if [ "$FM_LOCK_HELD_PID" = "$caller_pid" ]; then
+      trap - TERM INT
+      return 0
+    fi
+    sleep 0.1
+  done
   if [ -L "$lockdir" ]; then
     ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || {
       fm_lock_release "$lockdir"
