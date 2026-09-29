@@ -22,7 +22,9 @@ export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
 # Reconciles that expect a healthy detached runner to confirm its claim use a
 # generous launch-confirmation window: it returns as soon as the claim is
 # proved, while the 3-second production default is routinely exceeded on a
-# loaded CI runner. Cases that pin the window itself set it per call.
+# loaded CI runner, and an unconfirmed launch queues its own notice ahead of the
+# result a case is waiting for. Cases that pin the window set it per call; pe
+# applies this one otherwise.
 HEALTHY_CONFIRM_SECONDS=${FM_TEST_HEALTHY_CONFIRM_SECONDS:-60}
 
 BLOCKER="$TMP_ROOT/blocker.sh"
@@ -42,7 +44,11 @@ printf '%s\n' "$@"
 SH
 chmod +x "$BLOCKER"
 
-pe() { FM_HOME="$1" "$ROOT/bin/fm-procevent.sh" "${@:2}"; }
+# reconcile gets the generous healthy-launch window unless the caller pins one.
+pe() {
+  FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="${FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS-$HEALTHY_CONFIRM_SECONDS}" \
+    FM_HOME="$1" "$ROOT/bin/fm-procevent.sh" "${@:2}"
+}
 
 # Every home this suite registers a source in is tracked so teardown can stop
 # its runners. A runner started by reconcile is detached and reparented, so a
@@ -231,7 +237,7 @@ ln -s "$HPHYS" "$TMP_ROOT/symlinked-parent"
 HSYM="$TMP_ROOT/symlinked-parent/home"; new_home "$HSYM"
 SYM_TRIGGER="$TMP_ROOT/symlink-trigger"
 pe_register "$HSYM" lavish symlinked-src -- "$BLOCKER" "$SYM_TRIGGER" "symlinked payload" >/dev/null
-FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HSYM" reconcile >/dev/null
+pe "$HSYM" reconcile >/dev/null
 wait_for "$FM_PROCEVENT_CLAIM_ROOT/symlinked-src.claim" \
   || fail "a home reached through a symlinked ancestor never claimed its source"
 : > "$SYM_TRIGGER"
@@ -651,7 +657,7 @@ lavish_id=$("$ROOT/bin/fm-procevent-lavish.sh" source-id "$REVIEW_ART")
 fm_test_track_procevent_home "$HLT"
 PATH="$LAVISH_BIN:$PATH" FM_HOME="$HLT" "$ROOT/bin/fm-procevent-lavish.sh" arm "$REVIEW_ART" >/dev/null
 for _ in $(seq 1 6); do
-  PATH="$LAVISH_BIN:$PATH" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HLT" reconcile >/dev/null
+  PATH="$LAVISH_BIN:$PATH" pe "$HLT" reconcile >/dev/null
   sleep 0.3
 done
 [ "$(cat "$LAVISH_POLL_COUNT")" = 1 ] \
@@ -1257,7 +1263,7 @@ pe_register "$HG2" lavish dead-gen-src -- "$RACE_BLOCKER" "$DEAD_LOG" "$DEAD_TRI
 printf '%s\n%s\ndead-token\ndead-identity\n%s\n' "$HG2" 999999 "$HG2/state/procevent" \
   > "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
 chmod 0600 "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
-dead_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HG2" reconcile)
+dead_out=$(pe "$HG2" reconcile)
 assert_contains "$dead_out" "started=1" "a generation with no leader and no group is still reclaimable"
 wait_for "$DEAD_LOG" || fail "the replacement source never started for a truly dead generation"
 : > "$DEAD_TRIGGER"
@@ -1536,6 +1542,17 @@ ep_reconcile() {  # <expected-fragment> <expected-exit-nonzero:0|1> <msg>; sets 
     [ "$rc" -eq 0 ] || fail "$3 (reconcile exited $rc): $ep_out"
   fi
 }
+# A failed cycle's detached runner outlives its reconcile. Wait for every
+# runner this home launched to finish before the next cycle, so a straggler
+# from a failed cycle can neither confirm nor fail the next one on its behalf.
+ep_settle_runners() {
+  local i=0
+  while pgrep -f "fm-procevent.sh _start episode-src" >/dev/null 2>&1; do
+    [ "$i" -lt "$READY_TRIES" ] || fail "an episode runner never exited"
+    sleep 0.1
+    i=$((i + 1))
+  done
+}
 ep_damage
 ep_reconcile "failed=1" 1 "a launch that never proved its claim was not reported failed"
 [ "$(launch_failed_wake_count "$HEP" episode-src)" = 1 ] \
@@ -1566,10 +1583,12 @@ case "$ep_wake" in
   *"never claimed"*|*"exited without"*|*"runner died"*)
     fail "the launch-failed wake asserts a cause confirmation cannot observe: $ep_wake" ;;
 esac
+ep_settle_runners
 ep_reconcile "failed=1" 1 "the second cycle stopped relaunching a source that cannot start"
 [ "$(launch_failed_wake_count "$HEP" episode-src)" = 1 ] \
   || fail "the same failure episode was announced twice: $ep_out"
 ep_repair
+ep_settle_runners
 ep_reconcile "started=1" 0 "a repaired source did not confirm"
 assert_contains "$ep_out" "failed=0" "a repaired source was still reported failed: $ep_out"
 [ "$(launch_failed_wake_count "$HEP" episode-src)" = 1 ] \
@@ -1581,6 +1600,7 @@ done
 [ ! -e "$FM_PROCEVENT_CLAIM_ROOT/episode-src.claim" ] \
   || fail "the confirmed episode runner never released its claim"
 ep_damage
+ep_settle_runners
 ep_reconcile "failed=1" 1 "a source that failed again after recovering was not reported failed"
 [ "$(launch_failed_wake_count "$HEP" episode-src)" = 2 ] \
   || fail "a new failure episode after a confirmed launch was not announced: $ep_out"
@@ -1707,6 +1727,55 @@ assert_contains "$fc_out" "failed=0" \
 pe "$HFC" retire aa-fast-src >/dev/null 2>&1 || true
 pe "$HFC" retire zz-hold-src >/dev/null 2>&1 || true
 pass "a launch that finished before confirmation looked is still reported as started"
+
+# --- a launch whose registration is retired before it claims is not a result --
+# A terminal result can retire its own source while a concurrent cycle is
+# relaunching it, and the runner then correctly declines a generation that is
+# gone. That launch neither started nor failed, so reconcile must not count it
+# either way or announce it as a launch failure. The runner calls `ps` to prove
+# its process group before it takes the source lock, so a `ps` shim holds the
+# detached runner there until the registration has been retired underneath it.
+HRT="$TMP_ROOT/hrt"; new_home "$HRT"
+fm_test_track_procevent_home "$HRT"
+RT_BIN="$TMP_ROOT/retired-launch-bin"; mkdir -p "$RT_BIN"
+RT_ENTERED="$TMP_ROOT/retired-launch-entered"; RT_GATE="$TMP_ROOT/retired-launch-gate"
+RT_REAL_PS=$(command -v ps)
+cat > "$RT_BIN/ps" <<SH
+#!/usr/bin/env bash
+if [ -n "\${FM_PROCEVENT_RUNNER_GROUP:-}" ]; then
+  printf "entered\n" > "$RT_ENTERED"
+  for _ in \$(seq 1 $READY_TRIES); do
+    [ -e "$RT_GATE" ] && break
+    sleep 0.1
+  done
+fi
+exec "$RT_REAL_PS" "\$@"
+SH
+chmod +x "$RT_BIN/ps"
+RT_TRIGGER="$TMP_ROOT/retired-launch-trigger"
+pe_register "$HRT" lavish retired-launch-src -- "$BLOCKER" "$RT_TRIGGER" "retired launch" >/dev/null
+rt_rc=0
+PATH="$RT_BIN:$PATH" pe "$HRT" reconcile > "$TMP_ROOT/retired-launch.out" 2>&1 &
+RT_RECONCILE=$!
+if ! wait_for "$RT_ENTERED"; then
+  : > "$RT_GATE"
+  fail "the retired-launch fixture never saw reconcile detach its runner"
+fi
+pe "$HRT" retire retired-launch-src >/dev/null \
+  || { : > "$RT_GATE"; fail "could not retire the source while its launch was unconfirmed"; }
+: > "$RT_GATE"
+wait "$RT_RECONCILE" || rt_rc=$?
+rt_out=$(cat "$TMP_ROOT/retired-launch.out")
+assert_contains "$rt_out" "started=0" \
+  "reconcile counted a launch whose registration was retired as a start: $rt_out"
+assert_contains "$rt_out" "failed=0" \
+  "reconcile reported a launch whose registration was retired as failed: $rt_out"
+[ "$rt_rc" -eq 0 ] || fail "reconcile exited $rt_rc for a launch whose registration was retired: $rt_out"
+[ "$(launch_failed_wake_count "$HRT" retired-launch-src)" = 0 ] \
+  || fail "a launch whose registration was retired was announced as a launch failure"
+[ ! -e "$FM_PROCEVENT_CLAIM_ROOT/retired-launch-src.claim" ] \
+  || fail "the runner claimed a source whose registration had been retired"
+pass "a launch whose registration is retired before it claims is neither started nor failed"
 
 # --- a zero-padded confirm window is read as base 10 -------------------------
 # The window's validator reads base 10, so `08` is a value it accepts. Read as
@@ -2575,9 +2644,13 @@ HFLOOR="$TMP_ROOT/launch-floor"; new_home "$HFLOOR"
 fm_test_track_procevent_home "$HFLOOR"
 pe_register "$HFLOOR" lavish floor-src -- \
   "$STORM_SOURCE" "$TMP_ROOT/launch-times" "$HFLOOR" "$ROOT"
-FM_PROCEVENT_OWNER_LEASE_SECONDS=4 FM_PROCEVENT_OWNER_CHECK_SECONDS=1 \
+# The orphaned chain lives only as long as the owner lease, since its nested
+# reconciles run inside a runner and never refresh it. The lease must comfortably
+# fit three paced launches on a loaded runner; the launch-rate assertions below,
+# not the lease length, are what pin the floor.
+FM_PROCEVENT_OWNER_LEASE_SECONDS=${FM_TEST_STORM_LEASE_SECONDS:-20} FM_PROCEVENT_OWNER_CHECK_SECONDS=1 \
   FM_PROCEVENT_LAUNCH_FLOOR_SECONDS=1 pe "$HFLOOR" reconcile >/dev/null
-# Hang bound only: the launch-rate assertions below are what pin the floor.
+# Hang bound only.
 floor_deadline=$((SECONDS + ${FM_TEST_RACE_WAIT_SECONDS:-120}))
 while :; do
   floor_count=0
@@ -2594,6 +2667,8 @@ perl -e 'exit($ARGV[0] >= ($ARGV[1] - 1) * 0.8 ? 0 : 1)' "$launch_span" "$launch
   || fail "an orphaned source launched $launch_count times in only ${launch_span}s"
 [ "$launch_count" -le 6 ] \
   || fail "an orphaned source stormed $launch_count launches during its owner-dead grace window"
+# End the chain now rather than letting it run out its longer lease.
+pe "$HFLOOR" retire floor-src >/dev/null 2>&1 || true
 pass "an orphaned source command obeys the launch floor during its grace window"
 
 HPACE="$TMP_ROOT/registration-pacing"; new_home "$HPACE"

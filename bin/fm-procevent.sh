@@ -1449,7 +1449,9 @@ cmd_reconcile() {
       id=${entry%%$'\t'*}
       launch_identity=${entry#*$'\t'}
       launch_identity=${launch_identity%%$'\t'*}
-      if launch_entry_listed "$entry" "$unconfirmed"; then
+      if launch_entry_listed "retired"$'\t'"$entry" "$unconfirmed"; then
+        continue
+      elif launch_entry_listed "$entry" "$unconfirmed"; then
         failed=$((failed + 1))
         report_launch_failure "$id" "$launch_identity" || true
       else
@@ -1472,7 +1474,9 @@ launch_entry_listed() {  # <entry> <newline-separated entries>
 }
 
 # Bounded confirmation that every runner just detached actually took its
-# source's claim, printing every launch entry that did not, one per line.
+# source's claim, printing every launch entry that did not, one per line, and
+# every entry whose registration was retired or replaced before it could, one
+# per line prefixed with `retired<TAB>`.
 #
 # detach_runner is fire-and-forget and discards the child's stderr, so before
 # this every failure inside _start - a refused claim above all - was still
@@ -1495,7 +1499,7 @@ launch_entry_listed() {  # <entry> <newline-separated entries>
 # fleet of failing sources costs a watcher cycle the same bounded wait as one.
 confirm_launched_runners() {  # <source-id><TAB><registration-identity><TAB><launch-stamp-before>...
   local deadline window entry id rest identity before state stamp mark
-  local -a pending=("$@") remaining=()
+  local -a pending=("$@") remaining=() retired=()
   window=$(fm_procevent_launch_confirm_seconds) || return 1
   # A zero-padded window is a valid value to its validator, which reads base 10;
   # reading it as octal here would silently shorten the window or abort this
@@ -1530,6 +1534,16 @@ confirm_launched_runners() {  # <source-id><TAB><registration-identity><TAB><lau
       if [ -n "$mark" ] && [ "$mark" != "$before" ]; then
         continue
       fi
+      # A registration retired or replaced since this launch leaves nothing to
+      # confirm: the runner correctly declines a generation that is gone (a
+      # terminal result can retire its own source while a concurrent cycle is
+      # relaunching it), and reporting that as a failed launch would announce
+      # a problem with a source that no longer exists.
+      if [ -n "$identity" ] \
+        && [ "$(fm_pr_file_identity "$(source_file "$id")" 2>/dev/null || true)" != "$identity" ]; then
+        retired+=("retired"$'\t'"$entry")
+        continue
+      fi
       remaining+=("$entry")
     done
     pending=("${remaining[@]+"${remaining[@]}"}")
@@ -1538,6 +1552,7 @@ confirm_launched_runners() {  # <source-id><TAB><registration-identity><TAB><lau
     sleep 0.05
   done
   [ "${#pending[@]}" -eq 0 ] || printf '%s\n' "${pending[@]}"
+  [ "${#retired[@]}" -eq 0 ] || printf '%s\n' "${retired[@]}"
 }
 
 # Stop a runner and the child it is blocked on. A runner started by reconcile is

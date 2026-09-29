@@ -17,6 +17,16 @@ GRANT="$ROOT/bin/fm-wake-grant.sh"
 GUARD="$ROOT/bin/fm-guard.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-wake-tests)
+# A checkpoint asserted to stay quiet must run long enough for the watcher to
+# start and complete a poll; otherwise it proves nothing, and on a loaded runner
+# its deadline can stop the watcher mid-startup and leave stale-lock recovery
+# evidence that the next checkpoint reports ahead of the wake under test.
+QUIET_CHECKPOINT_SECONDS=${FM_TEST_QUIET_CHECKPOINT_SECONDS:-3}
+# A drain with a 1s lock deadline must finish well before a live holder lets
+# go. The bound is generous so a loaded runner does not trip it, and each
+# holder outlives it by a wide margin so a drain that waited still fails.
+BOUNDED_DRAIN_MAX_SECONDS=${FM_TEST_BOUNDED_DRAIN_MAX_SECONDS:-15}
+BOUNDED_DRAIN_HOLDER_SECONDS=$((BOUNDED_DRAIN_MAX_SECONDS * 2 + 10))
 
 
 test_concurrent_append_and_drain() {
@@ -262,7 +272,7 @@ SH
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-first.out" 2> "$dir/watch-first.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-first.out" 2> "$dir/watch-first.err" || true
   [ ! -s "$state/.wake-queue" ] \
     || fail "the first observation of an old foreign row produced an age-only alert"
 
@@ -274,7 +284,7 @@ SH
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-progress.out" 2> "$dir/watch-progress.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-progress.out" 2> "$dir/watch-progress.err" || true
   [ ! -s "$state/.wake-queue" ] \
     || fail "an advancing foreign queue produced a stall alert because its oldest row was old"
 
@@ -313,7 +323,7 @@ SH
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-next.out" 2> "$dir/watch-next.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-next.out" 2> "$dir/watch-next.err" || true
   [ ! -s "$state/.wake-queue" ] \
     || fail "a newly-oldest row cascaded an immediate second alert after progress"
   cp "$sub/state/.wake-queue" "$row_after"
@@ -362,13 +372,13 @@ EOF
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-first.out" 2> "$dir/watch-first.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-first.out" 2> "$dir/watch-first.err" || true
   printf '5000\n' > "$dir/now"
   PATH="$fakebin:$PATH" FM_FAKE_NOW_FILE="$dir/now" FM_HOME="$dir" FM_ROOT_OVERRIDE="$ROOT" \
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-second.out" 2> "$dir/watch-second.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-second.out" 2> "$dir/watch-second.err" || true
   [ ! -s "$state/.wake-queue" ] \
     || fail "declared external-wait rows fed the secondmate wake-loop escalation"
   ! grep -F 'secondmate wake-loop stalled' "$dir/watch-first.out" "$dir/watch-second.out" >/dev/null \
@@ -410,7 +420,7 @@ SH
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-old.out" 2> "$dir/watch-old.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-old.out" 2> "$dir/watch-old.err" || true
   [ ! -s "$state/.wake-queue" ] || fail "the first observation of the retired generation alerted"
 
   # Reprovisioning under the same task id restarts the sequence on 9 again, long
@@ -422,7 +432,7 @@ SH
     FM_STATE_OVERRIDE="$state" FM_FAKE_TMUX_WINDOW='firstmate:fm-mate' \
     FM_SECONDMATE_WAKE_STALL_SECS=1 FM_POLL=1 FM_SIGNAL_GRACE=0 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 1 > "$dir/watch-regen.out" 2> "$dir/watch-regen.err" || true
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds "$QUIET_CHECKPOINT_SECONDS" > "$dir/watch-regen.out" 2> "$dir/watch-regen.err" || true
   [ ! -s "$state/.wake-queue" ] \
     || fail "a reprovisioned queue generation inherited the retired generation's idle interval and alerted"
 
@@ -1887,8 +1897,8 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     . "$1"
     fm_lock_acquire_wait "$2"
     printf "ready\n" > "$3"
-    sleep 30 & wait
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.wake-queue.lock" "$dir/queue.ready" &
+    sleep "$4" & wait
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.wake-queue.lock" "$dir/queue.ready" "$BOUNDED_DRAIN_HOLDER_SECONDS" &
   queue_holder=$!
   i=0
   while [ "$i" -lt 100 ] && [ ! -s "$dir/queue.ready" ]; do
@@ -1903,7 +1913,7 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     "$DRAIN" > "$queue_out" 2> "$queue_err" \
     || { kill "$queue_holder" 2>/dev/null || true; fail "bounded queue presentation drain failed"; }
   elapsed=$(( $(date +%s) - start ))
-  [ "$elapsed" -le 4 ] \
+  [ "$elapsed" -le "$BOUNDED_DRAIN_MAX_SECONDS" ] \
     || { kill "$queue_holder" 2>/dev/null || true; fail "queue lock delayed the drain for ${elapsed}s"; }
   advisory_count=$(grep -Fc \
     "WAKE DRAIN SKIPPED: queue lock remains held by live pid $queue_holder" \
@@ -1927,8 +1937,8 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     . "$1"
     fm_lock_acquire_wait "$2"
     printf "ready\n" > "$3"
-    sleep 30 & wait
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.status-presentation-lock" "$dir/presentation.ready" &
+    sleep "$4" & wait
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state/.status-presentation-lock" "$dir/presentation.ready" "$BOUNDED_DRAIN_HOLDER_SECONDS" &
   presentation_holder=$!
   i=0
   while [ "$i" -lt 100 ] && [ ! -s "$dir/presentation.ready" ]; do
@@ -1943,7 +1953,7 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack() {
     "$DRAIN" > "$first_out" 2> "$first_err" \
     || { kill "$presentation_holder" 2>/dev/null || true; fail "bounded presentation drain failed"; }
   elapsed=$(( $(date +%s) - start ))
-  [ "$elapsed" -le 4 ] \
+  [ "$elapsed" -le "$BOUNDED_DRAIN_MAX_SECONDS" ] \
     || { kill "$presentation_holder" 2>/dev/null || true; fail "presentation lock delayed the drain for ${elapsed}s"; }
   advisory_count=$(grep -Fc \
     "STATUS PRESENTATION SKIPPED: lock remains held by live pid $presentation_holder" \
