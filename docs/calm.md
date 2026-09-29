@@ -106,6 +106,8 @@ The installer retires a legacy project-local `.omp/extensions/fm-calm-omp.ts` fo
 
 OMP exposes no extension setter for tool-activity visibility, so `/calm-omp` reaches the native toggle through a one-shot widget probe of the focused editor and delegates to it, including its own persisted `display.hideToolActivity` setting, tool images, and terminal-history repainting.
 While that setting hides tool activity and a run is under way, the extension draws the same two-row sailboat animation from the vendored working-ship module in `extensions/fm-calm-omp/lib/`.
+The boat reads the live loader-provided settings through OMP's `cfgDisplayHideToolActivity` typed handle, rather than the removed string-keyed `settings.get()` API (verified with OMP 18.3.1).
+Changes made through the native shortcut or settings panel are picked up on the next animation tick; visible activity removes the boat, and hiding activity resumes it during the same run.
 When the probe finds no visibility action the command reports the fallback (`Ctrl+Shift+O` or `/settings > Appearance > Display > Hide Tool Activity`) and changes nothing.
 
 Regression entry point:

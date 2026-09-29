@@ -3,6 +3,7 @@
 // OMP has no public extension setter for this action. Its widget factory gives
 // us the live TUI, whose focused CustomEditor exposes the native callback.
 // Probe that seam for each command; never patch or retain an editor instance.
+import { cfgDisplayHideToolActivity } from "@oh-my-pi/pi-coding-agent/modes/settings";
 import {
   CALM_WORKING_SHIP_TICK_MS,
   createCalmWorkingShipAnimation,
@@ -15,9 +16,9 @@ type UI = {
 };
 type Context = { hasUI: boolean; ui: UI };
 type ExtensionAPI = {
-  // The loader provides its own live namespace; importing the package again can
-  // create a second settings singleton when OMP runs from its bundled CLI.
-  pi?: { settings?: { get: (key: "display.hideToolActivity") => unknown } };
+  // Keep the loader's live settings scope; the host resolves the typed handle
+  // import above to its own registry, including in bundled CLI installs.
+  pi?: { settings?: Parameters<typeof cfgDisplayHideToolActivity.get>[0] };
   on?: (event: string, handler: (event: { willContinue?: boolean }, ctx: Context) => void) => void;
   registerCommand: (
     name: string,
@@ -55,7 +56,8 @@ export default function calmOmp(omp: ExtensionAPI): void {
     if (!context?.hasUI || !context.ui.setWidget) return;
     let hidden: unknown;
     try {
-      hidden = omp.pi?.settings?.get("display.hideToolActivity");
+      const settings = omp.pi?.settings;
+      hidden = settings ? cfgDisplayHideToolActivity.get(settings) : undefined;
     } catch {
       hidden = undefined;
     }
