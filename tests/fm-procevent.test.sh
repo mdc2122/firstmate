@@ -19,12 +19,11 @@ set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_ROOT=$(fm_test_tmproot fm-procevent-tests)
 export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
-# A healthy detached runner must be proved to claim its source within the
-# launch-confirmation window, whose 3-second production default a loaded CI
-# runner can exceed without anything being wrong. Cases that are not about that
-# window get a generous one (it bounds only a genuinely failed launch, which
-# the cases that pin the window still set per call).
-export FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="${FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS:-60}"
+# Reconciles that expect a healthy detached runner to confirm its claim use a
+# generous launch-confirmation window: it returns as soon as the claim is
+# proved, while the 3-second production default is routinely exceeded on a
+# loaded CI runner. Cases that pin the window itself set it per call.
+HEALTHY_CONFIRM_SECONDS=${FM_TEST_HEALTHY_CONFIRM_SECONDS:-60}
 
 BLOCKER="$TMP_ROOT/blocker.sh"
 cat > "$BLOCKER" <<'SH'
@@ -114,8 +113,12 @@ count_results() {  # <home> <source-id>
   printf '%s\n' "$n"
 }
 
+# Readiness waits poll the real condition; the default bound only catches a
+# hang, since a loaded CI runner can take far longer than an idle machine.
+READY_TRIES=${FM_TEST_READY_TRIES:-1200}
+
 wait_for() {  # <file> [tries]
-  local f=$1 n=${2:-100}
+  local f=$1 n=${2:-$READY_TRIES}
   for _ in $(seq 1 "$n"); do [ -s "$f" ] && return 0; sleep 0.1; done
   return 1
 }
@@ -125,7 +128,7 @@ wait_for() {  # <file> [tries]
 # has already returned, so a caller that needs that append must wait for it
 # rather than assume a fixed settle window covered it on a loaded machine.
 wait_for_lines() {
-  local f=$1 want=$2 n=${3:-100} have
+  local f=$1 want=$2 n=${3:-$READY_TRIES} have
   for _ in $(seq 1 "$n"); do
     have=$(wc -l < "$f" 2>/dev/null | tr -d ' ')
     case "$have" in ''|*[!0-9]*) have=0 ;; esac
@@ -228,7 +231,7 @@ ln -s "$HPHYS" "$TMP_ROOT/symlinked-parent"
 HSYM="$TMP_ROOT/symlinked-parent/home"; new_home "$HSYM"
 SYM_TRIGGER="$TMP_ROOT/symlink-trigger"
 pe_register "$HSYM" lavish symlinked-src -- "$BLOCKER" "$SYM_TRIGGER" "symlinked payload" >/dev/null
-pe "$HSYM" reconcile >/dev/null
+FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HSYM" reconcile >/dev/null
 wait_for "$FM_PROCEVENT_CLAIM_ROOT/symlinked-src.claim" \
   || fail "a home reached through a symlinked ancestor never claimed its source"
 : > "$SYM_TRIGGER"
@@ -648,7 +651,7 @@ lavish_id=$("$ROOT/bin/fm-procevent-lavish.sh" source-id "$REVIEW_ART")
 fm_test_track_procevent_home "$HLT"
 PATH="$LAVISH_BIN:$PATH" FM_HOME="$HLT" "$ROOT/bin/fm-procevent-lavish.sh" arm "$REVIEW_ART" >/dev/null
 for _ in $(seq 1 6); do
-  PATH="$LAVISH_BIN:$PATH" pe "$HLT" reconcile >/dev/null
+  PATH="$LAVISH_BIN:$PATH" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HLT" reconcile >/dev/null
   sleep 0.3
 done
 [ "$(cat "$LAVISH_POLL_COUNT")" = 1 ] \
@@ -1254,7 +1257,7 @@ pe_register "$HG2" lavish dead-gen-src -- "$RACE_BLOCKER" "$DEAD_LOG" "$DEAD_TRI
 printf '%s\n%s\ndead-token\ndead-identity\n%s\n' "$HG2" 999999 "$HG2/state/procevent" \
   > "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
 chmod 0600 "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
-dead_out=$(pe "$HG2" reconcile)
+dead_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HG2" reconcile)
 assert_contains "$dead_out" "started=1" "a generation with no leader and no group is still reclaimable"
 wait_for "$DEAD_LOG" || fail "the replacement source never started for a truly dead generation"
 : > "$DEAD_TRIGGER"
@@ -1524,7 +1527,7 @@ ep_reconcile() {  # <expected-fragment> <expected-exit-nonzero:0|1> <msg>; sets 
   # A launch expected to fail waits out its whole window, so keep that short;
   # a launch expected to confirm returns as soon as it does, so give it a
   # window a loaded CI runner cannot plausibly exceed.
-  [ "$2" -eq 1 ] || window=60
+  [ "$2" -eq 1 ] || window=$HEALTHY_CONFIRM_SECONDS
   ep_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$window" pe "$HEP" reconcile) || rc=$?
   assert_contains "$ep_out" "$1" "$3: $ep_out"
   if [ "$2" -eq 1 ]; then
