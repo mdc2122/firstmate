@@ -343,6 +343,67 @@ test_lock_does_not_steal_live_lock() {
   pass "live-held lock is not stolen"
 }
 
+# A TERM can interrupt a bounded acquire's wait and orphan its helper, which
+# still hands the lock to the caller once the holder goes; the caller's cleanup
+# may by then be waiting on the same lock through a second helper. That wait
+# must accept the handed-over lock as the caller's instead of waiting out its
+# whole deadline behind the caller itself.
+test_lock_bounded_acquire_accepts_handoff_to_caller() {
+  local dir state lockdir holder_pid caller_pid waiter_pid i out
+  dir=$(make_case lock-bounded-handoff-to-caller)
+  state="$dir/state"
+  lockdir="$state/.contend.lock"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_acquire_wait "$2" || exit 10
+    printf "ready\n" > "$3"
+    sleep 30
+  ' _ "$LIB" "$lockdir" "$dir/holder.ready" &
+  holder_pid=$!
+  i=0
+  while [ "$i" -lt 100 ] && [ ! -s "$dir/holder.ready" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -s "$dir/holder.ready" ] \
+    || { kill "$holder_pid" 2>/dev/null || true; fail "lock fixture holder never acquired"; }
+
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_current_pid self
+    printf "%s\n" "$self" > "$3.tmp" && mv "$3.tmp" "$3"
+    SECONDS=0
+    if fm_lock_acquire_wait_bounded "$2" 20; then rc=0; else rc=$?; fi
+    owned=no
+    [ "$(cat "$2/pid" 2>/dev/null)" != "$self" ] || owned=yes
+    printf "rc=%s elapsed=%s owned=%s\n" "$rc" "$SECONDS" "$owned" > "$4"
+  ' _ "$LIB" "$lockdir" "$dir/caller.pid" "$dir/caller.out" &
+  waiter_pid=$!
+  i=0
+  while [ "$i" -lt 100 ] && [ ! -s "$dir/caller.pid" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  caller_pid=$(cat "$dir/caller.pid" 2>/dev/null || true)
+  [ -n "$caller_pid" ] \
+    || { kill "$holder_pid" "$waiter_pid" 2>/dev/null || true; fail "bounded-acquire caller never started"; }
+  # Let the caller's own try fail and its helper start waiting, then hand the
+  # lock record to the caller exactly as an orphaned helper's handoff does.
+  sleep 1
+  rm -f "$lockdir/pid-identity"
+  printf '%s\n' "$caller_pid" > "$lockdir/pid"
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  wait "$waiter_pid" 2>/dev/null || true
+  out=$(cat "$dir/caller.out" 2>/dev/null || true)
+  case "$out" in
+    "rc=0 elapsed="[0-5]" owned=yes") ;;
+    *) fail "bounded acquire waited behind a lock already handed to its caller: $out" ;;
+  esac
+  pass "bounded acquire accepts a lock already handed over to its caller"
+}
+
 test_lock_empty_pid_uses_minimum_grace() {
   local dir state lockdir out
   dir=$(make_case lock-empty-grace)
@@ -1177,6 +1238,7 @@ test_lock_steals_dead_pid_lock
 test_lock_stale_steal_single_winner_under_concurrency
 test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
+test_lock_bounded_acquire_accepts_handoff_to_caller
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
 test_lock_paused_mid_acquire_claim_fails_during_steal

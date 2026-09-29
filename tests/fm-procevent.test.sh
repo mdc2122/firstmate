@@ -19,6 +19,11 @@ set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_ROOT=$(fm_test_tmproot fm-procevent-tests)
 export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
+# Reconciles that expect a healthy detached runner to confirm its claim use a
+# generous launch-confirmation window: it returns as soon as the claim is
+# proved, while the 3-second production default is routinely exceeded on a
+# loaded CI runner. Cases that pin the window itself set it per call.
+HEALTHY_CONFIRM_SECONDS=${FM_TEST_HEALTHY_CONFIRM_SECONDS:-60}
 
 BLOCKER="$TMP_ROOT/blocker.sh"
 cat > "$BLOCKER" <<'SH'
@@ -108,8 +113,12 @@ count_results() {  # <home> <source-id>
   printf '%s\n' "$n"
 }
 
+# Readiness waits poll the real condition; the default bound only catches a
+# hang, since a loaded CI runner can take far longer than an idle machine.
+READY_TRIES=${FM_TEST_READY_TRIES:-1200}
+
 wait_for() {  # <file> [tries]
-  local f=$1 n=${2:-100}
+  local f=$1 n=${2:-$READY_TRIES}
   for _ in $(seq 1 "$n"); do [ -s "$f" ] && return 0; sleep 0.1; done
   return 1
 }
@@ -119,7 +128,7 @@ wait_for() {  # <file> [tries]
 # has already returned, so a caller that needs that append must wait for it
 # rather than assume a fixed settle window covered it on a loaded machine.
 wait_for_lines() {
-  local f=$1 want=$2 n=${3:-100} have
+  local f=$1 want=$2 n=${3:-$READY_TRIES} have
   for _ in $(seq 1 "$n"); do
     have=$(wc -l < "$f" 2>/dev/null | tr -d ' ')
     case "$have" in ''|*[!0-9]*) have=0 ;; esac
@@ -222,12 +231,16 @@ ln -s "$HPHYS" "$TMP_ROOT/symlinked-parent"
 HSYM="$TMP_ROOT/symlinked-parent/home"; new_home "$HSYM"
 SYM_TRIGGER="$TMP_ROOT/symlink-trigger"
 pe_register "$HSYM" lavish symlinked-src -- "$BLOCKER" "$SYM_TRIGGER" "symlinked payload" >/dev/null
-pe "$HSYM" reconcile >/dev/null
+FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HSYM" reconcile >/dev/null
 wait_for "$FM_PROCEVENT_CLAIM_ROOT/symlinked-src.claim" \
   || fail "a home reached through a symlinked ancestor never claimed its source"
 : > "$SYM_TRIGGER"
-wait_for "$HSYM/state/.wake-queue" \
-  || fail "a home reached through a symlinked ancestor published no event"
+# Poll for the committed result row itself: on a slow runner reconcile can
+# legitimately queue a launch-confirmation wake before the result lands.
+for _ in $(seq 1 "$READY_TRIES"); do
+  wake_payloads "$HSYM" | grep -F "procevent lavish symlinked-src 1" >/dev/null && break
+  sleep 0.1
+done
 assert_contains "$(wake_payloads "$HSYM")" "procevent lavish symlinked-src 1" \
   "the symlinked-ancestor home publishes the committed result sequence"
 SYM_RESULT=$(first_result "$HSYM" symlinked-src || true)
@@ -638,7 +651,7 @@ lavish_id=$("$ROOT/bin/fm-procevent-lavish.sh" source-id "$REVIEW_ART")
 fm_test_track_procevent_home "$HLT"
 PATH="$LAVISH_BIN:$PATH" FM_HOME="$HLT" "$ROOT/bin/fm-procevent-lavish.sh" arm "$REVIEW_ART" >/dev/null
 for _ in $(seq 1 6); do
-  PATH="$LAVISH_BIN:$PATH" pe "$HLT" reconcile >/dev/null
+  PATH="$LAVISH_BIN:$PATH" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HLT" reconcile >/dev/null
   sleep 0.3
 done
 [ "$(cat "$LAVISH_POLL_COUNT")" = 1 ] \
@@ -1118,8 +1131,26 @@ for _ in $(seq 1 24); do
   pe "$HR" start race-src >/dev/null &
   race_pids+=("$!")
 done
-wait_for "$RACE_LOG" || fail "no contender acquired the stale claim"
-sleep 0.5
+# Synchronize on the race's own completion signals rather than wall-clock
+# windows: exactly one contender becomes the runner and blocks on the trigger,
+# while every other contender must finish (as "already owned") without ever
+# starting the source. Once at most the one blocked winner remains, no later
+# start can happen, so the execution count is final. The bound only catches a
+# hang; 24-way contention on a shared CI runner can take tens of seconds.
+race_deadline=$(( $(date +%s) + ${FM_TEST_RACE_WAIT_SECONDS:-180} ))
+while :; do
+  race_live=0
+  for race_pid in "${race_pids[@]}"; do
+    kill -0 "$race_pid" 2>/dev/null && race_live=$((race_live + 1))
+  done
+  [ -s "$RACE_LOG" ] && [ "$race_live" -le 1 ] && break
+  if [ "$(date +%s)" -ge "$race_deadline" ]; then
+    : > "$RACE_TRIGGER"
+    [ -s "$RACE_LOG" ] || fail "no contender acquired the stale claim"
+    fail "stale-claim race left $race_live contenders running"
+  fi
+  sleep 0.1
+done
 [ "$(wc -l < "$RACE_LOG" | tr -d ' ')" = 1 ] || fail "stale-claim race started more than one runner"
 : > "$RACE_TRIGGER"
 for race_pid in "${race_pids[@]}"; do wait "$race_pid" 2>/dev/null || true; done
@@ -1226,7 +1257,7 @@ pe_register "$HG2" lavish dead-gen-src -- "$RACE_BLOCKER" "$DEAD_LOG" "$DEAD_TRI
 printf '%s\n%s\ndead-token\ndead-identity\n%s\n' "$HG2" 999999 "$HG2/state/procevent" \
   > "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
 chmod 0600 "$FM_PROCEVENT_CLAIM_ROOT/dead-gen-src.claim"
-dead_out=$(pe "$HG2" reconcile)
+dead_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$HEALTHY_CONFIRM_SECONDS" pe "$HG2" reconcile)
 assert_contains "$dead_out" "started=1" "a generation with no leader and no group is still reclaimable"
 wait_for "$DEAD_LOG" || fail "the replacement source never started for a truly dead generation"
 : > "$DEAD_TRIGGER"
@@ -1492,8 +1523,12 @@ awk '/^argv:$/ { print; exit } { print }' "$EP_SOURCE" > "$TMP_ROOT/episode-bad.
 ep_damage() { cat "$TMP_ROOT/episode-bad.source" > "$EP_SOURCE"; }
 ep_repair() { cat "$TMP_ROOT/episode-good.source" > "$EP_SOURCE"; }
 ep_reconcile() {  # <expected-fragment> <expected-exit-nonzero:0|1> <msg>; sets ep_out
-  local rc=0
-  ep_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=2 pe "$HEP" reconcile) || rc=$?
+  local rc=0 window=2
+  # A launch expected to fail waits out its whole window, so keep that short;
+  # a launch expected to confirm returns as soon as it does, so give it a
+  # window a loaded CI runner cannot plausibly exceed.
+  [ "$2" -eq 1 ] || window=$HEALTHY_CONFIRM_SECONDS
+  ep_out=$(FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="$window" pe "$HEP" reconcile) || rc=$?
   assert_contains "$ep_out" "$1" "$3: $ep_out"
   if [ "$2" -eq 1 ]; then
     [ "$rc" -ne 0 ] || fail "$3 (reconcile exited 0): $ep_out"
@@ -2542,7 +2577,8 @@ pe_register "$HFLOOR" lavish floor-src -- \
   "$STORM_SOURCE" "$TMP_ROOT/launch-times" "$HFLOOR" "$ROOT"
 FM_PROCEVENT_OWNER_LEASE_SECONDS=4 FM_PROCEVENT_OWNER_CHECK_SECONDS=1 \
   FM_PROCEVENT_LAUNCH_FLOOR_SECONDS=1 pe "$HFLOOR" reconcile >/dev/null
-floor_deadline=$((SECONDS + 12))
+# Hang bound only: the launch-rate assertions below are what pin the floor.
+floor_deadline=$((SECONDS + ${FM_TEST_RACE_WAIT_SECONDS:-120}))
 while :; do
   floor_count=0
   [ ! -f "$TMP_ROOT/launch-times" ] \
