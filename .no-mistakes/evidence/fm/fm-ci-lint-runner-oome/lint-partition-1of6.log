@@ -1,0 +1,23 @@
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-lint.sh: full ShellCheck extended analysis enabled
+fm-lint-workflows.sh: actionlint 1.7.12 (pinned 1.7.12)
+fm-lint-workflows.sh: 3 workflow files valid
+      180.73 real       173.64 user         4.76 sys
+          6642991104  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2555056  page reclaims
+                 995  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 384  signals received
+                2899  voluntary context switches
+               79773  involuntary context switches
+           361953619  instructions retired
+           251892161  cycles elapsed
+             2392448  peak memory footprint
+exit=0 wall=181s
