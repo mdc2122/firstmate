@@ -11,6 +11,10 @@ WRITER="$ROOT/bin/fm-home-summary-refresh.sh"
 SNAPSHOT="$ROOT/bin/fm-fleet-snapshot.sh"
 WATCH="$ROOT/bin/fm-watch.sh"
 TMP_ROOT=$(fm_test_tmproot fm-home-summary-refresh)
+# Readiness waits (a lock holder, watcher, or publication becoming observable)
+# poll the real condition under one generous bound; a loaded CI runner can take
+# far longer than an idle machine. Waits that pin a cadence keep their own bounds.
+READY_TRIES=${FM_TEST_READY_TRIES:-1200}
 HOME_DIR="$TMP_ROOT/mate-home"
 CADENCE_HOME="$TMP_ROOT/cadence-home"
 PARENT_HOME="$TMP_ROOT/parent-home"
@@ -138,7 +142,7 @@ PATH="$FAKEBIN:$PATH" \
   "$WATCH" > "$TMP_ROOT/watch.out" 2> "$TMP_ROOT/watch.err" &
 WATCH_PID=$!
 i=0
-while [ ! -e "$HOME_DIR/state/.last-watcher-beat" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$HOME_DIR/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$WATCH_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -280,7 +284,7 @@ PATH="$FAKEBIN:$PATH" \
   "$WATCH" > "$TMP_ROOT/cadence-watch.out" 2> "$TMP_ROOT/cadence-watch.err" &
 WATCH_PID=$!
 i=0
-while [ ! -e "$CADENCE_HOME/state/.last-watcher-beat" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$CADENCE_HOME/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$WATCH_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -360,7 +364,7 @@ PATH="$FAKEBIN:$PATH" \
   "$WRITER" > "$TMP_ROOT/killed-writer.out" 2> "$TMP_ROOT/killed-writer.err" &
 SLOW_WRITER_PID=$!
 i=0
-while [ ! -s "$SLOW_MARKER" ] && [ "$i" -lt 100 ]; do
+while [ ! -s "$SLOW_MARKER" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$SLOW_WRITER_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -460,7 +464,7 @@ FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$HOME_DIR" bash -c '
 ' _ "$ROOT" "$HOME_DIR" "$LOCK_MARKER" &
 LOCK_HOLDER_PID=$!
 i=0
-while [ ! -e "$LOCK_MARKER" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$LOCK_MARKER" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$LOCK_HOLDER_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -756,7 +760,7 @@ FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$BEAT_HOME" bash -c '
 ' _ "$ROOT" "$BEAT_HOME" "$BEAT_LOCK_MARKER" &
 LOCK_HOLDER_PID=$!
 i=0
-while [ ! -e "$BEAT_LOCK_MARKER" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$BEAT_LOCK_MARKER" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$LOCK_HOLDER_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -770,7 +774,7 @@ PATH="$FAKEBIN:$PATH" \
   "$WATCH" > "$TMP_ROOT/beat-watch.out" 2> "$TMP_ROOT/beat-watch.err" &
 WATCH_PID=$!
 i=0
-while [ ! -e "$BEAT_HOME/state/.last-watcher-beat" ] && [ "$i" -lt 200 ]; do
+while [ ! -e "$BEAT_HOME/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$WATCH_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -833,7 +837,7 @@ FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$RESTART_HOME" bash -c '
 ' _ "$ROOT" "$RESTART_HOME" "$RESTART_LOCK_MARKER" &
 LOCK_HOLDER_PID=$!
 i=0
-while [ ! -e "$RESTART_LOCK_MARKER" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$RESTART_LOCK_MARKER" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$LOCK_HOLDER_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -845,7 +849,7 @@ PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$RESTART_HOME" \
   "$WATCH" > "$TMP_ROOT/restart-watch-one.out" 2> "$TMP_ROOT/restart-watch-one.err" &
 WATCH_PID=$!
 i=0
-while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$WATCH_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -855,7 +859,7 @@ done
 printf 'needs-decision [key=restart-gate]: restart the watcher\n' \
   > "$RESTART_HOME/state/restart-task.status"
 i=0
-while kill -0 "$WATCH_PID" 2>/dev/null && [ "$i" -lt 100 ]; do
+while kill -0 "$WATCH_PID" 2>/dev/null && [ "$i" -lt "$READY_TRIES" ]; do
   sleep 0.05
   i=$((i + 1))
 done
@@ -870,7 +874,7 @@ PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$RESTART_HOME" \
   "$WATCH" > "$TMP_ROOT/restart-watch-two.out" 2> "$TMP_ROOT/restart-watch-two.err" &
 WATCH_PID=$!
 i=0
-while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$WATCH_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
@@ -889,7 +893,7 @@ if ! kill -0 "$WATCH_PID" 2>/dev/null; then
     "$WATCH" > "$TMP_ROOT/restart-watch-three.out" 2> "$TMP_ROOT/restart-watch-three.err" &
   WATCH_PID=$!
   i=0
-  while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt 100 ]; do
+  while [ ! -e "$RESTART_HOME/state/.last-watcher-beat" ] && [ "$i" -lt "$READY_TRIES" ]; do
     kill -0 "$WATCH_PID" 2>/dev/null || break
     sleep 0.05
     i=$((i + 1))
@@ -904,7 +908,7 @@ PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$RESTART_HOME" \
   FM_HOME_SUMMARY_IF_IDLE=1 "$WRITER" --best-effort \
   || fail "stale-lock recovery changed the best-effort caller result"
 i=0
-while [ ! -e "$RESTART_HOME/state/home-summary.json" ] && [ "$i" -lt 200 ]; do
+while [ ! -e "$RESTART_HOME/state/home-summary.json" ] && [ "$i" -lt "$READY_TRIES" ]; do
   sleep 0.05
   i=$((i + 1))
 done
@@ -1027,7 +1031,7 @@ FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$ORDER_HOME" bash -c '
 ' _ "$ROOT" "$ORDER_HOME" "$ORDER_LOCK_MARKER" &
 LOCK_HOLDER_PID=$!
 i=0
-while [ ! -e "$ORDER_LOCK_MARKER" ] && [ "$i" -lt 100 ]; do
+while [ ! -e "$ORDER_LOCK_MARKER" ] && [ "$i" -lt "$READY_TRIES" ]; do
   kill -0 "$LOCK_HOLDER_PID" 2>/dev/null || break
   sleep 0.05
   i=$((i + 1))
