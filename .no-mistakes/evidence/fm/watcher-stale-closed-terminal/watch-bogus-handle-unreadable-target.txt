@@ -1,0 +1,6 @@
+case=bogus-handle-target bin=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY terminal=term_00000000-0000-0000-0000-000000000000 status='working: implementing' state=/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-watch-triage-tests.xsf7nC/bogus-handle-target/state
+seeded markers: .count-term_00000000-0000-0000-0000-000000000000 .hash-term_00000000-0000-0000-0000-000000000000 .stale-since-term_00000000-0000-0000-0000-000000000000 
+--- round 1: STILL RUNNING and silent after 23s and 8 beacon advances (>=3 full polls); killed by driver
+stdout: 
+stale rows in wake-queue: 
+markers now: .count-term_00000000-0000-0000-0000-000000000000 .hash-term_00000000-0000-0000-0000-000000000000 .stale-since-term_00000000-0000-0000-0000-000000000000 

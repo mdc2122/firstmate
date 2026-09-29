@@ -1,0 +1,1 @@
+not ok - a done worker's closed terminal kept its .hash- marker

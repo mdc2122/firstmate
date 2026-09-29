@@ -1,0 +1,30 @@
+== phase 1: scratch terminal OPEN at an idle shell prompt, status working:
+orca says: {"ok":true,"status":"running","tail":["studio2@Studio2s-Mac-Studio fm-watcher-stale-closed-terminal %"]}
+--- open-idle-1: EXITED rc=0 after 9s (3 beacon advances)
+stdout: stale: term_05b45f7f-9d67-4869-8faf-d647600abb14|
+stale rows in wake-queue: 1
+markers now: .count-term_05b45f7f-9d67-4869-8faf-d647600abb14 .hash-term_05b45f7f-9d67-4869-8faf-d647600abb14 .stale-term_05b45f7f-9d67-4869-8faf-d647600abb14 
+acked wake
+--- open-idle-2: STILL RUNNING and silent after 23s (8 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .count-term_05b45f7f-9d67-4869-8faf-d647600abb14 .hash-term_05b45f7f-9d67-4869-8faf-d647600abb14 .stale-since-term_05b45f7f-9d67-4869-8faf-d647600abb14 .stale-term_05b45f7f-9d67-4869-8faf-d647600abb14 
+== phase 2: closing the scratch terminal in Orca
+close ok: true 
+orca says: {"ok":true,"status":"exited","tail":[]}
+--- closed-1: EXITED rc=0 after 1s (3 beacon advances)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 0
+markers now: .count-term_05b45f7f-9d67-4869-8faf-d647600abb14 .hash-term_05b45f7f-9d67-4869-8faf-d647600abb14 .stale-since-term_05b45f7f-9d67-4869-8faf-d647600abb14 .stale-term_05b45f7f-9d67-4869-8faf-d647600abb14 
+acked wake
+--- closed-2: EXITED rc=0 after 2s (2 beacon advances)
+stdout: stale: term_05b45f7f-9d67-4869-8faf-d647600abb14 (endpoint gone: the backend reports the recorded terminal of task-scratch closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)|
+stale rows in wake-queue: 1
+markers now: .endpoint-gone-term_05b45f7f-9d67-4869-8faf-d647600abb14 
+endpoint-gone marker: notified
+acked wake
+--- closed-3: STILL RUNNING and silent after 20s (10 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_05b45f7f-9d67-4869-8faf-d647600abb14 
+endpoint-gone marker: notified

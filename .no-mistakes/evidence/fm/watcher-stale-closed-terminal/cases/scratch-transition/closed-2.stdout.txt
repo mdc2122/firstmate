@@ -1,0 +1,1 @@
+stale: term_05b45f7f-9d67-4869-8faf-d647600abb14 (endpoint gone: the backend reports the recorded terminal of task-scratch closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)

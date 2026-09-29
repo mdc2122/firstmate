@@ -1,0 +1,1 @@
+stale: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e (unread firstmate instruction: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-watch-triage-tests.CCXZLF/inbox-closed/state/task-inbox.inbox/001.msg is unhandled and the worker's agent has exited or its endpoint is missing, so the doorbell was not typed; recover the worker)

@@ -1,0 +1,19 @@
+# live PR-poll drive (2026-09-28 21:28:22): real Orca terminal term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e, orca=/opt/homebrew/bin/orca, fake gh
+orca says: {"ok":true,"status":"exited","tail":[]}
+seeded: meta+armed poll, status done:, stale markers count=486: .count-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .hash-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-since-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+-- run 1: PR still OPEN, watcher bounded to 10s
+rc=124 (124 = still running silently when the 10s bound expired)
+stdout: 
+stale rows in wake-queue: 
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: silent
+gh calls while the terminal was closed: 15 x 'pr view https://github.com/paperclipai/paperclip/pull/14479'; first: pr view https://github.com/paperclipai/paperclip/pull/14479 --json state -q .state
+triage log: [2026-09-28T21:28:25-0500] retired stale tracking for a proven-absent endpoint of finished task paperclip-pi-local-fallback-pr: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e
+-- run 2+: PR now MERGED
+attempt 1 rc=0 stdout: check: rearm-resurface|
+acked rearm-resurface
+attempt 2 rc=0 stdout: check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.okzUWn/live-closed-terminal-pr-poll/home/state/paperclip-pi-local-fallback-pr.check.sh: merged|
+RESULT: merge reported as a check wake while the terminal stayed closed
+stale rows in wake-queue at end: 0
+markers at end: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+# done 21:28:38

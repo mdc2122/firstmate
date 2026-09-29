@@ -1,0 +1,3 @@
+# BASE (9b11db8) watcher, live paused terminal (21:28:36) bin=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/nm-base-r2.P68BgB/bin/fm-watch.sh
+rc=0 stdout: stale: term_93e67bf9-7708-4de1-a264-b43d4da22ed5|
+markers now: .count-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .hash-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-rechecked-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-resurfaced-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 

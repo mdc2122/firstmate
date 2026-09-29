@@ -1,0 +1,7 @@
+case=paused-live-target bin=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY terminal=term_93e67bf9-7708-4de1-a264-b43d4da22ed5 status='paused: waiting on upstream maintainer review of https://github.com/diegosouzapw/OmniRoute/pull/1502' state=/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-watch-triage-tests.5OQ6IG/paused-live-target/state
+seeded markers: .count-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .hash-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-since-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 
+--- round 1: EXITED rc=0 after 24s and 4 beacon advances (an actionable wake)
+stdout: stale: term_93e67bf9-7708-4de1-a264-b43d4da22ed5|
+stale rows in wake-queue: 1
+markers now: .count-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .hash-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 
+acked wake

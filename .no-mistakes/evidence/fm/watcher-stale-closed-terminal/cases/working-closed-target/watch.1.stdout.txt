@@ -1,0 +1,1 @@
+stale: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e (endpoint gone: the backend reports the recorded terminal of task-working-closed-target closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)

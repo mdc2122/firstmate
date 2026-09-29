@@ -1,0 +1,3 @@
+ok - a closed Orca terminal on an unfinished task raises exactly one notice and retires its pane markers
+ok - an unreadable Orca read never proves absence and leaves the pane markers untouched
+ok - a live idle Orca pane keeps the ordinary stale handling

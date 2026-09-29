@@ -1,0 +1,99 @@
+# live watcher drive against the REAL Orca runtime (2026-09-28 21:25:58) bin=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY/bin/fm-watch.sh orca=/opt/homebrew/bin/orca 1.4.205
+
+== A. incident replay: real closed terminal term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e, finished task (done:), watcher must stay silent and retire pane markers
+orca says: {"ok":true,"status":"exited","tail":[]}
+seeded paperclip-pi-local-fallback-pr terminal=term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e status='done: PR https://github.com/paperclipai/paperclip/pull/14479' markers: .count-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .hash-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-since-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+--- A-done-1: STILL RUNNING and silent after 21s (10 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: silent
+triage log: 1 lines; last: [2026-09-28T21:26:02-0500] retired stale tracking for a proven-absent endpoint of finished task paperclip-pi-local-fallback-pr: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e
+--- A-done-2: EXITED rc=0 after 1s (2 beacon advances)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: silent
+triage log: 1 lines; last: [2026-09-28T21:26:02-0500] retired stale tracking for a proven-absent endpoint of finished task paperclip-pi-local-fallback-pr: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e
+
+== B. real closed terminal term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e, UNFINISHED task (working:): exactly one notice, then silence
+seeded worker-b terminal=term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e status='working: implementing the fallback' markers: .count-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .hash-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-since-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+--- B-working-1: EXITED rc=0 after 2s (2 beacon advances)
+stdout: stale: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e (endpoint gone: the backend reports the recorded terminal of worker-b closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)|
+stale rows in wake-queue: 1
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+acked wake
+--- B-working-2: STILL RUNNING and silent after 20s (11 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+--- B-working-3: EXITED rc=0 after 1s (2 beacon advances)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+
+== C. live transition: a REAL scratch terminal opened in Orca, watched while open, then closed under the watcher
+created scratch terminal handle=term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66
+orca says: {"ok":true,"status":"running","tail":["studio2@Studio2s-Mac-Studio fm-watcher-stale-closed-terminal %"]}
+seeded task-scratch terminal=term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 status='working: implementing' markers: .count-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .hash-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-since-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+--- C-open-1: EXITED rc=0 after 7s (3 beacon advances)
+stdout: stale: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66|
+stale rows in wake-queue: 1
+markers now: .count-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .hash-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+acked wake
+--- C-open-2: STILL RUNNING and silent after 15s (8 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .count-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .hash-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-since-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+triage log: 1 lines; last: [2026-09-28T21:26:58-0500] absorbed non-terminal stale timer reset: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66
+-- closing the scratch terminal in Orca
+close: {"ok":true,"close":{"handle":"term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66","tabId":"284a0d76-e540-4313-bdc6-26adcff6e1de","ptyKilled":true}}
+orca says: {"ok":true,"status":"exited","tail":[]}
+--- C-closed-1: EXITED rc=0 after 1s (1 beacon advances)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 0
+markers now: .count-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .hash-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-since-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 .stale-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+triage log: 1 lines; last: [2026-09-28T21:26:58-0500] absorbed non-terminal stale timer reset: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66
+acked wake
+--- C-closed-2: EXITED rc=0 after 2s (1 beacon advances)
+stdout: stale: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 (endpoint gone: the backend reports the recorded terminal of task-scratch closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)|
+stale rows in wake-queue: 1
+markers now: .endpoint-gone-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+endpoint-gone marker: notified
+triage log: 1 lines; last: [2026-09-28T21:26:58-0500] absorbed non-terminal stale timer reset: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66
+acked wake
+--- C-closed-3: STILL RUNNING and silent after 16s (8 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66 
+endpoint-gone marker: notified
+triage log: 1 lines; last: [2026-09-28T21:26:58-0500] absorbed non-terminal stale timer reset: term_d40dfdbe-87dd-4681-9fa0-7220b02d4d66
+
+== D. adversarial: reads that FAIL must not be taken as absence (markers kept, no endpoint-gone marker, no absence notice)
+orca raw for term_93e67bf9: {"id":"3f017834-791f-4ae6-a8ca-e3ca0cfb0452","ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"},"_meta":{"runtimeId":"511d381 (cli rc=1)
+seeded worker-d terminal=term_93e67bf9 status='working: implementing' markers: .count-term_93e67bf9 .hash-term_93e67bf9 .stale-since-term_93e67bf9 .stale-term_93e67bf9 
+--- D-term_93e67bf9: STILL RUNNING and silent after 12s (7 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 
+markers now: .count-term_93e67bf9 .hash-term_93e67bf9 .stale-since-term_93e67bf9 .stale-term_93e67bf9 
+pane markers unchanged: yes
+orca raw for term_00000000-0000-0000-0000-000000000000: {"id":"614d75ce-6662-49fc-ac70-04634941fcb0","ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"},"_meta":{"runtimeId":"511d381 (cli rc=1)
+seeded worker-d terminal=term_00000000-0000-0000-0000-000000000000 status='working: implementing' markers: .count-term_00000000-0000-0000-0000-000000000000 .hash-term_00000000-0000-0000-0000-000000000000 .stale-since-term_00000000-0000-0000-0000-000000000000 .stale-term_00000000-0000-0000-0000-000000000000 
+--- D-term_00000000-0000-0000-0000-000000000000: STILL RUNNING and silent after 12s (7 beacon advances); killed by driver
+stdout: 
+stale rows in wake-queue: 
+markers now: .count-term_00000000-0000-0000-0000-000000000000 .hash-term_00000000-0000-0000-0000-000000000000 .stale-since-term_00000000-0000-0000-0000-000000000000 .stale-term_00000000-0000-0000-0000-000000000000 
+pane markers unchanged: yes
+
+== E. regression: a LIVE open worker terminal with a declared paused: status keeps ordinary handling (no absence marker)
+orca says: {"ok":true,"status":"running","tail_lines":2}
+seeded worker-e terminal=term_93e67bf9-7708-4de1-a264-b43d4da22ed5 status='paused: waiting on upstream PR' markers: .count-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .hash-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-since-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 
+--- E-paused-1: EXITED rc=0 after 6s (4 beacon advances)
+stdout: stale: term_93e67bf9-7708-4de1-a264-b43d4da22ed5|
+stale rows in wake-queue: 1
+markers now: .count-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .hash-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-rechecked-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-resurfaced-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .paused-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 .stale-term_93e67bf9-7708-4de1-a264-b43d4da22ed5 
+
+# done 21:28:05

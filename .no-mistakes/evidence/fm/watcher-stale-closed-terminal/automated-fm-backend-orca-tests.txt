@@ -1,0 +1,2 @@
+ok - fm_backend_capture: only an exited Orca terminal is proven absent
+ok - fm-teardown.sh backend=orca: scout report gate then helper-backed worktree removal, retiring the closed terminal's watcher markers

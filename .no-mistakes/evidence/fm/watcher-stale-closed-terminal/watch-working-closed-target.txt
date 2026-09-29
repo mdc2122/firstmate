@@ -1,0 +1,19 @@
+case=working-closed-target bin=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY terminal=term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e status='working: implementing the fallback' state=/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-watch-triage-tests.ph5yTW/working-closed-target/state
+seeded markers: .count-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .hash-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-since-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+--- round 1: EXITED rc=0 after 6s and 2 beacon advances (an actionable wake)
+stdout: stale: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e (endpoint gone: the backend reports the recorded terminal of task-working-closed-target closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)|
+stale rows in wake-queue: 1
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+acked wake
+--- round 2: STILL RUNNING and silent after 22s and 10 beacon advances (>=3 full polls); killed by driver
+stdout: 
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+--- round 3: EXITED rc=0 after 3s and 3 beacon advances (an actionable wake)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 0
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: notified
+acked wake

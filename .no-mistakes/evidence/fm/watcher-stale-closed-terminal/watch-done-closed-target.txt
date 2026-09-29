@@ -1,0 +1,15 @@
+case=done-closed-target bin=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY terminal=term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e status='done: PR https://github.com/paperclipai/paperclip/pull/14479' state=/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-watch-triage-tests.8Qt3z6/done-closed-target/state
+seeded markers: .count-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .hash-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e .stale-since-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+--- round 1: STILL RUNNING and silent after 24s and 8 beacon advances (>=3 full polls); killed by driver
+stdout: 
+stale rows in wake-queue: 
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: silent
+triage: [2026-09-28T21:09:02-0500] retired stale tracking for a proven-absent endpoint of finished task task-done-closed-target: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e
+--- round 2: EXITED rc=0 after 2s and 2 beacon advances (an actionable wake)
+stdout: check: rearm-resurface|
+stale rows in wake-queue: 
+markers now: .endpoint-gone-term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e 
+endpoint-gone marker: silent
+triage: [2026-09-28T21:09:02-0500] retired stale tracking for a proven-absent endpoint of finished task task-done-closed-target: term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e
+acked wake

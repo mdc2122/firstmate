@@ -1,0 +1,21 @@
+{
+  "id": "52c2385a-addc-4e88-b1ef-0af7c2dea55a",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_05b45f7f-9d67-4869-8faf-d647600abb14",
+      "tabId": "5fd5c476-a485-4194-8c6b-bbb01dc19089",
+      "paneKey": "5fd5c476-a485-4194-8c6b-bbb01dc19089:7b594041-882a-493c-b3bf-aa3d4307934f",
+      "ptyId": "708e814e-bb60-4e51-80a8-ee3640d24f3c::/Users/studio2/orca/workspaces/fm-primary/fm-watcher-stale-closed-terminal@@8032f918",
+      "worktreeId": "708e814e-bb60-4e51-80a8-ee3640d24f3c::/Users/studio2/orca/workspaces/fm-primary/fm-watcher-stale-closed-terminal",
+      "title": "no-mistakes scratch (safe to close)",
+      "executionHostId": "local",
+      "incarnationId": "db1f881a-d8ec-4d62-bb33-9a34898b24e3",
+      "hostPlatform": "darwin",
+      "surface": "visible"
+    }
+  },
+  "_meta": {
+    "runtimeId": "511d3817-3265-48cb-aab6-8c452f3258b7"
+  }
+}

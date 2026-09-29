@@ -1,0 +1,6 @@
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+exit=0 took 16s
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+exit=0 took 16s
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+exit=0 took 17s

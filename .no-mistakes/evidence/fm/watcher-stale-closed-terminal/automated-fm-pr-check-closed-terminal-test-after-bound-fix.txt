@@ -1,0 +1,4 @@
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+run took 21s
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+run took 20s

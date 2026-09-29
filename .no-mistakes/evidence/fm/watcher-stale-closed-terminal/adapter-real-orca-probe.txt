@@ -1,0 +1,10 @@
+# fm_backend_capture against the REAL Orca runtime (2026-09-28 21:01:38)
+# handle | rc | classification | text (first 60 chars)
+## bin from: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3NDS2G8D29W0ZG8EZ1765YY
+term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e | rc=3 | ABSENT | 
+term_05b45f7f-9d67-4869-8faf-d647600abb14 | rc=0 | readable | studio2@Studio2s-Mac-Studio fm-watcher-stale-closed-terminal
+term_00000000-0000-0000-0000-000000000000 | rc=1 | unreadable | 
+## bin from: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//nm-01M3NDS2/base
+term_9cd9e1f8-da6b-4f1f-926b-045a5e5e7e6e | rc=0 | readable | 
+term_05b45f7f-9d67-4869-8faf-d647600abb14 | rc=0 | readable | studio2@Studio2s-Mac-Studio fm-watcher-stale-closed-terminal
+term_00000000-0000-0000-0000-000000000000 | rc=1 | unreadable | 

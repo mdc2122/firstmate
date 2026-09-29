@@ -1,0 +1,3 @@
+6:    FM_TEST_WATCH_ALARM=10 perl -e 'use POSIX qw(setpgid); my $pid=fork; die unless defined $pid; if (!$pid) { setpgid(0, 0); exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", -$pid; alarm 2; local $SIG{ALRM}=sub { kill "KILL", -$pid }; waitpid $pid, 0; exit 124 }; alarm $ENV{FM_TEST_WATCH_ALARM}; waitpid $pid, 0; alarm 0; exit($? >> 8)' env FM_HOME="$home" FM_ROOT_OVERRIDE="$watch_root" FM_CHECK_INTERVAL="$check_interval" FM_CHECK_TIMEOUT="$check_timeout" FM_POLL=0.02 FM_HEARTBEAT=999999 FM_SIGNAL_GRACE=0 PATH="$fakebin:$BASE_PATH" "$WATCH" "$@"
+ok - a done worker's closed terminal is silent while its armed PR poll keeps running to the merge
+took 23s with a 10s first-run alarm
