@@ -911,6 +911,7 @@ The generation's first launch is immediate, later launches share its monotonic p
 Starting a runner is detached and its errors are not visible to the caller, so `reconcile` reports a start only after the source is observed owned or its launch-pacing stamp has advanced or appeared, and reports every unconfirmed launch as `failed=` and a non-zero exit instead.
 Both signals are durable evidence a runner claimed: ownership is the only evidence a runner still blocked on its source ever shows, and the stamp - written after the claim and before the source command runs, and removed only by registration replacement - covers a runner that claimed, ran and exited between two polls.
 A healthy launch therefore confirms on the first poll and the window only bounds a launch that has not yet proved itself - one that died before claiming, or one merely too slow to claim inside the window; confirmation cannot tell those apart, and a launch that proves itself on a later cycle closes its failure episode without a retraction wake.
+A launch whose registration is retired or replaced before it confirms counts as neither started nor failed and raises or closes no failure episode, because the runner correctly declines a generation that no longer exists.
 All of a cycle's launches share one window, so a home full of sources that cannot start costs the same bounded wait as one.
 
 Keep this window well below `FM_POLL`.
