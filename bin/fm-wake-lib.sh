@@ -1165,16 +1165,30 @@ fm_lock_acquire_wait_bounded() {
     return 0
   fi
   if [ "$rc" -eq 124 ]; then
-    owner_pid=$(cat "$lockdir/pid" 2>/dev/null || true)
-    case "$owner_pid" in
-      ''|*[!0-9]*|0) ;;
-      *)
-        if [ "$owner_pid" -gt 0 ] 2>/dev/null && fm_pid_alive "$owner_pid"; then
-          FM_LOCK_HELD_PID=$owner_pid
-          return 124
-        fi
-        ;;
-    esac
+    # A lock churning between many short holders is ordinary contention, but
+    # any single read can land between one holder's release and the next
+    # holder's pid record and see no live owner. Sample a few times: acquiring
+    # wins, any observed live holder is contention (124), and only a lock that
+    # never shows a live holder across the samples falls through as unsafe.
+    local sample=0
+    while [ "$sample" -lt 10 ]; do
+      if fm_lock_try_acquire "$lockdir"; then
+        return 0
+      fi
+      owner_pid=${FM_LOCK_HELD_PID:-}
+      fm_pid_alive "$owner_pid" || owner_pid=$(cat "$lockdir/pid" 2>/dev/null || true)
+      case "$owner_pid" in
+        ''|*[!0-9]*|0) ;;
+        *)
+          if [ "$owner_pid" -gt 0 ] 2>/dev/null && fm_pid_alive "$owner_pid"; then
+            FM_LOCK_HELD_PID=$owner_pid
+            return 124
+          fi
+          ;;
+      esac
+      sample=$((sample + 1))
+      sleep 0.05
+    done
     # shellcheck disable=SC2034 # Output read by callers after bounded acquisition.
     FM_LOCK_HELD_PID=
     return 1

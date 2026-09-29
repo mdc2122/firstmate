@@ -19,6 +19,12 @@ set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_ROOT=$(fm_test_tmproot fm-procevent-tests)
 export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
+# A healthy detached runner must be proved to claim its source within the
+# launch-confirmation window, whose 3-second production default a loaded CI
+# runner can exceed without anything being wrong. Cases that are not about that
+# window get a generous one (it bounds only a genuinely failed launch, which
+# the cases that pin the window still set per call).
+export FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS="${FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS:-60}"
 
 BLOCKER="$TMP_ROOT/blocker.sh"
 cat > "$BLOCKER" <<'SH'
