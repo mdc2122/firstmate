@@ -108,7 +108,7 @@ The installer retires a legacy project-local `.omp/extensions/fm-calm-omp.ts` fo
 OMP's native UI subscription applies the persisted `display.hideToolActivity` choice to tool rows, tool images, and terminal-history repainting; no separate Calm visibility state is stored.
 While that setting hides tool activity and a run is under way, the extension draws the same two-row sailboat animation from the vendored working-ship module in `extensions/fm-calm-omp/lib/`.
 An unavailable native setting reports the fallback (`Ctrl+Shift+O` or `/settings > Appearance > Display > Hide Tool Activity`) instead of claiming to toggle visibility.
-Start a new OMP session after refreshing the installation to load the repaired bytes; existing sessions are not interrupted or automatically reloaded.
+Start a new OMP session after refreshing the installation to load the updated extension; existing sessions are not interrupted or automatically reloaded.
 The regression below exercises OMP's real typed store, persistence, unrelated-setting preservation, change subscribers, and working/idle boat transitions.
 
 Regression entry point:

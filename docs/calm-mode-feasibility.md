@@ -784,8 +784,6 @@ The launch used `omp --no-session --no-title --no-skills --no-rules --no-lsp --t
 Typing `/calm-omp` reported `Tool activity: visible`, then `Tool activity: hidden`, and later `Tool activity: visible`.
 A model-initiated `printf CALM_NATIVE_TOOL_MARKER; sleep 12` call and its result disappeared from the existing transcript when hidden and reappeared when visible, including a separate `sleep 30` call made while hidden.
 During a model-initiated `sleep 45` run, successive captures at 16 and 30 seconds showed the two-row boat moving from column 59 to column 74; the preceding completed run showed no boat at idle.
-The display preference was restored to its initial hidden choice; existing sessions were not reloaded or interrupted.
-Pi, Claude Code, and other runtime transports are unaffected because this repair changes only the standalone OMP package's native display-setting access.
 
 ## 2026-09-30 Pi 0.99.1 native-call and export compatibility
 
