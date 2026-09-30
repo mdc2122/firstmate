@@ -762,3 +762,34 @@ ok - failed legacy retirement aborts before linking
 ok - failed legacy removal aborts before linking
 ok - manifest entry resolves through link
 ```
+
+## 2026-09-30 Pi 0.99.1 native-call and export compatibility
+
+CI installs Pi from the exact development dependency and lockfile in `.opencode/plugins/`, setting `FM_PI_PACKAGE_DIR` for the package-based tests and adding its CLI to PATH.
+Weekly grouped npm updates in `.github/dependabot.yml` own advancing that pin.
+This controls the dependency change that moved CI from Pi 0.87.1 to 0.99.1 without a repository change.
+
+Pi 0.99.1 renders generic tool-call arguments on the title line when collapsed and as separate lines when expanded.
+The branch's self-rendered call slots delegate to `ToolExecutionComponent.createCallFallback` so Calm-off drawing follows the installed native presentation rather than copying its formatting.
+That helper is private in Pi's declarations; the installed-package behavioral comparison is the compatibility check for this seam.
+Pi 0.99.1 also retains `display: false` custom messages in HTML as default-hidden DOM with a native reveal toggle.
+The real Chrome export regression measures computed visibility before reveal, after reveal, and after hiding again instead of rejecting preserved hidden DOM bytes.
+
+Refresh the focused evidence with:
+
+```sh
+npm ci --prefix .opencode/plugins
+FM_PI_PACKAGE_DIR="$PWD/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" \
+  PATH="$PWD/.opencode/plugins/node_modules/.bin:$PATH" \
+  bin/fm-test-run.sh tests/fm-pi-branch-extension.test.sh tests/fm-calm-pi-extension.test.sh
+```
+
+Observed on 2026-09-30 against pinned Pi 0.99.1, including the strict typecheck:
+
+```text
+ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.99.1
+ok - fm_branch_outcomes hides through ToolExecutionComponent while Calm-off and HTML export stay stock
+FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=187399
+```
+
+

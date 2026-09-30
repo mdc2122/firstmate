@@ -106,8 +106,10 @@ jobs:
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          npm install -g @earendil-works/pi-coding-agent
-          npm ls -g --depth 0 @earendil-works/pi-coding-agent
+          npm ci --prefix .opencode/plugins
+          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
+          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable parallel shard 1
         run: |
           set -eu
@@ -214,8 +216,10 @@ jobs:
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          npm install -g @earendil-works/pi-coding-agent
-          npm ls -g --depth 0 @earendil-works/pi-coding-agent
+          npm ci --prefix .opencode/plugins
+          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
+          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable serial shard ${{ matrix.shard }}
         env:
           # job-total rather than a literal, so shrinking or growing the matrix

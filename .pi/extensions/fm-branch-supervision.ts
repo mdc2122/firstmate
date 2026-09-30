@@ -2060,6 +2060,20 @@ ${context.command}
     if (shellState.result) shell.addChild(shellState.result);
     return shell;
   };
+  const nativeCall = (
+    name: string,
+    args: Record<string, unknown>,
+    expanded = false,
+  ): Text => {
+    const row = new ToolExecutionComponent(
+      name, "fm-call-presentation", args, { showImages: false }, undefined,
+      { requestRender() {} } as ConstructorParameters<typeof ToolExecutionComponent>[5], root,
+    );
+    row.setExpanded(expanded);
+    // Pi keeps this native presentation helper private in its declarations.
+    const native = row as unknown as { createCallFallback: () => Text };
+    return native.createCallFallback();
+  };
 
   registerFirstmateTool(pi, {
     name: "fm_branch_outcomes",
@@ -2071,11 +2085,11 @@ ${context.command}
       recent: Type.Optional(Type.Number({ description: "How many most-recent outcomes to read (default 20)" })),
     }),
     renderShell: "self",
-    renderCall: (_args, theme, context) => {
+    renderCall: (args, theme, context) => {
       if (calmPresentation.stockExportRendering) throw new Error("Use Pi stock export rendering");
       if (calmHides("assistant-tool-call")) return new Container();
       const shellState = context.state as OutcomesToolShellState;
-      shellState.call = new Text(theme.fg("toolTitle", theme.bold("fm_branch_outcomes")), 0, 0);
+      shellState.call = nativeCall("fm_branch_outcomes", args, context.expanded);
       return refreshOutcomesToolShell(shellState, theme, context);
     },
     renderResult: (result, options, theme, context) => {
@@ -2133,11 +2147,11 @@ ${context.command}
       through: Type.Number({ description: "The highest outcome sequence number this conversation has processed" }),
     }),
     renderShell: "self",
-    renderCall: (_args, theme, context) => {
+    renderCall: (args, theme, context) => {
       if (calmPresentation.stockExportRendering) throw new Error("Use Pi stock export rendering");
       if (calmHides("assistant-tool-call")) return new Container();
       const shellState = context.state as OutcomesToolShellState;
-      shellState.call = new Text(theme.fg("toolTitle", theme.bold("fm_branch_processed")), 0, 0);
+      shellState.call = nativeCall("fm_branch_processed", args, context.expanded);
       return refreshOutcomesToolShell(shellState, theme, context);
     },
     renderResult: (result, _options, theme, context) => {
