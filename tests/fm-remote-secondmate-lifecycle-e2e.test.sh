@@ -312,6 +312,32 @@ seed_env() {
   "$@"
 }
 
+provision_failure_evidence() {
+  local phase=$1 status=$2 output=$3
+  command -v node >/dev/null 2>&1 || fail "node is required for sanitized provisioning failure evidence"
+  node - "$phase" "$status" "$output" "$TMP_ROOT" "${FM_TEST_FAILURE_EVIDENCE_DIR:-}" <<'JS'
+const fs = require('node:fs');
+const path = require('node:path');
+const [phase, status, file, root, evidenceDir] = process.argv.slice(2);
+const fd = fs.openSync(file, 'r');
+const bytes = Buffer.alloc(16384);
+const size = fs.readSync(fd, bytes, 0, bytes.length, 0);
+fs.closeSync(fd);
+let text = bytes.subarray(0, size).toString('utf8');
+text = text.split(root).join('<fixture>')
+  .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+  .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+  .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1<redacted>@')
+  .replace(/((?:token|password|secret|api[_-]?key|authorization)\s*[:=]\s*)[^\s]+/gi, '$1<redacted>');
+const report = `provisioning phase=${phase} exit=${status}\n${text}\n`;
+process.stderr.write(report);
+if (evidenceDir) {
+  fs.mkdirSync(evidenceDir, {recursive: true});
+  fs.writeFileSync(path.join(evidenceDir, `provision-${phase}.txt`), report, {mode: 0o600});
+}
+JS
+}
+
 REAL_GIT=$(command -v git)
 cat > "$FAKEBIN/git" <<SH
 #!/usr/bin/env bash
@@ -320,6 +346,10 @@ if [ "\${1:-}" = clone ] && [ "\${!#}" = "$TMP_ROOT/concurrent-home" ]; then
   if mkdir "$TMP_ROOT/provision-first" 2>/dev/null; then
     touch "$TMP_ROOT/provision.entered"
     while [ ! -f "$TMP_ROOT/provision.release" ]; do sleep 0.02; done
+    if [ "\${FM_TEST_PROVISION_CHILD_FAILURE:-0}" = 1 ]; then
+      printf 'controlled clone failure token=SMOKE_SECRET\n' >&2
+      exit 73
+    fi
   fi
 fi
 exec "$REAL_GIT" "\$@"
@@ -348,8 +378,16 @@ sleep 0.2
 [ "$(grep -cF clone "$TMP_ROOT/provision-clones")" -eq 1 ] \
   || fail "overlapping provisioning reached home classification concurrently"
 touch "$TMP_ROOT/provision.release"
-wait "$provision_one" || fail "first serialized provisioning attempt failed"
-wait "$provision_two" || fail "reconciled provisioning attempt failed"
+if wait "$provision_one"; then :; else
+  provision_status=$?
+  provision_failure_evidence first "$provision_status" "$TMP_ROOT/provision-one.out"
+  fail "first serialized provisioning attempt failed"
+fi
+if wait "$provision_two"; then :; else
+  provision_status=$?
+  provision_failure_evidence second "$provision_status" "$TMP_ROOT/provision-two.out"
+  fail "reconciled provisioning attempt failed"
+fi
 [ "$(cat "$TMP_ROOT/concurrent-home/.fm-secondmate-home")" = ios ] \
   || fail "serialized provisioning lost the published home"
 [ "$(grep -cF clone "$TMP_ROOT/provision-clones")" -eq 1 ] \
