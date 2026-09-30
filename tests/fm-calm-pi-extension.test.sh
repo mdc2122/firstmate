@@ -3781,6 +3781,27 @@ if (!serialized.includes("firstmate-synthetic-input") || !serialized.includes("/
 const synthetic = entries.find((entry) => entry.type === "custom_message" && entry.customType === "firstmate-synthetic-input");
 if (!synthetic || synthetic.display) process.exit(1);
 JS
+  # Measure native visibility and reveal behavior, not hidden DOM byte absence.
+  node - "$export_file" <<'JS'
+const fs = require("node:fs");
+const file = process.argv[2];
+const probe = `<script>window.addEventListener('load', () => {
+  const result = document.createElement('pre');
+  result.id = 'fm-export-visibility-proof';
+  const hooks = [...document.querySelectorAll('#messages .hook-message')];
+  const legacy = hooks.find(node => node.textContent.includes('[firstmate-synthetic-input]'));
+  const visible = node => !!node && getComputedStyle(node).display !== 'none' && node.getClientRects().length > 0;
+  const initiallyHidden = !visible(legacy);
+  const toggle = document.querySelector('[data-action="toggle-hidden-messages"]');
+  toggle?.click();
+  const revealed = !legacy || visible(legacy);
+  toggle?.click();
+  const hiddenAgain = !visible(legacy);
+  result.textContent = JSON.stringify({initiallyHidden, revealed, hiddenAgain});
+  document.body.appendChild(result);
+});</script>`;
+fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace('</body>', `${probe}</body>`));
+JS
   chrome=$(find_chrome) \
     || fail "Chrome or Chromium is required for rendered export DOM assertions; set FM_CHROME_BIN to one"
   chrome_report=$(render_export_dom "$chrome" "$export_file" "$export_dom" "$version") \
@@ -3792,8 +3813,10 @@ const tree = dom.match(/<div[^>]*id="tree-container"[^>]*>([\s\S]*?)<div[^>]*id=
 if (!messages || !tree) process.exit(1);
 if (!/<div class="user-message"[^>]*>[\s\S]*Show a deterministic tool example\./.test(messages)) process.exit(1);
 if (!/<div class="assistant-message"[^>]*>[\s\S]*The deterministic tool example is complete\./.test(messages)) process.exit(1);
-if (messages.includes('<div class="hook-message"')) process.exit(1);
-if (messages.includes("[firstmate-synthetic-input]")) process.exit(1);
+const proof = dom.match(/<pre id="fm-export-visibility-proof">([^<]+)<\/pre>/)?.[1];
+if (!proof) process.exit(1);
+const visibility = JSON.parse(proof);
+if (!visibility.initiallyHidden || !visibility.revealed || !visibility.hiddenAgain) process.exit(1);
 for (const current of ["CURRENT_WATCHER_E2E", "CURRENT_TURN_END_E2E", "CURRENT_AWAY_E2E", "CURRENT_FROM_FIRSTMATE_E2E", "CURRENT_LAUNCH_BRIEF_E2E"]) {
   if (!messages.includes(current)) process.exit(1);
 }
