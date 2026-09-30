@@ -93,3 +93,65 @@ pass "failed legacy removal aborts before linking"
 assert_grep "fm-calm-omp.ts" "$LINK/package.json" "manifest declares extension entry"
 assert_present "$LINK/fm-calm-omp.ts" "extension resolves through link"
 pass "manifest entry resolves through link"
+
+# Exercise the command against OMP's real typed store, including persistence
+# and live change delivery, rather than a mocked string-key settings facade.
+command -v bun >/dev/null 2>&1 || fail "bun is required for the installed OMP runtime"
+OMP_PACKAGE=$(dirname "$(dirname "$(realpath "$(command -v omp)")")")
+mkdir -p "$TMP_ROOT/native/node_modules/@oh-my-pi" "$TMP_ROOT/native/agent"
+ln -s "$OMP_PACKAGE" "$TMP_ROOT/native/node_modules/@oh-my-pi/pi-coding-agent"
+cp -R "$ROOT/extensions/fm-calm-omp" "$TMP_ROOT/native/extension"
+cat >"$TMP_ROOT/native/check.ts" <<'TS'
+import assert from "node:assert/strict";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { cfgDisplayHideToolActivity, cfgDisplayShowTokenUsage } from "@oh-my-pi/pi-coding-agent/modes/settings";
+import calm from "./extension/fm-calm-omp.ts";
+
+const agentDir = `${import.meta.dir}/agent`;
+await Bun.write(`${agentDir}/config.yml`, "display:\n  hideToolActivity: false\n  showTokenUsage: true\n");
+const settings = await Settings.loadIsolated({agentDir, cwd: import.meta.dir});
+let command: Parameters<Parameters<typeof calm>[0]["registerCommand"]>[1] | undefined;
+const events = new Map<string, Parameters<NonNullable<Parameters<typeof calm>[0]["on"]>>[1]>();
+const widgets = new Map<string, {render: (width: number) => string[]; invalidate: () => void; dispose?: () => void}>();
+const notices: string[] = [];
+const ctx = {hasUI: true, ui: {
+  notify: (message: string) => { notices.push(message); },
+  setWidget: (key: string, factory: ((tui: unknown) => {render: (width: number) => string[]; invalidate: () => void; dispose?: () => void}) | undefined) => {
+    widgets.get(key)?.dispose?.();
+    if (factory) widgets.set(key, factory({requestRender() {}}));
+    else widgets.delete(key);
+  },
+}};
+calm({pi: {settings}, registerCommand: (_name, registered) => {command = registered;}, on: (name, handler) => {events.set(name, handler);}});
+const changes: boolean[] = [];
+const unsubscribe = cfgDisplayHideToolActivity.listen(settings, value => {changes.push(value);});
+events.get("agent_start")?.({}, ctx);
+assert.equal(widgets.size, 0, "visible tools do not also display a boat");
+await command!.handler("", ctx);
+assert.equal(cfgDisplayHideToolActivity.get(settings), true);
+assert.equal(notices.at(-1), "Tool activity: hidden");
+assert.equal(widgets.get("firstmate-calm-omp-working-ship")?.render(80).length, 2);
+await settings.flush();
+const reload = await Settings.loadReadOnly({agentDir, cwd: import.meta.dir});
+assert.equal(cfgDisplayHideToolActivity.get(reload), true, "native toggle persists");
+assert.equal(cfgDisplayShowTokenUsage.get(reload), true, "unrelated preference preserved");
+events.get("agent_end")?.({willContinue: true}, ctx);
+assert.equal(widgets.size, 1, "continuing run retains boat");
+await command!.handler("", ctx);
+assert.equal(cfgDisplayHideToolActivity.get(settings), false);
+assert.equal(widgets.size, 0, "showing tools removes boat immediately");
+assert.deepEqual(changes, [true, false], "native subscribers receive both transitions");
+await command!.handler("unexpected", ctx);
+assert.equal(cfgDisplayHideToolActivity.get(settings), false, "invalid usage never toggles");
+await command!.handler("", ctx);
+events.get("agent_end")?.({}, ctx);
+assert.equal(widgets.size, 0, "idle run removes boat");
+await command!.handler("", ctx);
+await settings.flush();
+assert.equal(cfgDisplayHideToolActivity.get(await Settings.loadReadOnly({agentDir, cwd: import.meta.dir})), false);
+unsubscribe();
+settings.cancelPendingSaves();
+console.log("native toggle, subscribers, persistence, preservation, and boat transitions passed");
+TS
+bun "$TMP_ROOT/native/check.ts" || fail "native Calm visibility regression failed"
+pass "native command toggles persisted visibility and working boat in both directions"
