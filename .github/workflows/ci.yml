@@ -227,6 +227,7 @@ jobs:
           # leaving a shard of the required lane unrun.
           FM_SERIAL_LANE: portable-serial-${{ matrix.shard }}of${{ strategy.job-total }}
           FM_SERIAL_SHARD: ${{ matrix.shard }}
+          FM_TEST_FAILURE_EVIDENCE_DIR: ${{ runner.temp }}/fm-test/failure-evidence
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -242,6 +243,13 @@ jobs:
           name: fm-test-timing-portable-serial-${{ matrix.shard }}
           path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-serial-${{ matrix.shard }}.json
           if-no-files-found: warn
+      - name: Upload bounded provisioning failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-provision-failure-serial-${{ matrix.shard }}
+          path: ${{ runner.temp }}/fm-test/failure-evidence/provision-*.txt
+          if-no-files-found: ignore
 
   # Required real-Herdr lane: pinned install, serial real-herdr-gated family,
   # hard-fail on "skip: herdr not found". Starts on Linux x86_64; if a genuine
