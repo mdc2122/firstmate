@@ -763,6 +763,28 @@ ok - failed legacy removal aborts before linking
 ok - manifest entry resolves through link
 ```
 
+## 2026-09-29 OMP 18.4.4 native visibility verification
+
+[`calm.md`](calm.md#omp) owns the current OMP presentation contract.
+OMP 18.4.4's focused editor exposes no `onToggleToolActivity`, and its live settings instance has no string-key `get` or `set` methods.
+The exported `@oh-my-pi/pi-coding-agent/modes/settings` handle `cfgDisplayHideToolActivity` reads and writes the loader-provided live settings instance successfully in the bundled CLI.
+OMP's native display subscriber performs transcript repainting without an editor callback or a plugin-owned visibility flag.
+
+```text
+$ omp --version
+omp/18.4.4
+$ bin/fm-test-run.sh tests/fm-omp-calm-install.test.sh
+native toggle, subscribers, persistence, preservation, and boat transitions passed
+ok - native command toggles persisted visibility and working boat in both directions
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=4259
+```
+
+The real 110 by 38 TUI loaded the repaired package through user plugin discovery from a disposable HOME, using the existing agent configuration and credentials without explicit extension injection.
+The launch used `omp --no-session --no-title --no-skills --no-rules --no-lsp --tools bash --model gpt6astra-cliproxy/gpt-6-astra-high --thinking low` with a presentation-only system prompt.
+Typing `/calm-omp` reported `Tool activity: visible`, then `Tool activity: hidden`, and later `Tool activity: visible`.
+A model-initiated `printf CALM_NATIVE_TOOL_MARKER; sleep 12` call and its result disappeared from the existing transcript when hidden and reappeared when visible, including a separate `sleep 30` call made while hidden.
+During a model-initiated `sleep 45` run, successive captures at 16 and 30 seconds showed the two-row boat moving from column 59 to column 74; the preceding completed run showed no boat at idle.
+
 ## 2026-09-30 Pi 0.99.1 native-call and export compatibility
 
 CI installs Pi from the exact development dependency and lockfile in `.opencode/plugins/`, setting `FM_PI_PACKAGE_DIR` for the package-based tests and adding its CLI to PATH.
@@ -791,5 +813,4 @@ ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.99.1
 ok - fm_branch_outcomes hides through ToolExecutionComponent while Calm-off and HTML export stay stock
 FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=187399
 ```
-
 

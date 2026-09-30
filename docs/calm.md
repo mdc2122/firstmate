@@ -104,9 +104,12 @@ Calm on OMP is the standalone `fm-calm-omp` package under `extensions/fm-calm-om
 To unload it, run `omp plugin disable fm-calm-omp`. The package lives outside `.omp/extensions/` on purpose: OMP de-duplicates extension entries by absolute path rather than realpath, so a project-local copy plus a global link would load twice in sessions that run inside a firstmate checkout.
 The installer retires a legacy project-local `.omp/extensions/fm-calm-omp.ts` for the same reason, removing an identical copy and renaming a divergent one to `.bak`.
 
-OMP exposes no extension setter for tool-activity visibility, so `/calm-omp` reaches the native toggle through a one-shot widget probe of the focused editor and delegates to it, including its own persisted `display.hideToolActivity` setting, tool images, and terminal-history repainting.
+`/calm-omp` toggles OMP's typed `cfgDisplayHideToolActivity` handle against the loader-provided live settings instance.
+OMP's native UI subscription applies the persisted `display.hideToolActivity` choice to tool rows, tool images, and terminal-history repainting; no separate Calm visibility state is stored.
 While that setting hides tool activity and a run is under way, the extension draws the same two-row sailboat animation from the vendored working-ship module in `extensions/fm-calm-omp/lib/`.
-When the probe finds no visibility action the command reports the fallback (`Ctrl+Shift+O` or `/settings > Appearance > Display > Hide Tool Activity`) and changes nothing.
+An unavailable native setting reports the fallback (`Ctrl+Shift+O` or `/settings > Appearance > Display > Hide Tool Activity`) instead of claiming to toggle visibility.
+Start a new OMP session after refreshing the installation to load the updated extension; existing sessions are not interrupted or automatically reloaded.
+The regression below exercises OMP's real typed store, persistence, unrelated-setting preservation, change subscribers, and working/idle boat transitions.
 
 Regression entry point:
 
