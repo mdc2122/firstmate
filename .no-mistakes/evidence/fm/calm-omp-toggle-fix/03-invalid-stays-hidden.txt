@@ -1,0 +1,38 @@
+                                                                                                              
+╭─── omp v18.4.4 ──────────────────────────────────────────────────────────────────────────────────╮          
+│                          │ Tips                                                                  │          
+│      Welcome back!       │ # for prompt actions                                                  │          
+│                          │ / for commands                                                        │          
+│       ████████████       │ ! to run bash                                                         │          
+│          ██  ██          │ $ to run python                                                       │          
+│          ██  ██          │ ───────────────────────────────────────────────────────────────────── │          
+│          ▒▒  ██          │ Recent sessions                                                       │          
+│              ██          │ No recent sessions                                                    │          
+│                          │                                                                       │          
+│GPT-6 Astra high via clip…│                                                                       │          
+│    gpt6astra-cliproxy    │                                                                       │          
+│                          │                                                                       │          
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯          
+ Tip: Spaghetti code? Try complaining with /omfg                                                              
+                                                                                                              
+ Connected: claude-mem:mcp-search. Still connecting: ouroboros, context-mode:context-mode…                    
+                                                                                                              
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available                                                                                             
+ New version 18.4.5 is available. Run: omp update                                                             
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                              
+ Tool activity: hidden                                                                                        
+                                                                                                              
+ Warning: Usage: /calm-omp (toggles OMP tool activity visibility)                                             
+                                                                                                              
+ π > ◔ GPT-6 Astra high via cliproxy (high baked into the alias) > 🌳 …CG1R2M2HV9C > ⑂ detached ?1 ▶─4%─┃872K─
+╰─                                                                                ⇧⇥ to change thinking effort
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              

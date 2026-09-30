@@ -1,0 +1,38 @@
+│              ██          │ No recent sessions                                                    │          
+│                          │                                                                       │          
+│GPT-6 Astra high via clip…│                                                                       │          
+│    gpt6astra-cliproxy    │                                                                       │          
+│                          │                                                                       │          
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯          
+ Tip: Spaghetti code? Try complaining with /omfg                                                              
+                                                                                                              
+                                                                                                              
+ Connected: claude-mem:mcp-search. Still connecting: ouroboros, context-mode:context-mode…                    
+                                                                                                              
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available                                                                                             
+ New version 18.4.5 is available. Run: omp update                                                             
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                              
+ Tool activity: hidden                                                                                        
+                                                                                                              
+ Warning: Usage: /calm-omp (toggles OMP tool activity visibility)                                             
+                                                                                                              
+ Tool activity: visible                                                                                       
+                                                                                                              
+                                                                                                              
+ Run bash: printf CALM_LIVE_MARKER; sleep 25                                                                  
+                                                                                                              
+                                                                                                              
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ $ printf CALM_LIVE_MARKER; sleep 25                                                                        │
+├─── Output ─────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ CALM_LIVE_MARKER                                                                                           │
+│ ⟦Timeout: 60s⟧                                                                                             │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                              
+ 2026-09-30 14:30:18  ⤵ 33K  ⤴ 40  ⏱ 2.8s  ⚡ 10.2/s                                                          
+                                                                                                              
+  ⎋ Run the requested command once                                                                            
+ ⠙ 11s > ◔ GPT-6 Astra high via cliproxy (high baked into the alias) > 🌳 …2M2HV9C > ⑂ detached ?1 ▶─4%─┃872K─
+╰─                                                                                                            

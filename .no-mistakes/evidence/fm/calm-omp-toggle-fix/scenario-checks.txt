@@ -1,0 +1,1 @@
+Real OMP 18.4.4 PTY observations: hidden/visible notices match persisted preference; invalid arguments preserve hidden; active tool output disappears and completed output reappears; boat moves while hidden and disappears at idle; hidden preference survives restart; showTokenUsage remains true. Base-version command reports unavailable focused-editor action instead of toggling.
