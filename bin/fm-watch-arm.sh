@@ -47,7 +47,8 @@
 # Every observed watcher cycle appends one tab-separated lifecycle record to
 # state/.watch-cycle-exits.log. The arm layer owns that bounded ledger; it records
 # arm/watcher identities, timestamps, exit/signal classification, beacon age,
-# lock identity before and after close, and successor disposition. The separate
+# lock identity before and after close, the owned child's stderr tail, and
+# successor disposition. The separate
 # state/.watch-triage.log remains exclusively the watcher's absorbed-wake debug
 # log and is never written here.
 #
@@ -137,6 +138,17 @@ cycle_signal_name() {
   kill -l "$signal_number" 2>/dev/null || printf '%s' "$signal_number"
 }
 
+# The watcher child's stderr tail, so a cycle that dies without a reason line
+# (an unbound-variable abort, a failed `|| exit 1`) names its cause in the
+# ledger instead of only as nonzero-exit. `none` for attached cycles and quiet
+# children.
+cycle_stderr_tail() {
+  local tail_text
+  [ -n "${child_err:-}" ] && [ -s "$child_err" ] || { printf 'none'; return; }
+  tail_text=$(tail -n 5 "$child_err" 2>/dev/null | tr '\t\r\n' '  |')
+  printf '%s' "${tail_text:-none}"
+}
+
 cycle_log_append() {
   local exit_code=$1 signal=$2 reason=$3 successor=$4 ended_at beacon_age lock_after size tmp raw i
   [ "$cycle_active" -eq 1 ] || return 0
@@ -150,7 +162,7 @@ cycle_log_append() {
     sleep 0.02
     i=$((i + 1))
   done
-  printf 'arm_pid=%s\twatcher_pid=%s\torigin=%s\tstarted_at=%s\tended_at=%s\texit_code=%s\tsignal=%s\treason=%s\tbeacon_age=%s\tlock_before=%s\tlock_after=%s\tsuccessor=%s\n' \
+  printf 'arm_pid=%s\twatcher_pid=%s\torigin=%s\tstarted_at=%s\tended_at=%s\texit_code=%s\tsignal=%s\treason=%s\tbeacon_age=%s\tlock_before=%s\tlock_after=%s\tstderr=%s\tsuccessor=%s\n' \
     "$ARM_PID" \
     "$(cycle_clean_field "$cycle_watcher_pid")" \
     "$(cycle_clean_field "$cycle_origin")" \
@@ -162,6 +174,7 @@ cycle_log_append() {
     "$beacon_age" \
     "$(cycle_clean_field "$cycle_lock_before")" \
     "$(cycle_clean_field "$lock_after")" \
+    "$(cycle_clean_field "$(cycle_stderr_tail)")" \
     "$(cycle_clean_field "$successor")" >> "$CYCLE_LOG" 2>/dev/null || true
 
   size=$(wc -c < "$CYCLE_LOG" 2>/dev/null | tr -d '[:space:]')
@@ -447,6 +460,7 @@ fi
 # wake exit propagates out so the harness re-notifies firstmate.
 child=
 child_out=
+child_err=
 cleanup_child() {
   if [ -n "$child" ] && fm_pid_alive "$child"; then
     kill -TERM "$child" 2>/dev/null || true
@@ -454,6 +468,16 @@ cleanup_child() {
   if [ -n "$child_out" ]; then
     rm -f "$child_out" 2>/dev/null || true
   fi
+  child_err_flush
+}
+
+# Replay the closed child's captured stderr to this arm's stderr and drop it.
+# Called only after the cycle's ledger row has read it.
+child_err_flush() {
+  [ -n "$child_err" ] || return 0
+  [ ! -s "$child_err" ] || cat "$child_err" >&2
+  rm -f "$child_err" 2>/dev/null || true
+  child_err=
 }
 
 # shellcheck disable=SC2329 # Invoked indirectly by the signal traps below.
@@ -477,10 +501,13 @@ child_out=$(mktemp "$STATE/.watch-arm-output.XXXXXX") || {
   echo "watcher: FAILED - no live watcher with a fresh beacon"
   exit 1
 }
+# The child's stderr is kept so the cycle ledger can name why a cycle died; it
+# is replayed to this arm's own stderr when the cycle closes (cleanup_child).
+child_err=$(mktemp "$STATE/.watch-arm-stderr.XXXXXX") || child_err=
 if [ -n "${FM_WATCH_PREDECESSOR_ARM_PID:-}" ]; then
-  FM_WATCH_HANDLING_SUCCESSOR=1 "$WATCH" >"$child_out" &
+  FM_WATCH_HANDLING_SUCCESSOR=1 "$WATCH" >"$child_out" 2>"${child_err:-/dev/stderr}" &
 else
-  "$WATCH" >"$child_out" &
+  "$WATCH" >"$child_out" 2>"${child_err:-/dev/stderr}" &
 fi
 child=$!
 cycle_begin "$child" started "$(fm_pid_identity "$child" 2>/dev/null || true)"
@@ -492,6 +519,7 @@ owned_child_finished() {
   if [ "$rc" -eq 0 ] && watch_output_has_wake "$child_out"; then
     reason_type=$(watch_output_reason_type "$child_out")
     cycle_log_append "$rc" "$signal" "$reason_type" none
+    child_err_flush
     print_watch_output "$child_out"
     rm -f "$child_out" 2>/dev/null || true
     child=
@@ -502,6 +530,7 @@ owned_child_finished() {
   if [ "$rc" -eq 0 ]; then
     if wait_for_healthy_successor; then
       cycle_log_append "$rc" "$signal" unexpected-clean-exit "attached:$HEALTHY_PID"
+      child_err_flush
       print_watch_output "$child_out"
       rm -f "$child_out" 2>/dev/null || true
       child=
@@ -518,15 +547,18 @@ owned_child_finished() {
     child_out=
     if close_unobserved_cycle; then
       cycle_log_append "$rc" "$signal" clean-exit-delivered-wake none
+      child_err_flush
       return 0
     fi
     cycle_log_append "$rc" "$signal" unexpected-clean-exit none
+    child_err_flush
     return 1
   fi
 
   reason_type="nonzero-exit"
   [ "$signal" = none ] || reason_type="signal-exit"
   cycle_log_append "$rc" "$signal" "$reason_type" none
+  child_err_flush
   print_watch_output "$child_out"
   if ! grep -q '^watcher: FAILED' "$child_out" 2>/dev/null; then
     echo "watcher: FAILED - watcher cycle exited $rc without an actionable reason"
@@ -586,9 +618,12 @@ done
 
 trap - HUP TERM INT
 print_watch_output "$child_out"
-cleanup_child
+if [ -n "$child" ] && fm_pid_alive "$child"; then
+  kill -TERM "$child" 2>/dev/null || true
+fi
 wait "$child" 2>/dev/null
 rc=$?
 cycle_log_append "$rc" "$(cycle_signal_name "$rc")" confirmation-timeout none
+cleanup_child
 echo "watcher: FAILED - no live watcher with a fresh beacon"
 exit 1

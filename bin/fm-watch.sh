@@ -617,7 +617,7 @@ signal_turnend_panes_churned() {  # <file> ...
   # by macos-stock-bash, and this repository uses no associative arrays in bin/
   # or tests/. A batch is normally one to three tasks and captures dominate its
   # cost; indexed lookup is the upgrade path if coalesced batches grow large.
-  for task in "${signal_tasks[@]}"; do
+  for task in ${signal_tasks[@]+"${signal_tasks[@]}"}; do
     task_index=-1
     for ((i = 0; i < ${#snapshot_tasks[@]}; i++)); do
       [ "${snapshot_tasks[$i]}" = "$task" ] && { task_index=$i; break; }
@@ -633,7 +633,7 @@ signal_turnend_panes_churned() {  # <file> ...
     [ "$count" -eq 1 ] || return 1
     signal_indexes+=("$task_index")
   done
-  for task_index in "${signal_indexes[@]}"; do
+  for task_index in ${signal_indexes[@]+"${signal_indexes[@]}"}; do
     [ "${snapshot_kinds[$task_index]}" != secondmate ] || return 1
   done
   for ((i = 0; i < ${#signal_tasks[@]}; i++)); do
@@ -650,7 +650,7 @@ signal_turnend_panes_churned() {  # <file> ...
     return 1
   fi
   absorb_secs=$((10#$TURNEND_CHURN_ABSORB_SECS))
-  for task_index in "${churn_indexes[@]}"; do
+  for task_index in ${churn_indexes[@]+"${churn_indexes[@]}"}; do
     w=${snapshot_windows[$task_index]}
     key=${snapshot_keys[$task_index]}
     backend=${snapshot_backends[$task_index]}
@@ -669,7 +669,7 @@ signal_turnend_panes_churned() {  # <file> ...
   # Enforce the deferral bound BEFORE any .stale- state is touched, so a wake that
   # surfaces here leaves the staleness backbone's own classification alone.
   now_s=$(date +%s)
-  for key in "${churned_keys[@]}"; do
+  for key in ${churned_keys[@]+"${churned_keys[@]}"}; do
     marker="$STATE/.churn-since-$key"
     if [ ! -e "$marker" ]; then
       [ ! -L "$marker" ] || return 1
@@ -688,20 +688,20 @@ signal_turnend_panes_churned() {  # <file> ...
       return 1
     fi
   done
-  for key in "${missing_keys[@]}"; do
+  for key in ${missing_keys[@]+"${missing_keys[@]}"}; do
     marker="$STATE/.churn-since-$key"
     if (set -C; printf '%s' "$now_s" > "$marker") 2>/dev/null; then
       created_keys+=("$key")
       continue
     fi
-    for created in "${created_keys[@]}"; do
+    for created in ${created_keys[@]+"${created_keys[@]}"}; do
       rm -f "$STATE/.churn-since-$created"
     done
     return 1
   done
-  for key in "${churned_keys[@]}"; do
+  for key in ${churned_keys[@]+"${churned_keys[@]}"}; do
     if ! rm -f "$STATE/.stale-$key" "$STATE/.wedge-escalations-$key"; then
-      for created in "${created_keys[@]}"; do
+      for created in ${created_keys[@]+"${created_keys[@]}"}; do
         rm -f "$STATE/.churn-since-$created"
       done
       return 1

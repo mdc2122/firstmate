@@ -818,6 +818,41 @@ test_turn_ended_churning_pane_absorbed() {
   pass "a bare turn-end from a pane that churned since the previous poll is absorbed"
 }
 
+# A second churn absorb inside one open deferral window is the steady state of a
+# busy fleet: every churned pane already carries its .churn-since- marker, so no
+# new marker is created. Stock macOS Bash 3.2 treats expanding that empty set
+# under set -u as an unbound variable, which killed the watcher cycle with exit 1
+# and no actionable reason on every such batch until the window aged out.
+test_turn_ended_churn_within_open_window_absorbed() {
+  local dir state fakebin out capture_file window key pid since
+  dir=$(make_case turn-ended-churn-open-window); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"
+  window="test:fm-codexer"
+  : > "$state/codexer.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexer.meta"
+  printf 'apply_patch: writing bin/thing.sh' > "$capture_file"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  printf '%s' "$(hash_text 'reading the brief')" > "$state/.hash-$key"
+  printf '0\n' > "$state/.count-$key"
+  since=$(( $(date +%s) - 60 ))
+  printf '%s' "$since" > "$state/.churn-since-$key"
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2> "$dir/watch.err" &
+  pid=$!
+  wait_for_absorbed "$state" "$pid" "absorbed benign signal:" \
+    || { reap "$pid"; fail "a churning turn-end inside an open deferral window was not absorbed (watcher stderr: $(cat "$dir/watch.err"))"; }
+  kill -0 "$pid" 2>/dev/null \
+    || fail "the watcher died after absorbing a churning turn-end inside an open deferral window: $(cat "$dir/watch.err")"
+  [ "$(cat "$state/.churn-since-$key")" = "$since" ] \
+    || { reap "$pid"; fail "an absorb inside an open window restarted its deferral bound"; }
+  reap "$pid"
+  unset FM_FAKE_CREW_STATE
+  pass "a churning turn-end inside an already-open deferral window is absorbed without restarting the bound"
+}
+
 test_turn_ended_churn_resets_prior_stale_classification() {
   local dir state fakebin out capture_file window key old_hash active_hash pid i
   dir=$(make_case turn-ended-churn-resets-stale); state="$dir/state"; fakebin="$dir/fakebin"
@@ -5246,6 +5281,7 @@ test_provably_working_signal_absorbed
 test_turn_ended_provably_working_absorbed
 test_turn_ended_not_working_surfaced
 test_turn_ended_churning_pane_absorbed
+test_turn_ended_churn_within_open_window_absorbed
 test_turn_ended_churn_resets_prior_stale_classification
 test_turn_ended_churn_resets_wedge_state_before_stale_poll
 test_turn_ended_still_pane_surfaced

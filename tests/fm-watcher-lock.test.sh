@@ -1009,6 +1009,36 @@ test_stopped_watcher_is_live_but_stale_then_exit_is_classified() {
   pass "SIGSTOP distinguishes live PID from stale beacon and termination records the exit class"
 }
 
+# A watcher that dies before printing a reason line must still name its cause in
+# the lifecycle ledger: the 2026-09-30 incident ran six reasonless exit-1 cycles
+# whose only explanation was the watcher's stderr, which the arm discarded.
+test_reasonless_watcher_exit_records_stderr_in_ledger() {
+  local dir state armout holder status
+  dir=$(make_case reasonless-exit-stderr)
+  state="$dir/state"
+  armout="$dir/arm.out"
+  # A live foreign pid holds the singleton with a stale beacon: the fresh child
+  # refuses on stderr and exits 1 without any stdout reason line.
+  sleep 60 & holder=$!
+  mkdir -p "$state/.watch.lock"
+  printf '%s\n' "$holder" > "$state/.watch.lock/pid"
+  printf '%s\n' "$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$holder")" \
+    > "$state/.watch.lock/pid-identity"
+  : > "$state/.last-watcher-beat"
+  touch -t 200001010000 "$state/.last-watcher-beat"
+  FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_ARM_CONFIRM_TIMEOUT=5 "$WATCH_ARM" > "$armout" 2> "$dir/arm.err" &
+  wait_for_exit "$!" 80
+  status=$?
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+  [ "$status" -ne 0 ] && [ "$status" -ne 124 ] || fail "a refused watcher cycle did not fail (status $status)"
+  grep -q 'reason=nonzero-exit.*stderr=watcher: lock held by live pid .* heartbeat is stale' "$state/.watch-cycle-exits.log" \
+    || fail "the ledger row did not carry the watcher's stderr: $(cat "$state/.watch-cycle-exits.log" 2>/dev/null)"
+  grep -qF 'heartbeat is stale' "$dir/arm.err" || fail "the arm stopped relaying the watcher's stderr"
+  ! ls "$state"/.watch-arm-stderr.* >/dev/null 2>&1 || fail "the arm left its stderr capture file behind"
+  pass "a reasonless watcher exit records its stderr in the cycle ledger and still relays it"
+}
+
 test_pid_identity_is_locale_invariant() {
   # The portable fallback records its process identity under one locale, then
   # arm/guard/turn-end re-read it under the machine's ambient locale. ps's lstart
@@ -1255,4 +1285,5 @@ test_arm_waits_for_peer_beacon_after_child_stands_down
 test_arm_fails_loud_when_no_fresh_watcher_confirmable
 test_cycle_exit_ledger_links_successor_and_stays_bounded
 test_stopped_watcher_is_live_but_stale_then_exit_is_classified
+test_reasonless_watcher_exit_records_stderr_in_ledger
 test_sigterm_during_marker_wait_releases_watch_lock

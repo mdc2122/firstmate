@@ -103,7 +103,8 @@ A matching PID and identity lets an attached arm report the delivered reason and
 Only a cycle with no matching delivery record emits `watcher: FAILED - cycle ended without an actionable reason` and exits nonzero.
 
 The arm layer appends one tab-separated record per observed cycle to `state/.watch-cycle-exits.log`.
-Each record includes arm and watcher PIDs, start and end timestamps, exit code and signal, classified reason, beacon age, lock identity before and after close, and successor disposition.
+Each record includes arm and watcher PIDs, start and end timestamps, exit code and signal, classified reason, beacon age, lock identity before and after close, the last lines the owned watcher child wrote to stderr (`stderr=none` when it wrote nothing or the cycle was attached), and successor disposition.
+The arm still relays that captured stderr to its own stderr once the row is written, so a cycle that dies before printing a reason line names its cause in the ledger.
 The file is size-capped through `FM_WATCH_CYCLE_LOG_MAX_BYTES` and `FM_WATCH_CYCLE_LOG_KEEP_LINES`.
 `state/.watch-triage.log` remains only the watcher's bounded absorbed-wake debug log and carries no lifecycle semantics.
 
