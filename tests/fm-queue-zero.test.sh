@@ -263,13 +263,75 @@ test_paperclip_scan_classifies_stuck_items() {
   assert_contains "$out" "no-blocker FIR-7" "a backlog issue with no blocker and no date was not named"
   assert_contains "$out" "orphaned-execution FIR-8" "an in-progress issue with no run and no recent activity was not named"
   assert_contains "$out" "recovery FIR-10" "an issue with an active recovery action was not named"
-  assert_contains "$out" "approval approval:aaaaaaaa" "a pending approval past the age threshold was not named"
+  assert_contains "$out" "approval approval:aaaaaaaa" "an old pending approval was not named"
+  assert_contains "$out" "approval approval:bbbbbbbb" "a fresh pending approval was not named at the default age of 0"
   assert_not_contains "$out" "FIR-2 " "a backlog issue behind an open blocker was named"
   assert_not_contains "$out" "FIR-4 " "a blocked issue covered by live blocker work was named"
   assert_not_contains "$out" "FIR-6 " "a blocked issue with a dated next check was named"
   assert_not_contains "$out" "FIR-9 " "an in-progress issue with a live run was named"
-  assert_not_contains "$out" "bbbbbbbb" "a fresh approval was named before its threshold"
   pass "the Paperclip sweep names stuck issues and stale approvals and leaves covered or dated work alone"
+}
+
+# The approval-age default is 0 (no built-in wait): every pending approval is
+# listed on the next sweep. A home can still set a minute-granularity age in
+# the home .env or the environment, with a malformed value falling back to 0.
+test_approval_age_default_and_threshold() {
+  local home out
+  home=$(make_home approval-age)
+  install_fake_paperclip "$home"
+  paperclip_fixture "$home"
+  # Fresh ask is 1 h old, old ask 10 h (NOW is 12:00Z).
+  out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
+  assert_contains "$out" "approval approval:bbbbbbbb" "the default 0 age did not list a fresh approval"
+
+  printf 'FM_PAPERCLIP_APPROVAL_AGE_MINUTES=240\n' >> "$home/.env"
+  out=$(sweep "$home" scan) || fail "scan with a .env age failed"
+  assert_not_contains "$out" "bbbbbbbb" "an approval younger than the .env age was named"
+  assert_contains "$out" "approval approval:aaaaaaaa" "an approval older than the .env age was not named"
+  out=$(qz "$home" scan) || fail "queue scan failed"
+  assert_not_contains "$out" "bbbbbbbb" "queue-zero surfaced an approval below the .env age"
+
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_PAPERCLIP_APPROVAL_AGE_MINUTES=0 \
+    FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with an explicit env 0 failed"
+  assert_contains "$out" "approval approval:bbbbbbbb" "an explicit environment 0 did not list every approval"
+
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_PAPERCLIP_APPROVAL_AGE_MINUTES=09 \
+    FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with a leading-zero age failed: $out"
+  assert_contains "$out" "approval approval:bbbbbbbb" "a leading-zero age of 09 was not read as 9 minutes"
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_PAPERCLIP_APPROVAL_AGE_MINUTES=0090 \
+    FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with a leading-zero age failed: $out"
+  assert_not_contains "$out" "bbbbbbbb" "a leading-zero age of 0090 was not read as 90 minutes"
+
+  printf 'FM_PAPERCLIP_APPROVAL_AGE_MINUTES=soon\n' > "$home/.env"
+  printf 'FM_PAPERCLIP_URL=http://paperclip.test\nFM_PAPERCLIP_KEY_FILE=%s\n' "$home/pc/key" >> "$home/.env"
+  out=$(sweep "$home" scan) || fail "scan with a malformed age failed"
+  assert_contains "$out" "approval approval:bbbbbbbb" "a malformed age did not fall back to listing every approval"
+  pass "the approval age defaults to 0, reads whole minutes from the .env, and a malformed value falls back to 0"
+}
+
+# A newly appearing approval is a new queue-zero episode: its row key is new
+# to the report record, so the next check wakes firstmate instead of waiting
+# for the 24 h re-nag.
+test_new_approval_is_a_new_queue_zero_episode() {
+  local home out
+  home=$(make_home approval-episode)
+  install_fake_paperclip "$home"
+  printf '[]' > "$home/pc/issues.json"
+  printf '[]' > "$home/pc/approvals.json"
+  out=$(qz "$home" check) || fail "empty check failed"
+  [ -z "$out" ] || fail "an empty board woke firstmate: $out"
+
+  printf '[{"id":"cccccccc-3","type":"request_board_approval","status":"pending","createdAt":"%s","payload":{"title":"new ask"}}]' \
+    "$NOW.000Z" > "$home/pc/approvals.json"
+  out=$(qz "$home" check) || fail "check after a new approval failed"
+  assert_contains "$out" "check: queue-zero:" "a newly appearing approval did not start a new episode"
+  assert_contains "$out" "paperclip approval approval:cccccccc" "the new approval was not named in the wake"
+  grep -F $'\tcheck\tqueue-zero\t' "$home/state/.wake-queue" >/dev/null \
+    || fail "the approval wake was printed but not durably queued"
+
+  out=$(qz "$home" check) || fail "repeat check failed"
+  [ -z "$out" ] || fail "an unchanged approval set woke again: $out"
+  pass "a newly appearing approval is a new queue-zero episode that wakes firstmate on the next check"
 }
 
 test_paperclip_rows_join_the_queue_wake_and_failure_is_visible() {
@@ -419,3 +481,5 @@ test_paperclip_blocked_comment_marker_dates_the_next_check
 test_paperclip_comment_transport_failure_stops_comment_reads
 test_paperclip_rows_join_the_queue_wake_and_failure_is_visible
 test_paperclip_release_is_guarded
+test_approval_age_default_and_threshold
+test_new_approval_is_a_new_queue_zero_episode
