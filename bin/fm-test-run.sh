@@ -69,8 +69,9 @@
 #                   1 (serial) except for plain --changed and a plain list of
 #                   script paths, which use the bounded automatic scheduler.
 #   --per-script-timeout-secs N|auto
-#                   terminate a script that runs longer than its bound, record
-#                   it as exit 124, and append a "not ok - timed out: ..." line
+#                   terminate an attempt that runs longer than its bound, record
+#                   it as exit 124 (preserving any recorded nonzero test exit),
+#                   and append a "not ok - timed out: ..." line
 #                   naming the script and its bound (0 disables, the default).
 #                   N applies one bound to every script; auto applies the
 #                   measured bound table in per_script_timeout_auto_secs below.
@@ -80,13 +81,19 @@
 #                   caller's or job's own timeout. --max-wall-ms is checked
 #                   after the run and so cannot catch a hang on its own.
 #                   FM_TEST_STEP_BUDGET_SECS caps all attempts to a shared
-#                   invocation deadline; CI reserves reporting margin.
+#                   invocation deadline; CI reserves reporting margin. It is
+#                   consumed by this runner, not inherited by child scripts.
+#                   Exhaustion reports a timeout without starting more work.
 #                   FM_TEST_SCRIPT_BASH selects the test interpreter.
 #   --retry-infra-flakes
 #                   retry once after an observed process signal, harness startup
 #                   failure, or per-script timeout. Test-produced exit statuses
-#                   never qualify, regardless of their output. Retried results
-#                   are labeled as infrastructure flakes. Off by default.
+#                   never qualify, regardless of their output. Any recorded
+#                   test exit vetoes retry even if a descendant holds stdout
+#                   open until the stream-draining deadline; that timeout is
+#                   still named and annotated. Retries share the invocation
+#                   deadline and are labeled as infrastructure flakes.
+#                   Off by default.
 #   --max-wall-ms N fail the run when its measured invocation wall clock exceeds
 #                   N milliseconds, including an empty selection. It is
 #                   evaluated after selection and suite execution and cannot
@@ -2420,8 +2427,9 @@ record_script_result() {
 
 # Run <script> once, capturing output to <out>. <stream> 1 also echoes it live.
 # <id> only has to be unique within this run. When the script has a positive
-# bound (script_timeout_secs), a script that outruns it is terminated, reported
-# as exit 124, and named by a "not ok - timed out:" line: a hung script must
+# bound (script_timeout_secs), an attempt that outruns it is terminated, reported
+# as exit 124 unless a nonzero test exit was recorded, and named by a
+# "not ok - timed out:" line: a hung script must
 # become a bounded, explained failure rather than an unbounded suite, because an
 # unbounded suite is what silently outruns its caller's budget.
 run_script_bounded() {  # <script> <out> <stream> <id>
@@ -2506,9 +2514,10 @@ run_script_bounded() {  # <script> <out> <stream> <id>
 }
 
 # Run <script> through run_script_bounded and, under --retry-infra-flakes,
-# rerun it exactly once after a process signal, startup failure, or timeout. The
-# retry's exit is returned. A streamed first attempt was already shown live; a
-# captured one is kept in <out>.prelude, followed by the FM_TEST_RETRY marker,
+# rerun it exactly once after a process signal, startup failure, or timeout,
+# unless a test-produced exit was already recorded. The retry's exit is returned.
+# A streamed first attempt was already shown live; a captured one is kept in
+# <out>.prelude, followed by the FM_TEST_RETRY marker,
 # so a worker's replay still shows both attempts while <out> holds the attempt
 # that decides the result.
 run_script_attempts() {  # <script> <out> <stream> <id>

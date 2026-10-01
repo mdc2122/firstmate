@@ -83,7 +83,8 @@ jq -r '.scripts[] | [.path, .duration_ms] | @tsv' /tmp/fm-serial/*/*.json \
 bin/fm-test-run.sh --check-coverage
 ```
 
-A timed-out shard uploads no artifact, so pick runs where every serial shard is green or the lane's slowest scripts go unmeasured in exactly the shard that needs them most.
+A per-script timeout still allows the runner to write its artifact, but an enclosing step or job cancellation can prevent that write.
+Pick runs where every serial shard is green: failed or timeout durations are not healthy packing measurements.
 Measure native-Windows-only scripts through the focused Git Bash runner and retain that `duration_ms` separately, because the portable CI shards skip them.
 
 ## Coverage guard
@@ -115,14 +116,13 @@ Portable shards, each portable serial shard, and the Herdr lane upload runner-ge
 Timeouts are intended as hang tripwires; a passing coverage guard does not establish a healthy job duration.
 `.github/workflows/ci.yml` owns the exact numbers.
 
-Inside every lane each script also carries its own bound, so a hang fails as a named `not ok - timed out:` line with an error annotation instead of stalling until the job cap kills the lane without one.
-CI also supplies `FM_TEST_STEP_BUDGET_SECS` to the owning runner only, without passing it to child scripts or nested runners, reserving at least 30 seconds before an explicit step timeout for result reporting. Every attempt, including retries and later serial scripts, is capped by the remaining shared budget; exhausted budgets produce named timeout failures without starting more work.
-Every behavior lane passes `--per-script-timeout-secs auto`, and `per_script_timeout_auto_secs` in `bin/fm-test-run.sh` owns the measured bound table and its provenance.
+The [CI workflow](../.github/workflows/ci.yml) enables the runner's measured per-script bounds and shared step budget with reporting margin in every behavior lane, including stock-macOS compatibility.
+[`bin/fm-test-run.sh`](../bin/fm-test-run.sh)'s header and `--help` own timeout mechanics; `per_script_timeout_auto_secs` owns the measured bound table and its provenance.
 Refresh an entry from the timing artifacts whenever a script's slowest healthy run approaches its bound, the same way the shard hints are refreshed.
 
 ## Infrastructure flake retry
 
-Every behavior lane also passes `--retry-infra-flakes`.
-A script is retried once only after an observed process signal (`signal-N`), harness fork/exec failure (`start-error`), or per-script timeout (`timeout`). A process supervisor records these outcomes independently of test output. Test-produced exit statuses, including explicit exits 124 and 128 or higher, never qualify; assertion output is never classified. A recorded test exit always vetoes retries, even if a lingering stdout pipe subsequently times out; that timeout remains named and annotated, and a recorded nonzero status is preserved. Retries share the original enclosing deadline.
-The stock-macOS compatibility step also uses the runner with `FM_TEST_SCRIPT_BASH=/bin/bash`, preserving its selected public-followup regression and passing-case count checks.
-Each retry is labeled in the log (`FM_TEST_RETRY`, `FM_TEST_RETRIED_FLAKE`), as a warning annotation, in the job step summary, and in the timing JSON (`retried_infra_flake`, `retry_signature`, summary `retried_infra_flakes`), so retried flakes stay countable across runs instead of disappearing into manual reruns.
+The workflow enables the runner's opt-in process-level infrastructure retry in every behavior lane.
+The runner's header and `--help` own eligibility and log markers; its JSON writer owns timing fields.
+[`tests/fm-test-run.test.sh`](../tests/fm-test-run.test.sh) covers process outcomes, recorded-exit retry vetoes during stream-draining timeouts, shared serial budgets, and stock-Bash final-attempt counts and failure transcripts.
+Use the labeled logs, step summaries, and timing artifacts to count retries across runs rather than losing that evidence in manual reruns.

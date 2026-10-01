@@ -1959,12 +1959,12 @@ test_serial_family_shares_timeout_budget() {
   printf '#!/bin/bash\nsleep 600\n' >"$tmp/tests/fm-backend-herdr-presentation-e2e.test.sh"
   began=$SECONDS
   set +e
-  FM_TEST_STEP_BUDGET_SECS=5 "$runner" --family real-herdr-gated \
+  FM_TEST_STEP_BUDGET_SECS=15 "$runner" --family real-herdr-gated \
     --per-script-timeout-secs auto --json "$tmp/result.json" >"$tmp/out" 2>&1
   rc=$?
   set -e
   ended=$SECONDS
-  [ "$rc" -eq 1 ] && [ "$((ended - began))" -lt 10 ] \
+  [ "$rc" -eq 1 ] && [ "$((ended - began))" -lt 25 ] \
     || fail "serial family outran shared budget: $(cat "$tmp/out")"
   python3 - "$tmp/result.json" <<'PY' || fail "serial family did not record its remaining-time timeout"
 import json, sys
@@ -1972,7 +1972,7 @@ by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
 assert by['tests/fm-backend-herdr-focus-flash-e2e.test.sh']['exit'] == 0
 hang = by['tests/fm-backend-herdr-presentation-e2e.test.sh']
 assert hang['timed_out'] and hang['exit'] == 124
-assert 0 < hang['timeout_secs'] <= 3
+assert 0 < hang['timeout_secs'] <= 13
 PY
   rm -rf "$tmp"
   pass "serial family bounds a hang by the remaining shared step budget"
