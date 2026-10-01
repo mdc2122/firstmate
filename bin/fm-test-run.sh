@@ -2447,10 +2447,10 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     local remaining
     remaining=$(( (RUN_STARTED_MS + STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
     if [ "$remaining" -le 0 ]; then
-      printf 'not ok - timed out: %s exhausted the shared step budget before starting\n' "$script" >"$out"
-      printf '1\n' >"$out.timeout"
+      printf 'not ok - not started: %s exhausted the shared step budget before starting (infrastructure failure)\n' "$script" >"$out"
+      rm -f "$out.process" "$out.process.exit" "$out.timeout"
       [ "$stream" -eq 1 ] && cat "$out"
-      return 124
+      return 125
     fi
     if [ "$bound" -eq 0 ] || [ "$bound" -gt "$remaining" ]; then
       bound=$remaining

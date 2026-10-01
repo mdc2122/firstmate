@@ -1,0 +1,570 @@
+﻿2026-10-01T03:39:37.5395907Z Current runner version: '2.337.0'
+2026-10-01T03:39:37.5421418Z ##[group]Runner Image Provisioner
+2026-10-01T03:39:37.5422290Z Hosted Compute Agent
+2026-10-01T03:39:37.5422884Z Version: 20260828.587
+2026-10-01T03:39:37.5423690Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-10-01T03:39:37.5424429Z Build Date: 2026-08-28T16:44:25Z
+2026-10-01T03:39:37.5425158Z Worker ID: {87789db8-f3a5-4d73-a5b5-a98946d7c432}
+2026-10-01T03:39:37.5425914Z Azure Region: westcentralus
+2026-10-01T03:39:37.5426505Z ##[endgroup]
+2026-10-01T03:39:37.5428869Z ##[group]Operating System
+2026-10-01T03:39:37.5429539Z Ubuntu
+2026-10-01T03:39:37.5430131Z 24.04.5
+2026-10-01T03:39:37.5430655Z LTS
+2026-10-01T03:39:37.5431161Z ##[endgroup]
+2026-10-01T03:39:37.5431830Z ##[group]Runner Image
+2026-10-01T03:39:37.5432423Z Image: ubuntu-24.04
+2026-10-01T03:39:37.5433067Z Version: 20260920.314.1
+2026-10-01T03:39:37.5434351Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260920.314/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-01T03:39:37.5436014Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260920.314
+2026-10-01T03:39:37.5437052Z ##[endgroup]
+2026-10-01T03:39:37.5438401Z ##[group]GITHUB_TOKEN Permissions
+2026-10-01T03:39:37.5440583Z Contents: read
+2026-10-01T03:39:37.5441270Z Metadata: read
+2026-10-01T03:39:37.5441895Z ##[endgroup]
+2026-10-01T03:39:37.5443949Z Secret source: Actions
+2026-10-01T03:39:37.5445013Z Cache mode: write
+2026-10-01T03:39:37.5445717Z Prepare workflow directory
+2026-10-01T03:39:37.5839148Z Prepare all required actions
+2026-10-01T03:39:37.5887448Z Getting action download info
+2026-10-01T03:39:37.8965572Z Download action repository 'actions/checkout@v6' (SHA:d23441a48e516b6c34aea4fa41551a30e30af803)
+2026-10-01T03:39:37.9939398Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-01T03:39:38.1959577Z Complete job name: Behavior portable parallel 1
+2026-10-01T03:39:38.2756283Z ##[group]Run actions/checkout@v6
+2026-10-01T03:39:38.2757400Z with:
+2026-10-01T03:39:38.2757849Z   fetch-depth: 0
+2026-10-01T03:39:38.2758320Z   repository: mdc2122/firstmate
+2026-10-01T03:39:38.2762066Z   token: ***
+2026-10-01T03:39:38.2762506Z   ssh-strict: true
+2026-10-01T03:39:38.2762939Z   ssh-user: git
+2026-10-01T03:39:38.2763379Z   persist-credentials: true
+2026-10-01T03:39:38.2763864Z   clean: true
+2026-10-01T03:39:38.2764309Z   sparse-checkout-cone-mode: true
+2026-10-01T03:39:38.2764833Z   fetch-tags: false
+2026-10-01T03:39:38.2765278Z   show-progress: true
+2026-10-01T03:39:38.2765725Z   lfs: false
+2026-10-01T03:39:38.2766132Z   submodules: false
+2026-10-01T03:39:38.2766576Z   set-safe-directory: true
+2026-10-01T03:39:38.2767079Z   allow-unsafe-pr-checkout: false
+2026-10-01T03:39:38.2768090Z ##[endgroup]
+2026-10-01T03:39:38.3795210Z Syncing repository: mdc2122/firstmate
+2026-10-01T03:39:38.3798083Z ##[group]Getting Git version info
+2026-10-01T03:39:38.3799414Z Working directory is '/home/runner/work/firstmate/firstmate'
+2026-10-01T03:39:38.3801082Z [command]/usr/bin/git version
+2026-10-01T03:39:38.3886560Z git version 2.55.0
+2026-10-01T03:39:38.3911724Z ##[endgroup]
+2026-10-01T03:39:38.3928173Z Temporarily overriding HOME='/home/runner/work/_temp/105b5389-737b-41d4-a059-ebaaa37f57ff' before making global git config changes
+2026-10-01T03:39:38.3930546Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-01T03:39:38.3933440Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/firstmate/firstmate
+2026-10-01T03:39:38.3990237Z Deleting the contents of '/home/runner/work/firstmate/firstmate'
+2026-10-01T03:39:38.3995178Z ##[group]Determining repository object format
+2026-10-01T03:39:38.3997704Z ##[endgroup]
+2026-10-01T03:39:38.3999010Z ##[group]Initializing the repository
+2026-10-01T03:39:38.4002352Z [command]/usr/bin/git init /home/runner/work/firstmate/firstmate
+2026-10-01T03:39:38.4138869Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-01T03:39:38.4141062Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-01T03:39:38.4142681Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-01T03:39:38.4144076Z hint: call:
+2026-10-01T03:39:38.4155646Z hint:
+2026-10-01T03:39:38.4158676Z hint: 	git config --global init.defaultBranch <name>
+2026-10-01T03:39:38.4159388Z hint:
+2026-10-01T03:39:38.4159975Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-01T03:39:38.4160910Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-01T03:39:38.4162210Z hint:
+2026-10-01T03:39:38.4162955Z hint: 	git branch -m <name>
+2026-10-01T03:39:38.4163717Z hint:
+2026-10-01T03:39:38.4164720Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-01T03:39:38.4166612Z Initialized empty Git repository in /home/runner/work/firstmate/firstmate/.git/
+2026-10-01T03:39:38.4170594Z [command]/usr/bin/git remote add origin https://github.com/mdc2122/firstmate
+2026-10-01T03:39:38.4215043Z ##[endgroup]
+2026-10-01T03:39:38.4216349Z ##[group]Disabling automatic garbage collection
+2026-10-01T03:39:38.4221133Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-01T03:39:38.4261758Z ##[endgroup]
+2026-10-01T03:39:38.4264099Z ##[group]Setting up auth
+2026-10-01T03:39:38.4265690Z Removing SSH command configuration
+2026-10-01T03:39:38.4271705Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-01T03:39:38.4309318Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-01T03:39:38.4731313Z Removing HTTP extra header
+2026-10-01T03:39:38.4733024Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-01T03:39:38.4774851Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-01T03:39:38.4998484Z Removing includeIf entries pointing to credentials config files
+2026-10-01T03:39:38.5006952Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-01T03:39:38.5046872Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-01T03:39:38.5296716Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-01T03:39:38.5340688Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/firstmate/firstmate/.git.path /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:39:38.5374243Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:39:38.5410730Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:39:38.5444141Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:39:38.5475288Z ##[endgroup]
+2026-10-01T03:39:38.5476064Z ##[group]Fetching the repository
+2026-10-01T03:39:38.5484489Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +3c4ca5e57a3dc72f3f4a3deb986a81930911cf37:refs/remotes/pull/21/merge
+2026-10-01T03:39:41.4038577Z From https://github.com/mdc2122/firstmate
+2026-10-01T03:39:41.4040450Z  * [new branch]        archive/yolo-automerge-pre-rebase-69ba8a11 -> origin/archive/yolo-automerge-pre-rebase-69ba8a11
+2026-10-01T03:39:41.4042253Z  * [new branch]        feat/calm-omp-extension-20260915         -> origin/feat/calm-omp-extension-20260915
+2026-10-01T03:39:41.4043559Z  * [new branch]        fix/calm-omp-typed-display               -> origin/fix/calm-omp-typed-display
+2026-10-01T03:39:41.4044900Z  * [new branch]        fix/omp-bun-launcher-detection           -> origin/fix/omp-bun-launcher-detection
+2026-10-01T03:39:41.4046140Z  * [new branch]        fm/afk-pi-wake-bypass-r1                 -> origin/fm/afk-pi-wake-bypass-r1
+2026-10-01T03:39:41.4047624Z  * [new branch]        fm/calm-omp-global-10                    -> origin/fm/calm-omp-global-10
+2026-10-01T03:39:41.4049339Z  * [new branch]        fm/calm-omp-toggle-fix                   -> origin/fm/calm-omp-toggle-fix
+2026-10-01T03:39:41.4050546Z  * [new branch]        fm/ci-per-test-timeouts                  -> origin/fm/ci-per-test-timeouts
+2026-10-01T03:39:41.4051735Z  * [new branch]        fm/composer-clobber-12                   -> origin/fm/composer-clobber-12
+2026-10-01T03:39:41.4052945Z  * [new branch]        fm/contrib-converge-reraise              -> origin/fm/contrib-converge-reraise
+2026-10-01T03:39:41.4054172Z  * [new branch]        fm/contrib-poll-retry-02                 -> origin/fm/contrib-poll-retry-02
+2026-10-01T03:39:41.4055460Z  * [new branch]        fm/contributions-terminal-poll           -> origin/fm/contributions-terminal-poll
+2026-10-01T03:39:41.4057753Z  * [new branch]        fm/firstmate-gate-opus-restore           -> origin/fm/firstmate-gate-opus-restore
+2026-10-01T03:39:41.4060078Z  * [new branch]        fm/firstmate-pi-seat-policy              -> origin/fm/firstmate-pi-seat-policy
+2026-10-01T03:39:41.4062827Z  * [new branch]        fm/fm-actionable-update-escalation-misclassification-r1 -> origin/fm/fm-actionable-update-escalation-misclassification-r1
+2026-10-01T03:39:41.4066507Z  * [new branch]        fm/fm-actionable-update-escalation-misclassification-r3 -> origin/fm/fm-actionable-update-escalation-misclassification-r3
+2026-10-01T03:39:41.4069719Z  * [new branch]        fm/fm-afk-pi-branch-both-postures-r1     -> origin/fm/fm-afk-pi-branch-both-postures-r1
+2026-10-01T03:39:41.4070999Z  * [new branch]        fm/fm-audit-fixes-2-4                    -> origin/fm/fm-audit-fixes-2-4
+2026-10-01T03:39:41.4072451Z  * [new branch]        fm/fm-branch-note-sailboat-r2            -> origin/fm/fm-branch-note-sailboat-r2
+2026-10-01T03:39:41.4074031Z  * [new branch]        fm/fm-ci-lint-runner-oome                -> origin/fm/fm-ci-lint-runner-oome
+2026-10-01T03:39:41.4075863Z  * [new branch]        fm/fm-composer-thin-adapter-refactor-r1  -> origin/fm/fm-composer-thin-adapter-refactor-r1
+2026-10-01T03:39:41.4078176Z  * [new branch]        fm/fm-documentation-audience-cleanup-r1  -> origin/fm/fm-documentation-audience-cleanup-r1
+2026-10-01T03:39:41.4079928Z  * [new branch]        fm/fm-flaky-serial-followup              -> origin/fm/fm-flaky-serial-followup
+2026-10-01T03:39:41.4081927Z  * [new branch]        fm/fm-flaky-serial-shards                -> origin/fm/fm-flaky-serial-shards
+2026-10-01T03:39:41.4083911Z  * [new branch]        fm/fm-herdr-contiguity-resume            -> origin/fm/fm-herdr-contiguity-resume
+2026-10-01T03:39:41.4085711Z  * [new branch]        fm/fm-herdr-recovery-classifier-stale-agent-r1 -> origin/fm/fm-herdr-recovery-classifier-stale-agent-r1
+2026-10-01T03:39:41.4087814Z  * [new branch]        fm/fm-needs-decision-main-only-r1        -> origin/fm/fm-needs-decision-main-only-r1
+2026-10-01T03:39:41.4089429Z  * [new branch]        fm/fm-needs-decision-whole-batch-r1      -> origin/fm/fm-needs-decision-whole-batch-r1
+2026-10-01T03:39:41.4091129Z  * [new branch]        fm/fm-nm-evidence-store-firstmate-r1     -> origin/fm/fm-nm-evidence-store-firstmate-r1
+2026-10-01T03:39:41.4092868Z  * [new branch]        fm/fm-per-task-delivery-override-r1      -> origin/fm/fm-per-task-delivery-override-r1
+2026-10-01T03:39:41.4094543Z  * [new branch]        fm/fm-public-stow-readbeforewrite-port-r1 -> origin/fm/fm-public-stow-readbeforewrite-port-r1
+2026-10-01T03:39:41.4096334Z  * [new branch]        fm/fm-safe-auto-reboot-simple-r1         -> origin/fm/fm-safe-auto-reboot-simple-r1
+2026-10-01T03:39:41.4098279Z  * [new branch]        fm/fm-secondmate-creation-record-intake-r1 -> origin/fm/fm-secondmate-creation-record-intake-r1
+2026-10-01T03:39:41.4100083Z  * [new branch]        fm/fm-secondmate-parent-channel-structural-r1 -> origin/fm/fm-secondmate-parent-channel-structural-r1
+2026-10-01T03:39:41.4101911Z  * [new branch]        fm/fm-secondmate-record-atomic-transitions-r1 -> origin/fm/fm-secondmate-record-atomic-transitions-r1
+2026-10-01T03:39:41.4103562Z  * [new branch]        fm/fm-sessionstart-network-free-r1       -> origin/fm/fm-sessionstart-network-free-r1
+2026-10-01T03:39:41.4105018Z  * [new branch]        fm/fm-shared-test-fixtures-r1            -> origin/fm/fm-shared-test-fixtures-r1
+2026-10-01T03:39:41.4106438Z  * [new branch]        fm/fm-skill-frontmatter-desc-r1          -> origin/fm/fm-skill-frontmatter-desc-r1
+2026-10-01T03:39:41.4108282Z  * [new branch]        fm/fm-supervision-pr-url-hallucination-r1 -> origin/fm/fm-supervision-pr-url-hallucination-r1
+2026-10-01T03:39:41.4109914Z  * [new branch]        fm/fm-supervision-rearm-resurface-r1     -> origin/fm/fm-supervision-rearm-resurface-r1
+2026-10-01T03:39:41.4111658Z  * [new branch]        fm/fm-supervision-refused-ack-loop-r1    -> origin/fm/fm-supervision-refused-ack-loop-r1
+2026-10-01T03:39:41.4113345Z  * [new branch]        fm/fm-teardown-closes-captain-held-scout-r1 -> origin/fm/fm-teardown-closes-captain-held-scout-r1
+2026-10-01T03:39:41.4114969Z  * [new branch]        fm/fm-teardown-slot-collision-fix-r1     -> origin/fm/fm-teardown-slot-collision-fix-r1
+2026-10-01T03:39:41.4116464Z  * [new branch]        fm/fm-watcher-flap-autoarm-fix-r2        -> origin/fm/fm-watcher-flap-autoarm-fix-r2
+2026-10-01T03:39:41.4118576Z  * [new branch]        fm/fm-watcher-hardening-r1               -> origin/fm/fm-watcher-hardening-r1
+2026-10-01T03:39:41.4119944Z  * [new branch]        fm/fm-watcher-hardening-r2               -> origin/fm/fm-watcher-hardening-r2
+2026-10-01T03:39:41.4121396Z  * [new branch]        fm/fm-watcher-hardening-r3               -> origin/fm/fm-watcher-hardening-r3
+2026-10-01T03:39:41.4122602Z  * [new branch]        fm/fork-rebase-01                        -> origin/fm/fork-rebase-01
+2026-10-01T03:39:41.4125294Z  * [new branch]        fm/herdr-workspace-contiguity-maintenance -> origin/fm/herdr-workspace-contiguity-maintenance
+2026-10-01T03:39:41.4128390Z  * [new branch]        fm/muse-clobber-upstream-01              -> origin/fm/muse-clobber-upstream-01
+2026-10-01T03:39:41.4130738Z  * [new branch]        fm/muse-never-clear-01                   -> origin/fm/muse-never-clear-01
+2026-10-01T03:39:41.4132905Z  * [new branch]        fm/nm-fix-agent-model-09                 -> origin/fm/nm-fix-agent-model-09
+2026-10-01T03:39:41.4135638Z  * [new branch]        fm/nm-required-exempt-release-please-r1  -> origin/fm/nm-required-exempt-release-please-r1
+2026-10-01T03:39:41.4138657Z  * [new branch]        fm/omp-watch-session-generation          -> origin/fm/omp-watch-session-generation
+2026-10-01T03:39:41.4140989Z  * [new branch]        fm/orca-cleanup-identity-06              -> origin/fm/orca-cleanup-identity-06
+2026-10-01T03:39:41.4143875Z  * [new branch]        fm/reconcile-inactive-crew-investigate-s1 -> origin/fm/reconcile-inactive-crew-investigate-s1
+2026-10-01T03:39:41.4146396Z  * [new branch]        fm/remote-omp-verify-07                  -> origin/fm/remote-omp-verify-07
+2026-10-01T03:39:41.4148602Z  * [new branch]        fm/remote-omp-verify-07-forkbase         -> origin/fm/remote-omp-verify-07-forkbase
+2026-10-01T03:39:41.4150125Z  * [new branch]        fm/remote-send-confirm-readback-fix-r1   -> origin/fm/remote-send-confirm-readback-fix-r1
+2026-10-01T03:39:41.4151652Z  * [new branch]        fm/remote-send-delivery-delta-r1         -> origin/fm/remote-send-delivery-delta-r1
+2026-10-01T03:39:41.4153186Z  * [new branch]        fm/secondmate-autonomous-supervision-s7  -> origin/fm/secondmate-autonomous-supervision-s7
+2026-10-01T03:39:41.4155215Z  * [new branch]        fm/upstream-baseline-8d2ee291            -> origin/fm/upstream-baseline-8d2ee291
+2026-10-01T03:39:41.4157552Z  * [new branch]        fm/upstream-sync-01                      -> origin/fm/upstream-sync-01
+2026-10-01T03:39:41.4158798Z  * [new branch]        fm/watcher-arm-fix-01                    -> origin/fm/watcher-arm-fix-01
+2026-10-01T03:39:41.4160132Z  * [new branch]        fm/watcher-stale-closed-terminal         -> origin/fm/watcher-stale-closed-terminal
+2026-10-01T03:39:41.4161432Z  * [new branch]        fm/yolo-automerge                        -> origin/fm/yolo-automerge
+2026-10-01T03:39:41.4162599Z  * [new branch]        fm/yolo-automerge-v2                     -> origin/fm/yolo-automerge-v2
+2026-10-01T03:39:41.4163660Z  * [new branch]        main                                     -> origin/main
+2026-10-01T03:39:41.4164700Z  * [new branch]        no-mistakes/evidence                     -> origin/no-mistakes/evidence
+2026-10-01T03:39:41.4165976Z  * [new branch]        proto/herdr-child-workspaces             -> origin/proto/herdr-child-workspaces
+2026-10-01T03:39:41.4167153Z  * [new ref]           3c4ca5e57a3dc72f3f4a3deb986a81930911cf37 -> pull/21/merge
+2026-10-01T03:39:41.4169455Z ##[endgroup]
+2026-10-01T03:39:41.4170395Z ##[group]Determining the checkout info
+2026-10-01T03:39:41.4171410Z ##[endgroup]
+2026-10-01T03:39:41.4252012Z [command]/usr/bin/git sparse-checkout disable
+2026-10-01T03:39:41.4254955Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-01T03:39:41.4257128Z ##[group]Checking out the ref
+2026-10-01T03:39:41.4261208Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/21/merge
+2026-10-01T03:39:41.5198840Z Note: switching to 'refs/remotes/pull/21/merge'.
+2026-10-01T03:39:41.5200040Z 
+2026-10-01T03:39:41.5201211Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-01T03:39:41.5203132Z changes and commit them, and you can discard any commits you make in this
+2026-10-01T03:39:41.5204950Z state without impacting any branches by switching back to a branch.
+2026-10-01T03:39:41.5206025Z 
+2026-10-01T03:39:41.5206728Z If you want to create a new branch to retain commits you create, you may
+2026-10-01T03:39:41.5208693Z do so (now or later) by using -c with the switch command. Example:
+2026-10-01T03:39:41.5209674Z 
+2026-10-01T03:39:41.5210046Z   git switch -c <new-branch-name>
+2026-10-01T03:39:41.5210666Z 
+2026-10-01T03:39:41.5211039Z Or undo this operation with:
+2026-10-01T03:39:41.5211643Z 
+2026-10-01T03:39:41.5211956Z   git switch -
+2026-10-01T03:39:41.5212391Z 
+2026-10-01T03:39:41.5213160Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-01T03:39:41.5214268Z 
+2026-10-01T03:39:41.5215631Z HEAD is now at 3c4ca5e5 Merge 9a4ac89aacadb98f99d39810c634962c09c46d67 into 4cf7637bf3e284549c424af2e09bb63874c02520
+2026-10-01T03:39:41.5225923Z ##[endgroup]
+2026-10-01T03:39:41.5277680Z [command]/usr/bin/git log -1 --format=%H
+2026-10-01T03:39:41.5308504Z 3c4ca5e57a3dc72f3f4a3deb986a81930911cf37
+2026-10-01T03:39:41.5542365Z ##[group]Run set -eu
+2026-10-01T03:39:41.5543062Z [36;1mset -eu[0m
+2026-10-01T03:39:41.5543749Z [36;1mbin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"[0m
+2026-10-01T03:39:41.5544702Z [36;1mecho "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"[0m
+2026-10-01T03:39:41.5851275Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:41.5852017Z ##[endgroup]
+2026-10-01T03:39:42.2103752Z ShellCheck - shell script analysis tool
+2026-10-01T03:39:42.2106785Z version: 0.11.0
+2026-10-01T03:39:42.2108759Z license: GNU General Public License, version 3
+2026-10-01T03:39:42.2110708Z website: https://www.shellcheck.net
+2026-10-01T03:39:42.2258353Z ##[group]Run set -eu
+2026-10-01T03:39:42.2259555Z [36;1mset -eu[0m
+2026-10-01T03:39:42.2260870Z [36;1mbin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"[0m
+2026-10-01T03:39:42.2262585Z [36;1mecho "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"[0m
+2026-10-01T03:39:42.2331704Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:42.2332892Z ##[endgroup]
+2026-10-01T03:39:42.6644765Z 1.7.12
+2026-10-01T03:39:42.6646410Z installed by downloading from release page
+2026-10-01T03:39:42.6648888Z built with go1.26.1 compiler for linux/amd64
+2026-10-01T03:39:42.6829699Z ##[group]Run set -eu
+2026-10-01T03:39:42.6830726Z [36;1mset -eu[0m
+2026-10-01T03:39:42.6831722Z [36;1mnpm install -g tasks-axi[0m
+2026-10-01T03:39:42.6832823Z [36;1mtasks-axi --version[0m
+2026-10-01T03:39:42.6902149Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:42.6903202Z ##[endgroup]
+2026-10-01T03:39:44.3614474Z 
+2026-10-01T03:39:44.3614943Z added 3 packages in 1s
+2026-10-01T03:39:44.4308718Z 0.2.6
+2026-10-01T03:39:44.4386047Z ##[group]Run set -eu
+2026-10-01T03:39:44.4386357Z [36;1mset -eu[0m
+2026-10-01T03:39:44.4386597Z [36;1mnpm ci --prefix .opencode/plugins[0m
+2026-10-01T03:39:44.4387045Z [36;1mnpm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent[0m
+2026-10-01T03:39:44.4388134Z [36;1mecho "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"[0m
+2026-10-01T03:39:44.4388871Z [36;1mecho "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"[0m
+2026-10-01T03:39:44.4451733Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:44.4452030Z ##[endgroup]
+2026-10-01T03:39:46.9103294Z npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-10-01T03:39:50.7740677Z 
+2026-10-01T03:39:50.7741232Z added 122 packages, and audited 123 packages in 6s
+2026-10-01T03:39:50.7741610Z 
+2026-10-01T03:39:50.7741992Z 9 packages are looking for funding
+2026-10-01T03:39:50.7742955Z   run `npm fund` for details
+2026-10-01T03:39:50.7760055Z 
+2026-10-01T03:39:50.7760642Z 1 high severity vulnerability
+2026-10-01T03:39:50.7760989Z 
+2026-10-01T03:39:50.7761198Z To address all issues, run:
+2026-10-01T03:39:50.7761643Z   npm audit fix
+2026-10-01T03:39:50.7761878Z 
+2026-10-01T03:39:50.7762085Z Run `npm audit` for details.
+2026-10-01T03:39:51.0768684Z plugins@ /home/runner/work/firstmate/firstmate/.opencode/plugins
+2026-10-01T03:39:51.0769932Z └── @earendil-works/pi-coding-agent@0.99.1
+2026-10-01T03:39:51.0770403Z 
+2026-10-01T03:39:51.0912570Z ##[group]Run set -eu
+2026-10-01T03:39:51.0912879Z [36;1mset -eu[0m
+2026-10-01T03:39:51.0913128Z [36;1mmkdir -p "$RUNNER_TEMP/fm-test"[0m
+2026-10-01T03:39:51.0913558Z [36;1m# Per-script bounds and the infra-flake retry list are owned by[0m
+2026-10-01T03:39:51.0914069Z [36;1m# bin/fm-test-run.sh --help; every behavior lane passes both flags.[0m
+2026-10-01T03:39:51.0914546Z [36;1mbin/fm-test-run.sh --lane portable-parallel-1 \[0m
+2026-10-01T03:39:51.0914973Z [36;1m  --per-script-timeout-secs auto --retry-infra-flakes \[0m
+2026-10-01T03:39:51.0915470Z [36;1m  --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \[0m
+2026-10-01T03:39:51.0916026Z [36;1m  --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-1.json"[0m
+2026-10-01T03:39:51.0980647Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:51.0980924Z env:
+2026-10-01T03:39:51.0981500Z   FM_PI_PACKAGE_DIR: /home/runner/work/firstmate/firstmate/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent
+2026-10-01T03:39:51.0982096Z   FM_TEST_STEP_BUDGET_SECS: 390
+2026-10-01T03:39:51.0982353Z ##[endgroup]
+2026-10-01T03:39:51.1683011Z FM_TEST_BEGIN 2026-10-01T03:39:51Z tests/fm-lint.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:39:51.2521320Z ok - fm-lint.sh --help reports the complete executable interface
+2026-10-01T03:39:51.2646252Z ok - fm-lint.sh --list-files reports the complete shell inventory
+2026-10-01T03:39:51.4384251Z ok - fm-lint.sh --fast disables ShellCheck extended analysis
+2026-10-01T03:39:51.5011558Z ok - fm-lint.sh keeps full ShellCheck analysis by default in CI
+2026-10-01T03:39:51.5165963Z ok - fm-lint.sh rejects explicit --fast mode in CI
+2026-10-01T03:39:51.5818640Z ok - fm-lint.sh --fast catches an ordinary shell lint defect
+2026-10-01T03:39:51.5819935Z ok - fm-lint.sh pins an explicit ShellCheck version (0.11.0)
+2026-10-01T03:39:51.6494044Z ok - ShellCheck installer retries a transient download failure
+2026-10-01T03:39:51.9528044Z ok - ShellCheck installer selects the official archive, URL, and checksum per OS/arch
+2026-10-01T03:39:51.9908838Z ok - ShellCheck installer rejects a wrong checksum
+2026-10-01T03:39:52.0557681Z ok - ShellCheck installer falls back to shasum -a 256 when sha256sum is absent
+2026-10-01T03:39:52.1104903Z ok - ShellCheck installer prefers sha256sum when both hashers are present
+2026-10-01T03:39:52.1482717Z ok - ShellCheck installer rejects an unsupported OS or architecture
+2026-10-01T03:39:52.1629584Z ok - missing ShellCheck fails closed
+2026-10-01T03:39:52.1808182Z ok - fm-lint.sh refuses to lint under a non-pinned ShellCheck version
+2026-10-01T03:39:52.2452914Z ok - fm-lint.sh catches a real lint defect the old no-op gate passed
+2026-10-01T03:39:53.5014769Z ok - fm-lint.sh rejects direct Beads CLI invocations in firstmate core
+2026-10-01T03:39:53.6094110Z ok - fm-lint.sh enforces backend purity for explicit core paths
+2026-10-01T03:39:53.6738067Z ok - fm-lint.sh ignores ambient ShellCheck options
+2026-10-01T03:39:53.7368194Z ok - fm-lint.sh passes a clean fixture
+2026-10-01T03:39:54.2640386Z ok - jobs=1 and jobs=2 preserve deterministic diagnostics, failures, cleanup bounds, and quiet telemetry
+2026-10-01T03:39:54.4948821Z ok - jobs=1 and jobs=2 stop complete worker trees with and without telemetry
+2026-10-01T03:39:54.6028390Z ok - seeded dispatcher, adapter, production-owner, and test-local diagnostics preserve parity
+2026-10-01T03:39:56.3851782Z ok - fm-lint.sh changed mode lints only the changed canonical file
+2026-10-01T03:39:56.3982476Z ok - fm-lint.sh forces a full lint in CI even when the local diff would be empty
+2026-10-01T03:39:56.4233337Z ok - fm-lint.sh forces a full lint when HEAD is on main
+2026-10-01T03:39:56.4913807Z ok - fm-lint.sh explicit paths bypass changed-file mode selection
+2026-10-01T03:39:58.1689265Z ok - fm-lint.sh exits 0 with a note when the local branch has no changed lint targets
+2026-10-01T03:39:58.1960970Z ok - fm-lint.sh --list-files reports the would-be changed set in changed mode
+2026-10-01T03:39:59.9965289Z ok - fm-lint.sh changed mode drops source following and excludes cross-file codes
+2026-10-01T03:40:01.7140074Z ok - fm-lint.sh changed mode invokes ShellCheck once per root
+2026-10-01T03:40:01.8238851Z ok - fm-lint.sh CI source-following mode invokes ShellCheck once per root
+2026-10-01T03:40:08.5313298Z ok - fm-lint.sh --partition splits the canonical set into complete, disjoint partitions
+2026-10-01T03:40:11.9769305Z ok - fm-lint.sh --partition keeps full source-aware analysis outside CI
+2026-10-01T03:40:12.0421768Z ok - fm-lint.sh CI keeps source following without the local exclusion list
+2026-10-01T03:40:15.5042656Z ok - fm-lint.sh on main keeps source following without the local exclusion list
+2026-10-01T03:40:18.9555323Z ok - fm-lint.sh without a merge-base keeps source following without the local exclusion list
+2026-10-01T03:40:19.0249251Z ok - fm-lint.sh explicit paths keep source following
+2026-10-01T03:40:20.7537683Z ok - fm-lint.sh --fast on a local branch keeps source following
+2026-10-01T03:40:22.5944542Z ok - fm-lint.sh changed mode excludes cross-file codes that explicit paths still report
+2026-10-01T03:43:07.3557165Z ok - local exclusion list covers every no-external-sources ShellCheck code
+2026-10-01T03:43:07.4726080Z FM_TEST_END 2026-10-01T03:43:07Z tests/fm-lint.test.sh exit=0 duration_ms=196296 gate_skip=false
+2026-10-01T03:43:07.4969136Z FM_TEST_BEGIN 2026-10-01T03:43:07Z tests/fm-pr-merge.test.sh family=pr-forge expected_gate_skip=none
+2026-10-01T03:43:09.4322548Z ok - fm-pr-merge reports exact queue retry flags after a zero-exit false success
+2026-10-01T03:43:11.3360130Z ok - fm-pr-merge omits merge-queue retry guidance for a closed GitHub PR
+2026-10-01T03:43:13.2018753Z ok - fm-pr-merge aggregates agreeing merge-queue rules
+2026-10-01T03:43:15.0740459Z ok - fm-pr-merge reports ambiguity for conflicting merge-queue rules
+2026-10-01T03:43:17.1452863Z ok - fm-pr-merge records pr= and pr_head= for a verified GitHub merge
+2026-10-01T03:43:19.2254985Z ok - fm-pr-merge records pr= before the forge call can land the merge
+2026-10-01T03:43:20.9422174Z ok - fm-pr-merge propagates a real merge failure without silently succeeding
+2026-10-01T03:43:22.7975878Z ok - fm-pr-merge refuses a GitHub merge call that leaves the PR open and unqueued
+2026-10-01T03:43:24.6576410Z ok - fm-pr-merge keeps PR bookkeeping when it cannot read a successful merge call's outcome
+2026-10-01T03:43:26.5223676Z ok - fm-pr-merge refuses with the forge's own output quoted apart from its verdict
+2026-10-01T03:43:28.3873901Z ok - fm-pr-merge quotes the forge output when it cannot read the outcome either
+2026-10-01T03:43:30.2700521Z ok - fm-pr-merge does not echo back queue flags the caller already used
+2026-10-01T03:43:32.1521998Z ok - fm-pr-merge still names retry flags when the caller used a different method
+2026-10-01T03:43:33.9996219Z ok - fm-pr-merge names the queue requirement even when its method is unrecognised
+2026-10-01T03:43:35.8527786Z ok - fm-pr-merge distinguishes unreadable branch rules from a base with no merge queue
+2026-10-01T03:43:37.7115106Z ok - fm-pr-merge reads a plan-gated 403 on branch rules as no merge queue, not unreadable
+2026-10-01T03:43:39.5631581Z ok - fm-pr-merge says nothing about a merge queue when the base branch has no queue rule
+2026-10-01T03:43:41.4371228Z ok - fm-pr-merge accepts only a proved merge from the gh-axi fallback
+2026-10-01T03:43:45.1334983Z ok - fm-pr-merge explains an armed auto-merge that landed nothing on a queue-less base
+2026-10-01T03:43:46.8534638Z ok - fm-pr-merge never reports auto-merge as armed when the merge command failed
+2026-10-01T03:43:48.5863768Z ok - fm-pr-merge claims no acceptance for a failed merge command carrying queue flags
+2026-10-01T03:43:50.6359584Z ok - fm-pr-merge falls back to the gh-axi view when gh's read fails
+2026-10-01T03:43:52.3493695Z ok - fm-pr-merge names a landed state hiding behind a failed GitHub merge command
+2026-10-01T03:43:56.0445237Z ok - fm-pr-merge refuses a GitHub merge when gh is missing, before recording
+2026-10-01T03:43:59.7589157Z ok - fm-pr-merge refuses a GitHub merge when gh is missing rather than merging blind
+2026-10-01T03:44:01.7909759Z ok - fm-pr-merge verifies a genuinely merged GitHub pull request
+2026-10-01T03:44:02.6822237Z ok - fm-pr-merge refuses to claim a merge when poll recording fails
+2026-10-01T03:44:04.4617174Z ok - fm-pr-merge accepts and accurately reports a GitHub merge-queue entry
+2026-10-01T03:44:06.1281842Z ok - fm-pr-merge explains how to retry with the required GitHub merge queue method
+2026-10-01T03:44:08.1334585Z ok - fm-pr-merge refuses branch deletion unless --attended-override is passed
+2026-10-01T03:44:08.2070142Z ok - fm-pr-merge refuses before merging when task meta is missing
+2026-10-01T03:44:08.2768115Z ok - fm-pr-merge refuses malformed PR URLs before calling gh-axi
+2026-10-01T03:44:08.3455066Z ok - fm-pr-merge refuses unsafe PR URL segments before recording state
+2026-10-01T03:44:08.4137817Z ok - fm-pr-merge refuses repo override args before recording state
+2026-10-01T03:44:10.6148608Z ok - fm-pr-merge refuses a bundled short-option repo override and refuses -d unless attended
+2026-10-01T03:44:12.6030448Z ok - fm-pr-merge does not add default --squash when the caller passes an explicit merge method
+2026-10-01T03:44:14.5972777Z ok - fm-pr-merge respects --method=<value> as an explicit merge method
+2026-10-01T03:44:16.5783854Z ok - fm-pr-merge parses a GitHub PR URL into gh-axi number and --repo arguments
+2026-10-01T03:44:16.6425737Z ok - fm-pr-merge refuses a caller --sha on GitHub because the head comes from the live read
+2026-10-01T03:44:18.7046225Z ok - fm-pr-merge merges a GitLab merge request through glab instead of refusing it
+2026-10-01T03:44:20.7821322Z ok - fm-pr-merge takes the GitLab instance from the URL rather than assuming one
+2026-10-01T03:44:22.8323085Z ok - fm-pr-merge imposes no merge method on GitLab, leaving the project's own one
+2026-10-01T03:44:24.9730510Z ok - fm-pr-merge refuses GitLab source-branch deletion unless --attended-override is passed
+2026-10-01T03:44:26.7013708Z ok - fm-pr-merge propagates a real glab merge failure without silently succeeding
+2026-10-01T03:44:38.5120002Z ok - fm-pr-merge refuses on each GitLab pre-merge condition independently
+2026-10-01T03:44:40.1792739Z ok - fm-pr-merge reports every failing GitLab condition, not only the first
+2026-10-01T03:44:42.1820465Z ok - fm-pr-merge reports a stale recorded head and verifies the live one
+2026-10-01T03:44:47.0671057Z ok - fm-pr-merge refuses an unreadable GitLab merge request state rather than merging blind
+2026-10-01T03:44:48.7351877Z ok - fm-pr-merge refuses a GitLab head commit it cannot validate
+2026-10-01T03:44:56.0771438Z ok - fm-pr-merge refuses before recording anything when glab or jq is absent
+2026-10-01T03:44:56.1515049Z ok - fm-pr-merge refuses a GitLab head override before recording state
+2026-10-01T03:44:59.7526156Z ok - a merge a secondmate home performs itself is reported upward exactly once
+2026-10-01T03:45:01.6268594Z ok - a locally routed secondmate home reports the landed PR into its parent's own channel
+2026-10-01T03:45:03.5293270Z ok - a landed GitLab merge request is reported upward on the same channel
+2026-10-01T03:45:05.3520404Z ok - a queued GitLab merge stays silent and leaves confirmation to the armed poll
+2026-10-01T03:45:07.0160177Z ok - a refused or failed merge reports no outcome
+2026-10-01T03:45:08.6885330Z ok - a GitLab merge refused before the forge call reports no outcome
+2026-10-01T03:45:10.7266159Z ok - a merge a main home performs itself leaves one durable wake naming the PR
+2026-10-01T03:45:12.5132600Z ok - a queued GitHub merge stays silent and leaves confirmation to the armed poll
+2026-10-01T03:45:16.8029809Z ok - distinct merged PRs for one task retain distinct captain-facing wakes
+2026-10-01T03:45:20.5911394Z ok - an uncommitted marker retry preserves at least one durable outcome
+2026-10-01T03:45:22.4213579Z ok - a secondmate home that cannot report upward says so instead of merging in silence
+2026-10-01T03:45:24.0483626Z ok - fm-pr-merge proceeds when the home carries no backlog at all
+2026-10-01T03:45:25.6439443Z ok - fm-pr-merge refuses when the backlog exists but cannot be read
+2026-10-01T03:45:26.9026720Z ok - fm-pr-merge refuses when its configured backend cannot be read
+2026-10-01T03:45:28.1553402Z ok - fm-pr-merge refuses when its user backend configuration cannot be read
+2026-10-01T03:45:29.3927681Z ok - fm-pr-merge refuses when its user backend configuration directory cannot be traversed
+2026-10-01T03:45:31.0312122Z ok - fm-pr-merge proceeds once when its user configuration directory and backlog are genuinely absent
+2026-10-01T03:45:32.6957581Z ok - fm-pr-merge honors a backend override over an unreadable user configuration
+2026-10-01T03:45:36.3585788Z ok - fm-pr-merge refuses red GitHub checks and waives only a named --allow-red check
+2026-10-01T03:45:38.3884223Z ok - fm-pr-merge merges when a failed check run was replaced by a passing re-run
+2026-10-01T03:45:40.0527517Z ok - fm-pr-merge never lets a check run supersede a legacy status context
+2026-10-01T03:45:41.7021256Z ok - fm-pr-merge still refuses when a check's current run failed after an earlier pass
+2026-10-01T03:45:43.3774644Z ok - fm-pr-merge uses start order when the old success finishes last
+2026-10-01T03:45:45.4082244Z ok - fm-pr-merge supersedes an old cancellation that finishes last
+2026-10-01T03:45:48.6943845Z ok - fm-pr-merge keeps a check red while its re-run is still in flight
+2026-10-01T03:45:50.2852104Z ok - fm-pr-merge never lets one check's pass clear another check's failure
+2026-10-01T03:45:56.7272605Z ok - fm-pr-merge clears a failure only on a proven later pass of the same check
+2026-10-01T03:46:00.3471659Z ok - fm-pr-merge keeps --allow-red scoped to its named check beside a superseded failure
+2026-10-01T03:46:02.7317475Z ok - fm-pr-merge rechecks away presence before an attended red merge
+2026-10-01T03:46:02.8639907Z ok - fm-pr-merge accepts exactly one separately named red-check waiver
+2026-10-01T03:46:08.4854168Z ok - away merges require yolo or a grant, and --attended-override does not skip that
+2026-10-01T03:46:15.8682918Z ok - away posture permits immediate merges but refuses every asynchronous path
+2026-10-01T03:46:18.1159503Z ok - away merge proceeds on a plan-gated 403 because that repository cannot have a merge queue
+2026-10-01T03:46:20.2718919Z ok - a grant does not bypass red checks, and a recorded pr= must match the URL
+2026-10-01T03:46:20.4609778Z ok - an unreadable away-posture record refuses the merge instead of skipping the grant
+2026-10-01T03:46:20.5278855Z not ok - timed out: tests/fm-pr-merge.test.sh exceeded its per-script bound of 193s and was terminated
+2026-10-01T03:46:20.5349820Z FM_TEST_RETRY 2026-10-01T03:46:20Z tests/fm-pr-merge.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:20.5571259Z not ok - timed out: tests/fm-pr-merge.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.5880113Z ##[error]tests/fm-pr-merge.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:20.5889785Z fm-test-run: retried infra flake: tests/fm-pr-merge.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:20.5892312Z ##[warning]tests/fm-pr-merge.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:20.5893681Z FM_TEST_END 2026-10-01T03:46:20Z tests/fm-pr-merge.test.sh exit=124 duration_ms=193080 gate_skip=false
+2026-10-01T03:46:20.6118378Z FM_TEST_BEGIN 2026-10-01T03:46:20Z tests/fm-test-run.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:20.6344971Z not ok - timed out: tests/fm-test-run.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.6401465Z FM_TEST_RETRY 2026-10-01T03:46:20Z tests/fm-test-run.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:20.6625645Z not ok - timed out: tests/fm-test-run.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.6898849Z ##[error]tests/fm-test-run.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:20.6901652Z fm-test-run: retried infra flake: tests/fm-test-run.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:20.6905049Z ##[warning]tests/fm-test-run.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:20.6906914Z FM_TEST_END 2026-10-01T03:46:20Z tests/fm-test-run.test.sh exit=124 duration_ms=70 gate_skip=false
+2026-10-01T03:46:20.7171202Z FM_TEST_BEGIN 2026-10-01T03:46:20Z tests/fm-cd-pretool-check.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:20.7398832Z not ok - timed out: tests/fm-cd-pretool-check.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.7454668Z FM_TEST_RETRY 2026-10-01T03:46:20Z tests/fm-cd-pretool-check.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:20.7662815Z not ok - timed out: tests/fm-cd-pretool-check.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.7943414Z ##[error]tests/fm-cd-pretool-check.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:20.7944978Z fm-test-run: retried infra flake: tests/fm-cd-pretool-check.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:20.7946711Z ##[warning]tests/fm-cd-pretool-check.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:20.7948964Z FM_TEST_END 2026-10-01T03:46:20Z tests/fm-cd-pretool-check.test.sh exit=124 duration_ms=69 gate_skip=false
+2026-10-01T03:46:20.8200971Z FM_TEST_BEGIN 2026-10-01T03:46:20Z tests/fm-pi-primary-types.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:20.8426527Z not ok - timed out: tests/fm-pi-primary-types.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.8481033Z FM_TEST_RETRY 2026-10-01T03:46:20Z tests/fm-pi-primary-types.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:20.8691200Z not ok - timed out: tests/fm-pi-primary-types.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.8966073Z ##[error]tests/fm-pi-primary-types.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:20.8970765Z ##[warning]tests/fm-pi-primary-types.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:20.8973690Z fm-test-run: retried infra flake: tests/fm-pi-primary-types.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:20.8975008Z FM_TEST_END 2026-10-01T03:46:20Z tests/fm-pi-primary-types.test.sh exit=124 duration_ms=69 gate_skip=false
+2026-10-01T03:46:20.9224529Z FM_TEST_BEGIN 2026-10-01T03:46:20Z tests/fm-grok-harness.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:20.9453593Z not ok - timed out: tests/fm-grok-harness.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.9508543Z FM_TEST_RETRY 2026-10-01T03:46:20Z tests/fm-grok-harness.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:20.9720926Z not ok - timed out: tests/fm-grok-harness.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:20.9990202Z ##[error]tests/fm-grok-harness.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:20.9994523Z ##[warning]tests/fm-grok-harness.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:20.9997578Z FM_TEST_END 2026-10-01T03:46:20Z tests/fm-grok-harness.test.sh exit=124 duration_ms=69 gate_skip=false
+2026-10-01T03:46:20.9999082Z fm-test-run: retried infra flake: tests/fm-grok-harness.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.0248836Z FM_TEST_BEGIN 2026-10-01T03:46:21Z tests/fm-composer-lib.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:21.0481520Z not ok - timed out: tests/fm-composer-lib.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.0536492Z FM_TEST_RETRY 2026-10-01T03:46:21Z tests/fm-composer-lib.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:21.0753566Z not ok - timed out: tests/fm-composer-lib.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.1025009Z ##[error]tests/fm-composer-lib.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:21.1027989Z fm-test-run: retried infra flake: tests/fm-composer-lib.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.1051203Z ##[warning]tests/fm-composer-lib.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:21.1054756Z FM_TEST_END 2026-10-01T03:46:21Z tests/fm-composer-lib.test.sh exit=124 duration_ms=70 gate_skip=false
+2026-10-01T03:46:21.1290469Z FM_TEST_BEGIN 2026-10-01T03:46:21Z tests/fm-review-diff.test.sh family=pr-forge expected_gate_skip=none
+2026-10-01T03:46:21.1513457Z not ok - timed out: tests/fm-review-diff.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.1568614Z FM_TEST_RETRY 2026-10-01T03:46:21Z tests/fm-review-diff.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:21.1782077Z not ok - timed out: tests/fm-review-diff.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.2047913Z ##[error]tests/fm-review-diff.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:21.2050205Z fm-test-run: retried infra flake: tests/fm-review-diff.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.2053416Z ##[warning]tests/fm-review-diff.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:21.2055758Z FM_TEST_END 2026-10-01T03:46:21Z tests/fm-review-diff.test.sh exit=124 duration_ms=68 gate_skip=false
+2026-10-01T03:46:21.2299583Z FM_TEST_BEGIN 2026-10-01T03:46:21Z tests/fm-tmux-submit-busy.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:21.2525252Z not ok - timed out: tests/fm-tmux-submit-busy.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.2579140Z FM_TEST_RETRY 2026-10-01T03:46:21Z tests/fm-tmux-submit-busy.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:21.2788790Z not ok - timed out: tests/fm-tmux-submit-busy.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.3055396Z fm-test-run: retried infra flake: tests/fm-tmux-submit-busy.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.3058771Z ##[error]tests/fm-tmux-submit-busy.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:21.3063482Z ##[warning]tests/fm-tmux-submit-busy.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:21.3065571Z FM_TEST_END 2026-10-01T03:46:21Z tests/fm-tmux-submit-busy.test.sh exit=124 duration_ms=69 gate_skip=false
+2026-10-01T03:46:21.3315328Z FM_TEST_BEGIN 2026-10-01T03:46:21Z tests/fm-composer-ghost.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:21.3543876Z not ok - timed out: tests/fm-composer-ghost.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.3597653Z FM_TEST_RETRY 2026-10-01T03:46:21Z tests/fm-composer-ghost.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:21.3808042Z not ok - timed out: tests/fm-composer-ghost.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.4074571Z ##[error]tests/fm-composer-ghost.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:21.4077510Z fm-test-run: retried infra flake: tests/fm-composer-ghost.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.4080943Z ##[warning]tests/fm-composer-ghost.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:21.4082634Z FM_TEST_END 2026-10-01T03:46:21Z tests/fm-composer-ghost.test.sh exit=124 duration_ms=69 gate_skip=false
+2026-10-01T03:46:21.4334735Z FM_TEST_BEGIN 2026-10-01T03:46:21Z tests/fm-brief.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:21.4559257Z not ok - timed out: tests/fm-brief.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.4611836Z FM_TEST_RETRY 2026-10-01T03:46:21Z tests/fm-brief.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:21.4820043Z not ok - timed out: tests/fm-brief.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:21.5092985Z ##[error]tests/fm-brief.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:21.5095045Z fm-test-run: retried infra flake: tests/fm-brief.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5099337Z ##[warning]tests/fm-brief.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:21.5101868Z FM_TEST_END 2026-10-01T03:46:21Z tests/fm-brief.test.sh exit=124 duration_ms=68 gate_skip=false
+2026-10-01T03:46:21.5326176Z FM_TEST_SUMMARY total=11 failed=10 skipped_gate=0 duration_ms=390403
+2026-10-01T03:46:21.5344719Z FM_TEST_SUMMARY_FAMILY family=pr-forge count=2 duration_ms=193148 failed=2
+2026-10-01T03:46:21.5345705Z FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=9 duration_ms=196849 failed=8
+2026-10-01T03:46:21.5369335Z FM_TEST_TIMED_OUT script=tests/fm-pr-merge.test.sh bound_secs=1
+2026-10-01T03:46:21.5369929Z FM_TEST_RETRIED_FLAKE script=tests/fm-pr-merge.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5370486Z FM_TEST_TIMED_OUT script=tests/fm-test-run.test.sh bound_secs=1
+2026-10-01T03:46:21.5371286Z FM_TEST_RETRIED_FLAKE script=tests/fm-test-run.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5372248Z FM_TEST_TIMED_OUT script=tests/fm-cd-pretool-check.test.sh bound_secs=1
+2026-10-01T03:46:21.5373358Z FM_TEST_RETRIED_FLAKE script=tests/fm-cd-pretool-check.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5375178Z FM_TEST_TIMED_OUT script=tests/fm-pi-primary-types.test.sh bound_secs=1
+2026-10-01T03:46:21.5375783Z FM_TEST_RETRIED_FLAKE script=tests/fm-pi-primary-types.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5376377Z FM_TEST_TIMED_OUT script=tests/fm-grok-harness.test.sh bound_secs=1
+2026-10-01T03:46:21.5376933Z FM_TEST_RETRIED_FLAKE script=tests/fm-grok-harness.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5377873Z FM_TEST_TIMED_OUT script=tests/fm-composer-lib.test.sh bound_secs=1
+2026-10-01T03:46:21.5378444Z FM_TEST_RETRIED_FLAKE script=tests/fm-composer-lib.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5379018Z FM_TEST_TIMED_OUT script=tests/fm-review-diff.test.sh bound_secs=1
+2026-10-01T03:46:21.5379559Z FM_TEST_RETRIED_FLAKE script=tests/fm-review-diff.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5380136Z FM_TEST_TIMED_OUT script=tests/fm-tmux-submit-busy.test.sh bound_secs=1
+2026-10-01T03:46:21.5380725Z FM_TEST_RETRIED_FLAKE script=tests/fm-tmux-submit-busy.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5381328Z FM_TEST_TIMED_OUT script=tests/fm-composer-ghost.test.sh bound_secs=1
+2026-10-01T03:46:21.5381899Z FM_TEST_RETRIED_FLAKE script=tests/fm-composer-ghost.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5382436Z FM_TEST_TIMED_OUT script=tests/fm-brief.test.sh bound_secs=1
+2026-10-01T03:46:21.5382927Z FM_TEST_RETRIED_FLAKE script=tests/fm-brief.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:21.5439519Z FM_TEST_SLOWEST rank=1 script=tests/fm-lint.test.sh duration_ms=196296
+2026-10-01T03:46:21.5440503Z FM_TEST_SLOWEST rank=2 script=tests/fm-pr-merge.test.sh duration_ms=193080
+2026-10-01T03:46:21.5441368Z FM_TEST_SLOWEST rank=3 script=tests/fm-composer-lib.test.sh duration_ms=70
+2026-10-01T03:46:21.5442264Z FM_TEST_SLOWEST rank=4 script=tests/fm-test-run.test.sh duration_ms=70
+2026-10-01T03:46:21.5443167Z FM_TEST_SLOWEST rank=5 script=tests/fm-cd-pretool-check.test.sh duration_ms=69
+2026-10-01T03:46:21.5444101Z FM_TEST_SLOWEST rank=6 script=tests/fm-composer-ghost.test.sh duration_ms=69
+2026-10-01T03:46:21.5445289Z FM_TEST_SLOWEST rank=7 script=tests/fm-grok-harness.test.sh duration_ms=69
+2026-10-01T03:46:21.5446194Z FM_TEST_SLOWEST rank=8 script=tests/fm-pi-primary-types.test.sh duration_ms=69
+2026-10-01T03:46:21.5447099Z FM_TEST_SLOWEST rank=9 script=tests/fm-tmux-submit-busy.test.sh duration_ms=69
+2026-10-01T03:46:21.5448145Z FM_TEST_SLOWEST rank=10 script=tests/fm-brief.test.sh duration_ms=68
+2026-10-01T03:46:21.5448904Z FM_TEST_SLOWEST rank=11 script=tests/fm-review-diff.test.sh duration_ms=68
+2026-10-01T03:46:21.5753697Z fm-test-run: wrote timing artifact: /home/runner/work/_temp/fm-test/fm-test-timing-portable-parallel-1.json
+2026-10-01T03:46:21.5795269Z ##[error]Process completed with exit code 1.
+2026-10-01T03:46:21.5919071Z ##[group]Run actions/upload-artifact@v4
+2026-10-01T03:46:21.5919422Z with:
+2026-10-01T03:46:21.5919681Z   name: fm-test-timing-portable-parallel-1
+2026-10-01T03:46:21.5920129Z   path: /home/runner/work/_temp/fm-test/fm-test-timing-portable-parallel-1.json
+2026-10-01T03:46:21.5920550Z   if-no-files-found: warn
+2026-10-01T03:46:21.5920807Z   compression-level: 6
+2026-10-01T03:46:21.5921024Z   overwrite: false
+2026-10-01T03:46:21.5921233Z   include-hidden-files: false
+2026-10-01T03:46:21.5921464Z env:
+2026-10-01T03:46:21.5921932Z   FM_PI_PACKAGE_DIR: /home/runner/work/firstmate/firstmate/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent
+2026-10-01T03:46:21.5922469Z ##[endgroup]
+2026-10-01T03:46:21.7716528Z (node:135987) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-01T03:46:21.7717584Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-01T03:46:21.7759983Z With the provided path, there will be 1 file uploaded
+2026-10-01T03:46:21.7761716Z Artifact name is valid!
+2026-10-01T03:46:21.7762213Z Root directory input is valid!
+2026-10-01T03:46:22.0687721Z Beginning upload of artifact content to blob storage
+2026-10-01T03:46:22.0886679Z (node:135987) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-01T03:46:22.2682446Z Uploaded bytes 842
+2026-10-01T03:46:22.3218502Z Finished uploading artifact content to blob storage!
+2026-10-01T03:46:22.3219593Z SHA256 digest of uploaded artifact zip is 64083e3537ad3c120a985fbb0d908d5798aac6418c9c85d75a2421ad09cc9028
+2026-10-01T03:46:22.3220987Z Finalizing artifact upload
+2026-10-01T03:46:22.5438796Z Artifact fm-test-timing-portable-parallel-1.zip successfully finalized. Artifact ID 11139996114
+2026-10-01T03:46:22.5440875Z Artifact fm-test-timing-portable-parallel-1 has been successfully uploaded! Final size is 842 bytes. Artifact ID is 11139996114
+2026-10-01T03:46:22.5447008Z Artifact download URL: https://github.com/mdc2122/firstmate/actions/runs/36811522084/artifacts/11139996114
+2026-10-01T03:46:22.5681834Z Post job cleanup.
+2026-10-01T03:46:22.6587579Z [command]/usr/bin/git version
+2026-10-01T03:46:22.6639574Z git version 2.55.0
+2026-10-01T03:46:22.6688014Z Temporarily overriding HOME='/home/runner/work/_temp/c64e1e76-767a-40ab-ae13-5ef4650d29d6' before making global git config changes
+2026-10-01T03:46:22.6689690Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-01T03:46:22.6694965Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/firstmate/firstmate
+2026-10-01T03:46:22.6732555Z Removing SSH command configuration
+2026-10-01T03:46:22.6740480Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-01T03:46:22.6783684Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-01T03:46:22.7056565Z Removing HTTP extra header
+2026-10-01T03:46:22.7062675Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-01T03:46:22.7112853Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-01T03:46:22.7394849Z Removing includeIf entries pointing to credentials config files
+2026-10-01T03:46:22.7408041Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-01T03:46:22.7445505Z includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path
+2026-10-01T03:46:22.7447090Z includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path
+2026-10-01T03:46:22.7448767Z includeif.gitdir:/github/workspace/.git.path
+2026-10-01T03:46:22.7449765Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-01T03:46:22.7460373Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path
+2026-10-01T03:46:22.7493702Z /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7509117Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7563520Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path
+2026-10-01T03:46:22.7595802Z /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7608494Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7652412Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-01T03:46:22.7681798Z /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7692908Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7741762Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-01T03:46:22.7768888Z /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7779657Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config
+2026-10-01T03:46:22.7819793Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-01T03:46:22.8054826Z Removing credentials config '/home/runner/work/_temp/git-credentials-1fe50afd-7715-4b15-8fdb-c2142f583b53.config'
+2026-10-01T03:46:22.8216886Z Cleaning up orphan processes
+2026-10-01T03:46:22.8529761Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

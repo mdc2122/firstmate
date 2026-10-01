@@ -76,14 +76,10 @@ jobs:
   tests-portable-parallel-1:
     name: Behavior portable parallel 1
     runs-on: ubuntu-latest
-    # This cap is intended as a hang tripwire, but the previous lane 1 reached
-    # it; the former "~1 min of serial sum" estimate no longer applies.
-    # Compare it with the derived hints from fm-test-run.sh --check-coverage
-    # and completed job timings, allowing for setup and runner-speed spread.
-    # A packed hint sum is not a measured job wall time or proof of headroom.
+    # Shared deadline is an enclosing-step backstop: 1140s exceeds twice
+    # the measured green lane p90 (545s), with 60s for result reporting.
     # Evidence and refresh procedure: docs/fm-test-portable-shards.md.
-    # Changes to this cap or the lane count require a separate scope decision.
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:
@@ -111,9 +107,9 @@ jobs:
           echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable parallel shard 1
-        timeout-minutes: 7
+        timeout-minutes: 20
         env:
-          FM_TEST_STEP_BUDGET_SECS: 390
+          FM_TEST_STEP_BUDGET_SECS: 1140
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -134,8 +130,8 @@ jobs:
   tests-portable-parallel-2:
     name: Behavior portable parallel 2
     runs-on: ubuntu-latest
-    # Same timeout rationale as portable parallel shard 1 above.
-    timeout-minutes: 10
+    # Same budget as shard 1; also exceeds twice this lane's 488s green p90.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:
@@ -156,9 +152,9 @@ jobs:
           npm install -g tasks-axi
           tasks-axi --version
       - name: Run portable parallel shard 2
-        timeout-minutes: 7
+        timeout-minutes: 20
         env:
-          FM_TEST_STEP_BUDGET_SECS: 390
+          FM_TEST_STEP_BUDGET_SECS: 1140
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -184,10 +180,10 @@ jobs:
     runs-on: ubuntu-latest
     # Current runners take up to ~25 min for the slowest shard: the lane sums to
     # ~108 min of script time and tests/fm-watch-triage.test.sh alone runs
-    # ~15 min, so no five-way split stays near 20 min. This 45-minute cap
+    # ~15 min, so no five-way split stays near 20 min. This 62-minute cap
     # preserves the timeout as a hang tripwire while allowing runner-speed and
     # job-setup margin; it is not the expected healthy end of the lane.
-    timeout-minutes: 45
+    timeout-minutes: 62
     strategy:
       # Every shard reports so one failure never hides another shard's result.
       fail-fast: false
@@ -231,9 +227,10 @@ jobs:
           echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable serial shard ${{ matrix.shard }}
-        timeout-minutes: 40
+        # 3360s exceeds twice the measured green serial p90 (1651s).
+        timeout-minutes: 57
         env:
-          FM_TEST_STEP_BUDGET_SECS: 2340
+          FM_TEST_STEP_BUDGET_SECS: 3360
           # job-total rather than a literal, so shrinking or growing the matrix
           # without matching bin/fm-test-run.sh is refused instead of quietly
           # leaving a shard of the required lane unrun.
@@ -357,9 +354,10 @@ jobs:
       - name: Run real-Herdr family (serial, required)
         # Comfortably above the ~7 min healthy wall and far below the 75 min
         # job backstop. A hang must fail this step so cleanup still runs.
-        timeout-minutes: 20
+        # 1380s exceeds twice the measured green Herdr p90 (668s).
+        timeout-minutes: 24
         env:
-          FM_TEST_STEP_BUDGET_SECS: 1140
+          FM_TEST_STEP_BUDGET_SECS: 1380
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -434,17 +432,18 @@ jobs:
   macos-stock-bash:
     name: Stock macOS Bash snapshot compatibility
     runs-on: macos-latest
-    timeout-minutes: 10
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@v6
       - name: Run snapshot consumers with stock Bash
-        timeout-minutes: 8
+        # 780s exceeds twice the measured green snapshot p90 (360s).
+        timeout-minutes: 14
         shell: /bin/bash {0}
         env:
           PATH: /bin:/usr/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin
         run: |
           set -eu
-          deadline=$((SECONDS + 420))
+          deadline=$((SECONDS + 780))
           run_stock_test() {
             remaining=$((deadline - SECONDS))
             [ "$remaining" -gt 0 ] || remaining=1

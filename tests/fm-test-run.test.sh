@@ -1584,8 +1584,12 @@ test_auto_timeout_bounds_every_script_from_its_table() {
   chmod +x "$runner"
   cat >"$repo/bin/fm-timeout-lib.sh" <<'SH'
 fm_run_timed() {
-  printf '%s %s\n' "$1" "${!#}" >>"$BOUNDS_LOG"
+  local bound=$1 script
   shift
+  # The streamed wrapper passes the script before output/completion sidecars;
+  # the captured supervisor passes it as the final command argument.
+  if [ "$1" = bash ]; then script=${8}; else script=${!#}; fi
+  printf '%s %s\n' "$bound" "$script" >>"$BOUNDS_LOG"
   "$@"
 }
 SH
@@ -1953,6 +1957,32 @@ SH
   pass "step budget stays private while child runners accept explicit budgets"
 }
 
+test_exhausted_budget_does_not_start_or_retry() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-not-started.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  printf '#!/bin/bash\nsleep 2\n' >"$tmp/tests/first.test.sh"
+  printf '#!/bin/bash\necho started >>"$START_LOG"\n' >"$tmp/tests/later.test.sh"
+  set +e
+  START_LOG="$tmp/started" FM_TEST_STEP_BUDGET_SECS=1 "$tmp/bin/fm-test-run.sh" \
+    --jobs 1 --per-script-timeout-secs auto --retry-infra-flakes \
+    --json "$tmp/result.json" tests/first.test.sh tests/later.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] && [ ! -e "$tmp/started" ] || fail "exhausted budget started a script"
+  grep -q 'not started: tests/later.test.sh' "$tmp/out" || fail "missing not-started diagnostic"
+  python3 - "$tmp/result.json" <<'PY' || fail "not-started script was labeled a timeout or flake"
+import json, sys
+later = next(s for s in json.load(open(sys.argv[1]))['scripts'] if s['path'] == 'tests/later.test.sh')
+assert later['exit'] == 125 and not later['timed_out']
+assert not later['retried_infra_flake']
+PY
+  rm -rf "$tmp"
+  pass "budget exhaustion reports not started without timeout retry"
+}
+
 test_serial_family_shares_timeout_budget() {
   local tmp runner rc began ended
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-step-budget.XXXXXX")
@@ -1983,6 +2013,7 @@ PY
   pass "serial family bounds a hang by the remaining shared step budget"
 }
 
+test_exhausted_budget_does_not_start_or_retry
 test_list_all_exact_suite_coverage
 test_family_selection
 test_single_script_selection

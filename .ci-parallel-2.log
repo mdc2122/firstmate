@@ -1,0 +1,801 @@
+﻿2026-10-01T03:39:36.5017673Z Current runner version: '2.337.0'
+2026-10-01T03:39:36.5041253Z ##[group]Runner Image Provisioner
+2026-10-01T03:39:36.5042162Z Hosted Compute Agent
+2026-10-01T03:39:36.5042877Z Version: 20260828.587
+2026-10-01T03:39:36.5043580Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-10-01T03:39:36.5044631Z Build Date: 2026-08-28T16:44:25Z
+2026-10-01T03:39:36.5045517Z Worker ID: {609efdf5-0d1f-4aaa-9955-58f6bbd75a02}
+2026-10-01T03:39:36.5046278Z Azure Region: westus3
+2026-10-01T03:39:36.5046927Z ##[endgroup]
+2026-10-01T03:39:36.5048473Z ##[group]Operating System
+2026-10-01T03:39:36.5049134Z Ubuntu
+2026-10-01T03:39:36.5049779Z 24.04.5
+2026-10-01T03:39:36.5050312Z LTS
+2026-10-01T03:39:36.5050876Z ##[endgroup]
+2026-10-01T03:39:36.5051511Z ##[group]Runner Image
+2026-10-01T03:39:36.5052132Z Image: ubuntu-24.04
+2026-10-01T03:39:36.5052812Z Version: 20260920.314.1
+2026-10-01T03:39:36.5054069Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260920.314/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-01T03:39:36.5056144Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260920.314
+2026-10-01T03:39:36.5057197Z ##[endgroup]
+2026-10-01T03:39:36.5058405Z ##[group]GITHUB_TOKEN Permissions
+2026-10-01T03:39:36.5060311Z Contents: read
+2026-10-01T03:39:36.5061102Z Metadata: read
+2026-10-01T03:39:36.5061691Z ##[endgroup]
+2026-10-01T03:39:36.5063785Z Secret source: Actions
+2026-10-01T03:39:36.5065032Z Cache mode: write
+2026-10-01T03:39:36.5066134Z Prepare workflow directory
+2026-10-01T03:39:36.5454849Z Prepare all required actions
+2026-10-01T03:39:36.5502504Z Getting action download info
+2026-10-01T03:39:36.8808953Z Download action repository 'actions/checkout@v6' (SHA:d23441a48e516b6c34aea4fa41551a30e30af803)
+2026-10-01T03:39:36.9874924Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-01T03:39:37.1958098Z Complete job name: Behavior portable parallel 2
+2026-10-01T03:39:37.2751576Z ##[group]Run actions/checkout@v6
+2026-10-01T03:39:37.2752479Z with:
+2026-10-01T03:39:37.2752918Z   fetch-depth: 0
+2026-10-01T03:39:37.2753386Z   repository: mdc2122/firstmate
+2026-10-01T03:39:37.2757599Z   token: ***
+2026-10-01T03:39:37.2758039Z   ssh-strict: true
+2026-10-01T03:39:37.2758479Z   ssh-user: git
+2026-10-01T03:39:37.2758934Z   persist-credentials: true
+2026-10-01T03:39:37.2759429Z   clean: true
+2026-10-01T03:39:37.2759882Z   sparse-checkout-cone-mode: true
+2026-10-01T03:39:37.2760412Z   fetch-tags: false
+2026-10-01T03:39:37.2760866Z   show-progress: true
+2026-10-01T03:39:37.2761317Z   lfs: false
+2026-10-01T03:39:37.2761732Z   submodules: false
+2026-10-01T03:39:37.2762192Z   set-safe-directory: true
+2026-10-01T03:39:37.2762699Z   allow-unsafe-pr-checkout: false
+2026-10-01T03:39:37.2763481Z ##[endgroup]
+2026-10-01T03:39:37.3757724Z Syncing repository: mdc2122/firstmate
+2026-10-01T03:39:37.3759910Z ##[group]Getting Git version info
+2026-10-01T03:39:37.3760774Z Working directory is '/home/runner/work/firstmate/firstmate'
+2026-10-01T03:39:37.3762561Z [command]/usr/bin/git version
+2026-10-01T03:39:37.3873527Z git version 2.55.0
+2026-10-01T03:39:37.3902998Z ##[endgroup]
+2026-10-01T03:39:37.3920455Z Temporarily overriding HOME='/home/runner/work/_temp/3633a53e-2431-4c31-9fde-545f14779944' before making global git config changes
+2026-10-01T03:39:37.3922618Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-01T03:39:37.3925807Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/firstmate/firstmate
+2026-10-01T03:39:37.3982205Z Deleting the contents of '/home/runner/work/firstmate/firstmate'
+2026-10-01T03:39:37.3987596Z ##[group]Determining repository object format
+2026-10-01T03:39:37.3989925Z ##[endgroup]
+2026-10-01T03:39:37.3990819Z ##[group]Initializing the repository
+2026-10-01T03:39:37.3995329Z [command]/usr/bin/git init /home/runner/work/firstmate/firstmate
+2026-10-01T03:39:37.4129541Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-01T03:39:37.4131484Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-01T03:39:37.4133279Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-01T03:39:37.4134986Z hint: call:
+2026-10-01T03:39:37.4136347Z hint:
+2026-10-01T03:39:37.4137682Z hint: 	git config --global init.defaultBranch <name>
+2026-10-01T03:39:37.4139379Z hint:
+2026-10-01T03:39:37.4140800Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-01T03:39:37.4142988Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-01T03:39:37.4144825Z hint:
+2026-10-01T03:39:37.4145965Z hint: 	git branch -m <name>
+2026-10-01T03:39:37.4147202Z hint:
+2026-10-01T03:39:37.4148833Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-01T03:39:37.4151232Z Initialized empty Git repository in /home/runner/work/firstmate/firstmate/.git/
+2026-10-01T03:39:37.4155199Z [command]/usr/bin/git remote add origin https://github.com/mdc2122/firstmate
+2026-10-01T03:39:37.4213222Z ##[endgroup]
+2026-10-01T03:39:37.4214755Z ##[group]Disabling automatic garbage collection
+2026-10-01T03:39:37.4218142Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-01T03:39:37.4259916Z ##[endgroup]
+2026-10-01T03:39:37.4261945Z ##[group]Setting up auth
+2026-10-01T03:39:37.4263221Z Removing SSH command configuration
+2026-10-01T03:39:37.4271064Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-01T03:39:37.4317149Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-01T03:39:37.4720276Z Removing HTTP extra header
+2026-10-01T03:39:37.4728127Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-01T03:39:37.4775828Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-01T03:39:37.4999267Z Removing includeIf entries pointing to credentials config files
+2026-10-01T03:39:37.5005560Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-01T03:39:37.5041238Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-01T03:39:37.5267203Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-01T03:39:37.5308146Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/firstmate/firstmate/.git.path /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:39:37.5341529Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:39:37.5382661Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:39:37.5423120Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:39:37.5457191Z ##[endgroup]
+2026-10-01T03:39:37.5458610Z ##[group]Fetching the repository
+2026-10-01T03:39:37.5467404Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +3c4ca5e57a3dc72f3f4a3deb986a81930911cf37:refs/remotes/pull/21/merge
+2026-10-01T03:39:40.4769611Z From https://github.com/mdc2122/firstmate
+2026-10-01T03:39:40.4796602Z  * [new branch]        archive/yolo-automerge-pre-rebase-69ba8a11 -> origin/archive/yolo-automerge-pre-rebase-69ba8a11
+2026-10-01T03:39:40.4806449Z  * [new branch]        feat/calm-omp-extension-20260915         -> origin/feat/calm-omp-extension-20260915
+2026-10-01T03:39:40.4808676Z  * [new branch]        fix/calm-omp-typed-display               -> origin/fix/calm-omp-typed-display
+2026-10-01T03:39:40.4810909Z  * [new branch]        fix/omp-bun-launcher-detection           -> origin/fix/omp-bun-launcher-detection
+2026-10-01T03:39:40.4813186Z  * [new branch]        fm/afk-pi-wake-bypass-r1                 -> origin/fm/afk-pi-wake-bypass-r1
+2026-10-01T03:39:40.4815588Z  * [new branch]        fm/calm-omp-global-10                    -> origin/fm/calm-omp-global-10
+2026-10-01T03:39:40.4817125Z  * [new branch]        fm/calm-omp-toggle-fix                   -> origin/fm/calm-omp-toggle-fix
+2026-10-01T03:39:40.4818790Z  * [new branch]        fm/ci-per-test-timeouts                  -> origin/fm/ci-per-test-timeouts
+2026-10-01T03:39:40.4820565Z  * [new branch]        fm/composer-clobber-12                   -> origin/fm/composer-clobber-12
+2026-10-01T03:39:40.4822658Z  * [new branch]        fm/contrib-converge-reraise              -> origin/fm/contrib-converge-reraise
+2026-10-01T03:39:40.4824203Z  * [new branch]        fm/contrib-poll-retry-02                 -> origin/fm/contrib-poll-retry-02
+2026-10-01T03:39:40.4826960Z  * [new branch]        fm/contributions-terminal-poll           -> origin/fm/contributions-terminal-poll
+2026-10-01T03:39:40.4829829Z  * [new branch]        fm/firstmate-gate-opus-restore           -> origin/fm/firstmate-gate-opus-restore
+2026-10-01T03:39:40.4831839Z  * [new branch]        fm/firstmate-pi-seat-policy              -> origin/fm/firstmate-pi-seat-policy
+2026-10-01T03:39:40.4834002Z  * [new branch]        fm/fm-actionable-update-escalation-misclassification-r1 -> origin/fm/fm-actionable-update-escalation-misclassification-r1
+2026-10-01T03:39:40.4837542Z  * [new branch]        fm/fm-actionable-update-escalation-misclassification-r3 -> origin/fm/fm-actionable-update-escalation-misclassification-r3
+2026-10-01T03:39:40.4839990Z  * [new branch]        fm/fm-afk-pi-branch-both-postures-r1     -> origin/fm/fm-afk-pi-branch-both-postures-r1
+2026-10-01T03:39:40.4842571Z  * [new branch]        fm/fm-audit-fixes-2-4                    -> origin/fm/fm-audit-fixes-2-4
+2026-10-01T03:39:40.4845376Z  * [new branch]        fm/fm-branch-note-sailboat-r2            -> origin/fm/fm-branch-note-sailboat-r2
+2026-10-01T03:39:40.4847880Z  * [new branch]        fm/fm-ci-lint-runner-oome                -> origin/fm/fm-ci-lint-runner-oome
+2026-10-01T03:39:40.4850577Z  * [new branch]        fm/fm-composer-thin-adapter-refactor-r1  -> origin/fm/fm-composer-thin-adapter-refactor-r1
+2026-10-01T03:39:40.4853679Z  * [new branch]        fm/fm-documentation-audience-cleanup-r1  -> origin/fm/fm-documentation-audience-cleanup-r1
+2026-10-01T03:39:40.4856755Z  * [new branch]        fm/fm-flaky-serial-followup              -> origin/fm/fm-flaky-serial-followup
+2026-10-01T03:39:40.4859018Z  * [new branch]        fm/fm-flaky-serial-shards                -> origin/fm/fm-flaky-serial-shards
+2026-10-01T03:39:40.4861865Z  * [new branch]        fm/fm-herdr-contiguity-resume            -> origin/fm/fm-herdr-contiguity-resume
+2026-10-01T03:39:40.4865437Z  * [new branch]        fm/fm-herdr-recovery-classifier-stale-agent-r1 -> origin/fm/fm-herdr-recovery-classifier-stale-agent-r1
+2026-10-01T03:39:40.4867286Z  * [new branch]        fm/fm-needs-decision-main-only-r1        -> origin/fm/fm-needs-decision-main-only-r1
+2026-10-01T03:39:40.4868821Z  * [new branch]        fm/fm-needs-decision-whole-batch-r1      -> origin/fm/fm-needs-decision-whole-batch-r1
+2026-10-01T03:39:40.4870493Z  * [new branch]        fm/fm-nm-evidence-store-firstmate-r1     -> origin/fm/fm-nm-evidence-store-firstmate-r1
+2026-10-01T03:39:40.4872408Z  * [new branch]        fm/fm-per-task-delivery-override-r1      -> origin/fm/fm-per-task-delivery-override-r1
+2026-10-01T03:39:40.4875427Z  * [new branch]        fm/fm-public-stow-readbeforewrite-port-r1 -> origin/fm/fm-public-stow-readbeforewrite-port-r1
+2026-10-01T03:39:40.4877643Z  * [new branch]        fm/fm-safe-auto-reboot-simple-r1         -> origin/fm/fm-safe-auto-reboot-simple-r1
+2026-10-01T03:39:40.4885354Z  * [new branch]        fm/fm-secondmate-creation-record-intake-r1 -> origin/fm/fm-secondmate-creation-record-intake-r1
+2026-10-01T03:39:40.4887216Z  * [new branch]        fm/fm-secondmate-parent-channel-structural-r1 -> origin/fm/fm-secondmate-parent-channel-structural-r1
+2026-10-01T03:39:40.4890391Z  * [new branch]        fm/fm-secondmate-record-atomic-transitions-r1 -> origin/fm/fm-secondmate-record-atomic-transitions-r1
+2026-10-01T03:39:40.4892369Z  * [new branch]        fm/fm-sessionstart-network-free-r1       -> origin/fm/fm-sessionstart-network-free-r1
+2026-10-01T03:39:40.4894066Z  * [new branch]        fm/fm-shared-test-fixtures-r1            -> origin/fm/fm-shared-test-fixtures-r1
+2026-10-01T03:39:40.4896607Z  * [new branch]        fm/fm-skill-frontmatter-desc-r1          -> origin/fm/fm-skill-frontmatter-desc-r1
+2026-10-01T03:39:40.4898264Z  * [new branch]        fm/fm-supervision-pr-url-hallucination-r1 -> origin/fm/fm-supervision-pr-url-hallucination-r1
+2026-10-01T03:39:40.4899987Z  * [new branch]        fm/fm-supervision-rearm-resurface-r1     -> origin/fm/fm-supervision-rearm-resurface-r1
+2026-10-01T03:39:40.4902552Z  * [new branch]        fm/fm-supervision-refused-ack-loop-r1    -> origin/fm/fm-supervision-refused-ack-loop-r1
+2026-10-01T03:39:40.4906025Z  * [new branch]        fm/fm-teardown-closes-captain-held-scout-r1 -> origin/fm/fm-teardown-closes-captain-held-scout-r1
+2026-10-01T03:39:40.4909169Z  * [new branch]        fm/fm-teardown-slot-collision-fix-r1     -> origin/fm/fm-teardown-slot-collision-fix-r1
+2026-10-01T03:39:40.4912048Z  * [new branch]        fm/fm-watcher-flap-autoarm-fix-r2        -> origin/fm/fm-watcher-flap-autoarm-fix-r2
+2026-10-01T03:39:40.4913941Z  * [new branch]        fm/fm-watcher-hardening-r1               -> origin/fm/fm-watcher-hardening-r1
+2026-10-01T03:39:40.4915829Z  * [new branch]        fm/fm-watcher-hardening-r2               -> origin/fm/fm-watcher-hardening-r2
+2026-10-01T03:39:40.4917395Z  * [new branch]        fm/fm-watcher-hardening-r3               -> origin/fm/fm-watcher-hardening-r3
+2026-10-01T03:39:40.4918860Z  * [new branch]        fm/fork-rebase-01                        -> origin/fm/fork-rebase-01
+2026-10-01T03:39:40.4920568Z  * [new branch]        fm/herdr-workspace-contiguity-maintenance -> origin/fm/herdr-workspace-contiguity-maintenance
+2026-10-01T03:39:40.4923421Z  * [new branch]        fm/muse-clobber-upstream-01              -> origin/fm/muse-clobber-upstream-01
+2026-10-01T03:39:40.4927250Z  * [new branch]        fm/muse-never-clear-01                   -> origin/fm/muse-never-clear-01
+2026-10-01T03:39:40.4928771Z  * [new branch]        fm/nm-fix-agent-model-09                 -> origin/fm/nm-fix-agent-model-09
+2026-10-01T03:39:40.4930533Z  * [new branch]        fm/nm-required-exempt-release-please-r1  -> origin/fm/nm-required-exempt-release-please-r1
+2026-10-01T03:39:40.4932338Z  * [new branch]        fm/omp-watch-session-generation          -> origin/fm/omp-watch-session-generation
+2026-10-01T03:39:40.4933947Z  * [new branch]        fm/orca-cleanup-identity-06              -> origin/fm/orca-cleanup-identity-06
+2026-10-01T03:39:40.4936045Z  * [new branch]        fm/reconcile-inactive-crew-investigate-s1 -> origin/fm/reconcile-inactive-crew-investigate-s1
+2026-10-01T03:39:40.4937799Z  * [new branch]        fm/remote-omp-verify-07                  -> origin/fm/remote-omp-verify-07
+2026-10-01T03:39:40.4939396Z  * [new branch]        fm/remote-omp-verify-07-forkbase         -> origin/fm/remote-omp-verify-07-forkbase
+2026-10-01T03:39:40.4941280Z  * [new branch]        fm/remote-send-confirm-readback-fix-r1   -> origin/fm/remote-send-confirm-readback-fix-r1
+2026-10-01T03:39:40.4943059Z  * [new branch]        fm/remote-send-delivery-delta-r1         -> origin/fm/remote-send-delivery-delta-r1
+2026-10-01T03:39:40.4945178Z  * [new branch]        fm/secondmate-autonomous-supervision-s7  -> origin/fm/secondmate-autonomous-supervision-s7
+2026-10-01T03:39:40.4947293Z  * [new branch]        fm/upstream-baseline-8d2ee291            -> origin/fm/upstream-baseline-8d2ee291
+2026-10-01T03:39:40.4948898Z  * [new branch]        fm/upstream-sync-01                      -> origin/fm/upstream-sync-01
+2026-10-01T03:39:40.4950382Z  * [new branch]        fm/watcher-arm-fix-01                    -> origin/fm/watcher-arm-fix-01
+2026-10-01T03:39:40.4952027Z  * [new branch]        fm/watcher-stale-closed-terminal         -> origin/fm/watcher-stale-closed-terminal
+2026-10-01T03:39:40.4953610Z  * [new branch]        fm/yolo-automerge                        -> origin/fm/yolo-automerge
+2026-10-01T03:39:40.4955305Z  * [new branch]        fm/yolo-automerge-v2                     -> origin/fm/yolo-automerge-v2
+2026-10-01T03:39:40.4956730Z  * [new branch]        main                                     -> origin/main
+2026-10-01T03:39:40.4958031Z  * [new branch]        no-mistakes/evidence                     -> origin/no-mistakes/evidence
+2026-10-01T03:39:40.4959621Z  * [new branch]        proto/herdr-child-workspaces             -> origin/proto/herdr-child-workspaces
+2026-10-01T03:39:40.4961079Z  * [new ref]           3c4ca5e57a3dc72f3f4a3deb986a81930911cf37 -> pull/21/merge
+2026-10-01T03:39:40.4963180Z ##[endgroup]
+2026-10-01T03:39:40.4963976Z ##[group]Determining the checkout info
+2026-10-01T03:39:40.4965234Z ##[endgroup]
+2026-10-01T03:39:40.4965766Z [command]/usr/bin/git sparse-checkout disable
+2026-10-01T03:39:40.4967480Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-01T03:39:40.4969436Z ##[group]Checking out the ref
+2026-10-01T03:39:40.4970334Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/21/merge
+2026-10-01T03:39:40.5985092Z Note: switching to 'refs/remotes/pull/21/merge'.
+2026-10-01T03:39:40.5986325Z 
+2026-10-01T03:39:40.5987239Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-01T03:39:40.5988855Z changes and commit them, and you can discard any commits you make in this
+2026-10-01T03:39:40.5990378Z state without impacting any branches by switching back to a branch.
+2026-10-01T03:39:40.5991266Z 
+2026-10-01T03:39:40.5991868Z If you want to create a new branch to retain commits you create, you may
+2026-10-01T03:39:40.5993382Z do so (now or later) by using -c with the switch command. Example:
+2026-10-01T03:39:40.5994577Z 
+2026-10-01T03:39:40.5995057Z   git switch -c <new-branch-name>
+2026-10-01T03:39:40.5995716Z 
+2026-10-01T03:39:40.5996063Z Or undo this operation with:
+2026-10-01T03:39:40.5996621Z 
+2026-10-01T03:39:40.5996927Z   git switch -
+2026-10-01T03:39:40.5997359Z 
+2026-10-01T03:39:40.5998162Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-01T03:39:40.5999343Z 
+2026-10-01T03:39:40.6001369Z HEAD is now at 3c4ca5e5 Merge 9a4ac89aacadb98f99d39810c634962c09c46d67 into 4cf7637bf3e284549c424af2e09bb63874c02520
+2026-10-01T03:39:40.6007586Z ##[endgroup]
+2026-10-01T03:39:40.6053213Z [command]/usr/bin/git log -1 --format=%H
+2026-10-01T03:39:40.6080826Z 3c4ca5e57a3dc72f3f4a3deb986a81930911cf37
+2026-10-01T03:39:40.6342171Z ##[group]Run set -eu
+2026-10-01T03:39:40.6343402Z [36;1mset -eu[0m
+2026-10-01T03:39:40.6345103Z [36;1mbin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"[0m
+2026-10-01T03:39:40.6347005Z [36;1mecho "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"[0m
+2026-10-01T03:39:40.6636620Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:40.6637915Z ##[endgroup]
+2026-10-01T03:39:41.1073349Z ShellCheck - shell script analysis tool
+2026-10-01T03:39:41.1075106Z version: 0.11.0
+2026-10-01T03:39:41.1076697Z license: GNU General Public License, version 3
+2026-10-01T03:39:41.1079264Z website: https://www.shellcheck.net
+2026-10-01T03:39:41.1223922Z ##[group]Run set -eu
+2026-10-01T03:39:41.1225245Z [36;1mset -eu[0m
+2026-10-01T03:39:41.1226417Z [36;1mbin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"[0m
+2026-10-01T03:39:41.1228009Z [36;1mecho "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"[0m
+2026-10-01T03:39:41.1295593Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:41.1296664Z ##[endgroup]
+2026-10-01T03:39:41.4829046Z 1.7.12
+2026-10-01T03:39:41.4829945Z installed by downloading from release page
+2026-10-01T03:39:41.4830617Z built with go1.26.1 compiler for linux/amd64
+2026-10-01T03:39:41.4959327Z ##[group]Run set -eu
+2026-10-01T03:39:41.4959671Z [36;1mset -eu[0m
+2026-10-01T03:39:41.4959955Z [36;1mnpm install -g tasks-axi[0m
+2026-10-01T03:39:41.4960278Z [36;1mtasks-axi --version[0m
+2026-10-01T03:39:41.5023664Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:41.5023990Z ##[endgroup]
+2026-10-01T03:39:45.9292598Z 
+2026-10-01T03:39:46.0003646Z added 3 packages in 2s
+2026-10-01T03:39:46.0004144Z 0.2.6
+2026-10-01T03:39:46.0101722Z ##[group]Run set -eu
+2026-10-01T03:39:46.0102035Z [36;1mset -eu[0m
+2026-10-01T03:39:46.0102279Z [36;1mmkdir -p "$RUNNER_TEMP/fm-test"[0m
+2026-10-01T03:39:46.0102636Z [36;1mbin/fm-test-run.sh --lane portable-parallel-2 \[0m
+2026-10-01T03:39:46.0103088Z [36;1m  --per-script-timeout-secs auto --retry-infra-flakes \[0m
+2026-10-01T03:39:46.0103571Z [36;1m  --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-2.json"[0m
+2026-10-01T03:39:46.0169381Z shell: /usr/bin/bash -e {0}
+2026-10-01T03:39:46.0169666Z env:
+2026-10-01T03:39:46.0169878Z   FM_TEST_STEP_BUDGET_SECS: 390
+2026-10-01T03:39:46.0170136Z ##[endgroup]
+2026-10-01T03:39:46.0845694Z FM_TEST_BEGIN 2026-10-01T03:39:46Z tests/fm-captain-hold-lifecycle.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:39:48.4546280Z ok - report-only unresolved captain call is reproduced and completion refuses before loss
+2026-10-01T03:39:56.9201185Z ok - both body-decoding paths work without the allow_nonref default
+2026-10-01T03:40:06.3853660Z ok - cleanup preserves every byte of a retained body's non-ASCII characters
+2026-10-01T03:40:13.8997408Z ok - the completion gate attests captain-held inventory and transfers open status decisions
+2026-10-01T03:40:19.6425697Z ok - answer records the captain's words, closes idempotently, and releases routed work
+2026-10-01T03:40:28.3817008Z ok - release frees held work with the captain's words recorded and the body preserved
+2026-10-01T03:40:30.2219772Z ok - captain holds become visible only after their hold-set timestamp is durable
+2026-10-01T03:40:33.6540074Z ok - an interrupted answer preserves its hold age until close retry
+2026-10-01T03:40:39.3429619Z ok - a deferred captain call leaves the live Captain's Call until its date and stays answerable
+2026-10-01T03:40:48.9456153Z ok - an out-of-band close is recordable with the captain's word and nothing else
+2026-10-01T03:40:53.5822965Z ok - ended visual review follows the same captain-hold completion owner
+2026-10-01T03:40:54.3141645Z ok - resolved findings and decision-like prose do not create captain-held tasks
+2026-10-01T03:40:57.7499286Z ok - terminal single-owner stale status decisions do not block empty inventory
+2026-10-01T03:41:02.8461321Z ok - main-home and secondmate-home captain calls remain correctly routed
+2026-10-01T03:41:13.8926906Z ok - a secondmate home publishes each hold occurrence and its answer on the parent channel
+2026-10-01T03:41:20.4261760Z ok - secondmate resolutions publish before retiring durable retry triggers
+2026-10-01T03:41:51.9526880Z ok - a bound channel's captured answers close their captain-held tasks at answer time
+2026-10-01T03:41:55.8162000Z ok - only a bound captured source creates reconcile requests
+2026-10-01T03:42:05.1378808Z ok - normal answers and their replays retire reconcile requests
+2026-10-01T03:42:15.5142446Z ok - reconcile closes a moot call with evidence and keeps an active one open with a note
+2026-10-01T03:42:29.8535851Z ok - reconcile outcomes apply durable mutations once across partial failures
+2026-10-01T03:42:31.3446317Z ok - a channel source with no decision binding closes nothing
+2026-10-01T03:42:46.4626001Z ok - legacy identities, metadata, bindings, and the shim keep working
+2026-10-01T03:42:50.8909199Z ok - a board answer reaches the keyed-answer intake and wakes firstmate
+2026-10-01T03:43:03.1797753Z ok - the chat channel feeds the same keyed-answer intake a captured review does
+2026-10-01T03:43:03.2956435Z ok - completion and verification validate origins before constructing paths
+2026-10-01T03:43:07.2659219Z ok - a status resolution over a still-open captain-held task is signalled, not closed
+2026-10-01T03:43:14.1793785Z ok - a captain call with no routed work, a verified transfer, an open decision, and an answered call all stay silent
+2026-10-01T03:43:26.4884794Z ok - cleanup leaves a captain-held work item open with its deliverable, and only an answer closes it
+2026-10-01T03:44:03.9798642Z ok - release and scout report retention distinguish deliveries from rejected merge answers
+2026-10-01T03:44:09.2731129Z ok - an interrupted cleanup keeps the captain call recoverable and session start retains it
+2026-10-01T03:44:15.2026633Z ok - an answer before cleanup replay preserves the retained report
+2026-10-01T03:44:19.1097573Z ok - an unusable pending-close record names its reason instead of a bare refusal
+2026-10-01T03:44:24.9938743Z ok - an unsupported relocated report does not wedge the captain's answer
+2026-10-01T03:44:29.7572532Z ok - cleanup retains captain calls in the configured backlog
+2026-10-01T03:44:34.6156078Z ok - merge approval releases before zero-retention cleanup records completion
+2026-10-01T03:44:37.3304987Z ok - the PR merge entrypoint refuses a captain-held task before merging
+2026-10-01T03:44:39.4673884Z ok - the local merge entrypoint refuses a captain-held task before merging
+2026-10-01T03:44:42.4168735Z ok - the PR merge entrypoint separates an unreadable authority record from an absent one
+2026-10-01T03:44:43.8860670Z ok - the local merge entrypoint separates an unreadable authority record from an absent one
+2026-10-01T03:44:44.0083215Z ok - merge entrypoints reject unsafe identities and absent state before locking
+2026-10-01T03:44:50.5907940Z ok - merge entrypoints refuse a replacement incarnation after waiting for cleanup
+2026-10-01T03:44:58.0536292Z ok - merge entrypoints own task state before forced cleanup can retire it
+2026-10-01T03:45:04.6768888Z ok - a released merge passes the guarded entrypoint and remains recently landed
+2026-10-01T03:45:06.7002328Z ok - cleanup refuses a ship row when its captain hold cannot be read
+2026-10-01T03:45:06.7003627Z ok - skipped on markdown-only tasks-axi: verify against a beads-migrated hold
+2026-10-01T03:45:06.7004662Z ok - skipped on markdown-only tasks-axi: verify against a prefix-migrated hold
+2026-10-01T03:45:06.7005632Z ok - skipped on markdown-only tasks-axi: prefer a marker-noted row over a prefix namesake
+2026-10-01T03:45:06.7006510Z ok - skipped on markdown-only tasks-axi: complete against a beads-migrated hold
+2026-10-01T03:45:06.7011735Z ok - skipped on markdown-only tasks-axi: verify an unresolvable beads legacy id
+2026-10-01T03:45:06.7012561Z ok - skipped on markdown-only tasks-axi: verify a derived pre-collapse key
+2026-10-01T03:45:07.5174947Z ok - captain-hold mutations address the beads backend without a markdown override
+2026-10-01T03:45:07.9395092Z FM_TEST_END 2026-10-01T03:45:07Z tests/fm-captain-hold-lifecycle.test.sh exit=0 duration_ms=321848 gate_skip=false
+2026-10-01T03:45:07.9616096Z FM_TEST_BEGIN 2026-10-01T03:45:07Z tests/fm-x-mode.test.sh family=pr-forge expected_gate_skip=none
+2026-10-01T03:45:08.0616967Z ok - fm-x-poll is a hard no-op without a token (inert default)
+2026-10-01T03:45:08.0966202Z ok - fm-x-poll treats an explicitly empty env token as configured
+2026-10-01T03:45:08.1472001Z ok - fm-x-poll stays silent on HTTP 204 (the common case)
+2026-10-01T03:45:08.1939234Z ok - fm-x-poll lets an explicitly empty relay env override .env
+2026-10-01T03:45:08.3705836Z ok - fm-x-poll surfaces auth/config errors once and clears on recovery
+2026-10-01T03:45:08.5444918Z ok - fm-x-poll diagnostic markers use private guarded publication
+2026-10-01T03:45:08.7504911Z ok - fm-x-poll stashes the question and prints the compact marker
+2026-10-01T03:45:09.9178849Z ok - fm-x-poll wakes once per durable request offer across inbox cleanup
+2026-10-01T03:45:10.4210997Z ok - fm-x-poll retains offer claim diagnostics until recovery
+2026-10-01T03:45:10.8280333Z ok - fm-x-poll preserves in_reply_to conversation context in the inbox
+2026-10-01T03:45:11.0539843Z ok - fm-x-poll preserves inbound attachment URLs for the responder
+2026-10-01T03:45:11.4368307Z ok - fm-x-poll reports inbox commit failures without emitting a mention wake
+2026-10-01T03:45:11.9165155Z ok - fm-x-poll publishes inbox records only through private guarded artifacts
+2026-10-01T03:45:12.0583572Z ok - fm-x-poll requires a non-empty question before waking
+2026-10-01T03:45:12.1547556Z ok - fm-x-poll rejects an unsafe request_id (path-traversal guard)
+2026-10-01T03:45:12.2564119Z ok - fm-x-reply posts a request-bound answer and echoes only the request_id
+2026-10-01T03:45:12.4317416Z ok - fm-x-reply accepts the reply via --text-file and stdin (safe, unexpanded)
+2026-10-01T03:45:12.5162993Z ok - fm-x-reply exits non-zero on a non-2xx relay response
+2026-10-01T03:45:12.5987729Z ok - fm-x-reply cleans up auth header temp files on interrupted posts
+2026-10-01T03:45:12.6145163Z ok - fm-x-reply rejects missing arguments with a usage error
+2026-10-01T03:45:12.6299167Z ok - fm-x-reply --help makes image support discoverable
+2026-10-01T03:45:12.6842983Z ok - fm-x-reply rejects whitespace-only reply text
+2026-10-01T03:45:12.7974832Z ok - fm-x-reply dry-run records the would-be reply and never posts
+2026-10-01T03:45:12.8915573Z ok - fm-x-reply dry-run works without a token
+2026-10-01T03:45:13.0007127Z ok - fm-x-reply honors FMX_DRY_RUN from .env
+2026-10-01T03:45:13.0841018Z ok - fm-x-reply lets an explicitly empty dry-run env override .env
+2026-10-01T03:45:13.1489519Z ok - fm-x-reply dry-run fails when it cannot record the preview
+2026-10-01T03:45:13.6000601Z ok - fm-x-reply dry-run publishes outbox records only through private guarded artifacts
+2026-10-01T03:45:13.6857359Z ok - fmx_split_thread: word-boundary, fence-aware, within-limit, numbered, lossless, capped
+2026-10-01T03:45:13.7866450Z ok - fm-x-reply keeps a concise reply as a single unnumbered tweet
+2026-10-01T03:45:13.8934042Z ok - fm-x-reply auto-splits a long reply into a numbered thread (texts[])
+2026-10-01T03:45:14.0152032Z ok - fm-x-reply uses the Discord inbox platform budget instead of the X tweet budget
+2026-10-01T03:45:14.1355460Z ok - fm-x-reply keeps numeric X requests on the X tweet budget
+2026-10-01T03:45:14.2556935Z ok - fm-x-reply prefers an explicit relay-provided reply limit
+2026-10-01T03:45:14.6860462Z ok - fm-x-reply rejects unsafe inbox context artifacts
+2026-10-01T03:45:14.7863171Z ok - fm-x-reply clamps a below-floor max to 50 characters
+2026-10-01T03:45:14.8786078Z ok - fm-x-reply posts a thread payload (texts[]) to the relay
+2026-10-01T03:45:14.9932325Z ok - fm-x-reply --image posts an image object on answer
+2026-10-01T03:45:15.1895354Z ok - fm-x-reply streams large image payloads outside curl argv
+2026-10-01T03:45:15.3199768Z ok - fm-x-reply dry-run records compact image metadata for threaded replies
+2026-10-01T03:45:15.4324193Z ok - fm-x-reply cleans image and payload temp files
+2026-10-01T03:45:15.6808488Z ok - fm-x-reply --image rejects missing and unsupported image paths clearly
+2026-10-01T03:45:15.7547733Z ok - fm-x-reply --followup posts to /connector/followup with the same request-bound body
+2026-10-01T03:45:15.8195503Z ok - fm-x-reply maps a followup_unavailable follow-up 409 to exit 9
+2026-10-01T03:45:15.9403824Z ok - fm-x-reply maps every follow-up 409 to exit 9 even without the marker
+2026-10-01T03:45:16.0260657Z ok - fm-x-reply treats answer-endpoint 409 as a generic failure
+2026-10-01T03:45:16.1134837Z ok - fm-x-reply --followup --image posts an image object
+2026-10-01T03:45:16.2557820Z ok - fm-x-reply --followup is accepted in any position and leaves the answer path default
+2026-10-01T03:45:16.4267728Z ok - fm-x-reply --followup dry-run marks the endpoint without changing the answer path
+2026-10-01T03:45:16.5084177Z ok - fm-x-reply --followup auto-splits a long follow-up into a marked thread
+2026-10-01T03:45:16.6021726Z ok - fm-x-reply followup dry-run keeps endpoint marker and compact image metadata
+2026-10-01T03:45:17.2444085Z ok - fm-x-poll records the durable per-request reply context from the relay payload
+2026-10-01T03:45:17.3972408Z ok - context registry publishes records only through private guarded artifacts
+2026-10-01T03:45:17.4840965Z ok - context registry reads only private single-link artifacts
+2026-10-01T03:45:17.5293558Z ok - private artifact publisher is compatible with the system bash path
+2026-10-01T03:45:17.9457693Z ok - context registry retention is bounded to the seven-day follow-up window
+2026-10-01T03:45:18.2476367Z ok - context registry rewrites preserve the first-seen timestamp
+2026-10-01T03:45:19.1025088Z ok - context retention starts only when a live initial answer succeeds
+2026-10-01T03:45:19.4570126Z ok - a delayed Discord follow-up stays one message after inbox cleanup via the durable registry
+2026-10-01T03:45:19.8156489Z ok - an X follow-up over 280 still splits correctly after inbox cleanup
+2026-10-01T03:45:19.9448146Z ok - every unresolved follow-up is refused before posting
+2026-10-01T03:45:20.1209526Z ok - a partial registry platform combines with the relay's authoritative budget
+2026-10-01T03:45:20.9585852Z ok - concurrent requests each recover their own platform/budget with no cross-overwrite
+2026-10-01T03:45:21.0187873Z ok - fm-x-dismiss clears the durable per-request context (a dismissed mention gets no follow-up)
+2026-10-01T03:45:21.0788928Z ok - fm-x-dismiss posts a request-bound dismiss and echoes only the request_id
+2026-10-01T03:45:21.1555024Z ok - fm-x-dismiss dry-run records the would-be body and never posts
+2026-10-01T03:45:21.2103271Z ok - fm-x-dismiss dry-run works without a token
+2026-10-01T03:45:21.3558409Z ok - fm-x-dismiss dry-run publishes outbox records only through private guarded artifacts
+2026-10-01T03:45:21.4019751Z ok - fm-x-dismiss exits non-zero on a non-2xx relay response
+2026-10-01T03:45:21.4487798Z ok - fm-x-dismiss exits non-zero on a transport failure
+2026-10-01T03:45:21.4681815Z ok - fm-x-dismiss rejects an unsafe request_id (path-traversal guard)
+2026-10-01T03:45:21.4954984Z ok - fm-x-dismiss rejects missing or extra arguments with a usage error
+2026-10-01T03:45:21.8858768Z ok - fm-x-link records and refreshes the X-request link without disturbing meta
+2026-10-01T03:45:22.3574952Z ok - fm-x-link records Discord platform context so follow-ups keep the Discord budget
+2026-10-01T03:45:22.8686610Z ok - fm-x-link resolves the platform by request_id so a post-cleanup link keeps the Discord budget
+2026-10-01T03:45:23.2117437Z ok - fm-x-link warns loudly and the follow-up is held (not wrongly split) when the platform is unknown
+2026-10-01T03:45:23.3803099Z ok - fm-x-link paired carry flags preserve a prior task's follow-up binding onto a successor
+2026-10-01T03:45:23.8038781Z ok - fm-x-link recovery relink preserves Discord platform context after inbox drain
+2026-10-01T03:45:24.0366662Z ok - fm-x-link rejects malformed or unpaired carry flags
+2026-10-01T03:45:24.4135042Z ok - meta rewrites are independent of TMPDIR
+2026-10-01T03:45:24.6970696Z ok - x-lib meta helpers refuse a symlinked task record and leave its target untouched
+2026-10-01T03:45:24.8067913Z ok - fm-x-link rejects unsafe ids, missing meta, and missing arguments
+2026-10-01T03:45:24.8387163Z ok - fm-x-link keeps the plain missing-task error when no second mate is registered
+2026-10-01T03:45:25.0665137Z ok - fm-x-link refuses a second-mate-routed task and points at the promised-final path
+2026-10-01T03:45:25.1002543Z ok - fm-x-link points an unlocatable task at the promised-final path when second mates exist
+2026-10-01T03:45:25.4059226Z ok - fm-x-followup --check reports postable / not-linked correctly
+2026-10-01T03:45:25.7534909Z ok - fm-x-followup --check prunes a link past the 7-day window
+2026-10-01T03:45:26.1004931Z ok - fm-x-followup --check prunes a link that already reached the follow-up cap
+2026-10-01T03:45:26.5295876Z ok - fm-x-followup posts a follow-up, increments the counter, and keeps the link under the cap
+2026-10-01T03:45:26.9500600Z ok - fm-x-followup --final clears the link after one post regardless of the remaining count
+2026-10-01T03:45:27.3693912Z ok - fm-x-followup clears the link once the third follow-up reaches the cap
+2026-10-01T03:45:27.8142113Z ok - fm-x-followup --image forwards the attachment through fm-x-reply --followup
+2026-10-01T03:45:28.1119591Z ok - fm-x-followup keeps the link and counter when the post fails
+2026-10-01T03:45:28.6428087Z ok - fm-x-followup tombstones the link when a post-success counter write fails
+2026-10-01T03:45:29.0599613Z ok - fm-x-followup treats a relay cap/window rejection as an already-exhausted link, not a retry
+2026-10-01T03:45:29.4241378Z ok - fm-x-followup skips silently and clears the link past the 7-day window
+2026-10-01T03:45:29.4839192Z ok - fm-x-followup is a no-op for a task with no X link
+2026-10-01T03:45:29.9043029Z ok - fm-x-followup dry-run records the follow-up and increments the counter, keeping the link
+2026-10-01T03:45:30.3210821Z ok - fm-x-followup dry-run --final clears the link just as a live post would
+2026-10-01T03:45:30.4653896Z ok - fm-x-followup rejects malformed invocations
+2026-10-01T03:45:32.9314739Z ok - bootstrap activates X mode from an .env token, idempotently
+2026-10-01T03:45:33.3285070Z ok - bootstrap ignores CDPATH when writing absolute FM_HOME into the durable X-mode poll shim
+2026-10-01T03:45:33.4278380Z ok - bootstrap reports missing X-mode dependencies before arming
+2026-10-01T03:45:33.7286757Z ok - bootstrap does not report X mode on when activation artifacts cannot be written
+2026-10-01T03:45:34.0681907Z ok - bootstrap rejects linked X artifacts without touching their targets
+2026-10-01T03:45:34.6914668Z ok - bootstrap is inert without a non-empty .env token (non-X users unaffected)
+2026-10-01T03:45:35.7984710Z ok - bootstrap cleans up X artifacts on opt-out and is silent once off
+2026-10-01T03:45:36.5066449Z ok - bootstrap reports failed X artifact cleanup on opt-out
+2026-10-01T03:45:36.5685138Z FM_TEST_END 2026-10-01T03:45:36Z tests/fm-x-mode.test.sh exit=0 duration_ms=28600 gate_skip=false
+2026-10-01T03:45:36.5908722Z FM_TEST_BEGIN 2026-10-01T03:45:36Z tests/fm-arm-pretool-check.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:45:36.8878773Z ok - matrix A01: allow through all five entry forms
+2026-10-01T03:45:37.1202849Z ok - matrix A02: allow through all five entry forms
+2026-10-01T03:45:37.3601667Z ok - matrix A03: allow through all five entry forms
+2026-10-01T03:45:37.5938086Z ok - matrix A04: allow through all five entry forms
+2026-10-01T03:45:37.8251606Z ok - matrix A05: allow through all five entry forms
+2026-10-01T03:45:38.0579047Z ok - matrix A06: allow through all five entry forms
+2026-10-01T03:45:38.2967851Z ok - matrix A07: allow through all five entry forms
+2026-10-01T03:45:38.5305139Z ok - matrix A08: allow through all five entry forms
+2026-10-01T03:45:38.7624582Z ok - matrix A09: allow through all five entry forms
+2026-10-01T03:45:38.9967700Z ok - matrix A10: allow through all five entry forms
+2026-10-01T03:45:39.2273575Z ok - matrix A11: allow through all five entry forms
+2026-10-01T03:45:39.4684049Z ok - matrix A12: allow through all five entry forms
+2026-10-01T03:45:39.7172174Z ok - matrix A13: allow through all five entry forms
+2026-10-01T03:45:39.9542642Z ok - matrix A14: allow through all five entry forms
+2026-10-01T03:45:40.1897467Z ok - matrix A15: allow through all five entry forms
+2026-10-01T03:45:40.4249277Z ok - matrix A16: allow through all five entry forms
+2026-10-01T03:45:40.6591437Z ok - matrix A17: allow through all five entry forms
+2026-10-01T03:45:40.8940607Z ok - matrix R01: allow through all five entry forms
+2026-10-01T03:45:41.1271072Z ok - matrix R02: allow through all five entry forms
+2026-10-01T03:45:41.3613416Z ok - matrix R03: allow through all five entry forms
+2026-10-01T03:45:41.5916485Z ok - matrix R04: allow through all five entry forms
+2026-10-01T03:45:41.8220817Z ok - matrix R05: allow through all five entry forms
+2026-10-01T03:45:42.0541319Z ok - matrix R06: allow through all five entry forms
+2026-10-01T03:45:42.2889072Z ok - matrix R07: allow through all five entry forms
+2026-10-01T03:45:42.5215397Z ok - matrix R08: allow through all five entry forms
+2026-10-01T03:45:42.7458283Z ok - matrix R09: allow through all five entry forms
+2026-10-01T03:45:42.9834766Z ok - matrix R10: allow through all five entry forms
+2026-10-01T03:45:43.2222000Z ok - matrix R11: allow through all five entry forms
+2026-10-01T03:45:43.4573452Z ok - matrix R12: allow through all five entry forms
+2026-10-01T03:45:43.6910289Z ok - matrix R13: allow through all five entry forms
+2026-10-01T03:45:43.9257036Z ok - matrix R14: allow through all five entry forms
+2026-10-01T03:45:44.1598616Z ok - matrix R15: allow through all five entry forms
+2026-10-01T03:45:44.3932117Z ok - matrix R16: allow through all five entry forms
+2026-10-01T03:45:44.6297678Z ok - matrix R17: allow through all five entry forms
+2026-10-01T03:45:44.8686875Z ok - matrix R18: allow through all five entry forms
+2026-10-01T03:45:45.1011616Z ok - matrix R19: allow through all five entry forms
+2026-10-01T03:45:45.3594656Z ok - matrix D01: deny through all five entry forms
+2026-10-01T03:45:45.6195867Z ok - matrix D02: deny through all five entry forms
+2026-10-01T03:45:45.8839286Z ok - matrix D03: deny through all five entry forms
+2026-10-01T03:45:46.1490037Z ok - matrix D04: deny through all five entry forms
+2026-10-01T03:45:46.4081165Z ok - matrix D05: deny through all five entry forms
+2026-10-01T03:45:46.6686199Z ok - matrix D06: deny through all five entry forms
+2026-10-01T03:45:46.9289568Z ok - matrix D07: deny through all five entry forms
+2026-10-01T03:45:47.1940790Z ok - matrix D08: deny through all five entry forms
+2026-10-01T03:45:47.4538006Z ok - matrix D09: deny through all five entry forms
+2026-10-01T03:45:47.7126625Z ok - matrix D10: deny through all five entry forms
+2026-10-01T03:45:47.9704136Z ok - matrix D11: deny through all five entry forms
+2026-10-01T03:45:48.2279605Z ok - matrix D12: deny through all five entry forms
+2026-10-01T03:45:48.4919395Z ok - matrix D13: deny through all five entry forms
+2026-10-01T03:45:48.7537294Z ok - matrix D14: deny through all five entry forms
+2026-10-01T03:45:49.0151324Z ok - matrix D15: deny through all five entry forms
+2026-10-01T03:45:49.2726265Z ok - matrix D16: deny through all five entry forms
+2026-10-01T03:45:49.5316236Z ok - matrix D17: deny through all five entry forms
+2026-10-01T03:45:49.7913537Z ok - matrix D18: deny through all five entry forms
+2026-10-01T03:45:50.0508674Z ok - matrix D19: deny through all five entry forms
+2026-10-01T03:45:50.3129151Z ok - matrix D20: deny through all five entry forms
+2026-10-01T03:45:50.5712769Z ok - matrix D21: deny through all five entry forms
+2026-10-01T03:45:50.8337135Z ok - matrix D22: deny through all five entry forms
+2026-10-01T03:45:51.0949443Z ok - matrix D23: deny through all five entry forms
+2026-10-01T03:45:51.3578200Z ok - matrix D24: deny through all five entry forms
+2026-10-01T03:45:51.6191697Z ok - matrix D25: deny through all five entry forms
+2026-10-01T03:45:51.8776759Z ok - matrix D26: deny through all five entry forms
+2026-10-01T03:45:52.1386186Z ok - matrix D27: deny through all five entry forms
+2026-10-01T03:45:52.3991564Z ok - matrix D28: deny through all five entry forms
+2026-10-01T03:45:52.6640398Z ok - matrix D29: deny through all five entry forms
+2026-10-01T03:45:52.9305013Z ok - matrix D30: deny through all five entry forms
+2026-10-01T03:45:53.1912405Z ok - matrix D31: deny through all five entry forms
+2026-10-01T03:45:53.4497948Z ok - matrix D32: deny through all five entry forms
+2026-10-01T03:45:53.7155319Z ok - matrix D33: deny through all five entry forms
+2026-10-01T03:45:53.9754964Z ok - matrix D34: deny through all five entry forms
+2026-10-01T03:45:54.2373410Z ok - matrix D35: deny through all five entry forms
+2026-10-01T03:45:54.4960996Z ok - matrix D36: deny through all five entry forms
+2026-10-01T03:45:54.7560744Z ok - matrix D37: deny through all five entry forms
+2026-10-01T03:45:55.0147916Z ok - matrix D38: deny through all five entry forms
+2026-10-01T03:45:55.2745727Z ok - matrix D39: deny through all five entry forms
+2026-10-01T03:45:55.5341245Z ok - matrix D40: deny through all five entry forms
+2026-10-01T03:45:55.7938473Z ok - matrix D41: deny through all five entry forms
+2026-10-01T03:45:56.0572086Z ok - matrix D42: deny through all five entry forms
+2026-10-01T03:45:56.3144254Z ok - matrix D43: deny through all five entry forms
+2026-10-01T03:45:56.5736248Z ok - matrix D44: deny through all five entry forms
+2026-10-01T03:45:56.8384081Z ok - matrix D45: deny through all five entry forms
+2026-10-01T03:45:57.0965984Z ok - matrix D46: deny through all five entry forms
+2026-10-01T03:45:57.3601723Z ok - matrix D47: deny through all five entry forms
+2026-10-01T03:45:57.6239487Z ok - matrix D48: deny through all five entry forms
+2026-10-01T03:45:57.8834072Z ok - matrix D49: deny through all five entry forms
+2026-10-01T03:45:58.1408102Z ok - matrix D50: deny through all five entry forms
+2026-10-01T03:45:58.4029440Z ok - matrix D51: deny through all five entry forms
+2026-10-01T03:45:58.6646380Z ok - matrix D52: deny through all five entry forms
+2026-10-01T03:45:58.9262867Z ok - matrix D53: deny through all five entry forms
+2026-10-01T03:45:59.1836993Z ok - matrix D54: deny through all five entry forms
+2026-10-01T03:45:59.4466683Z ok - matrix D55: deny through all five entry forms
+2026-10-01T03:45:59.7062083Z ok - matrix D56: deny through all five entry forms
+2026-10-01T03:45:59.9657377Z ok - matrix D57: deny through all five entry forms
+2026-10-01T03:46:00.2327717Z ok - matrix D58: deny through all five entry forms
+2026-10-01T03:46:00.4655228Z ok - matrix E01: allow through all five entry forms
+2026-10-01T03:46:00.6986484Z ok - matrix E02: allow through all five entry forms
+2026-10-01T03:46:00.9347769Z ok - matrix E03: allow through all five entry forms
+2026-10-01T03:46:01.1701661Z ok - matrix E04: allow through all five entry forms
+2026-10-01T03:46:01.4326900Z ok - matrix E05: deny through all five entry forms
+2026-10-01T03:46:01.6962900Z ok - matrix E06: deny through all five entry forms
+2026-10-01T03:46:01.9589747Z ok - matrix E07: deny through all five entry forms
+2026-10-01T03:46:02.2177051Z ok - matrix E08: deny through all five entry forms
+2026-10-01T03:46:02.4807732Z ok - matrix E09: deny through all five entry forms
+2026-10-01T03:46:02.7431385Z ok - matrix E10: deny through all five entry forms
+2026-10-01T03:46:03.0081681Z ok - matrix E11: deny through all five entry forms
+2026-10-01T03:46:03.2404736Z ok - matrix E12: allow through all five entry forms
+2026-10-01T03:46:03.4731379Z ok - matrix E13: allow through all five entry forms
+2026-10-01T03:46:03.5317872Z ok - matrix E14: allow through all five entry forms
+2026-10-01T03:46:03.7659912Z ok - matrix E15: allow through all five entry forms
+2026-10-01T03:46:03.9988283Z ok - matrix E16: allow through all five entry forms
+2026-10-01T03:46:04.2342849Z ok - matrix E17: allow through all five entry forms
+2026-10-01T03:46:04.2650207Z ok - direct policy direct-data-pkill: allow
+2026-10-01T03:46:04.2990240Z ok - direct policy direct-broad-pkill: deny	broad-watcher-kill
+2026-10-01T03:46:04.3311081Z ok - direct policy direct-loop-broad-pkill: deny	broad-watcher-kill
+2026-10-01T03:46:04.3657903Z ok - direct policy direct-loop-broad-kill-pgrep: deny	broad-watcher-kill
+2026-10-01T03:46:04.3971660Z ok - direct policy direct-loop-no-kill-allowed: allow
+2026-10-01T03:46:04.4275193Z ok - direct policy direct-pipeline: deny	watcher-pipeline
+2026-10-01T03:46:04.4603338Z ok - direct policy direct-leading-redirection: deny	watcher-redirection
+2026-10-01T03:46:04.4911685Z ok - direct policy direct-unclassifiable: deny	unclassifiable-protected-command
+2026-10-01T03:46:04.5243845Z ok - direct policy direct-unsupported: deny	unclassifiable-protected-command
+2026-10-01T03:46:04.5564717Z ok - direct policy direct-constructed-payload: deny	watcher-nested
+2026-10-01T03:46:04.5893654Z ok - direct policy direct-parameter-export: allow
+2026-10-01T03:46:04.6206171Z ok - direct policy direct-expanded-arm-blessed: allow
+2026-10-01T03:46:04.6509965Z ok - direct policy direct-expanded-arm-background: deny	watcher-background
+2026-10-01T03:46:04.6845030Z ok - direct policy direct-expanded-arm-pipeline: deny	watcher-pipeline
+2026-10-01T03:46:04.7157617Z ok - direct policy direct-watch-not-blessed: deny	watcher-direct
+2026-10-01T03:46:04.7482825Z ok - direct policy direct-watch-expanded: deny	watcher-direct
+2026-10-01T03:46:04.7786311Z ok - direct policy direct-watch-safe-shape: deny	watcher-direct
+2026-10-01T03:46:04.8116822Z ok - direct policy direct-heredoc-data: allow
+2026-10-01T03:46:04.8447656Z ok - direct policy direct-heredoc-watcher: deny	watcher-redirection
+2026-10-01T03:46:04.8837106Z ok - --command=<val> equals-form parses correctly
+2026-10-01T03:46:04.9588505Z ok - --background is accepted for interface parity and is never itself a deny signal
+2026-10-01T03:46:04.9623717Z ok - unknown CLI flag is rejected
+2026-10-01T03:46:05.0194115Z ok - stdin grok schema (toolInput.command): denied with Grok-shaped stdout JSON
+2026-10-01T03:46:05.0704878Z ok - stdin claude/codex schema (tool_input.command): blessed shape allowed
+2026-10-01T03:46:05.1215342Z ok - stdin claude/codex schema (tool_input.command): backgrounded shape denied
+2026-10-01T03:46:05.1366951Z ok - stdin: unrelated command is a fast allow
+2026-10-01T03:46:05.4153642Z ok - transport prefilter is a strict superset: non-fm-watch fast-allows, every fm-watch and quoting-decoder-marker command reaches the classifier
+2026-10-01T03:46:05.4195361Z ok - fail-open: empty stdin
+2026-10-01T03:46:05.4314162Z ok - fail-open: unparseable JSON on stdin
+2026-10-01T03:46:05.4461418Z ok - fail-open: missing jq on stdin path
+2026-10-01T03:46:05.4576267Z ok - fail-open: missing classifier runtime
+2026-10-01T03:46:05.5046111Z ok - --claude: stdout empty, stderr carries hookSpecificOutput deny JSON
+2026-10-01T03:46:05.5475149Z ok - default mode: stdout carries Grok-shaped decision JSON on deny
+2026-10-01T03:46:05.6238886Z ok - allow is silent on both stdout and stderr in default and --claude mode
+2026-10-01T03:46:05.7576831Z ok - bin/fm-arm-pretool-check.sh is clean under bin/fm-lint.sh
+2026-10-01T03:46:05.8104885Z FM_TEST_END 2026-10-01T03:46:05Z tests/fm-arm-pretool-check.test.sh exit=0 duration_ms=29213 gate_skip=false
+2026-10-01T03:46:05.8331456Z FM_TEST_BEGIN 2026-10-01T03:46:05Z tests/fm-backend-herdr.test.sh family=backend-dispatch expected_gate_skip=none
+2026-10-01T03:46:05.9632799Z ok - fm_backend_herdr_version_check: accepts the current protocol (14)
+2026-10-01T03:46:06.0014993Z ok - fm_backend_herdr_version_check: refuses an old protocol loudly
+2026-10-01T03:46:06.0232400Z ok - fm_backend_herdr_version_check: refuses loudly when herdr is not installed
+2026-10-01T03:46:06.0443029Z ok - fm_backend_herdr_workspace_label: a primary home (no marker) resolves to 'firstmate'
+2026-10-01T03:46:06.0670836Z ok - fm_backend_herdr_workspace_label: a secondmate home (.fm-secondmate-home) resolves to '2ndmate-<id>'
+2026-10-01T03:46:06.0903041Z ok - fm_backend_herdr_workspace_label: trims whitespace around the marker's secondmate id
+2026-10-01T03:46:06.1130042Z ok - fm_backend_herdr_workspace_label: an empty marker file falls back to the primary label 'firstmate'
+2026-10-01T03:46:06.1587290Z ok - fm_backend_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels
+2026-10-01T03:46:06.1915853Z ok - fm_backend_herdr_cli: sets HERDR_SESSION AND appends a trailing --session flag on every call
+2026-10-01T03:46:06.3269827Z ok - herdr client selection: a live pane behind a stale shadowing client reads alive
+2026-10-01T03:46:06.5243819Z ok - herdr recovery-grade read: a stopped server means missing there, and nowhere else
+2026-10-01T03:46:06.7730815Z ok - herdr stale registration: a shell-only pane with a lingering Pi record is agent-free with an explicit reason
+2026-10-01T03:46:07.5189536Z ok - herdr stale registration: no registered status can outrank a shell-only process view
+2026-10-01T03:46:07.7200217Z ok - herdr stale registration: a registered agent with a live Pi foreground process still reads alive
+2026-10-01T03:46:07.9311721Z ok - herdr stale registration: only a shell-only pane demotes a registration
+2026-10-01T03:46:08.1882526Z ok - herdr stale registration: a transient prompt helper settles into stale-agent instead of reading live
+2026-10-01T03:46:08.4550880Z ok - herdr stale registration: an exhausted settle window still reads a non-shell foreground as live
+2026-10-01T03:46:09.0512566Z Terminated
+2026-10-01T03:46:09.2990754Z ok - herdr stale registration: an agent process outside the foreground group still counts as alive
+2026-10-01T03:46:09.8926550Z Terminated
+2026-10-01T03:46:09.8928920Z ok - herdr stale registration: the descendant walk reads a spaced executable path whole
+2026-10-01T03:46:10.5218474Z ok - herdr stale registration: an unreadable process view refuses instead of guessing either way
+2026-10-01T03:46:10.7249156Z ok - herdr stale registration: an empty foreground list over a real shell is not unreadable, it settles via the descendant walk
+2026-10-01T03:46:10.7459323Z ok - herdr stale registration: presentation reclaim never closes a stale-registration pane
+2026-10-01T03:46:10.9535216Z ok - herdr stale registration: busy_state proves a working record at process level before reporting busy
+2026-10-01T03:46:11.0089744Z ok - herdr client selection: one selected client is reused per process
+2026-10-01T03:46:11.0906082Z ok - herdr client selection: selected clients remain scoped to their session
+2026-10-01T03:46:11.1219324Z ok - herdr client selection: only protocol_mismatch triggers reselection; other failures pass through untouched
+2026-10-01T03:46:11.1549650Z ok - herdr client selection: the happy path makes no extra call
+2026-10-01T03:46:11.2627533Z ok - herdr client status: .server.compatible, legacy protocol equality, unknown, and stopped shapes all normalize
+2026-10-01T03:46:11.2883524Z ok - fm_backend_herdr_launcher_identity: a firstmate not running inside herdr has no launcher workspace to inherit
+2026-10-01T03:46:11.3137185Z ok - fm_backend_herdr_launcher_identity: HERDR_ENV=1 without a pane id selects the backend but binds no parent
+2026-10-01T03:46:11.3897432Z ok - fm_backend_herdr_launcher_identity: resolves the launcher's exact workspace even when a same-labeled workspace sorts first
+2026-10-01T03:46:11.4164986Z ok - fm_backend_herdr_launcher_identity: refuses a launcher pane that names a different herdr session
+2026-10-01T03:46:11.4432226Z ok - fm_backend_herdr_launcher_identity: refuses a claimed pane without exact server identity
+2026-10-01T03:46:11.4871549Z ok - fm_backend_herdr_launcher_identity: refuses a launcher pane whose injected socket belongs to another herdr server
+2026-10-01T03:46:11.5361447Z ok - fm_backend_herdr_launcher_identity: refuses when the launcher's own pane no longer resolves
+2026-10-01T03:46:11.6007787Z ok - fm_backend_herdr_launcher_identity: refuses when the launcher's pane and tab disagree about their workspace
+2026-10-01T03:46:11.6746334Z ok - fm_backend_herdr_launcher_identity: refuses when the launcher's workspace is gone from its own session
+2026-10-01T03:46:11.7493288Z ok - fm_backend_herdr_workspace_ensure: places a worker in the launcher's exact workspace, not the first same-labeled one
+2026-10-01T03:46:11.7901857Z ok - fm_backend_herdr_workspace_ensure: refuses to guess between two same-labeled home workspaces
+2026-10-01T03:46:11.8302555Z ok - fm_backend_herdr_workspace_ensure: a --secondmate container resolves that home's own workspace, not the launcher's
+2026-10-01T03:46:11.8870346Z ok - fm_backend_herdr_container_ensure: surfaces the exact ambiguous-placement refusal instead of a generic failure
+2026-10-01T03:46:11.9713434Z ok - fm_backend_herdr_container_ensure: version-gates, starts the server, ensures the firstmate workspace, echoes session:workspace_id + the seeded default tab id
+2026-10-01T03:46:12.0098961Z ok - fm_backend_herdr_server_ensure: scrubs home and harness identity without disturbing unrelated environment or session routing
+2026-10-01T03:46:12.0704017Z ok - fm_backend_herdr_container_ensure: reuses an existing firstmate workspace without recreating it, and reports no seeded default tab (adopted, not created)
+2026-10-01T03:46:12.1434943Z ok - fm_backend_herdr_container_ensure: workspace create passes --no-focus
+2026-10-01T03:46:12.2215562Z ok - fm_backend_herdr_container_ensure: creates the workspace under the SECONDMATE home's own label, not 'firstmate'
+2026-10-01T03:46:12.3914851Z ok - fm_backend_herdr_create_task: prunes exactly the seeded default tab container_ensure identified, once the first real task tab exists
+2026-10-01T03:46:12.9095596Z ok - herdr repeated spawn/teardown: one persistent firstmate workspace reused, zero orphans, default tab pruned, create ran once
+2026-10-01T03:46:13.0183249Z ok - fm_backend_herdr_create_task: an ADOPTED workspace's pre-existing tab is never pruned (the created-vs-adopted gate)
+2026-10-01T03:46:13.1272100Z ok - fm_backend_herdr_create_task: the label-collision startup-workspace scenario (2026-07-02 incident) leaves the captain's live tab untouched
+2026-10-01T03:46:13.2901821Z ok - fm_backend_herdr_workspace_prune_seeded_default_tab: refuses to close the seeded default tab when its pane reports a working agent (defense in depth)
+2026-10-01T03:46:13.3341204Z ok - fm_backend_herdr_create_task: refuses a duplicate tab label (herdr's own tab create has no uniqueness check)
+2026-10-01T03:46:13.4422663Z ok - fm_backend_herdr_create_task: a same-labeled tab with a live (even idle) registered agent still refuses exactly as before
+2026-10-01T03:46:13.5828721Z ok - fm_backend_herdr_create_task: scans every same-labeled tab and refuses if any duplicate is live
+2026-10-01T03:46:13.6730320Z ok - fm_backend_herdr_create_task: closes and replaces a same-labeled tab whose pane is dead (pane_not_found)
+2026-10-01T03:46:13.7758649Z ok - fm_backend_herdr_create_task: closes and replaces a same-labeled tab whose pane is alive but hosts no registered agent (a restored plain shell)
+2026-10-01T03:46:13.9240838Z ok - fm_backend_herdr_create_task: closes every confirmed same-labeled husk only after creating the replacement
+2026-10-01T03:46:14.0282483Z ok - fm_backend_herdr_create_task: refuses success when a preexisting husk tab remains after replacement
+2026-10-01T03:46:14.1009040Z ok - fm_backend_herdr_create_task: refuses (fail-safe) rather than guessing when the duplicate's agent state cannot be classified confidently
+2026-10-01T03:46:14.1925245Z ok - fm_backend_herdr_create_task: creates the replacement tab BEFORE closing the husk tab, never the reverse
+2026-10-01T03:46:14.2438655Z ok - fm_backend_herdr_create_task: creates a tab and parses tab_id/pane_id from the JSON response, prunes nothing when no seeded tab id is given
+2026-10-01T03:46:14.2938823Z ok - fm_backend_herdr_create_task: tab create passes --no-focus
+2026-10-01T03:46:14.3698327Z ok - herdr presentation: a home that set nothing gets the projection by default at or above the floor
+2026-10-01T03:46:14.4145043Z ok - herdr presentation: an unconfigured home below the floor falls back flat with one naming warning
+2026-10-01T03:46:14.4471418Z ok - herdr presentation: an unreadable client release falls back flat instead of guessing
+2026-10-01T03:46:14.5216869Z ok - herdr presentation: a deliberate opt-in is never silently downgraded below the floor
+2026-10-01T03:46:14.6421449Z ok - herdr presentation: an explicit off opts the home out
+2026-10-01T03:46:14.7280319Z ok - herdr presentation: an unrecognized value warns and follows the default instead of failing a spawn
+2026-10-01T03:46:14.8515586Z ok - herdr presentation: the below-floor warning is one per home per release, not one per spawn
+2026-10-01T03:46:15.2337866Z ok - herdr presentation: warning marker publication is atomic, symlink-safe, and fails visible
+2026-10-01T03:46:15.4451185Z ok - herdr presentation: client and selected server floors compose conservatively without overriding explicit opt-in
+2026-10-01T03:46:15.7179336Z ok - herdr presentation floor: every measured release, and each signal alone, classifies correctly
+2026-10-01T03:46:15.7967393Z ok - herdr presentation floor: either signal alone can carry an above verdict, and each divergence is real
+2026-10-01T03:46:15.8610648Z not ok - timed out: tests/fm-backend-herdr.test.sh exceeded its per-script bound of 10s and was terminated
+2026-10-01T03:46:15.8675589Z FM_TEST_RETRY 2026-10-01T03:46:15Z tests/fm-backend-herdr.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:15.8865560Z not ok - timed out: tests/fm-backend-herdr.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:15.9114832Z ##[error]tests/fm-backend-herdr.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:15.9123748Z fm-test-run: retried infra flake: tests/fm-backend-herdr.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:15.9127172Z ##[warning]tests/fm-backend-herdr.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:15.9128993Z FM_TEST_END 2026-10-01T03:46:15Z tests/fm-backend-herdr.test.sh exit=124 duration_ms=10071 gate_skip=false
+2026-10-01T03:46:15.9327301Z FM_TEST_BEGIN 2026-10-01T03:46:15Z tests/fm-crew-state.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:15.9524410Z not ok - timed out: tests/fm-crew-state.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:15.9574119Z FM_TEST_RETRY 2026-10-01T03:46:15Z tests/fm-crew-state.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:15.9760817Z not ok - timed out: tests/fm-crew-state.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:15.9985565Z ##[error]tests/fm-crew-state.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:15.9986978Z fm-test-run: retried infra flake: tests/fm-crew-state.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:15.9988553Z ##[warning]tests/fm-crew-state.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:15.9989944Z FM_TEST_END 2026-10-01T03:46:15Z tests/fm-crew-state.test.sh exit=124 duration_ms=60 gate_skip=false
+2026-10-01T03:46:16.0215205Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-herdr-lab.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.0412809Z not ok - timed out: tests/fm-herdr-lab.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.0461843Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-herdr-lab.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.0649072Z not ok - timed out: tests/fm-herdr-lab.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.0872507Z ##[error]tests/fm-herdr-lab.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.0874958Z fm-test-run: retried infra flake: tests/fm-herdr-lab.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.0877690Z ##[warning]tests/fm-herdr-lab.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.0880184Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-herdr-lab.test.sh exit=124 duration_ms=60 gate_skip=false
+2026-10-01T03:46:16.1100983Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-send-popup-settle.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.1299365Z not ok - timed out: tests/fm-send-popup-settle.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.1348564Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-send-popup-settle.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.1536195Z not ok - timed out: tests/fm-send-popup-settle.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.1763986Z ##[error]tests/fm-send-popup-settle.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.1765788Z fm-test-run: retried infra flake: tests/fm-send-popup-settle.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.1772666Z ##[warning]tests/fm-send-popup-settle.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.1774564Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-send-popup-settle.test.sh exit=124 duration_ms=61 gate_skip=false
+2026-10-01T03:46:16.1995026Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-send-strict.test.sh family=backend-dispatch expected_gate_skip=none
+2026-10-01T03:46:16.2197283Z not ok - timed out: tests/fm-send-strict.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.2246501Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-send-strict.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.2434228Z not ok - timed out: tests/fm-send-strict.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.2662453Z ##[error]tests/fm-send-strict.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.2664189Z fm-test-run: retried infra flake: tests/fm-send-strict.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.2666169Z ##[warning]tests/fm-send-strict.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.2667677Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-send-strict.test.sh exit=124 duration_ms=61 gate_skip=false
+2026-10-01T03:46:16.2900060Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-spawn-batch.test.sh family=backend-dispatch expected_gate_skip=none
+2026-10-01T03:46:16.3103767Z not ok - timed out: tests/fm-spawn-batch.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.3157060Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-spawn-batch.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.3347893Z not ok - timed out: tests/fm-spawn-batch.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.3592161Z ##[error]tests/fm-spawn-batch.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.3595124Z fm-test-run: retried infra flake: tests/fm-spawn-batch.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.3598081Z ##[warning]tests/fm-spawn-batch.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.3600916Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-spawn-batch.test.sh exit=124 duration_ms=62 gate_skip=false
+2026-10-01T03:46:16.3927569Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-send-settle.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.4132134Z not ok - timed out: tests/fm-send-settle.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.4185737Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-send-settle.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.4381515Z not ok - timed out: tests/fm-send-settle.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.4606187Z ##[error]tests/fm-send-settle.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.4607824Z fm-test-run: retried infra flake: tests/fm-send-settle.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.4609341Z ##[warning]tests/fm-send-settle.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.4610776Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-send-settle.test.sh exit=124 duration_ms=64 gate_skip=false
+2026-10-01T03:46:16.4841479Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-ensure-agents-md.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.5043987Z not ok - timed out: tests/fm-ensure-agents-md.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.5093443Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-ensure-agents-md.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.5280985Z not ok - timed out: tests/fm-ensure-agents-md.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.5509088Z ##[error]tests/fm-ensure-agents-md.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.5516022Z fm-test-run: retried infra flake: tests/fm-ensure-agents-md.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.5518990Z ##[warning]tests/fm-ensure-agents-md.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.5521407Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-ensure-agents-md.test.sh exit=124 duration_ms=62 gate_skip=false
+2026-10-01T03:46:16.5740302Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-supervision-instructions.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.5937701Z not ok - timed out: tests/fm-supervision-instructions.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.5986538Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-supervision-instructions.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.6172569Z not ok - timed out: tests/fm-supervision-instructions.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.6399415Z ##[error]tests/fm-supervision-instructions.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.6401405Z fm-test-run: retried infra flake: tests/fm-supervision-instructions.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.6405220Z ##[warning]tests/fm-supervision-instructions.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.6407882Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-supervision-instructions.test.sh exit=124 duration_ms=61 gate_skip=false
+2026-10-01T03:46:16.6632391Z FM_TEST_BEGIN 2026-10-01T03:46:16Z tests/fm-transition-lib.test.sh family=pure-contract-unit expected_gate_skip=none
+2026-10-01T03:46:16.6832112Z not ok - timed out: tests/fm-transition-lib.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.6880788Z FM_TEST_RETRY 2026-10-01T03:46:16Z tests/fm-transition-lib.test.sh signature=timeout first_exit=124
+2026-10-01T03:46:16.7069031Z not ok - timed out: tests/fm-transition-lib.test.sh exhausted the shared step budget before starting
+2026-10-01T03:46:16.7292401Z ##[error]tests/fm-transition-lib.test.sh exceeded its per-script bound of 1s and was terminated
+2026-10-01T03:46:16.7296414Z ##[warning]tests/fm-transition-lib.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 124
+2026-10-01T03:46:16.7298813Z FM_TEST_END 2026-10-01T03:46:16Z tests/fm-transition-lib.test.sh exit=124 duration_ms=61 gate_skip=false
+2026-10-01T03:46:16.7301180Z fm-test-run: retried infra flake: tests/fm-transition-lib.test.sh: signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7504611Z FM_TEST_SUMMARY total=13 failed=10 skipped_gate=0 duration_ms=390704
+2026-10-01T03:46:16.7522914Z FM_TEST_SUMMARY_FAMILY family=backend-dispatch count=3 duration_ms=10194 failed=3
+2026-10-01T03:46:16.7523871Z FM_TEST_SUMMARY_FAMILY family=pr-forge count=1 duration_ms=28600 failed=0
+2026-10-01T03:46:16.7525109Z FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=9 duration_ms=351490 failed=7
+2026-10-01T03:46:16.7545419Z FM_TEST_TIMED_OUT script=tests/fm-backend-herdr.test.sh bound_secs=1
+2026-10-01T03:46:16.7546619Z FM_TEST_RETRIED_FLAKE script=tests/fm-backend-herdr.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7547359Z FM_TEST_TIMED_OUT script=tests/fm-crew-state.test.sh bound_secs=1
+2026-10-01T03:46:16.7547912Z FM_TEST_RETRIED_FLAKE script=tests/fm-crew-state.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7548502Z FM_TEST_TIMED_OUT script=tests/fm-herdr-lab.test.sh bound_secs=1
+2026-10-01T03:46:16.7549124Z FM_TEST_RETRIED_FLAKE script=tests/fm-herdr-lab.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7549851Z FM_TEST_TIMED_OUT script=tests/fm-send-popup-settle.test.sh bound_secs=1
+2026-10-01T03:46:16.7550512Z FM_TEST_RETRIED_FLAKE script=tests/fm-send-popup-settle.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7551341Z FM_TEST_TIMED_OUT script=tests/fm-send-strict.test.sh bound_secs=1
+2026-10-01T03:46:16.7551901Z FM_TEST_RETRIED_FLAKE script=tests/fm-send-strict.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7552448Z FM_TEST_TIMED_OUT script=tests/fm-spawn-batch.test.sh bound_secs=1
+2026-10-01T03:46:16.7553032Z FM_TEST_RETRIED_FLAKE script=tests/fm-spawn-batch.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7553573Z FM_TEST_TIMED_OUT script=tests/fm-send-settle.test.sh bound_secs=1
+2026-10-01T03:46:16.7554091Z FM_TEST_RETRIED_FLAKE script=tests/fm-send-settle.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7555317Z FM_TEST_TIMED_OUT script=tests/fm-ensure-agents-md.test.sh bound_secs=1
+2026-10-01T03:46:16.7556074Z FM_TEST_RETRIED_FLAKE script=tests/fm-ensure-agents-md.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7556692Z FM_TEST_TIMED_OUT script=tests/fm-supervision-instructions.test.sh bound_secs=1
+2026-10-01T03:46:16.7557344Z FM_TEST_RETRIED_FLAKE script=tests/fm-supervision-instructions.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7557950Z FM_TEST_TIMED_OUT script=tests/fm-transition-lib.test.sh bound_secs=1
+2026-10-01T03:46:16.7558503Z FM_TEST_RETRIED_FLAKE script=tests/fm-transition-lib.test.sh signature=timeout first_exit=124 exit=124
+2026-10-01T03:46:16.7606909Z FM_TEST_SLOWEST rank=1 script=tests/fm-captain-hold-lifecycle.test.sh duration_ms=321848
+2026-10-01T03:46:16.7607967Z FM_TEST_SLOWEST rank=2 script=tests/fm-arm-pretool-check.test.sh duration_ms=29213
+2026-10-01T03:46:16.7608854Z FM_TEST_SLOWEST rank=3 script=tests/fm-x-mode.test.sh duration_ms=28600
+2026-10-01T03:46:16.7609716Z FM_TEST_SLOWEST rank=4 script=tests/fm-backend-herdr.test.sh duration_ms=10071
+2026-10-01T03:46:16.7610575Z FM_TEST_SLOWEST rank=5 script=tests/fm-send-settle.test.sh duration_ms=64
+2026-10-01T03:46:16.7611442Z FM_TEST_SLOWEST rank=6 script=tests/fm-ensure-agents-md.test.sh duration_ms=62
+2026-10-01T03:46:16.7612319Z FM_TEST_SLOWEST rank=7 script=tests/fm-spawn-batch.test.sh duration_ms=62
+2026-10-01T03:46:16.7613189Z FM_TEST_SLOWEST rank=8 script=tests/fm-send-popup-settle.test.sh duration_ms=61
+2026-10-01T03:46:16.7617815Z FM_TEST_SLOWEST rank=9 script=tests/fm-send-strict.test.sh duration_ms=61
+2026-10-01T03:46:16.7618384Z FM_TEST_SLOWEST rank=10 script=tests/fm-supervision-instructions.test.sh duration_ms=61
+2026-10-01T03:46:16.7618928Z FM_TEST_SLOWEST rank=11 script=tests/fm-transition-lib.test.sh duration_ms=61
+2026-10-01T03:46:16.7619408Z FM_TEST_SLOWEST rank=12 script=tests/fm-crew-state.test.sh duration_ms=60
+2026-10-01T03:46:16.7619921Z FM_TEST_SLOWEST rank=13 script=tests/fm-herdr-lab.test.sh duration_ms=60
+2026-10-01T03:46:16.7890074Z fm-test-run: wrote timing artifact: /home/runner/work/_temp/fm-test/fm-test-timing-portable-parallel-2.json
+2026-10-01T03:46:16.7931326Z ##[error]Process completed with exit code 1.
+2026-10-01T03:46:16.8104204Z ##[group]Run actions/upload-artifact@v4
+2026-10-01T03:46:16.8104827Z with:
+2026-10-01T03:46:16.8105073Z   name: fm-test-timing-portable-parallel-2
+2026-10-01T03:46:16.8105552Z   path: /home/runner/work/_temp/fm-test/fm-test-timing-portable-parallel-2.json
+2026-10-01T03:46:16.8105987Z   if-no-files-found: warn
+2026-10-01T03:46:16.8106225Z   compression-level: 6
+2026-10-01T03:46:16.8106452Z   overwrite: false
+2026-10-01T03:46:16.8106667Z   include-hidden-files: false
+2026-10-01T03:46:16.8106902Z ##[endgroup]
+2026-10-01T03:46:16.9796986Z (node:176777) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-01T03:46:16.9798279Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-01T03:46:16.9835470Z With the provided path, there will be 1 file uploaded
+2026-10-01T03:46:16.9855868Z Artifact name is valid!
+2026-10-01T03:46:16.9856300Z Root directory input is valid!
+2026-10-01T03:46:17.3361900Z Beginning upload of artifact content to blob storage
+2026-10-01T03:46:17.3549058Z (node:176777) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-01T03:46:17.5731242Z Uploaded bytes 881
+2026-10-01T03:46:17.6370972Z Finished uploading artifact content to blob storage!
+2026-10-01T03:46:17.6372255Z SHA256 digest of uploaded artifact zip is dd1bbac60cc0cbd0d54b0be40862d01a8c902e72f65223b386cdc3411c0c56de
+2026-10-01T03:46:17.6374692Z Finalizing artifact upload
+2026-10-01T03:46:17.8786905Z Artifact fm-test-timing-portable-parallel-2.zip successfully finalized. Artifact ID 11139991083
+2026-10-01T03:46:17.8788510Z Artifact fm-test-timing-portable-parallel-2 has been successfully uploaded! Final size is 881 bytes. Artifact ID is 11139991083
+2026-10-01T03:46:17.8793221Z Artifact download URL: https://github.com/mdc2122/firstmate/actions/runs/36811522084/artifacts/11139991083
+2026-10-01T03:46:17.9000716Z Post job cleanup.
+2026-10-01T03:46:17.9888184Z [command]/usr/bin/git version
+2026-10-01T03:46:17.9933506Z git version 2.55.0
+2026-10-01T03:46:17.9978990Z Temporarily overriding HOME='/home/runner/work/_temp/11e12065-9542-497a-aa34-dacc242c0c8b' before making global git config changes
+2026-10-01T03:46:17.9980158Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-01T03:46:17.9984811Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/firstmate/firstmate
+2026-10-01T03:46:18.0014997Z Removing SSH command configuration
+2026-10-01T03:46:18.0022075Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-01T03:46:18.0057809Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-01T03:46:18.0299733Z Removing HTTP extra header
+2026-10-01T03:46:18.0305409Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-01T03:46:18.0341642Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-01T03:46:18.0583832Z Removing includeIf entries pointing to credentials config files
+2026-10-01T03:46:18.0592889Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-01T03:46:18.0625663Z includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path
+2026-10-01T03:46:18.0626906Z includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path
+2026-10-01T03:46:18.0627979Z includeif.gitdir:/github/workspace/.git.path
+2026-10-01T03:46:18.0628912Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-01T03:46:18.0637824Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path
+2026-10-01T03:46:18.0672207Z /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0684117Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/firstmate/firstmate/.git.path /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0727994Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path
+2026-10-01T03:46:18.0753901Z /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0765143Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/firstmate/firstmate/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0804998Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-01T03:46:18.0831151Z /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0841199Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0887934Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-01T03:46:18.0922546Z /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0932573Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config
+2026-10-01T03:46:18.0970543Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-01T03:46:18.1192487Z Removing credentials config '/home/runner/work/_temp/git-credentials-18ddeeac-3756-459c-8682-0b84ff6a9b4e.config'
+2026-10-01T03:46:18.1333684Z Cleaning up orphan processes
+2026-10-01T03:46:18.1643005Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
