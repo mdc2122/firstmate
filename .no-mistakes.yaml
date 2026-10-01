@@ -1,6 +1,7 @@
 # Per-repo no-mistakes overrides.
-# Use the Pi validation seat for this repository only.
-agent: pi
+# Agent selection and fallback constraints: docs/configuration.md "Gate defaults".
+# Every fallback member must satisfy the project-instruction neutralization guard.
+agent: [claude, pi]
 
 # firstmate is an agent-orchestration repo: its AGENTS.md installs a fleet-captain
 # identity. Disable project-level agent settings/instructions for gate agents so a

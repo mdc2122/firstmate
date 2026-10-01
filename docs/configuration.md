@@ -217,7 +217,12 @@ The flag is a home-local supervision-noise preference and is not inherited by se
 
 ## Gate defaults (.no-mistakes.yaml)
 
-The tracked `.no-mistakes.yaml` sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh`, the same owner CI invokes.
+The tracked `.no-mistakes.yaml` selects `agent: [claude, pi]`: Opus (Claude) first, with Sol (Pi) as fallback.
+Both agents have verified project-instruction neutralization controls, as required for every fallback member by this repository's `disable_project_settings: true` guard.
+Cursor is omitted because its ACP adapter has no verified neutralization control; including it makes the guard refuse the chain before the first step.
+The `agent` override is trusted-only and read from the default-branch copy, so a branch changing it is still validated with the default branch's current selection.
+[Architecture](architecture.md#no-mistakes-gate-authority-boundary) owns the gate's authority boundary and layered fleet-mutation refusal.
+The tracked `.no-mistakes.yaml` also sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh`, the same owner CI invokes.
 Storing evidence in the repo publishes each run's test artifacts to the orphan `no-mistakes/evidence` branch and links them from the PR body, instead of keeping them on local disk under the no-mistakes home.
 That branch shares no history with code branches, so evidence never enters a pushed feature branch or the default branch; the worktree's `.no-mistakes/` stays local and CI rejects tracked entries under that path.
 The [`firstmate-coding-guidelines` skill](../.agents/skills/firstmate-coding-guidelines/SKILL.md#no-mistakes-test-configuration) owns why `commands.test` stays absent and targeted validation belongs to the evidence path.
