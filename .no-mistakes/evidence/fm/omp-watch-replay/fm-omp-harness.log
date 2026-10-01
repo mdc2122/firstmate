@@ -1,0 +1,6 @@
+ok - fm-harness: omp detects by its anchored name; the marker is a precedence override that needs real omp ancestry
+ok - session lock and shared liveness: omp is anchored in both shapes, decoys stay out
+ok - fm-harness: bun running the omp launcher detects as omp
+ok - fm-harness ancestry: the bun-launcher argv rule accepts the launcher and rejects decoys, bare runs, and flag mentions
+not ok - OMPCODE=1 must identify omp, got 'claude'
+exit=1

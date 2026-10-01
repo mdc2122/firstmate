@@ -1,0 +1,3 @@
+not ok - a close whose queued wake was acknowledged before the restart must not be replayed, saw '1,0'
+ok - .omp watch extension: after a restart, a handed-off close whose queued wake is still unacknowledged is replayed exactly once
+not ok - after --ack-through 7 under a still-pending shared generation, only the close for row 8 may replay, saw '1,1'

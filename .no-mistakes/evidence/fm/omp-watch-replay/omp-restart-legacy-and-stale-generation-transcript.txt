@@ -1,0 +1,15 @@
+### case 1: legacy handoff record persisted by the pre-change extension (no wakeQueueSeq binding)
+{"version":2,"pending":[{"version":1,"token":"1-1-1","message":"signal: omp-replay A done","predecessorArmPid":"1"}]}
+restart -> re-deliveries A,B: 1,0
+restart again -> 0,0
+
+### case 2: record bound to row 2 under an old generation; row 2 still queued but the recovery generation moved on
+1790858233	2	signal	live.B	signal: omp-replay B done
+watcher-down: pending:downtime:NEWGEN
+{"version":2,"pending":[{"version":1,"token":"1-1-2","message":"signal: omp-replay B done","predecessorArmPid":"1","wakeQueueSeq":2,"recoveryGeneration":"OLDGEN"}]}
+restart -> re-deliveries A,B: 0,0
+handoff after: absent
+
+### case 3: same record, generation matches and row 2 queued -> replays
+restart -> re-deliveries A,B: 0,1
+handoff after: absent

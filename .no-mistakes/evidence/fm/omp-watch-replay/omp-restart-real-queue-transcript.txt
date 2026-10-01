@@ -1,0 +1,25 @@
+### session 1 (pre-reboot): deliveries A,B ->
+1,0
+### state after session 1 shutdown
+wake-queue:
+1790858232	1	signal	live.A	signal: omp-replay A done
+1790858233	2	signal	live.B	signal: omp-replay B done
+watcher-down: pending:downtime:15965.1790858232.XolW3B
+handoff:
+{"version":2,"pending":[{"version":1,"token":"15669-1790858232563-1","message":"signal: omp-replay A done","predecessorArmPid":"15698","wakeQueueSeq":1,"recoveryGeneration":"15965.1790858232.XolW3B"},{"version":1,"token":"15669-1790858262980-2","message":"signal: omp-replay B done","predecessorArmPid":"16024","wakeQueueSeq":2,"recoveryGeneration":"15965.1790858232.XolW3B"}]}
+
+### main presents queue with real bin/fm-wake-drain.sh
+1790858232	1	signal	live.A	signal: omp-replay A done
+1790858233	2	signal	live.B	signal: omp-replay B done
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 15965.1790858232.XolW3B
+drain exit=
+### main handles A only: real bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 15965.1790858232.XolW3B
+ack exit=
+wake-queue now:
+1790858233	2	signal	live.B	signal: omp-replay B done
+watcher-down now: pending:handling:15965.1790858232.XolW3B
+### session 2 (fresh process after reboot): re-deliveries A,B ->
+0,1
+### session 3 (another restart): re-deliveries A,B ->
+0,0
+handoff file after: absent

@@ -1,0 +1,6 @@
+ok - .omp watch extension: fm_watch_arm_omp arms once, repeats as a no-op, and delivers an actionable close as one follow-up
+ok - .omp watch extension: an in-process helper session's start and shutdown leave the owner armed and are logged as inert; a genuine replacement still takes over
+ok - .omp watch extension: after a restart, a handed-off close whose queued wake was already acknowledged is not replayed
+ok - .omp watch extension: after a restart, a handed-off close whose queued wake is still unacknowledged is replayed exactly once
+ok - .omp watch extension: closes sharing one pending recovery generation replay per wake, so acknowledging row 7 replays only row 8
+exit=0
