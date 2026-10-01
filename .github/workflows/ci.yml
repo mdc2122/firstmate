@@ -438,11 +438,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Run snapshot consumers with stock Bash
+        timeout-minutes: 8
         shell: /bin/bash {0}
         env:
           PATH: /bin:/usr/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin
         run: |
           set -eu
+          deadline=$((SECONDS + 420))
+          run_stock_test() {
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || remaining=1
+            FM_TEST_STEP_BUDGET_SECS="$remaining" FM_TEST_SCRIPT_BASH=/bin/bash \
+              /bin/bash bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs auto \
+                --retry-infra-flakes "$1"
+          }
           case "$BASH_VERSION" in
             3.2.57*) ;;
             *) echo "::error::expected stock macOS Bash 3.2.57, got $BASH_VERSION"; exit 1 ;;
@@ -464,7 +473,7 @@ jobs:
           export PATH
           command -v tasks-axi >/dev/null || { echo "::error::tasks-axi is required for the stock Bash regressions"; exit 1; }
 
-          snapshot_output=$(/bin/bash tests/fm-fleet-snapshot-view.test.sh)
+          snapshot_output=$(run_stock_test tests/fm-fleet-snapshot-view.test.sh)
           printf '%s\n' "$snapshot_output"
           snapshot_count=$(printf '%s\n' "$snapshot_output" | grep -c '^ok - ')
           [ "$snapshot_count" -eq 18 ] || {
@@ -472,7 +481,7 @@ jobs:
             exit 1
           }
 
-          bearings_output=$(/bin/bash tests/fm-bearings-snapshot.test.sh)
+          bearings_output=$(run_stock_test tests/fm-bearings-snapshot.test.sh)
           printf '%s\n' "$bearings_output"
           bearings_count=$(printf '%s\n' "$bearings_output" | grep -c '^ok - ')
           [ "$bearings_count" -eq 59 ] || {
@@ -483,7 +492,7 @@ jobs:
           # The full public-followup suite is not a stock-bash snapshot; run only
           # the empty-lock register regression under real /bin/bash 3.2.
           pf_output=$(FM_TEST_ONLY=test_first_register_succeeds_with_empty_lock_list_under_bash32 \
-            /bin/bash tests/fm-public-followup.test.sh)
+            run_stock_test tests/fm-public-followup.test.sh)
           printf '%s\n' "$pf_output"
           pf_count=$(printf '%s\n' "$pf_output" | grep -c '^ok - ')
           [ "$pf_count" -eq 1 ] || {

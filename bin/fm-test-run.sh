@@ -79,20 +79,14 @@
 #                   into a prompt, named failure instead of a stall to the
 #                   caller's or job's own timeout. --max-wall-ms is checked
 #                   after the run and so cannot catch a hang on its own.
-#                   A timed-out script is never retried.
-#                   External interruption cleanup is outside this runner's
-#                   guarantee. FM_TEST_STEP_BUDGET_SECS caps all attempts to a
-#                   shared invocation deadline; CI reserves reporting margin.
+#                   FM_TEST_STEP_BUDGET_SECS caps all attempts to a shared
+#                   invocation deadline; CI reserves reporting margin.
+#                   FM_TEST_SCRIPT_BASH selects the test interpreter.
 #   --retry-infra-flakes
-#                   rerun a failed script exactly once when its terminal diagnostic contains
-#                   one of the infrastructure signatures listed in
-#                   infra_flake_signatures below (disk, memory, file-descriptor,
-#                   or process-limit exhaustion, DNS failure, unreachable
-#                   network). The retry's exit is the script's result, and the
-#                   script is labeled a retried infra flake either way. A
-#                   failure whose output matches no signature - every assertion
-#                   failure - and a timeout are never retried. Off by default;
-#                   CI lanes enable it.
+#                   retry once after an observed process signal, harness startup
+#                   failure, or per-script timeout. Test-produced exit statuses
+#                   never qualify, regardless of their output. Retried results
+#                   are labeled as infrastructure flakes. Off by default.
 #   --max-wall-ms N fail the run when its measured invocation wall clock exceeds
 #                   N milliseconds, including an empty selection. It is
 #                   evaluated after selection and suite execution and cannot
@@ -278,49 +272,6 @@ script_timeout_secs() {  # <script>
     auto) per_script_timeout_auto_secs "$1" ;;
     *) echo "$PER_SCRIPT_TIMEOUT_SECS" ;;
   esac
-}
-
-# The only failures --retry-infra-flakes may retry, one "<id><TAB><text>" per
-# line. A failed script qualifies when its output contains <text>, compared
-# case-insensitively so libc, Node, and git spellings of one fault all match.
-# Every entry names exhaustion of a host resource or loss of the network: a
-# fault of the runner a test happens to run on, never a verdict about the code
-# under test. Deliberately absent: connection resets, refusals, and timeouts,
-# because many suites drive local servers and pipes whose own resets are the
-# product behavior under test, and a timed-out script, which the per-script
-# bound already reports.
-infra_flake_signatures() {
-  cat <<'SIGS'
-disk-full	no space left on device
-out-of-memory	cannot allocate memory
-fd-exhausted	too many open files
-process-limit	fork: retry: resource temporarily unavailable
-process-limit	fork: resource temporarily unavailable
-dns-failure	could not resolve host
-dns-failure	temporary failure in name resolution
-dns-failure	getaddrinfo eai_again
-network-unreachable	network is unreachable
-SIGS
-}
-
-infra_flake_signature_in() {  # <out>
-  local out=$1 id text terminal block verdict
-  verdict='not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expect|expected|fixture)([^[:alnum:]_]|$)'
-  block=$(awk -v verdict="$verdict" '
-    /^[[:space:]]*ok - / && !locked { block=""; next }
-    { block=block $0 "\n"; if (tolower($0) ~ verdict) locked=1 }
-    END { printf "%s", block }
-  ' "$out")
-  terminal=$(printf '%s\n' "$block" | awk 'NF { line=$0 } END { print line }')
-  if printf '%s\n' "$block" | grep -Eiq "$verdict"; then
-    return 1
-  fi
-  while IFS=$'\t' read -r id text; do
-    printf '%s\n' "$terminal" | grep -iqF -- "$text" || continue
-    printf '%s\n' "$id"
-    return 0
-  done < <(infra_flake_signatures)
-  return 1
 }
 
 # Emit a GitHub Actions workflow command when running under Actions; a no-op
@@ -2497,26 +2448,41 @@ run_script_bounded() {  # <script> <out> <stream> <id>
       bound=$remaining
     fi
   fi
+  local outcome="$out.process" program
+  rm -f "$outcome"
+  program='use POSIX qw(:sys_wait_h);
+    my ($record, @command) = @ARGV;
+    my $pid = fork;
+    if (!defined $pid) { open(my $f, ">", $record); print $f "start-error"; exit 125 }
+    if (!$pid) {
+      exec @command;
+      open(my $f, ">", $record); print $f "start-error"; exit 125;
+    }
+    waitpid($pid, 0);
+    my $status = $?;
+    if (-s $record) { exit 125 }
+    open(my $f, ">", $record) or exit 125;
+    if (WIFSIGNALED($status)) {
+      my $signal = WTERMSIG($status); print $f "signal-$signal"; exit(128 + $signal);
+    }
+    print $f "exit"; exit(WEXITSTATUS($status));'
+  local interpreter=${FM_TEST_SCRIPT_BASH:-bash}
   set +e
   if [ "$stream" -eq 1 ]; then
     if [ "$bound" -gt 0 ]; then
-      # Expansion is intentionally deferred to the child bash passed to -c.
-      # shellcheck disable=SC2016
-      fm_run_timed "$bound" bash -c \
-        'bash "$1" 2>&1 | tee "$2"; exit "${PIPESTATUS[0]}"' _ "$script" "$out"
-      rc=$?
+      fm_run_timed "$bound" perl -e "$program" "$outcome" "$interpreter" "$script" 2>&1 | tee "$out"
     else
-      bash "$script" 2>&1 | tee "$out"
-      rc=${PIPESTATUS[0]}
+      perl -e "$program" "$outcome" "$interpreter" "$script" 2>&1 | tee "$out"
     fi
+    rc=${PIPESTATUS[0]}
   elif [ "$bound" -gt 0 ]; then
-    fm_run_timed "$bound" bash "$script" >"$out" 2>&1
+    fm_run_timed "$bound" perl -e "$program" "$outcome" "$interpreter" "$script" >"$out" 2>&1
     rc=$?
   else
-    bash "$script" >"$out" 2>&1
+    perl -e "$program" "$outcome" "$interpreter" "$script" >"$out" 2>&1
     rc=$?
   fi
-  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ]; then
+  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ] && [ ! -s "$outcome" ]; then
     printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
       "$script" "$bound" >>"$out"
     printf '%s\n' "$bound" >"$out.timeout"
@@ -2526,8 +2492,7 @@ run_script_bounded() {  # <script> <out> <stream> <id>
 }
 
 # Run <script> through run_script_bounded and, under --retry-infra-flakes,
-# rerun it exactly once when it failed for a reason other than its bound and its
-# output carries an infrastructure signature (infra_flake_signature_in). The
+# rerun it exactly once after a process signal, startup failure, or timeout. The
 # retry's exit is returned. A streamed first attempt was already shown live; a
 # captured one is kept in <out>.prelude, followed by the FM_TEST_RETRY marker,
 # so a worker's replay still shows both attempts while <out> holds the attempt
@@ -2537,10 +2502,16 @@ run_script_attempts() {  # <script> <out> <stream> <id>
   rm -f "$out.timeout" "$out.retry" "$out.prelude"
   run_script_bounded "$script" "$out" "$stream" "$id"
   rc=$?
-  if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ] || [ -e "$out.timeout" ]; then
+  if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ]; then
     return "$rc"
   fi
-  signature=$(infra_flake_signature_in "$out") || return "$rc"
+  if [ -s "$out.timeout" ]; then
+    signature=timeout
+  else
+    signature=$(cat "$out.process" 2>/dev/null) || return "$rc"
+    case "$signature" in signal-*|start-error) ;; *) return "$rc" ;; esac
+  fi
+  rm -f "$out.timeout"
   marker=$(printf 'FM_TEST_RETRY %s %s signature=%s first_exit=%s' \
     "$(now_iso)" "$script" "$signature" "$rc")
   if [ "$stream" -eq 1 ]; then
@@ -2591,7 +2562,7 @@ else
   # Bash layers report synthetic POSIX modes, so retain chmod there but enforce
   # its observed mode only where the host reports real POSIX permissions.
   # Retries are never a green strategy: the only retry is the single
-  # --retry-infra-flakes rerun on a listed infrastructure signature.
+  # --retry-infra-flakes rerun on a process-level infrastructure failure.
   worker_n=0
   active_workers=0
 

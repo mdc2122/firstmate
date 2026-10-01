@@ -123,6 +123,6 @@ Refresh an entry from the timing artifacts whenever a script's slowest healthy r
 ## Infrastructure flake retry
 
 Every behavior lane also passes `--retry-infra-flakes`.
-A failed script is rerun exactly once only when its terminal block after passing `ok -` verdicts contains no assertion, FAIL, expected-result, or fixture marker and its last nonempty diagnostic contains one of the host-resource or network signatures listed in `infra_flake_signatures` in `bin/fm-test-run.sh`, which owns that list and the reasons for what it leaves out.
-Assertion failures and timeouts never retry, so the gate's rigor is unchanged. Once an assertion marker starts a failure block, subsequent captured lines (even `ok -` lines) cannot discard that verdict.
+A script is retried once only after an observed process signal (`signal-N`), harness fork/exec failure (`start-error`), or per-script timeout (`timeout`). A process supervisor records these outcomes independently of test output. Test-produced exit statuses, including explicit exits 124 and 128 or higher, never qualify; assertion output is never classified. Retries share the original enclosing deadline.
+The stock-macOS compatibility step also uses the runner with `FM_TEST_SCRIPT_BASH=/bin/bash`, preserving its selected public-followup regression and passing-case count checks.
 Each retry is labeled in the log (`FM_TEST_RETRY`, `FM_TEST_RETRIED_FLAKE`), as a warning annotation, in the job step summary, and in the timing JSON (`retried_infra_flake`, `retry_signature`, summary `retried_infra_flakes`), so retried flakes stay countable across runs instead of disappearing into manual reruns.

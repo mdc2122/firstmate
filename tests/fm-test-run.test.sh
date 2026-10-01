@@ -1464,140 +1464,74 @@ SH
   pass "--per-script-timeout-secs turns a hung script into a bounded failure"
 }
 
-# The only automatic retry is a single rerun of a failure whose output carries
-# a listed infrastructure signature. Every other failure - an assertion, a
-# signature the test prints from its own source, a timeout - runs exactly once,
-# and the retry is labeled everywhere a reader looks for it.
-# Fixture bodies and markdown backticks are deliberate single-quoted literals.
-# shellcheck disable=SC2016
 test_infra_flake_retry_classification() {
-  local tmp repo runner rc f
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-flake.XXXXXX")
-  repo="$tmp/repo"
-  runner="$repo/bin/fm-test-run.sh"
-  mkdir -p "$repo/bin" "$repo/tests" "$tmp/fx"
-  cp "$RUNNER" "$runner"
-  cp "$ROOT/tests/git-config-helpers.sh" "$repo/tests/"
-  cp "$ROOT/bin/fm-timeout-lib.sh" "$repo/bin/fm-timeout-lib.sh"
-  chmod +x "$runner"
-  # A runner fault reaches a test through a tool it calls, so the signature
-  # comes from a helper outside the test script, as it would on a real runner.
-  printf '#!/bin/sh\necho "fatal: write error: No space left on device" >&2\nexit 1\n' >"$tmp/fx/disk-full-tool"
-  chmod +x "$tmp/fx/disk-full-tool"
-  mkdir -p "$tmp/fx/fakebin"
-  printf '#!/bin/sh\necho "mkdir: cannot create directory: No space left on device" >&2\nexit 1\n' >"$tmp/fx/fakebin/mkdir"
-  chmod +x "$tmp/fx/fakebin/mkdir"
-  # <name> <first-attempt body> <later-attempt body>; every attempt is counted.
-  write_fixture() {
-    cat >"$repo/tests/$1" <<SH
-#!/usr/bin/env bash
-n=\$(cat "\$FX/$1.count" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" >"\$FX/$1.count"
-if [ "\$n" -eq 1 ]; then $2; else $3; fi
-SH
+  local tmp runner rc f
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-process.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests" "$tmp/fx"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$ROOT/tests/lib.sh" "$tmp/tests/"
+  runner="$tmp/bin/fm-test-run.sh"
+  write_process_fixture() {
+    printf '%s\n' '#!/bin/bash' \
+      'n=$(cat "$FX/'"$1"'.count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" >"$FX/'"$1"'.count"' \
+      'if [ "$n" -eq 1 ]; then' "$2" 'else' "$3" 'fi' >"$tmp/tests/$1.test.sh"
   }
-  write_fixture flake.test.sh ': "No space left on device"; "$FX/disk-full-tool"; exit 1' 'echo "ok - healthy"'
-  write_fixture passing-then-infra.test.sh 'set -e; echo "ok - a failed replacement keeps the standing posture live"; PATH="$FX/fakebin:$PATH" mkdir -p "$FX/home/fakebin"' 'echo "ok - healthy"'
-  write_fixture persistent.test.sh '"$FX/disk-full-tool"; exit 1' '"$FX/disk-full-tool"; exit 1'
-  write_fixture assertion.test.sh '"$FX/disk-full-tool"; echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
-  write_fixture own-text.test.sh 'echo "fixture: Too many open files"; echo "FAIL: assertion"; exit 1' 'echo "ok - would pass"'
-  write_fixture multiline.test.sh '. "$FX/test-lib/lib.sh"; echo "ok - earlier expected failure handled"; fail "spawn assertion failed
-ok - captured tool output
-$("$FX/disk-full-tool" 2>&1)"' 'echo "ok - would pass"'
-  mkdir -p "$tmp/fx/test-lib"
-  cp "$ROOT/tests/lib.sh" "$ROOT/tests/git-config-helpers.sh" "$tmp/fx/test-lib/"
-  write_fixture hang.test.sh '"$FX/disk-full-tool"; sleep 60' 'echo "ok - would pass"'
-
+  write_process_fixture stock 'echo "ok - stock interpreter"; [ "$BASH" = /bin/bash ]; [ "$FM_TEST_ONLY" = selected-regression ]' 'exit 99'
+  FM_TEST_SCRIPT_BASH=/bin/bash FM_TEST_ONLY=selected-regression FX="$tmp/fx" \
+    FM_TEST_STEP_BUDGET_SECS=5 "$runner" --jobs 1 --per-script-timeout-secs auto \
+    --retry-infra-flakes tests/stock.test.sh >"$tmp/stock.out" 2>&1 \
+    || fail "stock interpreter or selected regression was not preserved: $(cat "$tmp/stock.out")"
+  [ "$(grep -c '^ok - ' "$tmp/stock.out")" -eq 1 ] || fail "runner changed passing-case counts"
+  write_process_fixture signal 'kill -TERM $$' 'echo "ok - recovered"'
+  write_process_fixture persistent 'kill -KILL $$' 'kill -KILL $$'
+  write_process_fixture timeout 'sleep 60' 'echo "ok - recovered"'
+  write_process_fixture assertion '. "$(dirname "$0")/lib.sh"; fail "spawn assertion failed
+No space left on device"' 'echo "ok - must not run"'
+  write_process_fixture diagnostic 'echo "No space left on device"; exit 1' 'echo "ok - must not run"'
+  write_process_fixture explicit-signal-status 'exit 143' 'echo "ok - must not run"'
+  write_process_fixture explicit-timeout-status 'exit 124' 'echo "ok - must not run"'
   set +e
-  FX="$tmp/fx" GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$tmp/summary.md" \
-    "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 3 --json "$tmp/run.json" \
-    tests/flake.test.sh tests/persistent.test.sh tests/assertion.test.sh \
-    tests/own-text.test.sh tests/multiline.test.sh tests/passing-then-infra.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
+  FX="$tmp/fx" "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 2 \
+    --json "$tmp/result.json" tests/signal.test.sh tests/persistent.test.sh \
+    tests/timeout.test.sh tests/assertion.test.sh tests/diagnostic.test.sh \
+    tests/explicit-signal-status.test.sh tests/explicit-timeout-status.test.sh >"$tmp/out" 2>&1
   rc=$?
   set -e
-  [ "$rc" -eq 1 ] || fail "remaining failures must still fail the run, got $rc: $(cat "$tmp/out")"
-  for f in flake:2 persistent:2 passing-then-infra:2 assertion:1 own-text:1 multiline:1 hang:1; do
-    [ "$(cat "$tmp/fx/${f%%:*}.test.sh.count")" = "${f#*:}" ] \
-      || fail "${f%%:*} ran $(cat "$tmp/fx/${f%%:*}.test.sh.count") times, expected ${f#*:}: $(cat "$tmp/out")"
+  [ "$rc" -eq 1 ] || fail "remaining failures must fail the run: $(cat "$tmp/out")"
+  for f in signal:2 persistent:2 timeout:2 assertion:1 diagnostic:1 explicit-signal-status:1 explicit-timeout-status:1; do
+    [ "$(cat "$tmp/fx/${f%%:*}.count")" = "${f#*:}" ] || fail "wrong attempt count for $f: $(cat "$tmp/out")"
   done
-  grep -Eq '^FM_TEST_RETRY .+ tests/flake\.test\.sh signature=disk-full first_exit=1$' "$tmp/out" \
-    || fail "the retry was not announced before it ran: $(cat "$tmp/out")"
-  grep -Eq '^FM_TEST_END .+ tests/flake\.test\.sh exit=0 ' "$tmp/out" \
-    || fail "a flake that passed on retry must be recorded green: $(cat "$tmp/out")"
-  grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/flake.test.sh signature=disk-full first_exit=1 exit=0' "$tmp/out" \
-    || fail "the passing flake was not labeled in the run summary: $(cat "$tmp/out")"
-  grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/persistent.test.sh signature=disk-full first_exit=1 exit=1' "$tmp/out" \
-    || fail "a flake that failed again was not labeled with its retry exit: $(cat "$tmp/out")"
-  grep -Fq 'FM_TEST_SUMMARY total=7 failed=5' "$tmp/out" \
-    || fail "a retried script must be counted once: $(cat "$tmp/out")"
-  grep -Fq '::warning file=tests/flake.test.sh,title=Retried infra flake::' "$tmp/out" \
-    || fail "the retried flake had no warning annotation: $(cat "$tmp/out")"
-  grep -Fq '::error file=tests/hang.test.sh,title=Test timed out::' "$tmp/out" \
-    || fail "the timeout had no error annotation: $(cat "$tmp/out")"
-  if grep -Eq 'FM_TEST_(RETRY|RETRIED_FLAKE).*(assertion|own-text|multiline|hang)' "$tmp/out"; then
-    fail "an assertion, self-printed text, or timeout was retried: $(cat "$tmp/out")"
-  fi
-  grep -Fq '| `tests/flake.test.sh` | retried infra flake, passed on retry |' "$tmp/summary.md" \
-    || fail "the step summary did not list the passing flake: $(cat "$tmp/summary.md")"
-  grep -Fq '| `tests/hang.test.sh` | timed out |' "$tmp/summary.md" \
-    || fail "the step summary did not list the timeout: $(cat "$tmp/summary.md")"
-  python3 - "$tmp/run.json" <<'PY' || fail "timing JSON did not label the retry and timeout: $(cat "$tmp/run.json")"
+  python3 - "$tmp/result.json" <<'PYTEST' || fail "process outcomes were not labeled correctly"
 import json, sys
-doc = json.load(open(sys.argv[1], encoding="utf-8"))
-by = {s["path"]: s for s in doc["scripts"]}
-assert by["tests/flake.test.sh"]["retried_infra_flake"] is True
-assert by["tests/flake.test.sh"]["retry_signature"] == "disk-full"
-assert by["tests/flake.test.sh"]["first_attempt_exit"] == 1
-assert by["tests/flake.test.sh"]["exit"] == 0
-assert by["tests/passing-then-infra.test.sh"]["retried_infra_flake"] is True
-assert by["tests/passing-then-infra.test.sh"]["retry_signature"] == "disk-full"
-assert by["tests/passing-then-infra.test.sh"]["first_attempt_exit"] == 1
-assert by["tests/passing-then-infra.test.sh"]["exit"] == 0
-assert by["tests/assertion.test.sh"]["retried_infra_flake"] is False
-assert by["tests/multiline.test.sh"]["retried_infra_flake"] is False
-assert by["tests/multiline.test.sh"]["exit"] == 1
-assert by["tests/hang.test.sh"]["timed_out"] is True and by["tests/hang.test.sh"]["timeout_secs"] == 3
-assert doc["summary"]["retried_infra_flakes"] == 3
-assert doc["summary"]["timed_out"] == 1
-PY
-
-  # Off unless asked for: the same infrastructure failure is not retried.
-  rm -f "$tmp/fx/"*.count
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+for name, reason in [('signal', 'signal-15'), ('persistent', 'signal-9'), ('timeout', 'timeout')]:
+    row = by['tests/' + name + '.test.sh']
+    assert row['retried_infra_flake'] and row['retry_signature'] == reason
+assert by['tests/signal.test.sh']['exit'] == 0
+assert by['tests/timeout.test.sh']['exit'] == 0
+assert not by['tests/timeout.test.sh']['timed_out']
+for name in ['assertion', 'diagnostic', 'explicit-signal-status', 'explicit-timeout-status']:
+    assert not by['tests/' + name + '.test.sh']['retried_infra_flake']
+PYTEST
+  rm -f "$tmp/fx/signal.count"
   set +e
-  FX="$tmp/fx" "$runner" --jobs 1 tests/flake.test.sh >"$tmp/off.out" 2>&1
+  FX="$tmp/fx" "$runner" tests/signal.test.sh >"$tmp/off" 2>&1
   rc=$?
   set -e
-  [ "$rc" -eq 1 ] && [ "$(cat "$tmp/fx/flake.test.sh.count")" = 1 ] \
-    || fail "without --retry-infra-flakes a failure must not be retried: $(cat "$tmp/off.out")"
-
-  # A concurrent worker retries the same way, and its replayed log keeps the
-  # first attempt and the retry marker ahead of the deciding attempt. Both
-  # names are individually proven isolated, so they run as concurrent workers.
-  write_fixture fm-cd-pretool-check.test.sh '"$FX/disk-full-tool"; exit 1' 'echo "ok - healthy"'
-  write_fixture fm-pr-merge.test.sh 'echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
-  rm -f "$tmp/fx/"*.count
+  [ "$rc" -eq 1 ] && [ "$(cat "$tmp/fx/signal.count")" = 1 ] || fail "retry must be opt-in"
   set +e
-  FX="$tmp/fx" "$runner" --jobs 2 --retry-infra-flakes \
-    tests/fm-cd-pretool-check.test.sh tests/fm-pr-merge.test.sh >"$tmp/par.out" 2>&1
+  FM_TEST_SCRIPT_BASH="$tmp/missing-bash" "$runner" --retry-infra-flakes \
+    --json "$tmp/start.json" tests/signal.test.sh >"$tmp/start.out" 2>&1
   rc=$?
   set -e
-  [ "$rc" -eq 1 ] || fail "the concurrent assertion failure must fail the run, got $rc: $(cat "$tmp/par.out")"
-  [ "$(cat "$tmp/fx/fm-cd-pretool-check.test.sh.count")" = 2 ] \
-    && [ "$(cat "$tmp/fx/fm-pr-merge.test.sh.count")" = 1 ] \
-    || fail "concurrent workers retried the wrong scripts: $(cat "$tmp/par.out")"
-  python3 - "$tmp/par.out" <<'PY' || fail "concurrent replay lost the retry ordering: $(cat "$tmp/par.out")"
-import sys
-lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding="utf-8")]
-def at(pred):
-    return next(i for i, l in enumerate(lines) if pred(l))
-first = at(lambda l: l == "fatal: write error: No space left on device")
-retry = at(lambda l: l.startswith("FM_TEST_RETRY ") and "fm-cd-pretool-check" in l)
-healthy = at(lambda l: l == "ok - healthy")
-end = at(lambda l: l.startswith("FM_TEST_END ") and "fm-cd-pretool-check" in l and " exit=0 " in l)
-assert first < retry < healthy < end, (first, retry, healthy, end)
-PY
-
+  [ "$rc" -eq 1 ] || fail "startup failure must fail"
+  python3 - "$tmp/start.json" <<'PYTEST' || fail "startup failure was not retried and labeled"
+import json, sys
+row = json.load(open(sys.argv[1]))['scripts'][0]
+assert row['retry_signature'] == 'start-error' and row['exit'] == 125
+PYTEST
   rm -rf "$tmp"
-  pass "only a listed infrastructure signature earns one labeled retry; assertions and timeouts never retry"
+  pass "only observed process signals, startup failures, and timeouts retry once"
 }
 
 # CI lanes and --changed bound each script from the measured table rather than
@@ -1615,7 +1549,7 @@ test_auto_timeout_bounds_every_script_from_its_table() {
   chmod +x "$runner"
   cat >"$repo/bin/fm-timeout-lib.sh" <<'SH'
 fm_run_timed() {
-  printf '%s %s\n' "$1" "$*" >>"$BOUNDS_LOG"
+  printf '%s %s\n' "$1" "${!#}" >>"$BOUNDS_LOG"
   shift
   "$@"
 }
