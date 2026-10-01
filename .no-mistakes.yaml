@@ -4,6 +4,8 @@
 # disable_project_settings guard below requires of EVERY fallback member.
 # Cursor is omitted: its ACP adapter has no verified knob, so any chain that
 # includes it is refused before the first step.
+# `agent` is trusted-only: no-mistakes reads it from the default-branch copy,
+# so a branch changing it is still validated by main's current setting.
 agent: [claude, pi]
 
 # firstmate is an agent-orchestration repo: its AGENTS.md installs a fleet-captain
