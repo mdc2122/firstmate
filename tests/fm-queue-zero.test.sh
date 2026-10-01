@@ -63,7 +63,7 @@ sweep() {  # <home> <args...>
 }
 
 # A fake Paperclip: GET answers come from $home/pc/<route>.json (an issue's
-# latest comment from comments-<id>.json, else none); PATCH bodies are
+# comments, newest first, from comments-<id>.json, else none); PATCH bodies are
 # appended to $home/pc/patches.log. The key arrives on stdin (-H @-).
 install_fake_paperclip() {  # <home>
   local home=$1
@@ -293,16 +293,18 @@ test_paperclip_rows_join_the_queue_wake_and_failure_is_visible() {
 }
 
 # Paperclip refuses a monitor on a blocked issue, so its owner dates the next
-# check with an `fm-next-check:` line in the latest comment. A future date with
-# an owner hides a stalled or no-blocker issue; a passed date, a malformed
-# line, or blockers that are all done does not.
+# check with an `fm-next-check:` line in an issue comment. The sweep reads the
+# comments newest-first and honors the newest valid marker, so a later
+# acknowledgment does not clear it and a newer marker supersedes an older one;
+# a passed newest date, a malformed line, or blockers that are all done does
+# list the issue again.
 test_paperclip_blocked_comment_marker_dates_the_next_check() {
   local home out
   home=$(make_home pc-marker)
   install_fake_paperclip "$home"
   cat > "$home/pc/issues.json" <<'JSON'
 [
- {"id":"m1","identifier":"FIR-18","title":"future dated","status":"blocked",
+ {"id":"m1","identifier":"FIR-18","title":"marker then ack","status":"blocked",
   "blockedBy":[{"identifier":"FIR-104","status":"in_progress"}],"blockerAttention":{"state":"needs_attention"},
   "monitorNextCheckAt":null},
  {"id":"m2","identifier":"FIR-20","title":"past dated","status":"blocked",
@@ -317,19 +319,25 @@ test_paperclip_blocked_comment_marker_dates_the_next_check() {
  {"id":"m7","identifier":"FIR-89","title":"leading space","status":"blocked",
   "blockedBy":[{"identifier":"FIR-108","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
  {"id":"m8","identifier":"FIR-134","title":"dated but blockers done","status":"blocked",
-  "blockedBy":[{"identifier":"FIR-109","status":"done"}],"blockerAttention":{"state":"needs_attention"}}
+  "blockedBy":[{"identifier":"FIR-109","status":"done"}],"blockerAttention":{"state":"needs_attention"}},
+ {"id":"m9","identifier":"FIR-241","title":"newer past marker wins","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-110","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m10","identifier":"FIR-242","title":"newer future marker wins","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-111","status":"in_progress"}],"blockerAttention":{"state":"stalled"}}
 ]
 JSON
-  printf '%s' '[{"body":"Both blockers are healthy waits.\n\nfm-next-check: 2026-10-01T18:00:00Z owner=coordinator"}]' > "$home/pc/comments-m1.json"
+  printf '%s' '[{"body":"Acknowledged, tracking it."},{"body":"Both blockers are healthy waits.\n\nfm-next-check: 2026-10-01T18:00:00Z owner=coordinator"}]' > "$home/pc/comments-m1.json"
   printf '%s' '[{"body":"fm-next-check: 2026-10-01T11:59:59Z owner=engineer"}]' > "$home/pc/comments-m2.json"
   printf '%s' '[{"body":"fm-next-check: tomorrow morning owner=engineer"}]' > "$home/pc/comments-m3.json"
   printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00:00Z"}]' > "$home/pc/comments-m4.json"
   printf '%s' '[{"body":"I will set fm-next-check: 2026-10-03T00:00:00Z owner=engineer later"}]' > "$home/pc/comments-m5.json"
   printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00Z owner=engineer"}]' > "$home/pc/comments-m6.json"
   printf '%s' '[{"body":" fm-next-check: 2026-10-03T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m7.json"
-  printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00:00Z owner=coordinator"}]' > "$home/pc/comments-m8.json"
+  printf '%s' '[{"body":"Seen, releasing soon."},{"body":"fm-next-check: 2026-10-03T00:00:00Z owner=coordinator"}]' > "$home/pc/comments-m8.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-01T11:00:00Z owner=engineer"},{"body":"fm-next-check: 2026-10-05T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m9.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-02T00:00:00Z owner=engineer"},{"body":"fm-next-check: 2026-09-30T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m10.json"
   out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
-  assert_not_contains "$out" "FIR-18 " "a blocked issue whose latest comment dates a future check with an owner was named"
+  assert_not_contains "$out" "FIR-18 " "a blocked issue whose comment dates a future check with an owner was named despite a later acknowledgment"
   assert_contains "$out" "stalled FIR-20" "a blocked issue whose comment-dated check has passed was not named again"
   assert_contains "$out" "stalled FIR-13" "a blocked issue with a malformed date marker was hidden"
   assert_contains "$out" "no-blocker FIR-91" "a date marker naming no owner hid the issue"
@@ -337,10 +345,12 @@ JSON
   assert_contains "$out" "stalled FIR-58" "a marker time without seconds hid the issue"
   assert_contains "$out" "stalled FIR-89" "a marker with a leading space hid the issue"
   assert_contains "$out" "stale-edge FIR-134" "a future marker hid a blocked issue whose blockers are all done"
+  assert_contains "$out" "stalled FIR-241" "an older future marker beat the newest past marker"
+  assert_not_contains "$out" "FIR-242 " "an older past marker beat the newest future marker"
   FM_QUEUE_ZERO_NOW=2026-10-01T18:00:01Z PATH="$home/fakebin:$PATH" FM_HOME="$home" "$SWEEP" scan > "$home/later.out" \
     || fail "later sweep scan failed"
   assert_contains "$(cat "$home/later.out")" "stalled FIR-18" "a comment-dated blocked issue was not named once its date passed"
-  pass "a future fm-next-check comment with an owner hides a blocked issue until the date passes; malformed markers and stale edges do not"
+  pass "the newest valid fm-next-check comment marker with an owner hides a blocked issue through later acknowledgments until the date passes; malformed markers and stale edges do not"
 }
 
 # A board that stops answering after the issue list must not stretch the scan

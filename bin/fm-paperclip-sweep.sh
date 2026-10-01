@@ -15,8 +15,9 @@
 # `scan` is read-only. It makes its GET calls through Paperclip's supported
 # board API: company discovery when FM_PAPERCLIP_COMPANY is unset, the
 # open-issue list with includeBlockedBy, the pending-approval list, and the
-# latest comment of each blocked issue with no dated monitor. It prints one
-# row per item that needs action:
+# newest 20 comments of each blocked issue with no dated monitor (Paperclip
+# wakes the assignee on any board comment, so a later non-marker comment never
+# invalidates a marker). It prints one row per item that needs action:
 #
 #   release             a backlog issue with at least one blocker, every one done
 #   stale-edge          a blocked issue whose every blocker is done
@@ -33,19 +34,21 @@
 # A "dated next check" is the issue's monitor (monitorNextCheckAt) still in the
 # future. Paperclip refuses a monitor on a blocked issue (HTTP 422) and its
 # unblockDescriptor carries no date, so a blocked issue's owner records one as
-# a line of the issue's latest comment:
+# a line of an issue comment:
 #
 #   fm-next-check: <YYYY-MM-DDTHH:MM:SSZ, e.g. 2026-10-02T09:00:00Z> owner=<name>
 #
 # The line must be exactly that shape, starting at column 0 of a comment line,
-# and owner= must name someone. A blocked issue whose latest comment carries
-# such a line with a future time is treated as dated and not listed as
-# stalled or no-blocker; once the time passes, or when a newer comment lacks
-# the line, or the line is malformed, it is listed again. A stale-edge issue
-# is listed whatever its comment says. A backlog issue with an open blocker
-# is not listed: it is released by the `release` row the moment its blockers
-# are done. A blocked issue that Paperclip's own blockerAttention reports as
-# covered is waiting on live work.
+# and owner= must name someone. The scan reads each blocked issue's comments
+# newest-first and honors the marker on the newest comment that carries a valid
+# one, looking back over at most the last 20 comments; later non-marker
+# comments (an assignee's acknowledgment) do not clear it. A newer valid marker
+# supersedes an older one, and once that newest time passes, or no comment in
+# the window carries a valid line, the issue is listed again. A stale-edge
+# issue is listed whatever its comments say. A backlog issue with an open
+# blocker is not listed: it is released by the `release` row the moment its
+# blockers are done. A blocked issue that Paperclip's own blockerAttention
+# reports as covered is waiting on live work.
 # The scan prints nothing when nothing needs action, and prints one `error`
 # row instead of silence when the instance cannot be read.
 #
@@ -156,9 +159,11 @@ DEFS='
 # shellcheck disable=SC2016  # jq program text, not shell expansions.
 CLASSIFY='
   def marker_next:
-    ([($latest[.id] // "") | split("\n")[]
-      | capture("^fm-next-check: (?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) owner=[^ \\t\\r]+\\r?$")
-      | .t | ts] | last) as $t
+    ([($latest[.id] // [])[]
+      | capture("(?m)^fm-next-check: (?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) owner=[^ \\t\\r]+\\r?$"; "g")
+        // empty
+      | .t | ts]
+      | first) as $t
     | $t != null and $t > $now;
   def refs($l): ($l | map(.identifier // .id) | join(","));
   def short: tostring | gsub("\\s+"; " ") | if length > 70 then .[:69] + "…" else . end;
@@ -229,10 +234,10 @@ scan_rows() {
     rc=1
   else
     while IFS= read -r id; do
-      api GET "/issues/$id/comments?order=desc&limit=1"
+      api GET "/issues/$id/comments?order=desc&limit=20"
       case $? in 0) ;; 2) break ;; *) continue ;; esac
       printf '%s' "$API_BODY" \
-        | jq -c --arg id "$id" '{key:$id, value:(if type == "array" then (.[0].body // "") else "" end | tostring)}' \
+        | jq -c --arg id "$id" '{key:$id, value:(if type == "array" then (map(.body // "") | map(tostring)) else [] end)}' \
           >> "$tmp/latest.ndjson" 2>/dev/null
     done < "$tmp/blocked-ids"
     API_ERROR=
