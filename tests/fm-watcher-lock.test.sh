@@ -21,6 +21,9 @@ LIB="$ROOT/bin/fm-wake-lib.sh"
 ARM_FAIL_EXIT_POLLS=400
 
 TMP_ROOT=$(fm_test_tmproot fm-watcher-lock-tests)
+# The guard-banner cases pin detection to claude; the suite may itself run
+# under omp, whose leaked OMPCODE/FM_OMP_HARNESS markers would answer omp.
+unset OMPCODE FM_OMP_HARNESS
 
 drain_and_ack() {  # <state>
   local state=$1 err sequence generation

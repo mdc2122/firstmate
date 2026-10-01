@@ -834,6 +834,123 @@ EOF
   pass ".omp watch extension: an in-process helper session's start and shutdown leave the owner armed and are logged as inert; a genuine replacement still takes over"
 }
 
+# One restart round of the replacement-handoff replay contract against the real
+# extension: session 1 receives one actionable close per <wakes> entry, each
+# after its watcher queued the durable row under the shared pending recovery
+# generation (as bin/fm-watch.sh does), never consumes the follow-ups, and shuts
+# down, persisting the handoff. <ack-through> is the highest sequence the
+# handling turn acknowledged before the restart (0 for none); like
+# fm-wake-drain.sh --ack-through it removes those rows and leaves the generation
+# pending while any row remains. Sessions 2 and 3 are fresh processes (a
+# reboot); each prints how many times each wake was re-delivered ("A,B") and
+# consumes what it got, so session 3 proves a replay happens at most once.
+run_omp_restart_replay() {  # <dir> <ack-through> <wakes: "seq:label ...">
+  local dir=$1 ack=$2 wakes=$3 repo home wake planned=0
+  repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  printf 'pending:downtime:gen-G\n' > "$home/state/.watcher-down"
+  : > "$home/state/.e2e-plan"
+  for wake in $wakes; do
+    printf '%s\t%s\n' "${wake%%:*}" "${wake#*:}" >> "$home/state/.e2e-plan"
+    planned=$((planned + 1))
+  done
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+# The extension's synchronous handling-delivery confirmation must not consume
+# the next planned close meant for the successor arm.
+[ "${1:-}" = --handling-delivered ] && exit 0
+printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-G\n' "$$"
+plan="${FM_HOME:?}/state/.e2e-plan"
+next=$(head -n 1 "$plan")
+if [ -n "$next" ]; then
+  tail -n +2 "$plan" > "$plan.tmp" && mv "$plan.tmp" "$plan"
+  sleep 1
+  seq=${next%%$'\t'*}; label=${next#*$'\t'}
+  printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
+  printf '1700000000\t%s\tsignal\treplay.%s\tsignal: omp-replay %s done\n' "$seq" "$label" "$label" >> "$FM_HOME/state/.wake-queue"
+  printf 'signal: omp-replay %s done\n' "$label"
+  exit 0
+fi
+sleep 30
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  cat > "$dir/session.mjs" <<'EOF'
+import { pathToFileURL } from "node:url";
+import { writeFileSync } from "node:fs";
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m) { sent.push(m); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+// Wait until EXPECT wakes arrived (a slow host must not drop a late re-arm),
+// or WAIT_MS elapsed when asserting that nothing more arrives.
+const delivered = () => sent.filter((m) => /signal: omp-replay [AB] done/.test(m));
+const deadline = Date.now() + Number(process.env.WAIT_MS);
+while (Date.now() < deadline && !(Number(process.env.EXPECT) > 0 && delivered().length >= Number(process.env.EXPECT))) {
+  await new Promise((r) => setTimeout(r, 50));
+}
+const wakes = delivered();
+if (process.env.CONSUME === "1") {
+  for (const m of wakes) await handlers.get("before_agent_start")({ prompt: m }, {});
+}
+await handlers.get("session_shutdown")({}, {});
+const count = (label) => wakes.filter((m) => m.includes(`omp-replay ${label} done`)).length;
+process.stdout.write(`${count("A")},${count("B")}`);
+process.exit(0);
+EOF
+  omp_replay_session() {  # <consume> <wait-ms> [expected-wakes]
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+      FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+      EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" CONSUME="$1" WAIT_MS="$2" EXPECT="${3:-0}" node "$dir/session.mjs" 2>&1
+  }
+  OMP_REPLAY_FIRST=$(omp_replay_session 0 30000 "$planned")
+  OMP_REPLAY_HANDOFF=absent
+  [ -e "$home/state/extensions/omp-primary-watch/session-replacement-actionable.json" ] && OMP_REPLAY_HANDOFF=present
+  awk -F '\t' -v cutoff="$ack" '$2 > cutoff' "$home/state/.wake-queue" > "$home/state/.wake-queue.ack"
+  mv "$home/state/.wake-queue.ack" "$home/state/.wake-queue"
+  [ -s "$home/state/.wake-queue" ] || printf 'acked:downtime:gen-G\n' > "$home/state/.watcher-down"
+  OMP_REPLAY_SECOND=$(omp_replay_session 1 1500)
+  OMP_REPLAY_THIRD=$(omp_replay_session 1 1500)
+  OMP_REPLAY_LEFTOVER=absent
+  [ -e "$home/state/extensions/omp-primary-watch/session-replacement-actionable.json" ] && OMP_REPLAY_LEFTOVER=present
+}
+
+test_watch_extension_restart_skips_acknowledged_handoff() {
+  run_omp_restart_replay "$TMP_ROOT/watch-replay-acked" 7 "7:A"
+  [ "$OMP_REPLAY_FIRST" = 1,0 ] || fail "session 1 must deliver the close once before the restart, got '$OMP_REPLAY_FIRST'"
+  [ "$OMP_REPLAY_HANDOFF" = present ] || fail "an unconsumed close must ride the replacement handoff across shutdown"
+  [ "$OMP_REPLAY_SECOND" = 0,0 ] || fail "a close whose queued wake was acknowledged before the restart must not be replayed, saw '$OMP_REPLAY_SECOND'"
+  [ "$OMP_REPLAY_THIRD" = 0,0 ] || fail "an acknowledged close must stay unreplayed on a later restart, saw '$OMP_REPLAY_THIRD'"
+  [ "$OMP_REPLAY_LEFTOVER" = absent ] || fail "a skipped acknowledged close must be retired from the handoff file"
+  pass ".omp watch extension: after a restart, a handed-off close whose queued wake was already acknowledged is not replayed"
+}
+
+test_watch_extension_restart_replays_unacknowledged_handoff_once() {
+  run_omp_restart_replay "$TMP_ROOT/watch-replay-unacked" 0 "7:A"
+  [ "$OMP_REPLAY_FIRST" = 1,0 ] || fail "session 1 must deliver the close once before the restart, got '$OMP_REPLAY_FIRST'"
+  [ "$OMP_REPLAY_HANDOFF" = present ] || fail "an unconsumed close must ride the replacement handoff across shutdown"
+  [ "$OMP_REPLAY_SECOND" = 1,0 ] || fail "a close whose queued wake is still unacknowledged must be replayed exactly once after the restart, saw '$OMP_REPLAY_SECOND'"
+  [ "$OMP_REPLAY_THIRD" = 0,0 ] || fail "a replayed and consumed close must not be replayed again, saw '$OMP_REPLAY_THIRD'"
+  [ "$OMP_REPLAY_LEFTOVER" = absent ] || fail "a consumed replay must be retired from the handoff file"
+  pass ".omp watch extension: after a restart, a handed-off close whose queued wake is still unacknowledged is replayed exactly once"
+}
+
+test_watch_extension_restart_decides_replay_per_wake_within_one_generation() {
+  run_omp_restart_replay "$TMP_ROOT/watch-replay-shared-generation" 7 "7:A 8:B"
+  [ "$OMP_REPLAY_FIRST" = 1,1 ] || fail "session 1 must deliver both closes once before the restart, got '$OMP_REPLAY_FIRST'"
+  [ "$OMP_REPLAY_HANDOFF" = present ] || fail "unconsumed closes must ride the replacement handoff across shutdown"
+  [ "$OMP_REPLAY_SECOND" = 0,1 ] || fail "after --ack-through 7 under a still-pending shared generation, only the close for row 8 may replay, saw '$OMP_REPLAY_SECOND'"
+  [ "$OMP_REPLAY_THIRD" = 0,0 ] || fail "neither close may replay again on a later restart, saw '$OMP_REPLAY_THIRD'"
+  [ "$OMP_REPLAY_LEFTOVER" = absent ] || fail "both closes must be retired from the handoff file"
+  pass ".omp watch extension: closes sharing one pending recovery generation replay per wake, so acknowledging row 7 replays only row 8"
+}
+
 test_detection_anchored_name_and_marker_precedence
 test_lock_identity_and_liveness_classification
 test_detection_bun_launcher_shape
@@ -851,3 +968,6 @@ test_ownership_proof_is_omp_keyed
 test_turnend_guard_extension_compels_one_continuation
 test_watch_extension_arms_and_delivers
 test_watch_extension_helper_session_leaves_owner_live
+test_watch_extension_restart_skips_acknowledged_handoff
+test_watch_extension_restart_replays_unacknowledged_handoff_once
+test_watch_extension_restart_decides_replay_per_wake_within_one_generation

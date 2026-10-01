@@ -29,6 +29,9 @@ AWAY_REQUIRED_REASON='Away mode owns watcher supervision'
 # are answered here; watcher liveness still reaches the real ps.
 BLIND_BIN=$(fm_fakebin "$TMP_ROOT/blind-ancestry")
 fm_fake_blind_ancestry "$BLIND_BIN"
+# The suite may itself run under omp, whose leaked OMPCODE/FM_OMP_HARNESS
+# markers would answer omp before the blinded ancestry is consulted.
+unset OMPCODE FM_OMP_HARNESS
 
 # --- PREDICATE: bin/fm-supervision-lib.sh -----------------------------------
 
