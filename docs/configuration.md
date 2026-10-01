@@ -599,6 +599,21 @@ A fail-closed poll that already queued a wake, and a timeout, always print so th
 `FM_MAIL_CHECK_BUDGET` (default 15, valid 5..25) bounds one standing poll and is cut down to fit `FM_CHECK_TIMEOUT`.
 `bin/fm-mail-check.sh disarm` removes the standing check.
 
+## Paperclip sweep (.env)
+
+A home that hands work to a Paperclip board can have the watcher's queue inbox-zero check include that board.
+It is off unless the home's gitignored `.env` (or the environment, which wins) names the instance:
+
+```sh
+FM_PAPERCLIP_URL=        # board base URL, for example http://127.0.0.1:3140
+FM_PAPERCLIP_KEY_FILE=   # path to a file holding a board API key; ~/ is expanded
+FM_PAPERCLIP_COMPANY=    # optional company id; discovered from the key when it sees exactly one
+```
+
+`FM_PAPERCLIP_APPROVAL_AGE_HOURS` (default 4) is how long a pending approval may wait before it is surfaced, and `FM_PAPERCLIP_STALE_HOURS` (default 6) is how long an in-progress issue with no run and no dated next check may sit idle.
+This section owns the schema; [`bin/fm-paperclip-sweep.sh`](../bin/fm-paperclip-sweep.sh) owns the row classes, the read-only scan, and the guarded `release` command, and [`bin/fm-queue-zero.sh`](../bin/fm-queue-zero.sh) owns how its rows reach firstmate.
+The scan uses only Paperclip's supported board API and never touches its database.
+
 ## Relay (.env)
 
 Relay lets a firstmate instance answer public mentions and act on normal reversible mention requests through firstmate's normal lifecycle.
@@ -997,6 +1012,7 @@ FM_TASKS_AXI_COMPATIBLE=   # internal one-hop handoff of an already-computed tas
 FM_GUARD_READ_ONLY=0    # internal/read-only guard mode: keep alarms but suppress drain, supervision repair, and checkout repair commands
 FM_GUARD_CONTINUE_LINE='This is a supervision warning only; the guarded operation WILL still run.'   # banner continuation line; fm-send.sh overrides it to name the requested message specifically
 FM_POLL=15              # seconds between watcher poll cycles
+FM_QUEUE_ZERO_INTERVAL=900   # seconds between the watcher's queue inbox-zero checks, independent of heartbeat backoff; bin/fm-queue-zero.sh owns the rule, row classes, and its other knobs
 FM_HOME_SUMMARY_INTERVAL=300   # seconds before a live watcher refreshes this home's state/home-summary.json even without a status signal; invalid or zero values use 300
 FM_HOME_SUMMARY_TIMEOUT=60     # seconds bounding the complete best-effort home-summary refresh, including lock acquisition, validation, atomic publication, and worker-side failure logging; invalid or zero values use 60
 FM_HOME_SUMMARY_ERROR_LOG_MAX_BYTES=65536   # approximate size cap for state/.home-summary-refresh.log before it is trimmed to the newest 200 lines; invalid or zero values use 65536

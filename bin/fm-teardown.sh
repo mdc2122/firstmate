@@ -1443,10 +1443,26 @@ backlog_refresh_reminder() {
   if [ "$BACKLOG_CLOSED" = 1 ] && [ "$BACKLOG_TRANSITION" = retain ]; then
     printf '%s\n' "Backlog: $ID stays open in $backlog_display, still held for the captain with its deliverable recorded. Relay the question and close it only with bin/fm-captain-hold.sh answer."
   elif [ "$BACKLOG_CLOSED" = 1 ]; then
-    printf '%s\n' "Backlog: $ID is closed in $backlog_display. Run bin/fm-tasks-axi.sh ready for dependency-cleared candidates, check date gates, and dispatch only work whose blockers are gone and date is due."
+    printf '%s\n' "Backlog: $ID is closed in $backlog_display."
+    queue_zero_report
   else
     printf '%s\n' "Backlog: $ID just finished ($BACKLOG_SKIP_REASON). Update $backlog_display - move $ID to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due."
   fi
+}
+
+# Queue inbox zero after a close (bin/fm-queue-zero.sh owns the rule and the
+# row classes): print every local row that must leave the queue now, so the
+# re-evaluation names its rows instead of relying on a later turn to look.
+queue_zero_report() {
+  local rows
+  rows=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
+    "$SCRIPT_DIR/fm-queue-zero.sh" scan --local 2>/dev/null) || rows=
+  if [ -z "$rows" ]; then
+    printf '%s\n' "Queue: nothing is ready or undated."
+    return 0
+  fi
+  printf '%s\n' "Queue: each row below leaves the queue this turn - dispatch it, hold it with --until and a reason naming its blocker or owner, or close it:"
+  printf '%s\n' "$rows" | sed 's/^/  /'
 }
 
 path_is_ancestor_of() {
