@@ -45,7 +45,9 @@ run_watcher_once() {
   date '+%s' > "$state/.afk"
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-  wait_for_exit "$!" 50
+  # Bound the wait without requiring process startup and classification to
+  # finish within five seconds on every portable runner.
+  wait_for_exit "$!" 300
 }
 
 ack_handled_wakes() {  # <state> <drain-stderr>
@@ -67,6 +69,11 @@ test_routine_then_terminal_after_restart() {
   drain_out="$dir/drain.out"
   drain_err="$dir/drain.err"
   status_file="$state/task-w1.status"
+
+  # This is a supervised task: routine signals from unrecorded helpers are
+  # intentionally absorbed before they reach the away-mode daemon.
+  fm_write_meta "$state/task-w1.meta" "window=sess:fm-task-w1" \
+    "worktree=$dir/wt" "kind=ship" "harness=pi"
 
   # A routine status fires a signal; the watcher queues it and exits.
   printf 'working: building\n' > "$status_file"
