@@ -2116,6 +2116,7 @@ reconcile_requests_detached() {
 
 
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
+[ -e "$STATE/.last-queue-zero" ] || touch "$STATE/.last-queue-zero"
 
 # A merged poll may have queued its terminal wake and then lost the process
 # between receipt publication and fixed-path removal.
