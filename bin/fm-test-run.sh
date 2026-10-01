@@ -742,6 +742,7 @@ tests/fm-procevent-when.test.sh 17392
 tests/fm-procevent.test.sh 69715
 tests/fm-project-origin.test.sh 137
 tests/fm-public-followup.test.sh 196745
+tests/fm-queue-zero.test.sh 27271
 tests/fm-quota-array-dispatch-live-e2e.test.sh 21
 tests/fm-quota-choose.test.sh 1461
 tests/fm-remote-backlog-handoff.test.sh 41432
