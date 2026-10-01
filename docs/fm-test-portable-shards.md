@@ -116,13 +116,13 @@ Timeouts are intended as hang tripwires; a passing coverage guard does not estab
 `.github/workflows/ci.yml` owns the exact numbers.
 
 Inside every lane each script also carries its own bound, so a hang fails as a named `not ok - timed out:` line with an error annotation instead of stalling until the job cap kills the lane without one.
-CI also supplies `FM_TEST_STEP_BUDGET_SECS`, reserving at least 30 seconds before an explicit step timeout for result reporting. Every attempt, including retries and later serial scripts, is capped by the remaining shared budget; exhausted budgets produce named timeout failures without starting more work.
+CI also supplies `FM_TEST_STEP_BUDGET_SECS` to the owning runner only, without passing it to child scripts or nested runners, reserving at least 30 seconds before an explicit step timeout for result reporting. Every attempt, including retries and later serial scripts, is capped by the remaining shared budget; exhausted budgets produce named timeout failures without starting more work.
 Every behavior lane passes `--per-script-timeout-secs auto`, and `per_script_timeout_auto_secs` in `bin/fm-test-run.sh` owns the measured bound table and its provenance.
 Refresh an entry from the timing artifacts whenever a script's slowest healthy run approaches its bound, the same way the shard hints are refreshed.
 
 ## Infrastructure flake retry
 
 Every behavior lane also passes `--retry-infra-flakes`.
-A failed script is rerun exactly once only when its last nonempty diagnostic contains no assertion, FAIL, expected-result, or fixture marker and contains one of the host-resource or network signatures listed in `infra_flake_signatures` in `bin/fm-test-run.sh`, which owns that list and the reasons for what it leaves out.
+A failed script is rerun exactly once only when its output contains no assertion, FAIL, expected-result, or fixture marker (including multiline verdict wrappers) and its last nonempty diagnostic contains one of the host-resource or network signatures listed in `infra_flake_signatures` in `bin/fm-test-run.sh`, which owns that list and the reasons for what it leaves out.
 Assertion failures and timeouts never retry, so the gate's rigor is unchanged.
 Each retry is labeled in the log (`FM_TEST_RETRY`, `FM_TEST_RETRIED_FLAKE`), as a warning annotation, in the job step summary, and in the timing JSON (`retried_infra_flake`, `retry_signature`, summary `retried_infra_flakes`), so retried flakes stay countable across runs instead of disappearing into manual reruns.

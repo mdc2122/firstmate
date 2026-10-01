@@ -1496,17 +1496,21 @@ SH
   write_fixture persistent.test.sh '"$FX/disk-full-tool"; exit 1' '"$FX/disk-full-tool"; exit 1'
   write_fixture assertion.test.sh '"$FX/disk-full-tool"; echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
   write_fixture own-text.test.sh 'echo "fixture: Too many open files"; echo "FAIL: assertion"; exit 1' 'echo "ok - would pass"'
+  write_fixture multiline.test.sh '. "$FX/test-lib/lib.sh"; fail "spawn assertion failed
+$("$FX/disk-full-tool" 2>&1)"' 'echo "ok - would pass"'
+  mkdir -p "$tmp/fx/test-lib"
+  cp "$ROOT/tests/lib.sh" "$ROOT/tests/git-config-helpers.sh" "$tmp/fx/test-lib/"
   write_fixture hang.test.sh '"$FX/disk-full-tool"; sleep 60' 'echo "ok - would pass"'
 
   set +e
   FX="$tmp/fx" GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$tmp/summary.md" \
     "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 3 --json "$tmp/run.json" \
     tests/flake.test.sh tests/persistent.test.sh tests/assertion.test.sh \
-    tests/own-text.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
+    tests/own-text.test.sh tests/multiline.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
   rc=$?
   set -e
   [ "$rc" -eq 1 ] || fail "remaining failures must still fail the run, got $rc: $(cat "$tmp/out")"
-  for f in flake:2 persistent:2 assertion:1 own-text:1 hang:1; do
+  for f in flake:2 persistent:2 assertion:1 own-text:1 multiline:1 hang:1; do
     [ "$(cat "$tmp/fx/${f%%:*}.test.sh.count")" = "${f#*:}" ] \
       || fail "${f%%:*} ran $(cat "$tmp/fx/${f%%:*}.test.sh.count") times, expected ${f#*:}: $(cat "$tmp/out")"
   done
@@ -1518,13 +1522,13 @@ SH
     || fail "the passing flake was not labeled in the run summary: $(cat "$tmp/out")"
   grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/persistent.test.sh signature=disk-full first_exit=1 exit=1' "$tmp/out" \
     || fail "a flake that failed again was not labeled with its retry exit: $(cat "$tmp/out")"
-  grep -Fq 'FM_TEST_SUMMARY total=5 failed=4' "$tmp/out" \
+  grep -Fq 'FM_TEST_SUMMARY total=6 failed=5' "$tmp/out" \
     || fail "a retried script must be counted once: $(cat "$tmp/out")"
   grep -Fq '::warning file=tests/flake.test.sh,title=Retried infra flake::' "$tmp/out" \
     || fail "the retried flake had no warning annotation: $(cat "$tmp/out")"
   grep -Fq '::error file=tests/hang.test.sh,title=Test timed out::' "$tmp/out" \
     || fail "the timeout had no error annotation: $(cat "$tmp/out")"
-  if grep -Eq 'FM_TEST_(RETRY|RETRIED_FLAKE).*(assertion|own-text|hang)' "$tmp/out"; then
+  if grep -Eq 'FM_TEST_(RETRY|RETRIED_FLAKE).*(assertion|own-text|multiline|hang)' "$tmp/out"; then
     fail "an assertion, self-printed text, or timeout was retried: $(cat "$tmp/out")"
   fi
   grep -Fq '| `tests/flake.test.sh` | retried infra flake, passed on retry |' "$tmp/summary.md" \
@@ -1540,6 +1544,8 @@ assert by["tests/flake.test.sh"]["retry_signature"] == "disk-full"
 assert by["tests/flake.test.sh"]["first_attempt_exit"] == 1
 assert by["tests/flake.test.sh"]["exit"] == 0
 assert by["tests/assertion.test.sh"]["retried_infra_flake"] is False
+assert by["tests/multiline.test.sh"]["retried_infra_flake"] is False
+assert by["tests/multiline.test.sh"]["exit"] == 1
 assert by["tests/hang.test.sh"]["timed_out"] is True and by["tests/hang.test.sh"]["timeout_secs"] == 3
 assert doc["summary"]["retried_infra_flakes"] == 2
 assert doc["summary"]["timed_out"] == 1
@@ -1902,6 +1908,35 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
+test_step_budget_is_owned_by_each_runner() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-budget-owner.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests" "$tmp/child/bin" "$tmp/child/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$RUNNER" "$tmp/child/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/child/tests/"
+  printf '#!/bin/bash\necho "ok - nested unbounded run"\n' >"$tmp/child/tests/plain.test.sh"
+  cat >"$tmp/tests/parent.test.sh" <<'SH'
+#!/bin/bash
+[ -z "${FM_TEST_STEP_BUDGET_SECS:-}" ] || exit 99
+"$CHILD/bin/fm-test-run.sh" tests/plain.test.sh || exit 98
+FM_TEST_STEP_BUDGET_SECS=5 "$CHILD/bin/fm-test-run.sh" tests/plain.test.sh
+rc=$?
+[ "$rc" -eq 2 ] || exit 97
+echo "ok - explicit child budget requires timeout helper"
+SH
+  set +e
+  CHILD="$tmp/child" FM_TEST_STEP_BUDGET_SECS=10 "$tmp/bin/fm-test-run.sh" \
+    tests/parent.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "parent budget leaked or explicit child budget was ignored: $(cat "$tmp/out")"
+  grep -Fq 'ok - nested unbounded run' "$tmp/out" || fail "nested runner did not execute"
+  rm -rf "$tmp"
+  pass "step budget stays private while child runners accept explicit budgets"
+}
+
 test_serial_family_shares_timeout_budget() {
   local tmp runner rc began ended
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-step-budget.XXXXXX")
@@ -1971,6 +2006,7 @@ test_max_wall_ms_is_a_result_not_advice
 test_infra_flake_retry_classification
 test_auto_timeout_bounds_every_script_from_its_table
 test_serial_family_shares_timeout_budget
+test_step_budget_is_owned_by_each_runner
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json

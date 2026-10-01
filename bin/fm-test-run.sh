@@ -182,6 +182,8 @@ now_ms() {
 
 RUN_STARTED_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 RUN_STARTED_MS=$(now_ms)
+STEP_BUDGET_SECS=${FM_TEST_STEP_BUDGET_SECS:-}
+unset FM_TEST_STEP_BUDGET_SECS
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
@@ -304,7 +306,7 @@ SIGS
 infra_flake_signature_in() {  # <out>
   local out=$1 id text terminal
   terminal=$(awk 'NF { line=$0 } END { print line }' "$out")
-  if printf '%s\n' "$terminal" | grep -Eiq 'not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expected|fixture)([^[:alnum:]_]|$)'; then
+  if grep -Eiq 'not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expect|expected|fixture)([^[:alnum:]_]|$)' "$out"; then
     return 1
   fi
   while IFS=$'\t' read -r id text; do
@@ -2122,11 +2124,11 @@ esac
 [ "$JOBS" -ge 1 ] || die "--jobs must be >= 1"
 [ "$JOBS" -le "$JOBS_MAX" ] || die "--jobs is capped at $JOBS_MAX (got $JOBS)"
 
-if [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
-  case "$FM_TEST_STEP_BUDGET_SECS" in
+if [ -n "$STEP_BUDGET_SECS" ]; then
+  case "$STEP_BUDGET_SECS" in
     *[!0-9]*) die "FM_TEST_STEP_BUDGET_SECS requires a positive integer" ;;
   esac
-  [ "$FM_TEST_STEP_BUDGET_SECS" -gt 0 ] || die "FM_TEST_STEP_BUDGET_SECS requires a positive integer"
+  [ "$STEP_BUDGET_SECS" -gt 0 ] || die "FM_TEST_STEP_BUDGET_SECS requires a positive integer"
 fi
 if [ -n "$MAX_WALL_MS" ]; then
   case "$MAX_WALL_MS" in
@@ -2342,7 +2344,7 @@ if [ "$JOBS" -gt 1 ]; then
   rm -f "$SCHEDULE_TMP"
 fi
 
-if [ "$PER_SCRIPT_TIMEOUT_SECS" != 0 ] || [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
+if [ "$PER_SCRIPT_TIMEOUT_SECS" != 0 ] || [ -n "$STEP_BUDGET_SECS" ]; then
   [ -r "$ROOT/bin/fm-timeout-lib.sh" ] || die "per-script timeout helper not found: bin/fm-timeout-lib.sh"
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$ROOT/bin/fm-timeout-lib.sh"
@@ -2476,9 +2478,9 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   local rc
   : "$id"
   bound=$(script_timeout_secs "$script")
-  if [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
+  if [ -n "$STEP_BUDGET_SECS" ]; then
     local remaining
-    remaining=$(( (RUN_STARTED_MS + FM_TEST_STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
+    remaining=$(( (RUN_STARTED_MS + STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
     if [ "$remaining" -le 0 ]; then
       printf 'not ok - timed out: %s exhausted the shared step budget before starting\n' "$script" >"$out"
       printf '1\n' >"$out.timeout"
