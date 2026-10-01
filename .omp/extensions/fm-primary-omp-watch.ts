@@ -10,10 +10,15 @@
 //     accepted the follow-up" collapses to "the call returned"; consumption is
 //     still tracked at before_agent_start / message_start exactly as on Pi.
 //   - omp reports no session_shutdown reason, so EVERY shutdown with a pending
-//     actionable close persists the replacement handoff and the next owning
-//     session_start, in this process or a later one, replays it. Replaying a
-//     wake main has already drained is harmless (the queue is durable and the
-//     drain is idempotent); losing one across /new is not.
+//     actionable close persists the replacement handoff. Each record is bound
+//     to the durable wake queue when its close is observed: the highest queued
+//     sequence (the watcher appends its row before printing the reason) and
+//     the still-unacknowledged state/.watcher-down generation. The next owning
+//     session_start, in this process or a later one, replays a record only
+//     while a queued row at or below that sequence or that recovery generation
+//     is still unacknowledged; a record main already acknowledged is retired
+//     unreplayed. A record with no readable binding is always replayed, so an
+//     unacknowledged close is never lost across /new or a restart.
 //   - The Pi supervision branch is out of scope for omp: every actionable wake
 //     is delivered to main, so no branch offer is made and no calm presentation
 //     hooks exist.
@@ -89,6 +94,10 @@ type PendingActionableClose = {
   message: string;
   predecessorArmPid: string;
   delivered?: true;
+  // Acknowledgement binding captured when the close was observed; absent when
+  // the wake queue state was unreadable, which always replays.
+  wakeQueueSeq?: number;
+  recoveryGeneration?: string;
 };
 
 type ReplacementActionableHandoff = {
@@ -135,6 +144,9 @@ const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
 const handoffDir = `${state}/extensions/omp-primary-watch`;
 const actionableHandoff = `${handoffDir}/session-replacement-actionable.json`;
+const wakeQueue = `${state}/.wake-queue`;
+const wakeQueueSeqFile = `${state}/.wake-queue.seq`;
+const recoveryMarker = `${state}/.watcher-down`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 const retryBaseMs = positiveInteger("FM_WATCH_REARM_RETRY_BASE_MS", 250);
 const retryMaxMs = positiveInteger("FM_WATCH_REARM_RETRY_MAX_MS", 4000);
@@ -270,12 +282,58 @@ function nodeErrorCode(error: unknown): string {
     : "";
 }
 
+function readOptional(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    if (nodeErrorCode(error) === "ENOENT") return "";
+    throw error;
+  }
+}
+
+// The unacknowledged recovery generation in state/.watcher-down, or "" when
+// there is none; bin/fm-wake-lib.sh owns the token grammar.
+function unackedRecoveryGeneration(): string {
+  const match = readOptional(recoveryMarker).match(/^(?:pending|announced):(?:handling|downtime):([A-Za-z0-9._-]+)\n$/);
+  return match ? match[1] : "";
+}
+
+// Bind a close to the acknowledgement state it must outlive. The watcher queued
+// this close's row (sequence <= the counter now) before printing its reason.
+function acknowledgementBinding(): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration"> {
+  try {
+    const seq = readFileSync(wakeQueueSeqFile, "utf8").trim();
+    if (!/^[0-9]+$/.test(seq)) return {};
+    return { wakeQueueSeq: Number(seq), recoveryGeneration: unackedRecoveryGeneration() };
+  } catch {
+    return {};
+  }
+}
+
+// docs/watcher-continuity.md owns this replay rule: a bound record replays only
+// while its queued rows or its recovery generation remain unacknowledged.
+function actionableStillUnacknowledged(pending: PendingActionableClose): boolean {
+  if (pending.wakeQueueSeq === undefined) return true;
+  try {
+    const bound = pending.wakeQueueSeq;
+    const queued = readOptional(wakeQueue).split("\n").some((row) => {
+      const seq = row.split("\t")[1];
+      return seq !== undefined && /^[0-9]+$/.test(seq) && Number(seq) <= bound;
+    });
+    if (queued) return true;
+    return pending.recoveryGeneration !== "" && pending.recoveryGeneration === unackedRecoveryGeneration();
+  } catch {
+    return true;
+  }
+}
+
 function createPendingActionable(message: string, predecessorArmPid: string): PendingActionableClose {
   return {
     version: 1,
     token: `${process.pid}-${Date.now()}-${++replacementCoordinator.nextTokenId}`,
     message,
     predecessorArmPid,
+    ...acknowledgementBinding(),
   };
 }
 
@@ -290,7 +348,13 @@ function validatePendingActionable(value: unknown): PendingActionableClose {
     typeof (value as { predecessorArmPid?: unknown }).predecessorArmPid !== "string" ||
     !/^[0-9]*$/.test((value as { predecessorArmPid: string }).predecessorArmPid) ||
     ((value as { delivered?: unknown }).delivered !== undefined &&
-      (value as { delivered?: unknown }).delivered !== true)
+      (value as { delivered?: unknown }).delivered !== true) ||
+    ((value as { wakeQueueSeq?: unknown }).wakeQueueSeq !== undefined &&
+      !Number.isSafeInteger((value as { wakeQueueSeq?: unknown }).wakeQueueSeq)) ||
+    ((value as { wakeQueueSeq?: unknown }).wakeQueueSeq !== undefined) !==
+      ((value as { recoveryGeneration?: unknown }).recoveryGeneration !== undefined) ||
+    ((value as { recoveryGeneration?: unknown }).recoveryGeneration !== undefined &&
+      !/^[A-Za-z0-9._-]*$/.test(String((value as { recoveryGeneration?: unknown }).recoveryGeneration)))
   ) {
     throw new Error(`invalid omp replacement actionable handoff at ${actionableHandoff}`);
   }
@@ -1040,7 +1104,16 @@ export default function (pi: ExtensionAPI) {
     }
     const inProcessPending = replacementCoordinator.pending.splice(0);
     for (const actionable of [...pending, ...inProcessPending]) {
-      enqueuePendingActionable(owner, actionable);
+      if (actionableStillUnacknowledged(actionable)) {
+        enqueuePendingActionable(owner, actionable);
+        continue;
+      }
+      // Main already acknowledged this close's wake before the restart.
+      try {
+        clearReplacementHandoff(actionable);
+      } catch (error) {
+        surfaceCleanupFailure(owner, error);
+      }
     }
     if (owner.pendingActionables.length > 0) {
       if (loadFailure) surfaceFailure(owner, loadFailure);
@@ -1085,8 +1158,8 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     // omp carries no shutdown reason (verified: `reason` is undefined), so the
-    // replacement handoff is always persisted when anything is pending; a
-    // terminal quit then merely replays an already-drained wake next start.
+    // replacement handoff is always persisted when anything is pending; the
+    // next owning start skips any record whose wake main has since acknowledged.
     if (replacementCoordinator.receiver === receiveReplacementActionable) replacementCoordinator.receiver = null;
     await stopSessionGeneration(generation, true);
   });
