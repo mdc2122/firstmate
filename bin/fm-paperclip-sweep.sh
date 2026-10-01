@@ -35,13 +35,14 @@
 # unblockDescriptor carries no date, so a blocked issue's owner records one as
 # a line of the issue's latest comment:
 #
-#   fm-next-check: <ISO-8601 UTC, e.g. 2026-10-02T09:00:00Z> owner=<name>
+#   fm-next-check: <YYYY-MM-DDTHH:MM:SSZ, e.g. 2026-10-02T09:00:00Z> owner=<name>
 #
-# The line must start the comment line, the time must end in Z (seconds are
-# optional), and owner= must name someone. A blocked issue whose latest
-# comment carries such a line with a future time is treated as dated and not
-# listed; once the time passes, or when a newer comment lacks the line, or the
-# line is malformed, it is listed again. A backlog issue with an open blocker
+# The line must be exactly that shape, starting at column 0 of a comment line,
+# and owner= must name someone. A blocked issue whose latest comment carries
+# such a line with a future time is treated as dated and not listed as
+# stalled or no-blocker; once the time passes, or when a newer comment lacks
+# the line, or the line is malformed, it is listed again. A stale-edge issue
+# is listed whatever its comment says. A backlog issue with an open blocker
 # is not listed: it is released by the `release` row the moment its blockers
 # are done. A blocked issue that Paperclip's own blockerAttention reports as
 # covered is waiting on live work.
@@ -110,7 +111,8 @@ configured() {
 }
 
 # api <method> <path> [<json-body>]: one bounded call. On a 2xx status the
-# response body is left in API_BODY; otherwise API_ERROR names the failure.
+# response body is left in API_BODY; otherwise API_ERROR names the failure and
+# the status is 2 when curl itself failed (transport) and 1 otherwise.
 # Both are globals rather than stdout so a failure reason survives the call.
 api() {
   local method=$1 path=$2 body=${3:-} key out code
@@ -121,11 +123,11 @@ api() {
     out=$(printf 'Authorization: Bearer %s\n' "$key" \
       | curl -sS -m "$CURL_SECS" -X "$method" -H @- -H 'Content-Type: application/json' \
           --data "$body" -w '\n%{http_code}' "$PC_URL/api$path" 2>&1) \
-      || { API_ERROR="$method $path failed: $(printf '%s' "$out" | head -n 1)"; return 1; }
+      || { API_ERROR="$method $path failed: $(printf '%s' "$out" | head -n 1)"; return 2; }
   else
     out=$(printf 'Authorization: Bearer %s\n' "$key" \
       | curl -sS -m "$CURL_SECS" -X "$method" -H @- -w '\n%{http_code}' "$PC_URL/api$path" 2>&1) \
-      || { API_ERROR="$method $path failed: $(printf '%s' "$out" | head -n 1)"; return 1; }
+      || { API_ERROR="$method $path failed: $(printf '%s' "$out" | head -n 1)"; return 2; }
   fi
   code=${out##*$'\n'}
   case "$code" in
@@ -155,10 +157,8 @@ DEFS='
 CLASSIFY='
   def marker_next:
     ([($latest[.id] // "") | split("\n")[]
-      | capture("^[ \\t]*fm-next-check:[ \\t]*(?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?Z)[ \\t]+owner=[^ \\t\\r]+")
-      | .t
-      | if test("T[0-9]{2}:[0-9]{2}Z$") then sub("Z$"; ":00Z") else . end
-      | ts] | last) as $t
+      | capture("^fm-next-check: (?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) owner=[^ \\t\\r]+\\r?$")
+      | .t | ts] | last) as $t
     | $t != null and $t > $now;
   def refs($l): ($l | map(.identifier // .id) | join(","));
   def short: tostring | gsub("\\s+"; " ") | if length > 70 then .[:69] + "…" else . end;
@@ -173,9 +173,10 @@ CLASSIFY='
          elif ($open | length) > 0 or dated_next then empty
          else $row + {class:"no-blocker", detail:"backlog with no blocker and no dated next check"} end
        elif .status == "blocked" then
-         if dated_next or marker_next then empty
+         if dated_next then empty
          elif ($bb | length) > 0 and ($open | length) == 0 then
            $row + {class:"stale-edge", detail:("blocked but blockers done: " + refs($bb))}
+         elif marker_next then empty
          elif (.blockerAttention.state // null) == "covered" then empty
          elif ($bb | length) == 0 and .unblockDescriptor == null then
            $row + {class:"no-blocker", detail:"blocked with no blocker, no unblock owner, and no dated next check"}
@@ -205,7 +206,8 @@ CLASSIFY='
 # scan_rows: leave the classified rows in SCAN_ROWS, or set API_ERROR. The
 # responses go to jq through private files, because an issue list can outgrow
 # a command-line argument. A failed comment read leaves that issue unmarked,
-# so it is listed as it would be without a marker.
+# so it is listed as it would be without a marker; a transport failure stops
+# the comment reads, so a slow board cannot hold the scan past its timeout.
 scan_rows() {
   local now_epoch tmp id rc=0
   SCAN_ROWS=
@@ -227,7 +229,8 @@ scan_rows() {
     rc=1
   else
     while IFS= read -r id; do
-      api GET "/issues/$id/comments?order=desc&limit=1" || continue
+      api GET "/issues/$id/comments?order=desc&limit=1"
+      case $? in 0) ;; 2) break ;; *) continue ;; esac
       printf '%s' "$API_BODY" \
         | jq -c --arg id "$id" '{key:$id, value:(if type == "array" then (.[0].body // "") else "" end | tostring)}' \
           >> "$tmp/latest.ndjson" 2>/dev/null

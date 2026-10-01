@@ -617,8 +617,9 @@ Paperclip refuses a monitor (`monitorNextCheckAt`) on a blocked issue, and its `
 fm-next-check: 2026-10-02T09:00:00Z owner=coordinator
 ```
 
-The line must start a comment line, the time must be ISO-8601 UTC ending in `Z`, and `owner=` must name someone.
-While that time is in the future the sweep does not list the blocked issue; once it passes, a newer comment omits the line, or the line is malformed, the issue is listed again.
+The line must be exactly `fm-next-check: YYYY-MM-DDTHH:MM:SSZ owner=<name>`, starting at column 0 of a comment line, with the time in UTC and `owner=` naming someone.
+While that time is in the future the sweep does not list the blocked issue as `stalled` or `no-blocker`; once it passes, a newer comment omits the line, or the line is malformed (for example a time without seconds or a leading space), the issue is listed again.
+A blocked issue whose every blocker is done is always listed as `stale-edge`, whatever its comment says.
 This section owns the schema; [`bin/fm-paperclip-sweep.sh`](../bin/fm-paperclip-sweep.sh) owns the row classes, the read-only scan, and the guarded `release` command, and [`bin/fm-queue-zero.sh`](../bin/fm-queue-zero.sh) owns how its rows reach firstmate.
 The scan uses only Paperclip's supported board API and never touches its database.
 
