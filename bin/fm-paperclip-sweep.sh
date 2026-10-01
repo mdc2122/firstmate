@@ -41,7 +41,8 @@
 # The line must be exactly that shape, starting at column 0 of a comment line,
 # and owner= must name someone. The scan reads each blocked issue's comments
 # newest-first and honors the marker on the newest comment that carries a valid
-# one, looking back over at most the last 20 comments; later non-marker
+# one (within one comment the last valid line wins), looking back over at most
+# the last 20 comments; later non-marker
 # comments (an assignee's acknowledgment) do not clear it. A newer valid marker
 # supersedes an older one, and once that newest time passes, or no comment in
 # the window carries a valid line, the issue is listed again. A stale-edge
@@ -160,9 +161,9 @@ DEFS='
 CLASSIFY='
   def marker_next:
     ([($latest[.id] // [])[]
-      | capture("(?m)^fm-next-check: (?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) owner=[^ \\t\\r]+\\r?$"; "g")
-        // empty
-      | .t | ts]
+      | [capture("(?m)^fm-next-check: (?<t>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) owner=[^ \\t\\r]+\\r?$"; "g")
+         | .t | ts]
+      | last // empty]
       | first) as $t
     | $t != null and $t > $now;
   def refs($l): ($l | map(.identifier // .id) | join(","));

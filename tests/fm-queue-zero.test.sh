@@ -295,8 +295,8 @@ test_paperclip_rows_join_the_queue_wake_and_failure_is_visible() {
 # Paperclip refuses a monitor on a blocked issue, so its owner dates the next
 # check with an `fm-next-check:` line in an issue comment. The sweep reads the
 # comments newest-first and honors the newest valid marker, so a later
-# acknowledgment does not clear it and a newer marker supersedes an older one;
-# a passed newest date, a malformed line, or blockers that are all done does
+# acknowledgment does not clear it and a newer marker supersedes an older one
+# (within one comment, the last valid line wins); a passed newest date, a malformed line, or blockers that are all done does
 # list the issue again.
 test_paperclip_blocked_comment_marker_dates_the_next_check() {
   local home out
@@ -323,7 +323,9 @@ test_paperclip_blocked_comment_marker_dates_the_next_check() {
  {"id":"m9","identifier":"FIR-241","title":"newer past marker wins","status":"blocked",
   "blockedBy":[{"identifier":"FIR-110","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
  {"id":"m10","identifier":"FIR-242","title":"newer future marker wins","status":"blocked",
-  "blockedBy":[{"identifier":"FIR-111","status":"in_progress"}],"blockerAttention":{"state":"stalled"}}
+  "blockedBy":[{"identifier":"FIR-111","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m11","identifier":"FIR-243","title":"last line in one comment wins","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-112","status":"in_progress"}],"blockerAttention":{"state":"stalled"}}
 ]
 JSON
   printf '%s' '[{"body":"Acknowledged, tracking it."},{"body":"Both blockers are healthy waits.\n\nfm-next-check: 2026-10-01T18:00:00Z owner=coordinator"}]' > "$home/pc/comments-m1.json"
@@ -336,6 +338,7 @@ JSON
   printf '%s' '[{"body":"Seen, releasing soon."},{"body":"fm-next-check: 2026-10-03T00:00:00Z owner=coordinator"}]' > "$home/pc/comments-m8.json"
   printf '%s' '[{"body":"fm-next-check: 2026-10-01T11:00:00Z owner=engineer"},{"body":"fm-next-check: 2026-10-05T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m9.json"
   printf '%s' '[{"body":"fm-next-check: 2026-10-02T00:00:00Z owner=engineer"},{"body":"fm-next-check: 2026-09-30T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m10.json"
+  printf '%s' '[{"body":"Re-dated.\nfm-next-check: 2026-10-01T11:00:00Z owner=engineer\nfm-next-check: 2026-10-04T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m11.json"
   out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
   assert_not_contains "$out" "FIR-18 " "a blocked issue whose comment dates a future check with an owner was named despite a later acknowledgment"
   assert_contains "$out" "stalled FIR-20" "a blocked issue whose comment-dated check has passed was not named again"
@@ -347,6 +350,7 @@ JSON
   assert_contains "$out" "stale-edge FIR-134" "a future marker hid a blocked issue whose blockers are all done"
   assert_contains "$out" "stalled FIR-241" "an older future marker beat the newest past marker"
   assert_not_contains "$out" "FIR-242 " "an older past marker beat the newest future marker"
+  assert_not_contains "$out" "FIR-243 " "an earlier past line beat the last future line in the same comment"
   FM_QUEUE_ZERO_NOW=2026-10-01T18:00:01Z PATH="$home/fakebin:$PATH" FM_HOME="$home" "$SWEEP" scan > "$home/later.out" \
     || fail "later sweep scan failed"
   assert_contains "$(cat "$home/later.out")" "stalled FIR-18" "a comment-dated blocked issue was not named once its date passed"

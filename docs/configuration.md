@@ -619,6 +619,7 @@ fm-next-check: 2026-10-02T09:00:00Z owner=coordinator
 
 The line must be exactly `fm-next-check: YYYY-MM-DDTHH:MM:SSZ owner=<name>`, starting at column 0 of a comment line, with the time in UTC and `owner=` naming someone.
 Paperclip wakes the assignee on any board comment, so an acknowledgment posted after the marker does not clear it: the sweep reads the issue's comments newest-first and honors the marker on the newest comment that carries a valid one, looking back over at most the last 20 comments.
+Within one comment the last valid `fm-next-check:` line wins; across comments the newest comment carrying a valid line wins.
 A newer valid marker supersedes an older one.
 While that newest time is in the future the sweep does not list the blocked issue as `stalled` or `no-blocker`; once it passes, or no comment in the window carries a valid line (a malformed marker, for example a time without seconds or a leading space, carries no date), the issue is listed again.
 A blocked issue whose every blocker is done is always listed as `stale-edge`, whatever its comments say.
