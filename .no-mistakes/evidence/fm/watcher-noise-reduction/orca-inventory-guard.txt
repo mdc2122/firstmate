@@ -1,0 +1,6 @@
+# Real Orca read of gone handle term_31857703 (answers terminal_handle_stale); only 'terminal list' degraded
+list=real -> capture exit 3 (3=proven absent, 1=ordinary read failure)
+list=fail -> capture exit 1 (3=proven absent, 1=ordinary read failure)
+list=truncated -> capture exit 1 (3=proven absent, 1=ordinary read failure)
+list=omitted -> capture exit 1 (3=proven absent, 1=ordinary read failure)
+list=lists -> capture exit 1 (3=proven absent, 1=ordinary read failure)

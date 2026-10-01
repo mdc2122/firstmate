@@ -1,0 +1,25 @@
+== HEAD 1c6c705
+-- 1) bare turn-ended + 'working:' for unrecorded task paperclip-legacy-recovery-repair
+   watcher still running after 8s - no wake
+   stdout: 
+-- 2) another turn-end + routine append for the same unrecorded task
+   watcher still running after 8s - no wake
+   stdout: 
+-- 3) adversarial: 'blocked:' line for the unrecorded task must still surface
+   watcher exited rc=0 - WAKE
+   stdout: signal: $HOME/state/paperclip-legacy-recovery-repair.status
+-- triage log:
+[2026-10-01T05:51:33-0500] absorbed signal for unrecorded task (no state/<id>.meta): $STATE/paperclip-legacy-recovery-repair.status $STATE/paperclip-legacy-recovery-repair.turn-ended
+[2026-10-01T05:51:55-0500] absorbed signal for unrecorded task (no state/<id>.meta): $STATE/paperclip-legacy-recovery-repair.status $STATE/paperclip-legacy-recovery-repair.turn-ended
+
+== BASE 7665567d
+-- 1) bare turn-ended + 'working:' for unrecorded task paperclip-legacy-recovery-repair
+   watcher exited rc=0 - WAKE
+   stdout: signal: $HOME/state/paperclip-legacy-recovery-repair.status $HOME/state/paperclip-legacy-recovery-repair.turn-ended
+-- 2) another turn-end + routine append for the same unrecorded task
+   watcher exited rc=0 - WAKE
+   stdout: signal: $HOME/state/paperclip-legacy-recovery-repair.status $HOME/state/paperclip-legacy-recovery-repair.turn-ended
+-- 3) adversarial: 'blocked:' line for the unrecorded task must still surface
+   watcher exited rc=0 - WAKE
+   stdout: signal: $HOME/state/paperclip-legacy-recovery-repair.status
+-- triage log:

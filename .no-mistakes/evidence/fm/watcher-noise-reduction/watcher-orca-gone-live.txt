@@ -1,0 +1,53 @@
+== HEAD 1c6c705: markers before
+.count-term_31857703
+.count-term_e91c7fe1
+.hash-term_31857703
+.hash-term_e91c7fe1
+.stale-since-term_31857703
+.stale-since-term_e91c7fe1
+.stale-term_31857703
+.stale-term_e91c7fe1
+.wedge-escalations-term_31857703
+.wedge-escalations-term_e91c7fe1
+== watcher exited rc=0
+== watcher stdout:
+stale: term_e91c7fe1 (endpoint gone: the backend reports the recorded terminal of mid closed while its latest status is not finished; recover or tear down the worker - this notice is not repeated)
+== markers after
+.endpoint-gone-term_31857703
+.endpoint-gone-term_e91c7fe1
+.endpoint-gone-term_31857703: silent
+.endpoint-gone-term_e91c7fe1: notified
+== triage log
+[2026-10-01T05:43:03-0500] retired stale tracking for a proven-absent endpoint of finished task fin: term_31857703
+== second sweep after ack (expect no repeat wake for gone endpoints)
+== watcher still running after 15s (no wake)
+== watcher stdout:
+
+== BASE 7665567d: markers before
+.count-term_31857703
+.count-term_e91c7fe1
+.hash-term_31857703
+.hash-term_e91c7fe1
+.stale-since-term_31857703
+.stale-since-term_e91c7fe1
+.stale-term_31857703
+.stale-term_e91c7fe1
+.wedge-escalations-term_31857703
+.wedge-escalations-term_e91c7fe1
+== watcher still running after 15s (no wake)
+== watcher stdout:
+== markers after
+.count-term_31857703
+.count-term_e91c7fe1
+.hash-term_31857703
+.hash-term_e91c7fe1
+.stale-since-term_31857703
+.stale-since-term_e91c7fe1
+.stale-term_31857703
+.stale-term_e91c7fe1
+.wedge-escalations-term_31857703
+.wedge-escalations-term_e91c7fe1
+== triage log
+== second sweep after ack (expect no repeat wake for gone endpoints)
+== watcher still running after 15s (no wake)
+== watcher stdout:

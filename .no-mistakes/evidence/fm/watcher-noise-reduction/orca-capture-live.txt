@@ -1,0 +1,12 @@
+# Live Orca (real app, read-only) - fm_backend_orca_capture on gone vs live handles
+date: 2026-10-01T10:41:14Z
+## BASE 7665567d
+  capture term_31857703 -> exit 1 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_e91c7fe1 -> exit 1 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_21b23576 -> exit 1 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_4e7b45ed-e53e-4815-90c0-9d118ed196a5 -> exit 0 (3 = FM_BACKEND_CAPTURE_ABSENT)
+## HEAD 1c6c705
+  capture term_31857703 -> exit 3 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_e91c7fe1 -> exit 3 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_21b23576 -> exit 3 (3 = FM_BACKEND_CAPTURE_ABSENT)
+  capture term_4e7b45ed-e53e-4815-90c0-9d118ed196a5 -> exit 0 (3 = FM_BACKEND_CAPTURE_ABSENT)
