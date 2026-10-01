@@ -611,6 +611,14 @@ FM_PAPERCLIP_COMPANY=    # optional company id; discovered from the key when it 
 ```
 
 `FM_PAPERCLIP_APPROVAL_AGE_HOURS` (default 4) is how long a pending approval may wait before it is surfaced, and `FM_PAPERCLIP_STALE_HOURS` (default 6) is how long an in-progress issue with no run and no dated next check may sit idle.
+Paperclip refuses a monitor (`monitorNextCheckAt`) on a blocked issue, and its `unblockDescriptor` carries no date, so a blocked issue's owner dates the next check with one line in the issue's latest comment:
+
+```text
+fm-next-check: 2026-10-02T09:00:00Z owner=coordinator
+```
+
+The line must start a comment line, the time must be ISO-8601 UTC ending in `Z`, and `owner=` must name someone.
+While that time is in the future the sweep does not list the blocked issue; once it passes, a newer comment omits the line, or the line is malformed, the issue is listed again.
 This section owns the schema; [`bin/fm-paperclip-sweep.sh`](../bin/fm-paperclip-sweep.sh) owns the row classes, the read-only scan, and the guarded `release` command, and [`bin/fm-queue-zero.sh`](../bin/fm-queue-zero.sh) owns how its rows reach firstmate.
 The scan uses only Paperclip's supported board API and never touches its database.
 

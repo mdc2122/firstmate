@@ -62,8 +62,9 @@ sweep() {  # <home> <args...>
   PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" "$@"
 }
 
-# A fake Paperclip: GET answers come from $home/pc/<route>.json; PATCH bodies
-# are appended to $home/pc/patches.log. The key arrives on stdin (-H @-).
+# A fake Paperclip: GET answers come from $home/pc/<route>.json (an issue's
+# latest comment from comments-<id>.json, else none); PATCH bodies are
+# appended to $home/pc/patches.log. The key arrives on stdin (-H @-).
 install_fake_paperclip() {  # <home>
   local home=$1
   mkdir -p "$home/pc"
@@ -92,6 +93,7 @@ case "\$method \$path" in
   "GET /cli-auth/me") body=\$(cat "\$pc/me.json") ;;
   "GET /companies/co1/issues?"*) body=\$(cat "\$pc/issues.json") ;;
   "GET /companies/co1/approvals?"*) body=\$(cat "\$pc/approvals.json") ;;
+  "GET /issues/"*"/comments?"*) f="\$pc/comments-\${path#/issues/}"; f="\${f%%/comments\?*}.json"; body=\$(cat "\$f" 2>/dev/null || printf '[]') ;;
   "GET /issues/"*) f="\$pc/issue-\${path#/issues/}.json"; [ -f "\$f" ] || { printf 'missing\n404'; exit 0; }; body=\$(cat "\$f") ;;
   "PATCH /issues/"*) printf '%s %s\n' "\${path#/issues/}" "\$data" >> "\$pc/patches.log"; body='{}' ;;
   *) printf 'unknown\n404'; exit 0 ;;
@@ -290,6 +292,44 @@ test_paperclip_rows_join_the_queue_wake_and_failure_is_visible() {
   pass "Paperclip rows join the one wake, an unreadable board is an error row, and unconfigured homes skip it"
 }
 
+# Paperclip refuses a monitor on a blocked issue, so its owner dates the next
+# check with an `fm-next-check:` line in the latest comment. A future date with
+# an owner hides the issue; a passed date or a malformed line does not.
+test_paperclip_blocked_comment_marker_dates_the_next_check() {
+  local home out
+  home=$(make_home pc-marker)
+  install_fake_paperclip "$home"
+  cat > "$home/pc/issues.json" <<'JSON'
+[
+ {"id":"m1","identifier":"FIR-18","title":"future dated","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-104","status":"in_progress"}],"blockerAttention":{"state":"needs_attention"},
+  "monitorNextCheckAt":null},
+ {"id":"m2","identifier":"FIR-20","title":"past dated","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-133","status":"in_review"}],"blockerAttention":{"state":"needs_attention"}},
+ {"id":"m3","identifier":"FIR-13","title":"malformed marker","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-105","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m4","identifier":"FIR-91","title":"no owner named","status":"blocked","blockedBy":[]},
+ {"id":"m5","identifier":"FIR-57","title":"marker not on its own line","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-106","status":"in_review"}],"blockerAttention":{"state":"stalled"}}
+]
+JSON
+  printf '%s' '[{"body":"Both blockers are healthy waits.\n\nfm-next-check: 2026-10-01T18:00Z owner=coordinator"}]' > "$home/pc/comments-m1.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-01T11:59:59Z owner=engineer"}]' > "$home/pc/comments-m2.json"
+  printf '%s' '[{"body":"fm-next-check: tomorrow morning owner=engineer"}]' > "$home/pc/comments-m3.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00:00Z"}]' > "$home/pc/comments-m4.json"
+  printf '%s' '[{"body":"I will set fm-next-check: 2026-10-03T00:00:00Z owner=engineer later"}]' > "$home/pc/comments-m5.json"
+  out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
+  assert_not_contains "$out" "FIR-18 " "a blocked issue whose latest comment dates a future check with an owner was named"
+  assert_contains "$out" "stalled FIR-20" "a blocked issue whose comment-dated check has passed was not named again"
+  assert_contains "$out" "stalled FIR-13" "a blocked issue with a malformed date marker was hidden"
+  assert_contains "$out" "no-blocker FIR-91" "a date marker naming no owner hid the issue"
+  assert_contains "$out" "stalled FIR-57" "a marker that does not start its line hid the issue"
+  FM_QUEUE_ZERO_NOW=2026-10-01T18:00:01Z PATH="$home/fakebin:$PATH" FM_HOME="$home" "$SWEEP" scan > "$home/later.out" \
+    || fail "later sweep scan failed"
+  assert_contains "$(cat "$home/later.out")" "stalled FIR-18" "a comment-dated blocked issue was not named once its date passed"
+  pass "a future fm-next-check comment with an owner hides a blocked issue until the date passes; malformed markers do not"
+}
+
 test_paperclip_release_is_guarded() {
   local home out
   home=$(make_home pc-release)
@@ -321,5 +361,6 @@ test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode
 test_failed_append_does_not_suppress_the_episode
 test_paperclip_scan_classifies_stuck_items
+test_paperclip_blocked_comment_marker_dates_the_next_check
 test_paperclip_rows_join_the_queue_wake_and_failure_is_visible
 test_paperclip_release_is_guarded
