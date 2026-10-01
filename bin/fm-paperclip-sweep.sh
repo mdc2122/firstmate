@@ -42,8 +42,8 @@
 # and owner= must name someone. The scan reads each blocked issue's comments
 # newest-first and honors the marker on the newest comment that carries a valid
 # one (within one comment the last valid line wins), looking back over at most
-# the last 20 comments; later non-marker
-# comments (an assignee's acknowledgment) do not clear it. A newer valid marker
+# the last 20 comments; later non-marker comments (an assignee's
+# acknowledgment) do not clear it. A newer valid marker
 # supersedes an older one, and once that newest time passes, or no comment in
 # the window carries a valid line, the issue is listed again. A stale-edge
 # issue is listed whatever its comments say. A backlog issue with an open
