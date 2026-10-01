@@ -725,7 +725,8 @@ fm_backend_resolve_selector() {  # <raw-target> <state-dir>
 # endpoint (possibly with an empty screen); exit FM_BACKEND_CAPTURE_ABSENT means
 # the backend itself positively reported the recorded endpoint gone, which only
 # an adapter with a verified absence signal may return (today Orca's `exited`
-# terminal status, bin/backends/orca.sh); every other nonzero exit is an
+# terminal status or a stale handle a complete terminal list omits,
+# bin/backends/orca.sh); every other nonzero exit is an
 # unreadable read and never proves absence.
 # shellcheck disable=SC2034 # Consumed by adapters and sourcing callers.
 FM_BACKEND_CAPTURE_ABSENT=3

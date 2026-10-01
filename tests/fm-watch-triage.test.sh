@@ -51,6 +51,18 @@ watch_bg() {  # <state> <fakebin> <out> [extra env assignments...]
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$@" "$WATCH" > "$out" &
 }
 
+# The watcher delivers signals only for tasks this home recorded (a signal for
+# an id with no state/<id>.meta is absorbed), so a fixture that models a
+# dispatched crew records one. The record names no endpoint, so the stale
+# backbone never reads a pane for it and only the signal path under test runs.
+record_task() {  # <state> <id>...
+  local state=$1 id
+  shift
+  for id in "$@"; do
+    [ -e "$state/$id.meta" ] || printf 'endpoint_task_id=%s\nkind=ship\nharness=claude\n' "$id" > "$state/$id.meta"
+  done
+}
+
 # Wait up to <limit> 0.1s ticks while <pid> stays alive; 0 if still alive, 1 if it died.
 wait_live() {
   local pid=$1 limit=${2:-30} i=0
@@ -181,6 +193,7 @@ size_of() { LC_ALL=C wc -c < "$1" | tr -d '[:space:]'; }
 test_status_span_actionable_classifier() {
   local dir state offset
   dir=$(make_case classify-signal); state="$dir/state"
+  record_task "$state" a b d e
   printf 'working: step 1\nworking: step 2\n' > "$state/a.status"
   status_span_has_actionable "$state/a.status" 0 && fail "benign working: span classified actionable"
   printf 'working: x\nneeds-decision: pick A or B\n' > "$state/b.status"
@@ -212,6 +225,7 @@ test_status_span_actionable_classifier() {
 test_status_span_survives_a_later_routine_append() {
   local dir state event
   dir=$(make_case classify-masked); state="$dir/state"
+  record_task "$state" mask release blocked
   printf 'working: setup\nneeds-decision: pick A or B\nworking: still tidying the branch\n' \
     > "$state/mask.status"
   status_span_has_actionable "$state/mask.status" 0 \
@@ -241,6 +255,7 @@ test_status_span_survives_a_later_routine_append() {
 test_status_span_respects_decision_closure() {
   local dir state event open
   dir=$(make_case classify-closure); state="$dir/state"
+  record_task "$state" closed reopened term two rejected-reserved
   printf 'needs-decision [key=api]: pick A or B\nresolved [key=api]: took A\n' > "$state/closed.status"
   status_span_has_actionable "$state/closed.status" 0 \
     && fail "a decision the same span already closed was still classified actionable"
@@ -278,6 +293,7 @@ test_status_span_respects_decision_closure() {
 test_malformed_seen_signature_reads_the_whole_log() {
   local dir state f marker offset
   dir=$(make_case malformed-seen); state="$dir/state"; f="$state/task.status"
+  record_task "$state" task
   printf 'needs-decision: choose the release target\nworking: cleanup\n' > "$f"
   marker="$state/.seen-task_status"
   printf '40' > "$marker"
@@ -689,6 +705,7 @@ test_secondmate_status_signal_never_absorbed_classifier() {
 test_provably_working_signal_absorbed() {
   local dir state fakebin out status_file pid
   dir=$(make_case provably-working-signal); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" task
   status_file="$state/task.status"
   printf 'working: compiling step 2\n' > "$status_file"
   # The crew's pipeline is in an actively-running step: positive evidence it is
@@ -711,6 +728,7 @@ test_provably_working_signal_absorbed() {
 test_turn_ended_provably_working_absorbed() {
   local dir state fakebin out pid
   dir=$(make_case turn-ended-working); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" task
   : > "$state/task.turn-ended"
   # A busy pane is the second form of positive evidence (covers a queued
   # continuation right after the turn-end).
@@ -736,6 +754,7 @@ test_turn_ended_not_working_surfaced() {
   dir=$(make_case turn-ended-stopped); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   : > "$state/task.turn-ended"
+  printf 'window=test:fm-task\nkind=ship\nharness=claude\n' > "$state/task.meta"
   # No running pipeline, no busy pane: the crew has stopped (e.g. it finished via
   # an interactive menu and wrote no done: status). Default unknown verdict.
   export FM_FAKE_CREW_STATE='state: unknown · source: none · no current-state source available'
@@ -746,6 +765,55 @@ test_turn_ended_not_working_surfaced() {
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "drain after the surfaced turn-end failed"
   grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/task.turn-ended" >/dev/null || fail "surfaced turn-end was not queued"
   pass "a bare turn-end whose crew is not provably working is surfaced (the swallowed-finish fix)"
+}
+
+# A bare turn-end or routine status write for a task id with no state/<id>.meta
+# (a worker's own helper writing under an id firstmate never dispatched, or a
+# torn-down task's late write) has no endpoint, worker, or decision this home
+# could act on: it is absorbed and logged, and does not re-fire later. A
+# recorded task in the same batch still surfaces on its own evidence, and a
+# captain-relevant line written for an unrecorded id is never swallowed.
+test_unrecorded_task_signal_absorbed() {
+  local dir state fakebin out pid marker expected i
+  dir=$(make_case unrecorded-task-signal); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  : > "$state/ghost.turn-ended"
+  printf 'working: helper chatter\n' > "$state/ghost.status"
+  export FM_FAKE_CREW_STATE='state: unknown · source: none · no current-state source available'
+  watch_bg "$state" "$fakebin" "$out"
+  pid=$!
+  wait_for_absorbed "$state" "$pid" "absorbed signal for unrecorded task" \
+    || { reap "$pid"; fail "a signal for a task with no metadata was not absorbed: $(cat "$out")"; }
+  [ ! -s "$out" ] || { reap "$pid"; fail "an unrecorded task's signal printed a wake: $(cat "$out")"; }
+  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "an unrecorded task's signal was queued"; }
+  marker=$(status_signal_seen_marker_path "$state" ghost)
+  expected=$(_fm_status_file_size "$state/ghost.status")
+  [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] \
+    || { reap "$pid"; fail "the absorbed routine status did not advance its classified cursor"; }
+  printf 'working: more helper chatter\n' >> "$state/ghost.status"
+  expected=$(_fm_status_file_size "$state/ghost.status")
+  for i in $(seq 1 100); do
+    [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] && break
+    sleep 0.05
+  done
+  [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] \
+    || { reap "$pid"; fail "the appended routine status did not advance its classified cursor"; }
+  [ ! -s "$out" ] || { reap "$pid"; fail "appended helper chatter printed a wake"; }
+  # A recorded, stopped crew in the next batch still surfaces alone.
+  record_task "$state" real
+  : > "$state/real.turn-ended"
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "a recorded stopped crew's turn-end did not surface beside an unrecorded one"; }
+  grep -F "signal: $state/real.turn-ended" "$out" >/dev/null || fail "the recorded crew's turn-end was not the surfaced reason: $(cat "$out")"
+  grep -F 'ghost' "$out" >/dev/null && fail "the unrecorded task re-fired with the recorded one: $(cat "$out")"
+  # A captain-relevant line for an unrecorded id surfaces.
+  ack_stopped_cycle "$state" >/dev/null 2>&1 || true
+  printf 'blocked: need the captain\n' >> "$state/ghost.status"
+  watch_bg "$state" "$fakebin" "$out"
+  pid=$!
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "a captain-relevant line for an unrecorded task was swallowed"; }
+  grep -F "signal: $state/ghost.status" "$out" >/dev/null || fail "the unrecorded task's blocked line was not the surfaced reason: $(cat "$out")"
+  unset FM_FAKE_CREW_STATE
+  pass "a routine signal for a task with no metadata is absorbed while its captain-relevant line and a recorded crew still surface"
 }
 
 # --- bare turn-end, unverifiable harness: pane churn is the third proof --------
@@ -816,6 +884,41 @@ test_turn_ended_churning_pane_absorbed() {
   reap "$pid"
   unset FM_FAKE_CREW_STATE
   pass "a bare turn-end from a pane that churned since the previous poll is absorbed"
+}
+
+# A second churn absorb inside one open deferral window is the steady state of a
+# busy fleet: every churned pane already carries its .churn-since- marker, so no
+# new marker is created. Stock macOS Bash 3.2 treats expanding that empty set
+# under set -u as an unbound variable, which killed the watcher cycle with exit 1
+# and no actionable reason on every such batch until the window aged out.
+test_turn_ended_churn_within_open_window_absorbed() {
+  local dir state fakebin out capture_file window key pid since
+  dir=$(make_case turn-ended-churn-open-window); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"
+  window="test:fm-codexer"
+  : > "$state/codexer.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexer.meta"
+  printf 'apply_patch: writing bin/thing.sh' > "$capture_file"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  printf '%s' "$(hash_text 'reading the brief')" > "$state/.hash-$key"
+  printf '0\n' > "$state/.count-$key"
+  since=$(( $(date +%s) - 60 ))
+  printf '%s' "$since" > "$state/.churn-since-$key"
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
+    FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
+    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2> "$dir/watch.err" &
+  pid=$!
+  wait_for_absorbed "$state" "$pid" "absorbed benign signal:" \
+    || { reap "$pid"; fail "a churning turn-end inside an open deferral window was not absorbed (watcher stderr: $(cat "$dir/watch.err"))"; }
+  kill -0 "$pid" 2>/dev/null \
+    || fail "the watcher died after absorbing a churning turn-end inside an open deferral window: $(cat "$dir/watch.err")"
+  [ "$(cat "$state/.churn-since-$key")" = "$since" ] \
+    || { reap "$pid"; fail "an absorb inside an open window restarted its deferral bound"; }
+  reap "$pid"
+  unset FM_FAKE_CREW_STATE
+  pass "a churning turn-end inside an already-open deferral window is absorbed without restarting the bound"
 }
 
 test_turn_ended_churn_resets_prior_stale_classification() {
@@ -1434,6 +1537,7 @@ test_turn_ended_surfaced_batch_opens_no_partial_deadline() {
 test_working_note_not_working_surfaced() {
   local dir state fakebin out drain_out status_file pid
   dir=$(make_case working-note-stopped); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   status_file="$state/task.status"
   printf 'working: compiling step 2\n' > "$status_file"
@@ -1474,6 +1578,7 @@ test_secondmate_status_note_surfaced_despite_busy_agent() {
 test_self_announced_close_does_not_rewake_but_next_note_does() {
   local dir state fakebin out status_file pid rc
   dir=$(make_case self-close-quiet); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" task
   status_file="$state/task.status"
   printf 'needs-decision [key=k1]: pick one\n' > "$status_file"
   prime_status_seen "$state" "$status_file" || fail "could not prime the announced baseline"
@@ -1507,6 +1612,7 @@ test_self_announced_close_does_not_rewake_but_next_note_does() {
 test_actionable_signal_surfaced() {
   local dir state fakebin out drain_out status_file pid
   dir=$(make_case actionable-signal); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   status_file="$state/task.status"
   printf 'working: setup\nneeds-decision: pick A or B\n' > "$status_file"
@@ -1529,6 +1635,7 @@ test_actionable_signal_surfaced() {
 test_needs_decision_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid
   dir=$(make_case needs-decision-payload); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'working: setup\nneeds-decision: pick A or B\n' > "$status_file"
@@ -1548,6 +1655,7 @@ test_needs_decision_signal_payload_marked_for_branch_exclusion() {
 test_needs_decision_reconciliation_required_still_marked() {
   local dir state fakebin out status_file pid
   dir=$(make_case needs-decision-reconciliation); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'needs-decision [key=pending-reply-x]: unrelated request\nworking: awaiting reconciliation\n' \
@@ -1566,6 +1674,7 @@ test_needs_decision_reconciliation_required_still_marked() {
 test_captain_held_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid
   dir=$(make_case captain-held-signal-payload); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'captain-held [key=route]: awaiting the captain\n' > "$status_file"
@@ -1583,6 +1692,7 @@ test_captain_held_signal_payload_marked_for_branch_exclusion() {
 test_pending_reply_escalation_signal_payload_marked_for_branch_exclusion() {
   local dir state fakebin out status_file pid corr
   dir=$(make_case pending-reply-escalation-payload); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   corr=0123456789abcdef
@@ -1599,6 +1709,7 @@ test_pending_reply_escalation_signal_payload_marked_for_branch_exclusion() {
 test_ordinary_blocked_signal_payload_remains_branch_eligible() {
   local dir state fakebin out status_file pid
   dir=$(make_case ordinary-blocked-payload); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'blocked [key=dependency]: waiting for an upstream release\n' > "$status_file"
@@ -1618,6 +1729,7 @@ test_ordinary_blocked_signal_payload_remains_branch_eligible() {
 test_routine_signal_payload_not_marked_needs_decision() {
   local dir state fakebin out status_file pid
   dir=$(make_case routine-signal-payload); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'working: setup\ndone: migration complete ; needs-decision: documented in follow-up\n' > "$status_file"
@@ -1641,6 +1753,7 @@ test_routine_signal_payload_not_marked_needs_decision() {
 test_actionable_signal_survives_a_later_routine_append() {
   local dir state fakebin out drain_out status_file sig pid
   dir=$(make_case actionable-masked); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   status_file="$state/task.status"
   # Everything through "working: setup" was already classified, so this asserts
@@ -1667,6 +1780,7 @@ test_actionable_signal_survives_a_later_routine_append() {
 test_release_completion_survives_a_later_routine_append() {
   local dir state fakebin out drain_out status_file sig pid
   dir=$(make_case release-masked); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   status_file="$state/task.status"
   printf 'working: publishing\n' > "$status_file"
@@ -1688,6 +1802,7 @@ test_release_completion_survives_a_later_routine_append() {
 test_routine_appends_after_a_classified_event_stay_absorbed() {
   local dir state fakebin out status_file sig pid
   dir=$(make_case actionable-classified); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"
   status_file="$state/task.status"
   # The decision is BEHIND the classified position, so only the new routine line
@@ -1710,6 +1825,7 @@ test_routine_appends_after_a_classified_event_stay_absorbed() {
 test_unreadable_status_reports_once_per_file_state() {
   local dir state fakebin out status_file target marker sig pid
   dir=$(make_case unreadable-status); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; status_file="$state/task.status"; target="$dir/missing-status-target"
   ln -s "$target" "$status_file"
   marker="$state/.seen-task_status"
@@ -1756,6 +1872,7 @@ test_unreadable_status_reports_once_per_file_state() {
 test_permission_recovery_surfaces_preserved_status() {
   local dir state fakebin out status_file marker before_ident after_ident pid
   dir=$(make_case permission-recovery); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; status_file="$state/task.status"; marker="$state/.seen-task_status"
   printf 'blocked: release approval required\nworking: preserving context\n' > "$status_file"
   before_ident=$(_fm_open_decisions_file_ident "$status_file")
@@ -4353,6 +4470,7 @@ test_terminal_first_sight_drops_a_finished_write_deferral_chain() {
 test_triage_log_size_cap_accepts_spaced_wc_counts() {
   local dir state fakebin out status_file pid lines i
   dir=$(make_case triage-log-spaced-wc); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" task
   i=1
   while [ "$i" -le 3000 ]; do
     printf 'old line %04d\n' "$i" >> "$state/.watch-triage.log"
@@ -4781,6 +4899,7 @@ test_procevent_marker_failure_exits_and_replays() {
 test_heartbeat_no_change_absorbed() {
   local dir state fakebin out pid i sig
   dir=$(make_case heartbeat-absorb); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" routine
   printf 'working: routine heartbeat history\n' > "$state/routine.status"
   sig=$(seen_sig "$state/routine.status"); printf '%s' "$sig" > "$state/.seen-routine_status"
   # A quiet fleet with a fast heartbeat cadence.
@@ -4813,6 +4932,7 @@ test_heartbeat_no_change_absorbed() {
 test_heartbeat_backstop_surfaces_a_masked_status() {
   local dir state fakebin out sig pid
   dir=$(make_case heartbeat-masked); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" miss
   out="$dir/watch.out"
   # Same miss as below, but the captain-relevant event is followed by a routine
   # append, so its last line reads benign. The backstop must still catch it.
@@ -4834,6 +4954,7 @@ test_heartbeat_backstop_surfaces_a_masked_status() {
 test_heartbeat_backstop_surfaces_unsurfaced_status() {
   local dir state fakebin out drain_out sig pid
   dir=$(make_case heartbeat-backstop); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" miss
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   # A captain-relevant status whose .seen-* signature ALREADY matches (so the
   # per-poll signal scan stays quiet) but which was never surfaced (no
@@ -4894,6 +5015,7 @@ test_queue_zero_tick_wakes_with_ready_rows_once() {
 test_beacon_stays_fresh_while_absorbing() {
   local dir state fakebin out status_file pid m1 m2 now
   dir=$(make_case beacon-fresh); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  record_task "$state" task
   status_file="$state/task.status"
   printf 'working: a\n' > "$status_file"
   # Provably working so the working: notes are absorbed (the path that must keep the
@@ -4927,6 +5049,7 @@ test_beacon_stays_fresh_while_absorbing() {
 test_afk_signal_records_heartbeat_endpoint() {
   local dir state fakebin out status_file pid
   dir=$(make_case afk-heartbeat-endpoint); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; status_file="$state/task.status"
   printf 'needs-decision: choose release target\nworking: preparing both targets\n' > "$status_file"
   date '+%s' > "$state/.afk"
@@ -4944,6 +5067,7 @@ test_afk_signal_records_heartbeat_endpoint() {
 test_afk_present_reverts_watcher_to_one_shot() {
   local dir state fakebin out drain_out status_file pid
   dir=$(make_case afk-coherence); state="$dir/state"; fakebin="$dir/fakebin"
+  record_task "$state" task
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   status_file="$state/task.status"
   printf 'working: routine note\n' > "$status_file"
@@ -5245,7 +5369,9 @@ test_secondmate_status_signal_never_absorbed_classifier
 test_provably_working_signal_absorbed
 test_turn_ended_provably_working_absorbed
 test_turn_ended_not_working_surfaced
+test_unrecorded_task_signal_absorbed
 test_turn_ended_churning_pane_absorbed
+test_turn_ended_churn_within_open_window_absorbed
 test_turn_ended_churn_resets_prior_stale_classification
 test_turn_ended_churn_resets_wedge_state_before_stale_poll
 test_turn_ended_still_pane_surfaced

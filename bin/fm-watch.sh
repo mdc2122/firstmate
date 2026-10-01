@@ -617,7 +617,7 @@ signal_turnend_panes_churned() {  # <file> ...
   # by macos-stock-bash, and this repository uses no associative arrays in bin/
   # or tests/. A batch is normally one to three tasks and captures dominate its
   # cost; indexed lookup is the upgrade path if coalesced batches grow large.
-  for task in "${signal_tasks[@]}"; do
+  for task in ${signal_tasks[@]+"${signal_tasks[@]}"}; do
     task_index=-1
     for ((i = 0; i < ${#snapshot_tasks[@]}; i++)); do
       [ "${snapshot_tasks[$i]}" = "$task" ] && { task_index=$i; break; }
@@ -633,7 +633,7 @@ signal_turnend_panes_churned() {  # <file> ...
     [ "$count" -eq 1 ] || return 1
     signal_indexes+=("$task_index")
   done
-  for task_index in "${signal_indexes[@]}"; do
+  for task_index in ${signal_indexes[@]+"${signal_indexes[@]}"}; do
     [ "${snapshot_kinds[$task_index]}" != secondmate ] || return 1
   done
   for ((i = 0; i < ${#signal_tasks[@]}; i++)); do
@@ -650,7 +650,7 @@ signal_turnend_panes_churned() {  # <file> ...
     return 1
   fi
   absorb_secs=$((10#$TURNEND_CHURN_ABSORB_SECS))
-  for task_index in "${churn_indexes[@]}"; do
+  for task_index in ${churn_indexes[@]+"${churn_indexes[@]}"}; do
     w=${snapshot_windows[$task_index]}
     key=${snapshot_keys[$task_index]}
     backend=${snapshot_backends[$task_index]}
@@ -669,7 +669,7 @@ signal_turnend_panes_churned() {  # <file> ...
   # Enforce the deferral bound BEFORE any .stale- state is touched, so a wake that
   # surfaces here leaves the staleness backbone's own classification alone.
   now_s=$(date +%s)
-  for key in "${churned_keys[@]}"; do
+  for key in ${churned_keys[@]+"${churned_keys[@]}"}; do
     marker="$STATE/.churn-since-$key"
     if [ ! -e "$marker" ]; then
       [ ! -L "$marker" ] || return 1
@@ -688,20 +688,20 @@ signal_turnend_panes_churned() {  # <file> ...
       return 1
     fi
   done
-  for key in "${missing_keys[@]}"; do
+  for key in ${missing_keys[@]+"${missing_keys[@]}"}; do
     marker="$STATE/.churn-since-$key"
     if (set -C; printf '%s' "$now_s" > "$marker") 2>/dev/null; then
       created_keys+=("$key")
       continue
     fi
-    for created in "${created_keys[@]}"; do
+    for created in ${created_keys[@]+"${created_keys[@]}"}; do
       rm -f "$STATE/.churn-since-$created"
     done
     return 1
   done
-  for key in "${churned_keys[@]}"; do
+  for key in ${churned_keys[@]+"${churned_keys[@]}"}; do
     if ! rm -f "$STATE/.stale-$key" "$STATE/.wedge-escalations-$key"; then
-      for created in "${created_keys[@]}"; do
+      for created in ${created_keys[@]+"${created_keys[@]}"}; do
         rm -f "$STATE/.churn-since-$created"
       done
       return 1
@@ -1559,6 +1559,48 @@ scan_signals() {
     printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
   done
   return 0
+}
+
+# Filter scan_signals output: print every row whose task has a state/<id>.meta,
+# and record the reported signature of every bare turn-end row whose task has
+# none, logging it as absorbed. A missing meta is the only test - kind,
+# backend, and liveness are not read - so every dispatched task, secondmates
+# included, keeps its signals exactly as before. An unrecorded status log is
+# absorbed only while its new span holds no captain-relevant event: a home
+# that writes a status line by hand for a task it never dispatched (a decision
+# record, a recovered or torn-down task's final word) still surfaces it.
+unrecorded_signals_absorb() {  # <scan_signals-output>
+  local sf sig f base task absorbed='' record needs_decision rc captured_end captured_ident
+  while IFS=$(printf '\t') read -r sf sig f; do
+    [ -n "$sf" ] || continue
+    base=${f##*/}
+    case "$base" in
+      *.status) task=${base%.status} ;;
+      *) task=${base%.turn-ended} ;;
+    esac
+    if [ -n "$task" ] && [ ! -e "$STATE/$task.meta" ] && [ ! -L "$STATE/$task.meta" ]; then
+      case "$f" in
+        *.status)
+          record=''; needs_decision=0
+          status_span_first_actionable_record "$f" "$(fm_wake_signal_seen_size "$STATE" "$f")" record needs_decision
+          rc=$?
+          if [ "$rc" -ne 1 ] || [ "$needs_decision" -eq 1 ]; then
+            printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
+            continue
+          fi
+          IFS=$'\t' read -r captured_end captured_ident <<< "$record"
+          fm_wake_status_seen_commit "$STATE" "$f" "$captured_end" "$captured_ident" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; }
+          ;;
+        *) printf '%s' "$sig" > "$sf" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; } ;;
+      esac
+      case " $absorbed " in *" $f "*) ;; *) absorbed="$absorbed $f" ;; esac
+      continue
+    fi
+    printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
+  done <<EOF
+$1
+EOF
+  [ -z "$absorbed" ] || triage_log "absorbed signal for unrecorded task (no state/<id>.meta):$absorbed"
 }
 
 # Deliver a durably queued process-event result to firstmate. Publication is
@@ -2484,6 +2526,12 @@ EOF
     # home_summary_refresh_detached for why publication stays off the beacon's
     # path. Publication failure stays side-band.
     home_summary_refresh_detached
+    # A signal file whose task has no state/<id>.meta belongs to nothing this
+    # home supervises: a torn-down task's late write, or a worker's own helper
+    # writing under an id firstmate never dispatched. Its seen marker advances
+    # so routine chatter does not re-fire or reach the queue. Captain-relevant
+    # status spans and failed classification/marker commits still surface.
+    pending=$(unrecorded_signals_absorb "$pending")
     files=""
     while IFS=$(printf '\t') read -r sf sig f; do
       [ -n "$sf" ] || continue
@@ -2491,6 +2539,8 @@ EOF
     done <<EOF
 $pending
 EOF
+  fi
+  if [ -n "$pending" ]; then
     reason="signal:$files"
     # Triage: a signal is ACTIONABLE when any of these holds (cheapest first):
     #   - the away-mode daemon owns triage (afk) and wants every wake;
