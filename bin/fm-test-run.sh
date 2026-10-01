@@ -83,7 +83,9 @@
 #                   FM_TEST_STEP_BUDGET_SECS caps all attempts to a shared
 #                   invocation deadline; CI reserves reporting margin. It is
 #                   consumed by this runner, not inherited by child scripts.
-#                   Exhaustion reports a timeout without starting more work.
+#                   A script it would cut short, or would never start, fails
+#                   as budget exhausted (exit 125), never as a timed-out
+#                   script and never retried.
 #                   FM_TEST_SCRIPT_BASH selects the test interpreter.
 #   --retry-infra-flakes
 #                   retry once after an observed process signal, harness startup
@@ -215,7 +217,7 @@ RETRY_INFRA_FLAKES=0
 # healthy CI runtimes rather than picked: across 30 fork CI runs on 2026-09-30
 # every script outside the explicit entries in per_script_timeout_auto_secs
 # finished within 218s at its slowest, so 400s leaves more than 1.8x headroom
-# while still firing well inside the 10-minute portable parallel job cap.
+# while still firing well inside the 25-minute portable parallel job cap.
 PER_SCRIPT_TIMEOUT_AUTO_DEFAULT_SECS=400
 
 # How many separate-runner shards the portable serial remainder splits into.
@@ -263,8 +265,8 @@ now_iso() {
 # the job or step cap kills the lane with no explanation.
 per_script_timeout_auto_secs() {  # <script path or basename>
   case "${1##*/}" in
-    fm-watch-triage.test.sh) echo 2100 ;;  # slowest 1250s; serial job cap 45m
-    fm-backend-herdr-presentation-e2e.test.sh) echo 1000 ;;  # slowest 473s; Herdr step cap 20m
+    fm-watch-triage.test.sh) echo 2100 ;;  # slowest 1250s; serial job cap 62m
+    fm-backend-herdr-presentation-e2e.test.sh) echo 1000 ;;  # slowest 473s; Herdr step cap 24m
     fm-captain-hold-lifecycle.test.sh) echo 650 ;;  # slowest 392s
     fm-pr-check-security.test.sh | fm-session-start.test.sh | \
       fm-remote-secondmate-lifecycle-e2e.test.sh | fm-procevent.test.sh)
@@ -2370,7 +2372,8 @@ family_bump() {
 # Sidecars beside a script's captured output <out>, written by
 # run_script_attempts and read back here so the serial path and a concurrent
 # worker subshell report through one place: <out>.timeout holds the bound a
-# timed-out script hit, and <out>.retry holds "<signature>\t<first exit>" for a
+# timed-out script hit, <out>.budget names a script the shared step budget cut
+# short or never started, and <out>.retry holds "<signature>\t<first exit>" for a
 # script retried as an infrastructure flake.
 record_script_result() {
   local script=$1 rc=$2 duration=$3 out=$4 end_iso=$5
@@ -2400,6 +2403,9 @@ record_script_result() {
     timeout_secs=$(cat "$out.timeout")
     gha_annotate error "$script" "Test timed out" \
       "$script exceeded its per-script bound of ${timeout_secs}s and was terminated"
+  fi
+  if [ -s "$out.budget" ]; then
+    gha_annotate error "$script" "Step budget exhausted" "$(cat "$out.budget")"
   fi
   if [ -s "$out.retry" ]; then
     IFS=$'\t' read -r retry_signature retry_first_exit <"$out.retry"
@@ -2440,20 +2446,23 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   local GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
   # shellcheck source=tests/git-config-helpers.sh
   . "$ROOT/tests/git-config-helpers.sh" || return
-  local rc
+  local rc budget_capped=0
   : "$id"
+  rm -f "$out.budget"
   bound=$(script_timeout_secs "$script")
   if [ -n "$STEP_BUDGET_SECS" ]; then
     local remaining
     remaining=$(( (RUN_STARTED_MS + STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
     if [ "$remaining" -le 0 ]; then
-      printf 'not ok - not started: %s exhausted the shared step budget before starting (infrastructure failure)\n' "$script" >"$out"
+      printf 'not ok - not started: %s exhausted the shared step budget of %ss before starting (infrastructure failure)\n' \
+        "$script" "$STEP_BUDGET_SECS" | tee "$out.budget" >"$out"
       rm -f "$out.process" "$out.process.exit" "$out.timeout"
       [ "$stream" -eq 1 ] && cat "$out"
       return 125
     fi
     if [ "$bound" -eq 0 ] || [ "$bound" -gt "$remaining" ]; then
       bound=$remaining
+      budget_capped=1
     fi
   fi
   local outcome="$out.process" completed="$out.completed" program
@@ -2502,9 +2511,15 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     { [ "$stream" -eq 1 ] && [ ! -s "$completed" ]; } ||
     { [ "$stream" -ne 1 ] && [ "$(cat "$outcome" 2>/dev/null)" != exit ]; }
   }; then
-    printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
-      "$script" "$bound" >>"$out"
-    printf '%s\n' "$bound" >"$out.timeout"
+    if [ "$budget_capped" -eq 1 ]; then
+      printf 'not ok - budget exhausted: %s was terminated after %ss when the shared step budget of %ss ran out (infrastructure failure)\n' \
+        "$script" "$bound" "$STEP_BUDGET_SECS" | tee "$out.budget" >>"$out"
+      rc=125
+    else
+      printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
+        "$script" "$bound" >>"$out"
+      printf '%s\n' "$bound" >"$out.timeout"
+    fi
     [ "$stream" -eq 1 ] && tail -1 "$out"
     if [ "$(cat "$outcome" 2>/dev/null)" = exit ]; then
       local script_exit
@@ -2527,7 +2542,7 @@ run_script_attempts() {  # <script> <out> <stream> <id>
   rm -f "$out.timeout" "$out.retry" "$out.prelude"
   run_script_bounded "$script" "$out" "$stream" "$id"
   rc=$?
-  if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ]; then
+  if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ] || [ -e "$out.budget" ]; then
     return "$rc"
   fi
   if [ "$(cat "$out.process" 2>/dev/null)" = exit ]; then

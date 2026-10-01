@@ -1963,26 +1963,31 @@ test_exhausted_budget_does_not_start_or_retry() {
   mkdir -p "$tmp/bin" "$tmp/tests"
   cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
   cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
-  printf '#!/bin/bash\nsleep 2\n' >"$tmp/tests/first.test.sh"
+  printf '#!/bin/bash\nsleep 10\n' >"$tmp/tests/first.test.sh"
   # Expand START_LOG in the generated fixture, not while writing it.
   # shellcheck disable=SC2016
   printf '#!/bin/bash\necho started >>"$START_LOG"\n' >"$tmp/tests/later.test.sh"
   set +e
-  START_LOG="$tmp/started" FM_TEST_STEP_BUDGET_SECS=1 "$tmp/bin/fm-test-run.sh" \
+  START_LOG="$tmp/started" FM_TEST_STEP_BUDGET_SECS=3 "$tmp/bin/fm-test-run.sh" \
     --jobs 1 --per-script-timeout-secs auto --retry-infra-flakes \
     --json "$tmp/result.json" tests/first.test.sh tests/later.test.sh >"$tmp/out" 2>&1
   rc=$?
   set -e
   [ "$rc" -eq 1 ] && [ ! -e "$tmp/started" ] || fail "exhausted budget started a script"
   grep -q 'not started: tests/later.test.sh' "$tmp/out" || fail "missing not-started diagnostic"
-  python3 - "$tmp/result.json" <<'PY' || fail "not-started script was labeled a timeout or flake"
+  grep -q 'budget exhausted: tests/first.test.sh .* step budget of 3s' "$tmp/out" \
+    || fail "budget-capped kill was not reported as budget exhaustion: $(cat "$tmp/out")"
+  ! grep -q 'timed out:\|FM_TEST_RETRY' "$tmp/out" \
+    || fail "budget exhaustion was reported as a timeout or retried: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "budget-exhausted script was labeled a timeout or flake"
 import json, sys
-later = next(s for s in json.load(open(sys.argv[1]))['scripts'] if s['path'] == 'tests/later.test.sh')
-assert later['exit'] == 125 and not later['timed_out']
-assert not later['retried_infra_flake']
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+for path in ('tests/first.test.sh', 'tests/later.test.sh'):
+    assert by[path]['exit'] == 125 and not by[path]['timed_out'], by[path]
+    assert not by[path]['retried_infra_flake'], by[path]
 PY
   rm -rf "$tmp"
-  pass "budget exhaustion reports not started without timeout retry"
+  pass "budget exhaustion is reported plainly without timeout retry"
 }
 
 test_serial_family_shares_timeout_budget() {
@@ -2003,13 +2008,14 @@ test_serial_family_shares_timeout_budget() {
   ended=$SECONDS
   [ "$rc" -eq 1 ] && [ "$((ended - began))" -lt 25 ] \
     || fail "serial family outran shared budget: $(cat "$tmp/out")"
-  python3 - "$tmp/result.json" <<'PY' || fail "serial family did not record its remaining-time timeout"
+  grep -q 'budget exhausted: tests/fm-backend-herdr-presentation-e2e.test.sh .* step budget of 15s' "$tmp/out" \
+    || fail "serial family did not name its budget exhaustion: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "serial family labeled its budget exhaustion a timeout"
 import json, sys
 by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
 assert by['tests/fm-backend-herdr-focus-flash-e2e.test.sh']['exit'] == 0
 hang = by['tests/fm-backend-herdr-presentation-e2e.test.sh']
-assert hang['timed_out'] and hang['exit'] == 124
-assert 0 < hang['timeout_secs'] <= 13
+assert not hang['timed_out'] and hang['exit'] == 125
 PY
   rm -rf "$tmp"
   pass "serial family bounds a hang by the remaining shared step budget"
