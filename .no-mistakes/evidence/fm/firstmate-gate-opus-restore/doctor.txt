@@ -1,0 +1,22 @@
+[33mA new version of no-mistakes is available: v1.76.0-2-g6c4eae7 -> v1.84.0
+Run "no-mistakes update" to update[0m
+  System
+  ✓ git             git version 2.50.1 (Apple Git-155)
+  ✓ gh              ok
+  – az              not found (optional, needed for Azure DevOps PR/CI)
+  ✓ data directory  /Users/studio2/.no-mistakes
+  ✓ database        ok
+  ✓ daemon          running
+
+  Agents
+  ✓ claude          /Users/studio2/.local/bin/claude
+  ✓ codex           /Users/studio2/.hermes/node/bin/codex
+  ✓ grok            /Users/studio2/.grok/bin/grok
+  – rovodev         not found
+  ✓ opencode        /Users/studio2/.hermes/node/bin/opencode
+  ✓ pi              /Users/studio2/.hermes/node/bin/pi
+  – copilot         not found
+  – antigravity     not found
+  ✓ acpx            /Users/studio2/.hermes/node/bin/acpx
+  ✓ cursor          /Users/studio2/.local/bin/cursor-agent, /Users/studio2/.hermes/node/bin/acpx
+  ✓ gate validation  claude is runnable
