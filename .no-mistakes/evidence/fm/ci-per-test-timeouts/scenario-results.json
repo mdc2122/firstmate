@@ -1,0 +1,92 @@
+[
+  {
+    "name": "bounded-hang",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 6.468,
+    "script_exit": 124,
+    "timed_out": true,
+    "retried": false
+  },
+  {
+    "name": "signal-recovery",
+    "status": 0,
+    "attempts": 2,
+    "elapsed": 5.367,
+    "script_exit": 0,
+    "timed_out": false,
+    "retried": true
+  },
+  {
+    "name": "timeout-recovery",
+    "status": 0,
+    "attempts": 2,
+    "elapsed": 4.823,
+    "script_exit": 0,
+    "timed_out": false,
+    "retried": true
+  },
+  {
+    "name": "persistent-signal",
+    "status": 1,
+    "attempts": 2,
+    "elapsed": 4.456,
+    "script_exit": 143,
+    "timed_out": false,
+    "retried": true
+  },
+  {
+    "name": "multiline-assertion",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 6.569,
+    "script_exit": 1,
+    "timed_out": false,
+    "retried": false
+  },
+  {
+    "name": "explicit-exit-124",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 5.573,
+    "script_exit": 124,
+    "timed_out": false,
+    "retried": false
+  },
+  {
+    "name": "pipe-assertion-default",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 9.745,
+    "script_exit": 1,
+    "timed_out": true,
+    "retried": false
+  },
+  {
+    "name": "pipe-success-default",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 6.293,
+    "script_exit": 124,
+    "timed_out": true,
+    "retried": false
+  },
+  {
+    "name": "pipe-assertion-bash",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 7.464,
+    "script_exit": 1,
+    "timed_out": true,
+    "retried": false
+  },
+  {
+    "name": "pipe-success-bash",
+    "status": 1,
+    "attempts": 1,
+    "elapsed": 8.906,
+    "script_exit": 124,
+    "timed_out": true,
+    "retried": false
+  }
+]

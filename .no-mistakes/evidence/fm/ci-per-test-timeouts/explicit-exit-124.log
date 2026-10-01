@@ -1,0 +1,9 @@
+$ /bin/bash /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 2 --json /Users/studio2/.no-mistakes/evidence/01M3TN9FECAZ4XH4DC05GJKTCT/explicit-exit-124.json --retry-infra-flakes /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/explicit-exit-124.test.sh
+FM_TEST_BEGIN 2026-10-01T03:29:16Z /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/explicit-exit-124.test.sh family=unclassified expected_gate_skip=none
+FM_TEST_END 2026-10-01T03:29:18Z /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/explicit-exit-124.test.sh exit=124 duration_ms=1236 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=3133
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=1236 failed=1
+FM_TEST_SLOWEST rank=1 script=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/explicit-exit-124.test.sh duration_ms=1236
+fm-test-run: wrote timing artifact: /Users/studio2/.no-mistakes/evidence/01M3TN9FECAZ4XH4DC05GJKTCT/explicit-exit-124.json
+
+CLI status=1; elapsed=5.573s

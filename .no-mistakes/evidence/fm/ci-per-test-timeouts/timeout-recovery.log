@@ -1,0 +1,15 @@
+$ /bin/bash /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 2 --json /Users/studio2/.no-mistakes/evidence/01M3TN9FECAZ4XH4DC05GJKTCT/timeout-recovery.json --retry-infra-flakes /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh
+FM_TEST_BEGIN 2026-10-01T03:28:59Z /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh family=unclassified expected_gate_skip=none
+not ok - timed out: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh exceeded its per-script bound of 2s and was terminated
+FM_TEST_RETRY 2026-10-01T03:29:02Z /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh signature=timeout first_exit=124
+ok - recovered
+fm-test-run: retried infra flake: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh: signature=timeout first_exit=124 exit=0
+::warning file=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh,title=Retried infra flake::/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh failed with infrastructure signature timeout (exit 124) and was retried once; retry exit 0
+FM_TEST_END 2026-10-01T03:29:02Z /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh exit=0 duration_ms=2777 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=3660
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=2777 failed=0
+FM_TEST_RETRIED_FLAKE script=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh signature=timeout first_exit=124 exit=0
+FM_TEST_SLOWEST rank=1 script=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TN9FECAZ4XH4DC05GJKTCT/.local-test-timeouts/timeout-recovery.test.sh duration_ms=2777
+fm-test-run: wrote timing artifact: /Users/studio2/.no-mistakes/evidence/01M3TN9FECAZ4XH4DC05GJKTCT/timeout-recovery.json
+
+CLI status=0; elapsed=4.823s

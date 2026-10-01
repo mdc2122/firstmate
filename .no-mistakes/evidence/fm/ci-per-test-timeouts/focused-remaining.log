@@ -1,0 +1,3 @@
+ok - step budget stays private while child runners accept explicit budgets
+ok - stock workflow checks final attempt and prints failed transcripts
+ok - only observed process signals, startup failures, and timeouts retry once
