@@ -1,0 +1,35 @@
+### FIR-20
+  [0] 2026-10-01T09:56:00.098Z (no marker) 
+  [1] 2026-10-01T09:55:28.853Z fm-next-check: 2026-10-01T12:00:00Z owner=firstmate
+  [2] 2026-10-01T08:54:53.029Z (no marker) 
+  [3] 2026-10-01T08:50:14.454Z fm-next-check: 2026-10-01T12:00:00Z owner=firstmate
+  [4] 2026-10-01T07:10:15.717Z (no marker) 
+  [5] 2026-10-01T07:07:55.786Z (no marker) 
+### FIR-13
+  [0] 2026-10-01T09:55:43.192Z (no marker) 
+  [1] 2026-10-01T09:55:28.822Z fm-next-check: 2026-10-01T12:30:00Z owner=firstmate
+  [2] 2026-10-01T08:55:29.198Z (no marker) 
+  [3] 2026-10-01T08:50:19.794Z fm-next-check: 2026-10-01T12:30:00Z owner=firstmate
+  [4] 2026-10-01T07:09:37.924Z (no marker) 
+  [5] 2026-10-01T07:07:53.160Z (no marker) 
+### FIR-57
+  [0] 2026-10-01T09:56:27.679Z (no marker) 
+  [1] 2026-10-01T09:55:28.836Z fm-next-check: 2026-10-05T15:30:00Z owner=firstmate
+  [2] 2026-10-01T08:57:40.357Z (no marker) 
+  [3] 2026-10-01T08:50:35.321Z fm-next-check: 2026-10-05T15:30:00Z owner=firstmate
+  [4] 2026-10-01T07:12:02.861Z (no marker) 
+  [5] 2026-10-01T07:07:54.521Z (no marker) 
+### FIR-58
+  [0] 2026-10-01T09:56:15.394Z (no marker) 
+  [1] 2026-10-01T09:55:28.822Z fm-next-check: 2026-10-05T18:30:00Z owner=firstmate
+  [2] 2026-10-01T08:58:33.048Z (no marker) 
+  [3] 2026-10-01T08:50:56.003Z fm-next-check: 2026-10-05T18:30:00Z owner=firstmate
+  [4] 2026-10-01T07:10:57.732Z (no marker) 
+  [5] 2026-10-01T07:07:53.695Z (no marker) 
+### FIR-134
+  [0] 2026-10-01T09:55:47.399Z fm-next-check 2026-10-01T11:00:00Z acknowledged (09:55Z) — firstmate check moved up 1h from 12:00Z. No gate movement since 08:53Z: FIR-146 and FIR-141 both still in_progress; spend approval unfiled. Issue stays blocked; no execution. Next action on my side unchanged: dependency wake or the 11:00Z firstmate check → read-only D2(a) re-assessment.
+  [1] 2026-10-01T09:55:28.853Z fm-next-check: 2026-10-01T11:00:00Z owner=firstmate
+  [2] 2026-10-01T08:53:33.198Z fm-next-check 2026-10-01T12:00:00Z acknowledged (08:53Z). Triage only — no gate movement to act on:
+  [3] 2026-10-01T08:51:08.870Z fm-next-check: 2026-10-01T12:00:00Z owner=firstmate
+  [4] 2026-10-01T07:10:39.103Z (no marker) 
+  [5] 2026-10-01T07:07:55.346Z (no marker) 

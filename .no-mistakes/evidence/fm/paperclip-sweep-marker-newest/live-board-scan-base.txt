@@ -1,0 +1,7 @@
+/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.Rka1ixe03J/bin/fm-x-lib.sh: line 54: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.Rka1ixe03J/bin/fm-tasks-axi-lib.sh: No such file or directory
+/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.Rka1ixe03J/bin/fm-x-lib.sh: line 56: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.Rka1ixe03J/bin/fm-backlog-transition-lib.sh: No such file or directory
+stalled FIR-20 - Build the missing top-12 final stage in viral-moment main under no-mi… [blocker attention needs_attention; waiting on FIR-134; no dated next check]
+stalled FIR-13 - Fix the missing and failing daily YouTube Analytics pulls (no success… [blocker attention needs_attention; waiting on FIR-70; no dated next check]
+stalled FIR-57 - trending-moment: turn on Dependabot alerts, group updates, auto-merge… [blocker attention stalled; waiting on FIR-61; no dated next check]
+stalled FIR-58 - channel-analytics: turn on Dependabot alerts, group updates, auto-mer… [blocker attention needs_attention; waiting on FIR-62; no dated next check]
+stalled FIR-134 - FIR-20 comparison: execute leader-comparison volume run (gated on D2(… [blocker attention needs_attention; waiting on FIR-141,FIR-146; no dated next check]

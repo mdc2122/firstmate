@@ -1,0 +1,5 @@
+== FIR-308 with ONLY a two-line comment as the latest comment (11:00Z past line, then 10-05 future line) ==
+-- base:
+(FIR-308 hidden)
+-- target:
+stalled FIR-308 - case FIR-308 [blocker attention stalled; waiting on FIR-90; no dated next check]

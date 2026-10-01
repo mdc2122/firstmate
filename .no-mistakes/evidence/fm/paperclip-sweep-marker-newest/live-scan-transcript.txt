@@ -1,0 +1,28 @@
+### TARGET (5eefb06) bin/fm-paperclip-sweep.sh scan @ 2026-10-01T12:00:00Z
+stalled FIR-58 - past marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-57 - newer past marker supersedes older future [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-61 - one comment: future line then past line [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-62 - future marker buried under 25 acks [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-63 - malformed marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-64 - no marker at all [blocker attention stalled; waiting on FIR-900; no dated next check]
+
+### TARGET scan @ 2026-10-02T09:00:01Z (FIR-13 marker date passed)
+stalled FIR-13 - marker then CEO ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-58 - past marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-57 - newer past marker supersedes older future [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-61 - one comment: future line then past line [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-62 - future marker buried under 25 acks [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-63 - malformed marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-64 - no marker at all [blocker attention stalled; waiting on FIR-900; no dated next check]
+
+### BASE (78b87cf) scan @ 2026-10-01T12:00:00Z — same fake board
+stalled FIR-13 - marker then CEO ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-20 - marker then ack then engineer ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-58 - past marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-57 - newer past marker supersedes older future [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-134 - newer future marker supersedes older past [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-60 - one comment: past line then future line [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-61 - one comment: future line then past line [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-62 - future marker buried under 25 acks [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-63 - malformed marker then ack [blocker attention stalled; waiting on FIR-900; no dated next check]
+stalled FIR-64 - no marker at all [blocker attention stalled; waiting on FIR-900; no dated next check]

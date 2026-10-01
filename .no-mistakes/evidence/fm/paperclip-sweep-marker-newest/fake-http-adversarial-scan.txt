@@ -1,0 +1,22 @@
+Fake Paperclip HTTP server (real curl), clock pinned 2026-10-01T12:00:00Z
+Expected listed: FIR-302 (newer past marker), FIR-303 (marker 21st newest), FIR-306 (only valid marker past), FIR-307 (comments 500)
+Expected hidden: FIR-301 (acks after future marker), FIR-304 (marker 20th newest), FIR-305 (malformed newer, valid older)
+FIR-308: one comment with two marker lines (11:00Z past, then 10-05 future)
+== BASE ==
+stalled FIR-301 - case FIR-301 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-302 - case FIR-302 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-303 - case FIR-303 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-304 - case FIR-304 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-305 - case FIR-305 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-306 - case FIR-306 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-307 - case FIR-307 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-308 - case FIR-308 [blocker attention stalled; waiting on FIR-90; no dated next check]
+== TARGET ==
+stalled FIR-302 - case FIR-302 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-303 - case FIR-303 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-306 - case FIR-306 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-307 - case FIR-307 [blocker attention stalled; waiting on FIR-90; no dated next check]
+stalled FIR-308 - case FIR-308 [blocker attention stalled; waiting on FIR-90; no dated next check]
+exit=0
+== comment requests made by target ==
+/api/issues/a1/comments?order=desc&limit=20
