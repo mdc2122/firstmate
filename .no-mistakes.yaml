@@ -1,6 +1,10 @@
 # Per-repo no-mistakes overrides.
-# Use the Pi validation seat for this repository only.
-agent: pi
+# Gate agents for this repository: Opus (claude) first, Sol (pi) as fallback.
+# Both have a verified project-instruction neutralization knob, which the
+# disable_project_settings guard below requires of EVERY fallback member.
+# Cursor is omitted: its ACP adapter has no verified knob, so any chain that
+# includes it is refused before the first step.
+agent: [claude, pi]
 
 # firstmate is an agent-orchestration repo: its AGENTS.md installs a fleet-captain
 # identity. Disable project-level agent settings/instructions for gate agents so a
