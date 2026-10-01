@@ -1,0 +1,99 @@
+=== Fake Paperclip at http://127.0.0.1:18765 (real HTTP, real curl). Pending approvals:
+{"id":"aaaaaaaa-1","createdAt":"2026-10-01T11:50:23.000Z","title":"old ask (10h)"}
+{"id":"bbbbbbbb-2","createdAt":"2026-10-01T21:48:23.000Z","title":"studio1 service autostart fix (filed 2 min ago)"}
+now: 2026-10-01T21:50:23Z
+
+=== S1: default config, NEW code (target e62b90d)
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+
+=== S1 baseline: default config, BASE code (45d2183)
+$ env FM_HOME=/tmp/pcfm.WQ0o /tmp/pcfm.WQ0o/base/fm-paperclip-sweep.sh scan
+/tmp/pcfm.WQ0o/base/fm-x-lib.sh: line 54: /tmp/pcfm.WQ0o/base/fm-tasks-axi-lib.sh: No such file or directory
+/tmp/pcfm.WQ0o/base/fm-x-lib.sh: line 56: /tmp/pcfm.WQ0o/base/fm-backlog-transition-lib.sh: No such file or directory
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+
+=== S2: queue-zero check wakes firstmate with the fresh approval
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-queue-zero.sh check
+check: queue-zero: 0 queue row(s) and 2 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): paperclip approval approval:aaaaaaaa; paperclip approval approval:bbbbbbbb
+[rc=0]
+--- durable wake queue:
+1790891434	1	check	queue-zero	check: queue-zero: 0 queue row(s) and 2 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): paperclip approval approval:aaaaaaaa; paperclip approval approval:bbbbbbbb
+--- repeat check (same set, expect silence):
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-queue-zero.sh check
+[rc=0]
+
+=== S3: home .env FM_PAPERCLIP_APPROVAL_AGE_MINUTES=240
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+--- environment 0 overrides the .env 240:
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=0 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+
+=== S4 adversarial: leading-zero values (were octal crashes)
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=08 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh configured
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=08 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=09 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh configured
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=09 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=010 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh configured
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=010 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+--- leading zero in .env (0090 = 90 min, fresh 2-min approval hidden, 10h shown):
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+--- queue-zero scan with .env 0090 still includes the Paperclip board:
+$ env FM_HOME=/tmp/pcfm.WQ0o /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-queue-zero.sh scan
+paperclip approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+[rc=0]
+--- leading-zero FM_PAPERCLIP_STALE_HOURS=08 also no longer crashes:
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_STALE_HOURS=08 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+
+=== S5 adversarial: malformed values fall back to 0 (list everything)
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=soon /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=-5 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES=1.5 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_MINUTES= 30 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+
+=== S6: legacy FM_PAPERCLIP_APPROVAL_AGE_HOURS=4 no longer imposes a wait
+$ env FM_HOME=/tmp/pcfm.WQ0o FM_PAPERCLIP_APPROVAL_AGE_HOURS=4 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3WPKJ11X822NW4B53XHMXS1/bin/fm-paperclip-sweep.sh scan
+approval approval:aaaaaaaa - old ask (10h) [pending since 2026-10-01T11:50:23.000Z]
+approval approval:bbbbbbbb - studio1 service autostart fix (filed 2 min ago) [pending since 2026-10-01T21:48:23.000Z]
+[rc=0]
+
+=== S7: --help documents the new knob
+FM_PAPERCLIP_APPROVAL_AGE_MINUTES (default 0, whole minutes; 0 lists every
+pending approval on the next sweep). See docs/configuration.md "Paperclip sweep".
+=== S2b: a further approval filed after the episode was reported wakes again on the next check
+$ fm-queue-zero.sh check
+check: queue-zero: 0 queue row(s) and 3 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): paperclip approval approval:aaaaaaaa; paperclip approval approval:bbbbbbbb; paperclip approval approval:cccccccc
+[rc=0]

@@ -1,0 +1,13 @@
+ok - ready, past-date, and undated rows are named; dated holds and captain holds are not
+ok - an in-flight backlog row with no live task is named instead of left as a silent warning
+ok - an empty queue and an unpaired state override stay silent
+ok - check wakes once per episode, names its rows, queues durably, and re-nags only after the window
+ok - a row that leaves the queue and returns wakes again
+ok - a wake that could not be queued is retried, never recorded as reported
+ok - the Paperclip sweep names stuck issues and stale approvals and leaves covered or dated work alone
+ok - the newest valid fm-next-check comment marker with an owner hides a blocked issue through later acknowledgments until the date passes; malformed markers and stale edges do not
+ok - the first comment transport failure stops the comment reads and unread issues stay listed
+ok - Paperclip rows join the one wake, an unreadable board is an error row, and unconfigured homes skip it
+ok - release moves only backlog or blocked issues whose every blocker is done
+ok - the approval age defaults to 0, reads whole minutes from the .env, and a malformed value falls back to 0
+ok - a newly appearing approval is a new queue-zero episode that wakes firstmate on the next check
