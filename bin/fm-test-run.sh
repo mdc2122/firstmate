@@ -2559,7 +2559,7 @@ run_script_attempts() {  # <script> <out> <stream> <id>
     local remaining bound
     remaining=$(( (RUN_STARTED_MS + STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
     bound=$(script_timeout_secs "$script")
-    if [ "$remaining" -le 0 ] || [ "$remaining" -lt "$bound" ]; then
+    if [ "$remaining" -le "$bound" ]; then
       log "not retried: $script: ${remaining}s of the shared step budget of ${STEP_BUDGET_SECS}s cannot cover its ${bound}s bound (signature=$signature first_exit=$rc)"
       return "$rc"
     fi
