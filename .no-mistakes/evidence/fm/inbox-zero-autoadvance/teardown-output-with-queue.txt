@@ -1,0 +1,5 @@
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.Lg7Hxu/tasks-axi-close/project: already current
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.Lg7Hxu/tasks-axi-close/wt)
+Backlog: task-x1 is closed in /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.Lg7Hxu/tasks-axi-close/data/backlog.md.
+Queue: each row below leaves the queue this turn - dispatch it, hold it with --until and a reason naming its blocker or owner, or close it:
+  queue ready next-ready - unblocked by task-x1 [filed 2026-10-01]

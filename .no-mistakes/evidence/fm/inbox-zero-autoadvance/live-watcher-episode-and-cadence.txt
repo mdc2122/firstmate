@@ -1,0 +1,11 @@
+acked through 3 rc=0
+# run B: same unchanged episode, FM_QUEUE_ZERO_INTERVAL=1, watcher should stay in its loop (killed by 45s alarm => rc 142)
+watcher rc=142 after 47s; wake-queue bytes:        0
+
+# run C: new ready row added + record cleared, but DEFAULT interval (900s) and fresh .last-queue-zero seed: no queue-zero wake in first cycles
+check: rearm-resurface
+watcher rc=0 after 12s; wake-queue bytes:        0
+
+# run D: same state, interval=1: new row wakes a new episode
+check: rearm-resurface
+after 7s

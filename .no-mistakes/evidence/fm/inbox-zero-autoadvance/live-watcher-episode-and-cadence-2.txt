@@ -1,0 +1,8 @@
+acked through 0 rc=0
+# run C (re-run after acking downtime wake): new ready row face-placement-opt12-ship present, queue-zero record cleared, DEFAULT FM_QUEUE_ZERO_INTERVAL (900s), .last-queue-zero absent => watcher seeds it at start; expect no queue-zero wake (stays in loop until 45s alarm, rc 142)
+watcher rc=142 after 47s; wake-queue bytes:        0
+acked through 0 rc=0
+
+# run D: same state, FM_QUEUE_ZERO_INTERVAL=1: the new row wakes
+check: queue-zero: 7 queue row(s) and 4 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): queue orphan main-inventory; queue ready ci-per-test-timeouts; queue ready seat-health-preflight; queue ready viral-opus55-high-rollout; queue ready watch-fir-10; queu
+after 11s

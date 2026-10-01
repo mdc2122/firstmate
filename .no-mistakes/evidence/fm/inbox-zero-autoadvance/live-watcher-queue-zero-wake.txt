@@ -1,0 +1,5 @@
+# run A: real watcher with FM_QUEUE_ZERO_INTERVAL=1 (heartbeat pinned at 999999s)
+check: queue-zero: 6 queue row(s) and 4 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): queue orphan main-inventory; queue ready ci-per-test-timeouts; queue ready seat-health-preflight; queue ready viral-opus55-high-rollout; queue ready watch-fir-10; queue undated stuck-blocked; paperclip orphaned-execution FIR-116; paperclip no-blocker FIR-105; paperclip recovery FIR-116; paperclip approval approval:abcdef12
+watcher exit rc=0 after 26s
+# durable wake queue (kind/key/reason):
+check	queue-zero	check: queue-zero: 6 queue row(s) and 4 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue

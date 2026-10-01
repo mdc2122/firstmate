@@ -1,0 +1,4 @@
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.NiRivg/tasks-axi-close/project: already current
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.NiRivg/tasks-axi-close/wt)
+Backlog: task-x1 is closed in /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.NiRivg/tasks-axi-close/data/backlog.md.
+Queue: nothing is ready or undated.

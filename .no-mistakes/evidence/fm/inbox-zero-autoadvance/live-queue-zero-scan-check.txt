@@ -1,0 +1,37 @@
+$ bin/fm-queue-zero.sh scan
+queue orphan main-inventory - lost in-flight work [in flight with no live task record]
+queue ready ci-per-test-timeouts - CI per-test timeouts [filed 2026-09-29]
+queue ready seat-health-preflight - Seat health preflight [filed 2026-09-29]
+queue ready viral-opus55-high-rollout - Viral opus55 high rollout [filed 2026-09-29]
+queue ready watch-fir-10 - Watch Paperclip FIR-10 (unowned) [filed 2026-09-29]
+queue undated stuck-blocked - Blocked behind seat-health [blocked-by seat-health-preflight; no --until date; filed 2026-09-29]
+paperclip release FIR-101 - backlog behind done blocker [blockers done: FIR-90]
+paperclip stale-edge FIR-102 - blocked with stale edge [blocked but blockers done: FIR-91]
+paperclip orphaned-execution FIR-116 - legacy execution needing recovery [in progress with no run, no dated next check, and no recent activity]
+paperclip no-blocker FIR-105 - backlog no blocker no date [backlog with no blocker and no dated next check]
+paperclip recovery FIR-116 - legacy execution needing recovery [recovery orphaned_execution: recover legacy run]
+paperclip approval approval:abcdef12 - Hire viral editor [pending since 2026-09-29T00:00:00Z]
+rc=0
+
+$ bin/fm-paperclip-sweep.sh scan
+release FIR-101 - backlog behind done blocker [blockers done: FIR-90]
+stale-edge FIR-102 - blocked with stale edge [blocked but blockers done: FIR-91]
+orphaned-execution FIR-116 - legacy execution needing recovery [in progress with no run, no dated next check, and no recent activity]
+no-blocker FIR-105 - backlog no blocker no date [backlog with no blocker and no dated next check]
+recovery FIR-116 - legacy execution needing recovery [recovery orphaned_execution: recover legacy run]
+approval approval:abcdef12 - Hire viral editor [pending since 2026-09-29T00:00:00Z]
+rc=0
+
+$ bin/fm-queue-zero.sh check   # first sighting
+check: queue-zero: 6 queue row(s) and 6 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): queue orphan main-inventory; queue ready ci-per-test-timeouts; queue ready seat-health-preflight; queue ready viral-opus55-high-rollout; queue ready watch-fir-10; queue undated stuck-blocked; paperclip release FIR-101; paperclip stale-edge FIR-102; paperclip orphaned-execution FIR-116; paperclip no-blocker FIR-105; paperclip recovery FIR-116; paperclip approval approval:abcdef12
+rc=0
+
+$ cat state/.wake-queue
+1790830662	1	check	queue-zero	check: queue-zero: 6 queue row(s) and 6 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): queue orphan main-inventory; queue ready ci-per-test-timeouts; queue ready seat-health-preflight; queue ready viral-opus55-high-rollout; queue ready watch-fir-10; queue undated stuck-blocked; paperclip release FIR-101; paperclip stale-edge FIR-102; paperclip orphaned-execution FIR-116; paperclip no-blocker FIR-105; paperclip recovery FIR-116; paperclip approval approval:abcdef12
+
+$ bin/fm-queue-zero.sh check   # same episode again -> silent
+rc=0
+
+$ FM_QUEUE_ZERO_NOW=2026-10-02T13:00:00Z bin/fm-queue-zero.sh check  # 25h later, unchanged -> renag
+check: queue-zero: 6 queue row(s) and 7 Paperclip item(s) must leave the queue this turn (dispatch, hold --until with a named blocker or owner, or close; Paperc
+rc=0

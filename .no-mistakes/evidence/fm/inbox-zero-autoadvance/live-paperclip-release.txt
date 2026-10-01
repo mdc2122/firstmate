@@ -1,0 +1,28 @@
+$ bin/fm-paperclip-sweep.sh release FIR-101 FIR-102 FIR-106 FIR-105 FIR-116 FIR-103
+released FIR-101
+released FIR-102
+refused FIR-106: it has no blocker, or a blocker is not done
+refused FIR-105: it has no blocker, or a blocker is not done
+refused FIR-116: status is in_progress, not backlog or blocked
+refused FIR-103: it has no blocker, or a blocker is not done
+rc=1
+
+# PATCH requests the board server received:
+PATCH u1 {"status": "todo", "comment": "Released by firstmate: every blocker is done (FIR-90)."}
+PATCH u2 {"status": "todo", "comment": "Released by firstmate: every blocker is done (FIR-91)."}
+
+$ bin/fm-paperclip-sweep.sh scan   # after release
+orphaned-execution FIR-116 - legacy execution needing recovery [in progress with no run, no dated next check, and no recent activity]
+no-blocker FIR-105 - backlog no blocker no date [backlog with no blocker and no dated next check]
+recovery FIR-116 - legacy execution needing recovery [recovery orphaned_execution: recover legacy run]
+approval approval:abcdef12 - Hire viral editor [pending since 2026-09-29T00:00:00Z]
+
+# adversarial: wrong board key
+error paperclip - Paperclip sweep could not read the board [GET /cli-auth/me returned HTTP 401]
+rc=0
+
+# adversarial: board down
+error paperclip - Paperclip sweep could not read the board [GET /cli-auth/me failed: curl: (7) Failed to connect to 127.0.0.1 port 38799 after 0 ms: Couldn't connect to server]
+rc=0
+
+# key never on curl argv: grep of access log + ps not applicable; key passed via -H @- (stdin)
