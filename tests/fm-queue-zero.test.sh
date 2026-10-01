@@ -295,6 +295,13 @@ test_approval_age_default_and_threshold() {
     FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with an explicit env 0 failed"
   assert_contains "$out" "approval approval:bbbbbbbb" "an explicit environment 0 did not list every approval"
 
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_PAPERCLIP_APPROVAL_AGE_MINUTES=09 \
+    FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with a leading-zero age failed: $out"
+  assert_contains "$out" "approval approval:bbbbbbbb" "a leading-zero age of 09 was not read as 9 minutes"
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_PAPERCLIP_APPROVAL_AGE_MINUTES=0090 \
+    FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" scan) || fail "scan with a leading-zero age failed: $out"
+  assert_not_contains "$out" "bbbbbbbb" "a leading-zero age of 0090 was not read as 90 minutes"
+
   printf 'FM_PAPERCLIP_APPROVAL_AGE_MINUTES=soon\n' > "$home/.env"
   printf 'FM_PAPERCLIP_URL=http://paperclip.test\nFM_PAPERCLIP_KEY_FILE=%s\n' "$home/pc/key" >> "$home/.env"
   out=$(sweep "$home" scan) || fail "scan with a malformed age failed"

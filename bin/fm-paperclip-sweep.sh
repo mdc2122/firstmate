@@ -121,7 +121,7 @@ approval_age_setting() {  # -> minutes
   case "$v" in ''|*[!0-9]*) v=0 ;; esac
   printf '%s' "$v"
 }
-APPROVAL_AGE_SECS=$(( $(approval_age_setting) * 60 ))
+APPROVAL_AGE_SECS=$(( 10#$(approval_age_setting) * 60 ))
 
 NOW=${FM_QUEUE_ZERO_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 
@@ -260,7 +260,7 @@ scan_rows() {
     if ! SCAN_ROWS=$(jq -nc --slurpfile i "$tmp/issues.json" --slurpfile a "$tmp/approvals.json" \
         --slurpfile l "$tmp/latest.ndjson" \
         --argjson now "$now_epoch" \
-        --argjson stale_secs "$((STALE_HOURS * 3600))" \
+        --argjson stale_secs "$((10#$STALE_HOURS * 3600))" \
         --argjson approval_secs "$APPROVAL_AGE_SECS" \
         "\$i[0] as \$issues | \$a[0] as \$approvals | (\$l | from_entries) as \$latest | $DEFS $CLASSIFY" 2>/dev/null); then
       API_ERROR="unexpected response shape"
