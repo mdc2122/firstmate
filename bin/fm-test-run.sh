@@ -2470,11 +2470,14 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   set +e
   if [ "$stream" -eq 1 ]; then
     if [ "$bound" -gt 0 ]; then
-      fm_run_timed "$bound" perl -e "$program" "$outcome" "$interpreter" "$script" 2>&1 | tee "$out"
+      fm_run_timed "$bound" bash -c \
+        'perl -e "$1" "$2" "$3" "$4" 2>&1 | tee "$5"; exit "${PIPESTATUS[0]}"' \
+        _ "$program" "$outcome" "$interpreter" "$script" "$out"
+      rc=$?
     else
       perl -e "$program" "$outcome" "$interpreter" "$script" 2>&1 | tee "$out"
+      rc=${PIPESTATUS[0]}
     fi
-    rc=${PIPESTATUS[0]}
   elif [ "$bound" -gt 0 ]; then
     fm_run_timed "$bound" perl -e "$program" "$outcome" "$interpreter" "$script" >"$out" 2>&1
     rc=$?
@@ -2482,7 +2485,7 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     perl -e "$program" "$outcome" "$interpreter" "$script" >"$out" 2>&1
     rc=$?
   fi
-  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ] && [ ! -s "$outcome" ]; then
+  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ] && [ "$(cat "$outcome" 2>/dev/null)" != exit ]; then
     printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
       "$script" "$bound" >>"$out"
     printf '%s\n' "$bound" >"$out.timeout"

@@ -1482,6 +1482,13 @@ test_infra_flake_retry_classification() {
     --retry-infra-flakes tests/stock.test.sh >"$tmp/stock.out" 2>&1 \
     || fail "stock interpreter or selected regression was not preserved: $(cat "$tmp/stock.out")"
   [ "$(grep -c '^ok - ' "$tmp/stock.out")" -eq 1 ] || fail "runner changed passing-case counts"
+  write_process_fixture orphan 'sleep 60 & echo "$!" >"$FX/orphan.pid"; kill -KILL $$' 'echo "ok - recovered"'
+  local began=$SECONDS
+  FX="$tmp/fx" "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 2 \
+    tests/orphan.test.sh >"$tmp/orphan.out" 2>&1 \
+    || fail "orphaned stdout prevented recovery: $(cat "$tmp/orphan.out")"
+  [ "$((SECONDS - began))" -lt 10 ] || fail "stream draining escaped the bound"
+  [ "$(cat "$tmp/fx/orphan.count")" = 2 ] || fail "orphan attempt was not retried"
   write_process_fixture signal 'kill -TERM $$' 'echo "ok - recovered"'
   write_process_fixture persistent 'kill -KILL $$' 'kill -KILL $$'
   write_process_fixture timeout 'sleep 60' 'echo "ok - recovered"'
@@ -1851,6 +1858,44 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
+test_stock_workflow_counts_final_attempt_and_reports_failure() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-stock-transcript.XXXXXX")
+  ruby -ryaml -e '
+    step = YAML.load_file(ARGV[0]).fetch("jobs").fetch("macos-stock-bash").fetch("steps").find { |s| s["run"] }
+    puts step.fetch("run")
+  ' "$ROOT/.github/workflows/ci.yml" >"$tmp/step.sh"
+  python3 - "$tmp/step.sh" "$tmp/check.sh" <<'PYTEST'
+from pathlib import Path
+import sys
+body = Path(sys.argv[1]).read_text()
+a = body.index('check_stock_test() {')
+b = body.index('\ncheck_stock_test tests/', a)
+Path(sys.argv[2]).write_text(body[a:b] + '\n')
+PYTEST
+  /bin/bash -c '
+    set -eu
+    . "$1"
+    run_stock_test() {
+      printf "%s\n" "FM_TEST_BEGIN first" "ok - partial" "FM_TEST_RETRY again" "ok - final one" "ok - final two"
+    }
+    check_stock_test fixture 2
+  ' _ "$tmp/check.sh" >"$tmp/pass.out" || fail "stock workflow counted both attempts"
+  set +e
+  /bin/bash -c '
+    set -eu
+    . "$1"
+    run_stock_test() { echo "not ok - timed out: named-fixture"; return 1; }
+    check_stock_test fixture 2
+  ' _ "$tmp/check.sh" >"$tmp/fail.out"
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "stock workflow swallowed failure"
+  grep -Fxq 'not ok - timed out: named-fixture' "$tmp/fail.out" || fail "stock workflow lost failure transcript"
+  rm -rf "$tmp"
+  pass "stock workflow checks final attempt and prints failed transcripts"
+}
+
 test_step_budget_is_owned_by_each_runner() {
   local tmp rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-budget-owner.XXXXXX")
@@ -1950,6 +1995,7 @@ test_infra_flake_retry_classification
 test_auto_timeout_bounds_every_script_from_its_table
 test_serial_family_shares_timeout_budget
 test_step_budget_is_owned_by_each_runner
+test_stock_workflow_counts_final_attempt_and_reports_failure
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json
