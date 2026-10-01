@@ -1570,7 +1570,7 @@ scan_signals() {
 # that writes a status line by hand for a task it never dispatched (a decision
 # record, a recovered or torn-down task's final word) still surfaces it.
 unrecorded_signals_absorb() {  # <scan_signals-output>
-  local sf sig f base task absorbed='' record needs_decision rc
+  local sf sig f base task absorbed='' record needs_decision rc captured_end captured_ident
   while IFS=$(printf '\t') read -r sf sig f; do
     [ -n "$sf" ] || continue
     base=${f##*/}
@@ -1588,7 +1588,8 @@ unrecorded_signals_absorb() {  # <scan_signals-output>
             printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
             continue
           fi
-          fm_wake_status_reported_commit "$STATE" "$f" "$sig" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; }
+          IFS=$'\t' read -r captured_end captured_ident <<< "$record"
+          fm_wake_status_seen_commit "$STATE" "$f" "$captured_end" "$captured_ident" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; }
           ;;
         *) printf '%s' "$sig" > "$sf" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; } ;;
       esac

@@ -774,7 +774,7 @@ test_turn_ended_not_working_surfaced() {
 # recorded task in the same batch still surfaces on its own evidence, and a
 # captain-relevant line written for an unrecorded id is never swallowed.
 test_unrecorded_task_signal_absorbed() {
-  local dir state fakebin out pid
+  local dir state fakebin out pid marker expected i
   dir=$(make_case unrecorded-task-signal); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"
   : > "$state/ghost.turn-ended"
@@ -786,6 +786,19 @@ test_unrecorded_task_signal_absorbed() {
     || { reap "$pid"; fail "a signal for a task with no metadata was not absorbed: $(cat "$out")"; }
   [ ! -s "$out" ] || { reap "$pid"; fail "an unrecorded task's signal printed a wake: $(cat "$out")"; }
   [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "an unrecorded task's signal was queued"; }
+  marker=$(status_signal_seen_marker_path "$state" ghost)
+  expected=$(_fm_status_file_size "$state/ghost.status")
+  [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] \
+    || { reap "$pid"; fail "the absorbed routine status did not advance its classified cursor"; }
+  printf 'working: more helper chatter\n' >> "$state/ghost.status"
+  expected=$(_fm_status_file_size "$state/ghost.status")
+  for i in $(seq 1 100); do
+    [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] && break
+    sleep 0.05
+  done
+  [ "$(status_presentation_marker_offset "$marker" "$state/ghost.status")" = "$expected" ] \
+    || { reap "$pid"; fail "the appended routine status did not advance its classified cursor"; }
+  [ ! -s "$out" ] || { reap "$pid"; fail "appended helper chatter printed a wake"; }
   # A recorded, stopped crew in the next batch still surfaces alone.
   record_task "$state" real
   : > "$state/real.turn-ended"
