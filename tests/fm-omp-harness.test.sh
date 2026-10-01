@@ -845,15 +845,21 @@ EOF
 # reboot); each prints how many times each wake was re-delivered ("A,B") and
 # consumes what it got, so session 3 proves a replay happens at most once.
 run_omp_restart_replay() {  # <dir> <ack-through> <wakes: "seq:label ...">
-  local dir=$1 ack=$2 wakes=$3 repo home wake
+  local dir=$1 ack=$2 wakes=$3 repo home wake planned=0
   repo="$dir/repo"; home="$dir/home"
   install_omp_extension_fixture "$repo"
   mkdir -p "$home/state"
   printf 'pending:downtime:gen-G\n' > "$home/state/.watcher-down"
   : > "$home/state/.e2e-plan"
-  for wake in $wakes; do printf '%s\t%s\n' "${wake%%:*}" "${wake#*:}" >> "$home/state/.e2e-plan"; done
+  for wake in $wakes; do
+    printf '%s\t%s\n' "${wake%%:*}" "${wake#*:}" >> "$home/state/.e2e-plan"
+    planned=$((planned + 1))
+  done
   cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
+# The extension's synchronous handling-delivery confirmation must not consume
+# the next planned close meant for the successor arm.
+[ "${1:-}" = --handling-delivered ] && exit 0
 printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-G\n' "$$"
 plan="${FM_HOME:?}/state/.e2e-plan"
 next=$(head -n 1 "$plan")
@@ -903,7 +909,7 @@ EOF
       FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
       EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" CONSUME="$1" WAIT_MS="$2" EXPECT="${3:-0}" node "$dir/session.mjs" 2>&1
   }
-  OMP_REPLAY_FIRST=$(omp_replay_session 0 30000 "$(printf '%s\n' $wakes | wc -l)")
+  OMP_REPLAY_FIRST=$(omp_replay_session 0 30000 "$planned")
   OMP_REPLAY_HANDOFF=absent
   [ -e "$home/state/extensions/omp-primary-watch/session-replacement-actionable.json" ] && OMP_REPLAY_HANDOFF=present
   awk -F '\t' -v cutoff="$ack" '$2 > cutoff' "$home/state/.wake-queue" > "$home/state/.wake-queue.ack"
