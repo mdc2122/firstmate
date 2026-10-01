@@ -68,15 +68,30 @@
 #                   scripts run serially after all concurrent phases. Default is
 #                   1 (serial) except for plain --changed and a plain list of
 #                   script paths, which use the bounded automatic scheduler.
-#   --per-script-timeout-secs N
-#                   terminate a script that runs longer than N seconds and
-#                   record it as exit 124 (0 disables, the default). The
-#                   --changed applies 900s automatically: no real script
-#                   approaches it, so it only converts a HUNG
-#                   script into a bounded failure. --max-wall-ms is checked
+#   --per-script-timeout-secs N|auto
+#                   terminate a script that runs longer than its bound, record
+#                   it as exit 124, and append a "not ok - timed out: ..." line
+#                   naming the script and its bound (0 disables, the default).
+#                   N applies one bound to every script; auto applies the
+#                   measured bound table in per_script_timeout_auto_secs below.
+#                   --changed and every CI lane use auto: no healthy script
+#                   approaches its bound, so it only converts a HUNG script
+#                   into a prompt, named failure instead of a stall to the
+#                   caller's or job's own timeout. --max-wall-ms is checked
 #                   after the run and so cannot catch a hang on its own.
+#                   A timed-out script is never retried.
 #                   External interruption cleanup is outside this runner's
 #                   guarantee; configured per-script bounds remain authoritative.
+#   --retry-infra-flakes
+#                   rerun a failed script exactly once when its output contains
+#                   one of the infrastructure signatures listed in
+#                   infra_flake_signatures below (disk, memory, file-descriptor,
+#                   or process-limit exhaustion, DNS failure, unreachable
+#                   network). The retry's exit is the script's result, and the
+#                   script is labeled a retried infra flake either way. A
+#                   failure whose output matches no signature - every assertion
+#                   failure - and a timeout are never retried. Off by default;
+#                   CI lanes enable it.
 #   --max-wall-ms N fail the run when its measured invocation wall clock exceeds
 #                   N milliseconds, including an empty selection. It is
 #                   evaluated after selection and suite execution and cannot
@@ -87,13 +102,22 @@
 #
 # Per-script machine-parseable markers (stdout):
 #   FM_TEST_BEGIN <iso8601> <script> family=<family> expected_gate_skip=<class>
+#   FM_TEST_RETRY <iso8601> <script> signature=<id> first_exit=<code>
+#                   (only under --retry-infra-flakes, before the single retry)
 #   FM_TEST_END <iso8601> <script> exit=<code> duration_ms=<n> gate_skip=<true|false>
 #
 # After all scripts (stdout):
 #   FM_TEST_SUMMARY total=<n> failed=<n> skipped_gate=<n> duration_ms=<n>
 #   FM_TEST_SUMMARY_FAMILY family=<name> count=<n> duration_ms=<n> failed=<n>
+#   FM_TEST_TIMED_OUT script=<path> bound_secs=<n>   (one per timed-out script)
+#   FM_TEST_RETRIED_FLAKE script=<path> signature=<id> first_exit=<n> exit=<n>
+#                   (one per retried script; exit is the retry's result)
 #   FM_TEST_SLOWEST rank=<k> script=<path> duration_ms=<n>
 #   FM_TEST_BUDGET max_wall_ms=<n> duration_ms=<n>   (only with --max-wall-ms)
+#
+# Under GitHub Actions (GITHUB_ACTIONS=true) each timeout also emits an error
+# annotation and each retried flake a warning annotation, and when either
+# occurred a table of them is appended to $GITHUB_STEP_SUMMARY.
 #
 # Placement refusal:
 #   A task worker is assigned an isolated worktree, and that placement is
@@ -181,16 +205,14 @@ JOBS_EXPLICIT=0
 JOBS_MAX=8
 MAX_WALL_MS=
 PER_SCRIPT_TIMEOUT_SECS=0
-# Bound applied automatically on the automatic --changed path, derived from
-# measured healthy runtimes with margin rather than picked: the slowest measured
-# behavior test is the 341s Herdr presentation E2E, and the slowest script in a
-# runner-file changed selection is tests/fm-calm-pi-extension.test.sh at 77s
-# once its Chrome reap terminates. 900s leaves roughly 2.6x headroom over the
-# slowest real script, so this can only ever fire on a script that is genuinely
-# stuck. It is a guard, not a speed control: a HUNG script becomes a bounded
-# failure instead of an unbounded suite, which is the shape that silently
-# outruns a caller's invocation budget.
-CHANGED_DEFAULT_TIMEOUT_SECS=900
+RETRY_INFRA_FLAKES=0
+
+# Default bound for --per-script-timeout-secs auto. Derived from measured
+# healthy CI runtimes rather than picked: across 30 fork CI runs on 2026-09-30
+# every script outside the explicit entries in per_script_timeout_auto_secs
+# finished within 218s at its slowest, so 400s leaves more than 1.8x headroom
+# while still firing well inside the 10-minute portable parallel job cap.
+PER_SCRIPT_TIMEOUT_AUTO_DEFAULT_SECS=400
 
 # How many separate-runner shards the portable serial remainder splits into.
 # One owner: CI lane names carry this count and are refused when they disagree.
@@ -228,6 +250,77 @@ log() {
 
 now_iso() {
   date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
+# Bound in seconds for one script under --per-script-timeout-secs auto. Each
+# explicit entry is a script whose slowest healthy CI run, across 30 fork CI
+# runs on 2026-09-30, came too near the default; its bound keeps at least 1.6x
+# headroom over that slowest run, so a hang fails here, named, rather than when
+# the job or step cap kills the lane with no explanation. Where that headroom
+# exceeds the remaining lane cap, the cap stays the effective backstop for that
+# script. Raise an entry only with a measured slower healthy run.
+per_script_timeout_auto_secs() {  # <script path or basename>
+  case "${1##*/}" in
+    fm-watch-triage.test.sh) echo 2100 ;;  # slowest 1250s; serial job cap 45m
+    fm-backend-herdr-presentation-e2e.test.sh) echo 1000 ;;  # slowest 473s; Herdr step cap 20m
+    fm-captain-hold-lifecycle.test.sh) echo 650 ;;  # slowest 392s
+    fm-pr-check-security.test.sh | fm-session-start.test.sh | \
+      fm-remote-secondmate-lifecycle-e2e.test.sh | fm-procevent.test.sh)
+      echo 500 ;;  # slowest 278-309s
+    *) echo "$PER_SCRIPT_TIMEOUT_AUTO_DEFAULT_SECS" ;;
+  esac
+}
+
+# The bound this run applies to <script>, in seconds; 0 means unbounded.
+script_timeout_secs() {  # <script>
+  case "$PER_SCRIPT_TIMEOUT_SECS" in
+    auto) per_script_timeout_auto_secs "$1" ;;
+    *) echo "$PER_SCRIPT_TIMEOUT_SECS" ;;
+  esac
+}
+
+# The only failures --retry-infra-flakes may retry, one "<id><TAB><text>" per
+# line. A failed script qualifies when its output contains <text>, compared
+# case-insensitively so libc, Node, and git spellings of one fault all match.
+# Every entry names exhaustion of a host resource or loss of the network: a
+# fault of the runner a test happens to run on, never a verdict about the code
+# under test. Deliberately absent: connection resets, refusals, and timeouts,
+# because many suites drive local servers and pipes whose own resets are the
+# product behavior under test, and a timed-out script, which the per-script
+# bound already reports. A signature that the script's own source contains is
+# a fixture string the test prints on purpose, so it does not qualify there.
+infra_flake_signatures() {
+  cat <<'SIGS'
+disk-full	no space left on device
+out-of-memory	cannot allocate memory
+fd-exhausted	too many open files
+process-limit	fork: retry: resource temporarily unavailable
+process-limit	fork: resource temporarily unavailable
+dns-failure	could not resolve host
+dns-failure	temporary failure in name resolution
+dns-failure	getaddrinfo eai_again
+network-unreachable	network is unreachable
+SIGS
+}
+
+# Echo the id of the first infrastructure signature in <out> that <script>'s own
+# source does not contain; fail when there is none.
+infra_flake_signature_in() {  # <out> <script>
+  local out=$1 script=$2 id text
+  while IFS=$'\t' read -r id text; do
+    grep -iqF -- "$text" "$out" 2>/dev/null || continue
+    grep -iqF -- "$text" "$script" 2>/dev/null && continue
+    printf '%s\n' "$id"
+    return 0
+  done < <(infra_flake_signatures)
+  return 1
+}
+
+# Emit a GitHub Actions workflow command when running under Actions; a no-op
+# elsewhere so local logs stay plain.
+gha_annotate() {  # <error|warning> <file> <title> <message>
+  [ "${GITHUB_ACTIONS:-}" = true ] || return 0
+  printf '::%s file=%s,title=%s::%s\n' "$1" "$2" "$3" "$4"
 }
 
 # Enforce the placement refusal described in this script's header.
@@ -1131,6 +1224,8 @@ lanes = []
 all_scripts = []
 failed = 0
 skipped = 0
+timed_out = 0
+retried = 0
 total = 0
 wall_ms = 0
 for path in inputs:
@@ -1148,6 +1243,8 @@ for path in inputs:
     total += int(summary.get("total") or 0)
     failed += int(summary.get("failed") or 0)
     skipped += int(summary.get("skipped_gate") or 0)
+    timed_out += int(summary.get("timed_out") or 0)
+    retried += int(summary.get("retried_infra_flakes") or 0)
     wall_ms = max(wall_ms, int(summary.get("duration_ms") or 0))
     for s in doc.get("scripts") or []:
         row = dict(s)
@@ -1164,6 +1261,8 @@ agg = {
         "total": total,
         "failed": failed,
         "skipped_gate": skipped,
+        "timed_out": timed_out,
+        "retried_infra_flakes": retried,
         "critical_path_duration_ms": wall_ms,
     },
     "scripts": all_scripts,
@@ -1171,7 +1270,7 @@ agg = {
 }
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(agg, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-print(f"FM_TEST_AGGREGATE lanes={len(lanes)} total={total} failed={failed} skipped_gate={skipped} critical_path_duration_ms={wall_ms}")
+print(f"FM_TEST_AGGREGATE lanes={len(lanes)} total={total} failed={failed} skipped_gate={skipped} timed_out={timed_out} retried_infra_flakes={retried} critical_path_duration_ms={wall_ms}")
 PY
 }
 
@@ -1754,7 +1853,8 @@ with open(records_file, encoding="utf-8") as fh:
         line = line.rstrip("\n")
         if not line:
             continue
-        path, family, expected, exit_s, dur_s, gate, reason = line.split("\t")
+        (path, family, expected, exit_s, dur_s, gate, reason,
+         timeout_s, retry_signature, first_exit_s) = line.split("\t")
         scripts.append({
             "path": path,
             "family": family,
@@ -1763,6 +1863,11 @@ with open(records_file, encoding="utf-8") as fh:
             "exit": int(exit_s),
             "gate_skip": gate == "true",
             "gate_skip_reason": reason,
+            "timed_out": int(timeout_s) > 0,
+            "timeout_secs": int(timeout_s),
+            "retried_infra_flake": retry_signature != "",
+            "retry_signature": retry_signature,
+            "first_attempt_exit": int(first_exit_s) if first_exit_s else None,
         })
 
 families = []
@@ -1788,6 +1893,8 @@ doc = {
         "total": int(total),
         "failed": int(failed),
         "skipped_gate": int(skipped),
+        "timed_out": sum(1 for s in scripts if s["timed_out"]),
+        "retried_infra_flakes": sum(1 for s in scripts if s["retried_infra_flake"]),
         "duration_ms": int(duration),
     },
     "scripts": scripts,
@@ -1881,12 +1988,16 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --per-script-timeout-secs)
-      [ "$#" -gt 1 ] || die "--per-script-timeout-secs requires a whole number of seconds"
+      [ "$#" -gt 1 ] || die "--per-script-timeout-secs requires a whole number of seconds or auto"
       PER_SCRIPT_TIMEOUT_SECS=$2
       shift 2
       ;;
     --per-script-timeout-secs=*)
       PER_SCRIPT_TIMEOUT_SECS=${1#--per-script-timeout-secs=}
+      shift
+      ;;
+    --retry-infra-flakes)
+      RETRY_INFRA_FLAKES=1
       shift
       ;;
     --list)
@@ -2020,7 +2131,9 @@ if [ -n "$MAX_WALL_MS" ]; then
 fi
 
 case "$PER_SCRIPT_TIMEOUT_SECS" in
-  ''|*[!0-9]*) die "--per-script-timeout-secs requires a whole number of seconds (0 disables)" ;;
+  auto) ;;
+  ''|*[!0-9]*) die "--per-script-timeout-secs requires a whole number of seconds or auto (0 disables)" ;;
+  *) PER_SCRIPT_TIMEOUT_SECS=$((10#$PER_SCRIPT_TIMEOUT_SECS)) ;;
 esac
 
 # Refuse before any suite is selected or run. The inspection modes execute
@@ -2148,8 +2261,8 @@ done
 # and --all is a deliberate complete regression.
 AUTO_CONCURRENCY=0
 if { [ "$MODE" = changed ] || [ "$MODE" = scripts ]; } && [ "$JOBS_EXPLICIT" -eq 0 ]; then
-  if [ "$MODE" = changed ] && [ "${#SCRIPTS[@]}" -gt 0 ] && [ "$PER_SCRIPT_TIMEOUT_SECS" -eq 0 ]; then
-    PER_SCRIPT_TIMEOUT_SECS=$CHANGED_DEFAULT_TIMEOUT_SECS
+  if [ "$MODE" = changed ] && [ "${#SCRIPTS[@]}" -gt 0 ] && [ "$PER_SCRIPT_TIMEOUT_SECS" = 0 ]; then
+    PER_SCRIPT_TIMEOUT_SECS=auto
   fi
   auto_admissible=0
   for s in "${SCRIPTS[@]}"; do
@@ -2224,7 +2337,7 @@ if [ "$JOBS" -gt 1 ]; then
   rm -f "$SCHEDULE_TMP"
 fi
 
-if [ "$PER_SCRIPT_TIMEOUT_SECS" -gt 0 ]; then
+if [ "$PER_SCRIPT_TIMEOUT_SECS" != 0 ]; then
   [ -r "$ROOT/bin/fm-timeout-lib.sh" ] || die "per-script timeout helper not found: bin/fm-timeout-lib.sh"
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$ROOT/bin/fm-timeout-lib.sh"
@@ -2283,9 +2396,15 @@ family_bump() {
   mv "$tmp" "$FAMILIES_TSV"
 }
 
+# Sidecars beside a script's captured output <out>, written by
+# run_script_attempts and read back here so the serial path and a concurrent
+# worker subshell report through one place: <out>.timeout holds the bound a
+# timed-out script hit, and <out>.retry holds "<signature>\t<first exit>" for a
+# script retried as an infrastructure flake.
 record_script_result() {
   local script=$1 rc=$2 duration=$3 out=$4 end_iso=$5
   local base family expected gate_skip gate_reason fail_delta
+  local timeout_secs=0 retry_signature='' retry_first_exit=''
   base=$(basename "$script")
   family=$(family_for_basename "$base")
   expected=$(expected_gate_skip_for_family "$family")
@@ -2306,6 +2425,18 @@ record_script_result() {
     log "gate skip: $script: ${gate_reason:-<no reason given>}"
   fi
 
+  if [ -s "$out.timeout" ]; then
+    timeout_secs=$(cat "$out.timeout")
+    gha_annotate error "$script" "Test timed out" \
+      "$script exceeded its per-script bound of ${timeout_secs}s and was terminated"
+  fi
+  if [ -s "$out.retry" ]; then
+    IFS=$'\t' read -r retry_signature retry_first_exit <"$out.retry"
+    log "retried infra flake: $script: signature=$retry_signature first_exit=$retry_first_exit exit=$rc"
+    gha_annotate warning "$script" "Retried infra flake" \
+      "$script failed with infrastructure signature $retry_signature (exit $retry_first_exit) and was retried once; retry exit $rc"
+  fi
+
   printf 'FM_TEST_END %s %s exit=%s duration_ms=%s gate_skip=%s\n' \
     "$end_iso" "$script" "$rc" "$duration" "$gate_skip"
 
@@ -2316,19 +2447,21 @@ record_script_result() {
     AGG_RC=1
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$script" "$family" "$expected" "$rc" "$duration" "$gate_skip" "$gate_reason" >>"$RECORDS"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$script" "$family" "$expected" "$rc" "$duration" "$gate_skip" "$gate_reason" \
+    "$timeout_secs" "$retry_signature" "$retry_first_exit" >>"$RECORDS"
   family_bump "$family" "$duration" "$fail_delta"
   TOTAL=$((TOTAL + 1))
 }
 
-# Run <script>, capturing output to <out>. <stream> 1 also echoes it live.
-# <id> only has to be unique within this run. When PER_SCRIPT_TIMEOUT_SECS is
-# positive, a script that outruns it is terminated and reported as exit 124: a
-# hung script must become a bounded failure rather than an unbounded suite,
-# because an unbounded suite is what silently outruns its caller's budget.
+# Run <script> once, capturing output to <out>. <stream> 1 also echoes it live.
+# <id> only has to be unique within this run. When the script has a positive
+# bound (script_timeout_secs), a script that outruns it is terminated, reported
+# as exit 124, and named by a "not ok - timed out:" line: a hung script must
+# become a bounded, explained failure rather than an unbounded suite, because an
+# unbounded suite is what silently outruns its caller's budget.
 run_script_bounded() {  # <script> <out> <stream> <id>
-  local script=$1 out=$2 stream=$3 id=$4
+  local script=$1 out=$2 stream=$3 id=$4 bound
   # Declaring the variables local first keeps the helper's export scoped to this
   # call and its child script, so the runner's own environment is left as the
   # caller had it.
@@ -2337,31 +2470,60 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   . "$ROOT/tests/git-config-helpers.sh" || return
   local rc
   : "$id"
+  bound=$(script_timeout_secs "$script")
   set +e
   if [ "$stream" -eq 1 ]; then
-    if [ "$PER_SCRIPT_TIMEOUT_SECS" -gt 0 ]; then
+    if [ "$bound" -gt 0 ]; then
       # Expansion is intentionally deferred to the child bash passed to -c.
       # shellcheck disable=SC2016
-      fm_run_timed "$PER_SCRIPT_TIMEOUT_SECS" bash -c \
+      fm_run_timed "$bound" bash -c \
         'bash "$1" 2>&1 | tee "$2"; exit "${PIPESTATUS[0]}"' _ "$script" "$out"
       rc=$?
     else
       bash "$script" 2>&1 | tee "$out"
       rc=${PIPESTATUS[0]}
     fi
-  elif [ "$PER_SCRIPT_TIMEOUT_SECS" -gt 0 ]; then
-    fm_run_timed "$PER_SCRIPT_TIMEOUT_SECS" bash "$script" >"$out" 2>&1
+  elif [ "$bound" -gt 0 ]; then
+    fm_run_timed "$bound" bash "$script" >"$out" 2>&1
     rc=$?
   else
     bash "$script" >"$out" 2>&1
     rc=$?
   fi
-  if [ "$PER_SCRIPT_TIMEOUT_SECS" -gt 0 ] && [ "$rc" -eq 124 ]; then
-    printf 'not ok - %s exceeded the per-script bound of %ss and was terminated\n' \
-      "$script" "$PER_SCRIPT_TIMEOUT_SECS" >>"$out"
+  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ]; then
+    printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
+      "$script" "$bound" >>"$out"
+    printf '%s\n' "$bound" >"$out.timeout"
     [ "$stream" -eq 1 ] && tail -1 "$out"
   fi
   return "$rc"
+}
+
+# Run <script> through run_script_bounded and, under --retry-infra-flakes,
+# rerun it exactly once when it failed for a reason other than its bound and its
+# output carries an infrastructure signature (infra_flake_signature_in). The
+# retry's exit is returned. A streamed first attempt was already shown live; a
+# captured one is kept in <out>.prelude, followed by the FM_TEST_RETRY marker,
+# so a worker's replay still shows both attempts while <out> holds the attempt
+# that decides the result.
+run_script_attempts() {  # <script> <out> <stream> <id>
+  local script=$1 out=$2 stream=$3 id=$4 rc signature marker
+  rm -f "$out.timeout" "$out.retry" "$out.prelude"
+  run_script_bounded "$script" "$out" "$stream" "$id"
+  rc=$?
+  if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ] || [ -e "$out.timeout" ]; then
+    return "$rc"
+  fi
+  signature=$(infra_flake_signature_in "$out" "$script") || return "$rc"
+  marker=$(printf 'FM_TEST_RETRY %s %s signature=%s first_exit=%s' \
+    "$(now_iso)" "$script" "$signature" "$rc")
+  if [ "$stream" -eq 1 ]; then
+    printf '%s\n' "$marker"
+  else
+    { cat "$out"; printf '%s\n' "$marker"; } >"$out.prelude"
+  fi
+  printf '%s\t%s\n' "$signature" "$rc" >"$out.retry"
+  run_script_bounded "$script" "$out" "$stream" "$id.retry"
 }
 
 run_one_serial() {
@@ -2379,7 +2541,7 @@ run_one_serial() {
 
   set +e
   # Stream live output while retaining a copy for gate-skip detection.
-  run_script_bounded "$script" "$out" 1 "s$TOTAL"
+  run_script_attempts "$script" "$out" 1 "s$TOTAL"
   rc=$?
   set -e
   : "${rc:=1}"
@@ -2402,7 +2564,8 @@ else
   # private mode-0700 TMPDIR so mktemp roots cannot collide. Native Windows
   # Bash layers report synthetic POSIX modes, so retain chmod there but enforce
   # its observed mode only where the host reports real POSIX permissions.
-  # Retries are never used as a green strategy.
+  # Retries are never a green strategy: the only retry is the single
+  # --retry-infra-flakes rerun on a listed infrastructure signature.
   worker_n=0
   active_workers=0
 
@@ -2431,6 +2594,10 @@ else
     out="$work/output"
     end_iso=$(now_iso)
     # Replay captured output after the worker finishes so markers stay ordered.
+    # A retried script's first attempt and its FM_TEST_RETRY marker come first.
+    if [ -s "$out.prelude" ]; then
+      cat "$out.prelude"
+    fi
     if [ -s "$out" ]; then
       cat "$out"
     fi
@@ -2502,7 +2669,7 @@ else
       cd "$ROOT" || exit 1
       begin_ms=$(now_ms)
       set +e
-      run_script_bounded "$script" "$work/output" 0 "w$worker_n"
+      run_script_attempts "$script" "$work/output" 0 "w$worker_n"
       rc=$?
       set -e
       end_ms=$(now_ms)
@@ -2545,6 +2712,31 @@ if [ -s "$FAMILIES_TSV" ]; then
     printf 'FM_TEST_SUMMARY_FAMILY family=%s count=%s duration_ms=%s failed=%s\n' \
       "$name" "$count" "$duration" "$failed_count"
   done
+fi
+
+# Timed-out and retried scripts, one line each in run order, so a lane's log
+# tail names every hang and every retried infrastructure flake without
+# scrolling back. Record columns 8-10 are timeout_secs, retry signature, and
+# the first attempt's exit; awk keeps empty columns in place.
+if [ -s "$RECORDS" ]; then
+  awk -F'\t' '
+    $8 > 0 { printf "FM_TEST_TIMED_OUT script=%s bound_secs=%s\n", $1, $8 }
+    $9 != "" { printf "FM_TEST_RETRIED_FLAKE script=%s signature=%s first_exit=%s exit=%s\n", $1, $9, $10, $4 }
+  ' "$RECORDS"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && awk -F'\t' '$8 > 0 || $9 != "" { found = 1 } END { exit !found }' "$RECORDS"; then
+    awk -F'\t' '
+      BEGIN {
+        print "### Behavior test timeouts and retried infra flakes"
+        print ""
+        print "| Script | Outcome | Detail |"
+        print "|---|---|---|"
+      }
+      $8 > 0 { printf "| `%s` | timed out | terminated after its %ss per-script bound |\n", $1, $8 }
+      $9 != "" {
+        printf "| `%s` | retried infra flake, %s | signature %s, first exit %s, retry exit %s |\n", $1, ($4 == 0 ? "passed on retry" : "failed on retry"), $9, $10, $4
+      }
+    ' "$RECORDS" >>"$GITHUB_STEP_SUMMARY" || log "could not append to GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY"
+  fi
 fi
 
 # Slowest scripts (top 15) from records.

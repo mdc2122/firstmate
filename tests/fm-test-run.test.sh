@@ -515,7 +515,7 @@ PY
   cp "$ROOT/tests/git-config-helpers.sh" "$timeout_repo/tests/"
   cat >"$timeout_repo/bin/fm-timeout-lib.sh" <<'SH'
 fm_run_timed() {
-  [ "$1" -eq 900 ] || return 99
+  [ "$1" -gt 0 ] || return 99
   return 124
 }
 SH
@@ -1432,8 +1432,10 @@ SH
   [ "$rc" -ne 0 ] || fail "a terminated script must fail the run: $(cat "$tmp/out")"
   [ "$((ended - began))" -lt 120 ] \
     || fail "the per-script bound did not stop a 600s hang (took $((ended - began))s)"
-  grep -Fq 'exceeded the per-script bound' "$tmp/out" \
-    || fail "the terminated script was not named: $(cat "$tmp/out")"
+  grep -Fq "not ok - timed out: $hang exceeded its per-script bound of 3s" "$tmp/out" \
+    || fail "the terminated script was not named with its bound: $(cat "$tmp/out")"
+  grep -Fq "FM_TEST_TIMED_OUT script=$hang bound_secs=3" "$tmp/out" \
+    || fail "the run summary did not list the timed-out script: $(cat "$tmp/out")"
   grep -Eq 'FM_TEST_END .* exit=124 ' "$tmp/out" \
     || fail "a terminated script must be recorded as exit 124: $(cat "$tmp/out")"
   # The run still completes and accounts for the script, rather than dying.
@@ -1460,6 +1462,170 @@ SH
 
   rm -rf "$tmp"
   pass "--per-script-timeout-secs turns a hung script into a bounded failure"
+}
+
+# The only automatic retry is a single rerun of a failure whose output carries
+# a listed infrastructure signature. Every other failure - an assertion, a
+# signature the test prints from its own source, a timeout - runs exactly once,
+# and the retry is labeled everywhere a reader looks for it.
+# Fixture bodies and markdown backticks are deliberate single-quoted literals.
+# shellcheck disable=SC2016
+test_infra_flake_retry_classification() {
+  local tmp repo runner rc f
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-flake.XXXXXX")
+  repo="$tmp/repo"
+  runner="$repo/bin/fm-test-run.sh"
+  mkdir -p "$repo/bin" "$repo/tests" "$tmp/fx"
+  cp "$RUNNER" "$runner"
+  cp "$ROOT/tests/git-config-helpers.sh" "$repo/tests/"
+  cp "$ROOT/bin/fm-timeout-lib.sh" "$repo/bin/fm-timeout-lib.sh"
+  chmod +x "$runner"
+  # A runner fault reaches a test through a tool it calls, so the signature
+  # comes from a helper outside the test script, as it would on a real runner.
+  printf '#!/bin/sh\necho "fatal: write error: No space left on device" >&2\nexit 1\n' >"$tmp/fx/disk-full-tool"
+  chmod +x "$tmp/fx/disk-full-tool"
+  # <name> <first-attempt body> <later-attempt body>; every attempt is counted.
+  write_fixture() {
+    cat >"$repo/tests/$1" <<SH
+#!/usr/bin/env bash
+n=\$(cat "\$FX/$1.count" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" >"\$FX/$1.count"
+if [ "\$n" -eq 1 ]; then $2; else $3; fi
+SH
+  }
+  write_fixture flake.test.sh '"$FX/disk-full-tool"; echo "not ok - setup"; exit 1' 'echo "ok - healthy"'
+  write_fixture persistent.test.sh '"$FX/disk-full-tool"; exit 1' '"$FX/disk-full-tool"; exit 1'
+  write_fixture assertion.test.sh 'echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
+  write_fixture own-text.test.sh 'echo "not ok - Too many open files"; exit 1' 'echo "ok - would pass"'
+  write_fixture hang.test.sh '"$FX/disk-full-tool"; sleep 60' 'echo "ok - would pass"'
+
+  set +e
+  FX="$tmp/fx" GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$tmp/summary.md" \
+    "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 3 --json "$tmp/run.json" \
+    tests/flake.test.sh tests/persistent.test.sh tests/assertion.test.sh \
+    tests/own-text.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "remaining failures must still fail the run, got $rc: $(cat "$tmp/out")"
+  for f in flake:2 persistent:2 assertion:1 own-text:1 hang:1; do
+    [ "$(cat "$tmp/fx/${f%%:*}.test.sh.count")" = "${f#*:}" ] \
+      || fail "${f%%:*} ran $(cat "$tmp/fx/${f%%:*}.test.sh.count") times, expected ${f#*:}: $(cat "$tmp/out")"
+  done
+  grep -Eq '^FM_TEST_RETRY .+ tests/flake\.test\.sh signature=disk-full first_exit=1$' "$tmp/out" \
+    || fail "the retry was not announced before it ran: $(cat "$tmp/out")"
+  grep -Eq '^FM_TEST_END .+ tests/flake\.test\.sh exit=0 ' "$tmp/out" \
+    || fail "a flake that passed on retry must be recorded green: $(cat "$tmp/out")"
+  grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/flake.test.sh signature=disk-full first_exit=1 exit=0' "$tmp/out" \
+    || fail "the passing flake was not labeled in the run summary: $(cat "$tmp/out")"
+  grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/persistent.test.sh signature=disk-full first_exit=1 exit=1' "$tmp/out" \
+    || fail "a flake that failed again was not labeled with its retry exit: $(cat "$tmp/out")"
+  grep -Fq 'FM_TEST_SUMMARY total=5 failed=4' "$tmp/out" \
+    || fail "a retried script must be counted once: $(cat "$tmp/out")"
+  grep -Fq '::warning file=tests/flake.test.sh,title=Retried infra flake::' "$tmp/out" \
+    || fail "the retried flake had no warning annotation: $(cat "$tmp/out")"
+  grep -Fq '::error file=tests/hang.test.sh,title=Test timed out::' "$tmp/out" \
+    || fail "the timeout had no error annotation: $(cat "$tmp/out")"
+  if grep -Eq 'FM_TEST_(RETRY|RETRIED_FLAKE).*(assertion|own-text|hang)' "$tmp/out"; then
+    fail "an assertion, self-printed text, or timeout was retried: $(cat "$tmp/out")"
+  fi
+  grep -Fq '| `tests/flake.test.sh` | retried infra flake, passed on retry |' "$tmp/summary.md" \
+    || fail "the step summary did not list the passing flake: $(cat "$tmp/summary.md")"
+  grep -Fq '| `tests/hang.test.sh` | timed out |' "$tmp/summary.md" \
+    || fail "the step summary did not list the timeout: $(cat "$tmp/summary.md")"
+  python3 - "$tmp/run.json" <<'PY' || fail "timing JSON did not label the retry and timeout: $(cat "$tmp/run.json")"
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+by = {s["path"]: s for s in doc["scripts"]}
+assert by["tests/flake.test.sh"]["retried_infra_flake"] is True
+assert by["tests/flake.test.sh"]["retry_signature"] == "disk-full"
+assert by["tests/flake.test.sh"]["first_attempt_exit"] == 1
+assert by["tests/flake.test.sh"]["exit"] == 0
+assert by["tests/assertion.test.sh"]["retried_infra_flake"] is False
+assert by["tests/hang.test.sh"]["timed_out"] is True and by["tests/hang.test.sh"]["timeout_secs"] == 3
+assert doc["summary"]["retried_infra_flakes"] == 2
+assert doc["summary"]["timed_out"] == 1
+PY
+
+  # Off unless asked for: the same infrastructure failure is not retried.
+  rm -f "$tmp/fx/"*.count
+  set +e
+  FX="$tmp/fx" "$runner" --jobs 1 tests/flake.test.sh >"$tmp/off.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] && [ "$(cat "$tmp/fx/flake.test.sh.count")" = 1 ] \
+    || fail "without --retry-infra-flakes a failure must not be retried: $(cat "$tmp/off.out")"
+
+  # A concurrent worker retries the same way, and its replayed log keeps the
+  # first attempt and the retry marker ahead of the deciding attempt. Both
+  # names are individually proven isolated, so they run as concurrent workers.
+  write_fixture fm-cd-pretool-check.test.sh '"$FX/disk-full-tool"; echo "not ok - setup"; exit 1' 'echo "ok - healthy"'
+  write_fixture fm-pr-merge.test.sh 'echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
+  rm -f "$tmp/fx/"*.count
+  set +e
+  FX="$tmp/fx" "$runner" --jobs 2 --retry-infra-flakes \
+    tests/fm-cd-pretool-check.test.sh tests/fm-pr-merge.test.sh >"$tmp/par.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "the concurrent assertion failure must fail the run, got $rc: $(cat "$tmp/par.out")"
+  [ "$(cat "$tmp/fx/fm-cd-pretool-check.test.sh.count")" = 2 ] \
+    && [ "$(cat "$tmp/fx/fm-pr-merge.test.sh.count")" = 1 ] \
+    || fail "concurrent workers retried the wrong scripts: $(cat "$tmp/par.out")"
+  python3 - "$tmp/par.out" <<'PY' || fail "concurrent replay lost the retry ordering: $(cat "$tmp/par.out")"
+import sys
+lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding="utf-8")]
+def at(pred):
+    return next(i for i, l in enumerate(lines) if pred(l))
+first = at(lambda l: l == "not ok - setup")
+retry = at(lambda l: l.startswith("FM_TEST_RETRY ") and "fm-cd-pretool-check" in l)
+healthy = at(lambda l: l == "ok - healthy")
+end = at(lambda l: l.startswith("FM_TEST_END ") and "fm-cd-pretool-check" in l and " exit=0 " in l)
+assert first < retry < healthy < end, (first, retry, healthy, end)
+PY
+
+  rm -rf "$tmp"
+  pass "only a listed infrastructure signature earns one labeled retry; assertions and timeouts never retry"
+}
+
+# CI lanes and --changed bound each script from the measured table rather than
+# one number, so a known-slow healthy script is not killed by the bound sized
+# for ordinary scripts, and an ordinary script still fails long before a slow
+# one's bound would.
+test_auto_timeout_bounds_every_script_from_its_table() {
+  local tmp repo runner ordinary slow rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-auto-bound.XXXXXX")
+  repo="$tmp/repo"
+  runner="$repo/bin/fm-test-run.sh"
+  mkdir -p "$repo/bin" "$repo/tests"
+  cp "$RUNNER" "$runner"
+  cp "$ROOT/tests/git-config-helpers.sh" "$repo/tests/"
+  chmod +x "$runner"
+  cat >"$repo/bin/fm-timeout-lib.sh" <<'SH'
+fm_run_timed() {
+  printf '%s %s\n' "$1" "$*" >>"$BOUNDS_LOG"
+  shift
+  "$@"
+}
+SH
+  for f in fm-watch-triage.test.sh fm-brief.test.sh; do
+    printf '#!/usr/bin/env bash\necho "ok - %s"\n' "$f" >"$repo/tests/$f"
+  done
+  BOUNDS_LOG="$tmp/bounds" "$runner" --jobs 1 --per-script-timeout-secs auto \
+    tests/fm-watch-triage.test.sh tests/fm-brief.test.sh >"$tmp/out" 2>&1 \
+    || fail "auto-bounded run failed: $(cat "$tmp/out")"
+  slow=$(awk '/fm-watch-triage/ { print $1 }' "$tmp/bounds")
+  ordinary=$(awk '/fm-brief/ { print $1 }' "$tmp/bounds")
+  [ -n "$slow" ] && [ -n "$ordinary" ] || fail "auto did not bound every script: $(cat "$tmp/bounds")"
+  # fm-watch-triage's slowest healthy CI run measured 1250s.
+  [ "$slow" -gt 1250 ] || fail "auto would kill fm-watch-triage's measured healthy run: bound ${slow}s"
+  [ "$ordinary" -gt 0 ] && [ "$ordinary" -lt "$slow" ] \
+    || fail "an ordinary script must get a positive bound below the slow script's: ${ordinary}s vs ${slow}s"
+
+  set +e
+  "$runner" --per-script-timeout-secs soon tests/fm-brief.test.sh >"$tmp/bad" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || fail "a bound that is neither seconds nor auto must be refused, got $rc: $(cat "$tmp/bad")"
+  rm -rf "$tmp"
+  pass "--per-script-timeout-secs auto bounds each script from its measured table"
 }
 
 # The duration regression this guard exists for: a suite whose scripts are all
@@ -1772,6 +1938,8 @@ test_changed_shared_fixture_selects_its_readers
 test_concurrent_runs_are_ordered_longest_first
 test_per_script_timeout_bounds_a_hang
 test_max_wall_ms_is_a_result_not_advice
+test_infra_flake_retry_classification
+test_auto_timeout_bounds_every_script_from_its_table
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json
