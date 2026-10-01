@@ -54,7 +54,7 @@ For a contribution wake or linked-issue filing, go directly to Contribution foll
    Aging is only a presentation safety net, and re-holding with `--until` remains the durable deferral.
    Do not scrape reports, visual-review artifacts, raw status-event tails, or visible conversation history to supplement current state.
    A queued item under `gates` only becomes "next work" when its blocker is gone and its time/date gate has arrived.
-   Until then it stays queued with the reason.
+   Until then it stays queued with the reason; clearing ready and stale rows is not a bearings action but `AGENTS.md` section 10's queue inbox zero, which the watcher's `check: queue-zero` wake drives.
    The `(main-inventory)` gate is an action-free integrity warning rather than queued work.
    Render it under Charted Next with the related `omitted` disclosure, never invent an Underway row from backlog-only state, and never move it into Captain's Call.
    The same holds for a secondmate home whose current state is unavailable, and for a readable home whose `invalidity` reports a backlog-vs-metadata mismatch: the mismatch is a repair notice about that home's own books, not a reason to drop its separately projected decisions, queued, landed, or live work.

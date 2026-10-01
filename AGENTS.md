@@ -399,7 +399,7 @@ Retire a custom check only through `bin/fm-check-unregister.sh <id>` (or `bin/fm
 Tear down a ship task only after landing is confirmed.
 A teardown refusal for uncommitted or unlanded work is a stop-and-investigate result, never an obstacle to bypass.
 Never force teardown without explicit discard authority.
-After successful teardown, record completion, retain only the configured recent Done history, and re-evaluate queued work whose blockers and time gates have cleared.
+After successful teardown, record completion, retain only the configured recent Done history, and clear the queue rows it prints under section 10's queue inbox zero.
 
 A secondmate is persistent and an empty queue is healthy.
 Retire one only on an explicit captain or main-firstmate decision, after loading `secondmate-provisioning`; its home must contain no work under way, and forced discard still requires explicit captain authority.
@@ -532,7 +532,7 @@ When the captain reported seeing a problem, the observation is that problem abse
 A handoff note, instruction, or "watch for it" follow-up you write is its own work item with an owner: a worker, or held for the captain through `bin/fm-captain-hold.sh hold`, the same wrapper that holds any pending captain decision or relay reminder worth durable tracking.
 Captain calls discovered by investigations or visual reviews follow `captain-hold-lifecycle`, which owns their completion gate and recorded-answer rules.
 When the automatic transition gate applies, dispatch and completion move the item themselves - `bin/fm-spawn.sh` and `bin/fm-teardown.sh` own those transitions and refuse rather than report success without them - so what remains yours is filing the item before dispatch, recording decisions, and keeping notes current; `docs/configuration.md` owns gate applicability and the manual-backend exception.
-Re-evaluate queued work after every teardown and heartbeat, dispatching items only when dependencies and time gates have cleared.
+Queue inbox zero: every row a `check: queue-zero` wake or a teardown's `Queue:` lines name leaves the queue in that turn - dispatched, held with `--until` and a reason naming its blocker or owner, or closed - and every named Paperclip item is released, given a dated next check, or decided; a watch-only row gets an owner and a date or becomes real work, and `bin/fm-queue-zero.sh` owns the row classes and cadence.
 
 `.tasks.toml`, `docs/configuration.md`, and current `tasks-axi --help` own the backlog schema, compatibility, retention, and routine command syntax.
 Use compatible `tasks-axi` when the configured backend selects it, always through `bin/fm-tasks-axi.sh` so the call reaches this home's backlog from any directory, and the documented manual path otherwise; keep only the configured recent Done entries.

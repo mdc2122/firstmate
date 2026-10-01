@@ -4854,6 +4854,41 @@ test_heartbeat_backstop_surfaces_unsurfaced_status() {
   pass "heartbeat backstop fail-safe surfaces a captain-relevant status the per-wake path missed"
 }
 
+# --- queue inbox zero: the watcher wakes with the rows, once per episode ------
+
+test_queue_zero_tick_wakes_with_ready_rows_once() {
+  local dir state fakebin out pid
+  command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found; queue-zero watcher case not run"; return 0; }
+  dir=$(make_case queue-zero); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  mkdir -p "$dir/data"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' > "$dir/data/backlog.md"
+  tasks-axi add idle-ready "ready work nobody dispatched" --file "$dir/data/backlog.md" >/dev/null
+  # The heartbeat is pinned far away: the queue-zero tick has its own cadence.
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$dir/data" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_QUEUE_ZERO_INTERVAL=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "the watcher did not wake for a ready queued row"
+  grep -F 'check: queue-zero:' "$out" | grep -F 'queue ready idle-ready' >/dev/null \
+    || fail "the queue-zero wake did not name its row: $(cat "$out")"
+  grep -F $'\tcheck\tqueue-zero\t' "$state/.wake-queue" >/dev/null \
+    || fail "the queue-zero wake was not durably queued"
+
+  ack_stopped_cycle "$state" || fail "could not acknowledge the queue-zero wake"
+  rm -f "$state/.last-queue-zero"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$dir/data" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_QUEUE_ZERO_INTERVAL=1 "$WATCH" > "$out.2" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    fail "the watcher exited again for the same unchanged queue row: $(cat "$out.2")"
+  fi
+  reap "$pid"
+  [ ! -s "$state/.wake-queue" ] || fail "the same queue episode was queued twice"
+  pass "the watcher wakes once with the ready rows on the queue-zero cadence, not again for the same episode"
+}
+
 # --- beacon stays fresh while absorbing -------------------------------------
 
 test_beacon_stays_fresh_while_absorbing() {
@@ -5299,6 +5334,7 @@ test_procevent_marker_failure_exits_and_replays
 test_heartbeat_no_change_absorbed
 test_heartbeat_backstop_surfaces_unsurfaced_status
 test_heartbeat_backstop_surfaces_a_masked_status
+test_queue_zero_tick_wakes_with_ready_rows_once
 test_beacon_stays_fresh_while_absorbing
 test_afk_signal_records_heartbeat_endpoint
 test_afk_present_reverts_watcher_to_one_shot

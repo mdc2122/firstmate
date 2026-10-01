@@ -108,6 +108,10 @@
 #                          per episode (pr_green_blocked_tick)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
+#   check: queue-zero: ... queued rows or Paperclip items that must leave the
+#                          queue this turn, named by id; one wake per episode
+#                          (bin/fm-queue-zero.sh check, every
+#                          FM_QUEUE_ZERO_INTERVAL, default 900s)
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -225,6 +229,8 @@ POLL=${FM_POLL:-15}                   # seconds between cycles
 WATCHER_STALE_GRACE=${FM_WATCHER_STALE_GRACE:-${FM_GUARD_GRACE:-$(fm_poll_derived_grace "$POLL")}}
 HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
 HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
+QUEUE_ZERO_INTERVAL=${FM_QUEUE_ZERO_INTERVAL:-900}  # seconds between queue inbox-zero checks (bin/fm-queue-zero.sh)
+case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
@@ -2110,6 +2116,7 @@ reconcile_requests_detached() {
 
 
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
+[ -e "$STATE/.last-queue-zero" ] || touch "$STATE/.last-queue-zero"
 
 # A merged poll may have queued its terminal wake and then lost the process
 # between receipt publication and fixed-path removal.
@@ -2816,6 +2823,20 @@ EOF
       fi
     fi
   done < <(recorded_windows)
+
+  # Queue inbox zero (bin/fm-queue-zero.sh owns the rule, the row classes, the
+  # one-wake-per-episode record, and the durable append). It keeps its own
+  # FM_QUEUE_ZERO_INTERVAL cadence via .last-queue-zero rather than the
+  # heartbeat's, because the heartbeat backs off on a quiet fleet and queued
+  # work must not sit for that long. A check that fails or times out prints
+  # nothing and is retried next interval.
+  if [ "$(age_of "$STATE/.last-queue-zero")" -ge "$QUEUE_ZERO_INTERVAL" ]; then
+    touch "$STATE/.last-queue-zero"
+    FM_HOME="$FM_HOME" run_check_capture "$SCRIPT_DIR/fm-queue-zero.sh" check || exit 1
+    if [ -n "$FM_CHECK_RESULT" ]; then
+      wake "$FM_CHECK_RESULT"
+    fi
+  fi
 
   # Heartbeat: the watcher runs a cheap fleet-scan at a regular cadence no matter
   # what. Time-based via .last-heartbeat mtime; interval doubles per consecutive
