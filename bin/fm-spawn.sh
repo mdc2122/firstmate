@@ -3854,6 +3854,12 @@ EOF
 // would leave every completed turn recorded busy. "turn_end" fires at every
 // inner turn boundary and stays a wake NOTIFICATION touch for the watcher,
 // never current-state truth.
+// omp rebinds this factory into every subagent session (task tool, eval
+// agent(), /tan clones) and reports which agent a handler serves through
+// ctx.agent.kind ("main" or "sub", omp 18.4.4). Only the worker's own main
+// agent speaks for the task: a subagent's agent_end would otherwise record the
+// whole task idle while main still awaits it, and every subagent turn would
+// ring the turn-end marker. An omp without ctx.agent keeps the old behavior.
 import { execFile } from "node:child_process";
 const busyEvent = (state: string, event: string) =>
   new Promise<void>((resolve) => {
@@ -3862,13 +3868,21 @@ const busyEvent = (state: string, event: string) =>
       "--gen", "$BUSY_GEN", "--source", "omp-ext", "--event", event,
     ], () => resolve());
   });
+const isSubagent = (ctx: any) => ctx?.agent?.kind === "sub";
 export default function (pi: any) {
-  pi.on("agent_start", () => busyEvent("busy", "agent-start"));
-  pi.on("agent_end", (event: any) => {
+  pi.on("agent_start", (_event: any, ctx: any) => {
+    if (isSubagent(ctx)) return;
+    return busyEvent("busy", "agent-start");
+  });
+  pi.on("agent_end", (event: any, ctx: any) => {
+    if (isSubagent(ctx)) return;
     if (event && event.willContinue === true) return;
     return busyEvent("idle", "agent-end");
   });
-  pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
+  pi.on("turn_end", (_event: any, ctx: any) => {
+    if (isSubagent(ctx)) return;
+    execFile("touch", ["$TURNEND"]);
+  });
 }
 EOF
     ;;
@@ -4047,12 +4061,33 @@ fi
 META_WINDOW=$T
 [ "$BACKEND" = orca ] && META_WINDOW=$W
 SPAWN_GEN="s$(date +%s).${BASHPID:-$$}.$RANDOM"
+# Retire the watcher's per-window markers (bin/fm-classify-lib.sh owns the key
+# and the set) for the endpoint this spawn's record just stopped naming. A
+# respawn onto a new terminal leaves no teardown to retire the old one, and its
+# leftover stale and wedge bookkeeping is what re-alarmed a gone pane. Skipped
+# when the target is unchanged or any other record still names it.
+spawn_retire_prior_endpoint_markers() {
+  local new meta
+  [ -n "$SPAWN_PRIOR_TARGET" ] || return 0
+  new=$(fm_backend_target_of_meta "$STATE/$ID.meta" 2>/dev/null || true)
+  [ "$new" != "$SPAWN_PRIOR_TARGET" ] || return 0
+  for meta in "$STATE"/*.meta; do
+    [ -e "$meta" ] || continue
+    [ "$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)" != "$SPAWN_PRIOR_TARGET" ] || return 0
+  done
+  _fm_wake_require_classify || return 0
+  watch_window_markers_retire "$STATE" "$(window_key "$SPAWN_PRIOR_TARGET")" || true
+}
 SPAWN_META_PATH="$STATE/$ID.meta"
 if [ "$SPAWN_META_LOCK_HELD" != 1 ]; then
   SPAWN_META_LOCK=$(fm_meta_lock_path "$STATE/$ID.meta") || exit 1
   fm_lock_acquire_wait "$SPAWN_META_LOCK"
   SPAWN_META_LOCK_HELD=1
 fi
+# The endpoint the record names before this spawn overwrites it, read under the
+# meta lock so its watcher markers can be retired once the replacement is published.
+SPAWN_PRIOR_TARGET=
+[ ! -f "$STATE/$ID.meta" ] || SPAWN_PRIOR_TARGET=$(fm_backend_target_of_meta "$STATE/$ID.meta" 2>/dev/null || true)
 if [ "$RELAUNCH" -eq 1 ]; then
   SPAWN_META_TMP="$STATE/.$ID.meta.relaunch.${BASHPID:-$$}"
 else
@@ -4127,6 +4162,7 @@ if [ "$RELAUNCH" -eq 0 ]; then
     exit 1
   fi
   SPAWN_META_TMP=
+  spawn_retire_prior_endpoint_markers
 fi
 
 # Fuse the backlog In-flight transition into the publication that just created
@@ -4186,6 +4222,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_REPLACEMENT_PENDING=0
   SPAWN_META_PUBLISH_STARTED=0
   SPAWN_META_TMP=
+  spawn_retire_prior_endpoint_markers
 fi
 # A dispatch or relaunch keeps the per-task meta lock through launch delivery.
 # The backlog mutation is deliberately the final fallible commit below, so

@@ -1561,6 +1561,47 @@ scan_signals() {
   return 0
 }
 
+# Filter scan_signals output: print every row whose task has a state/<id>.meta,
+# and record the reported signature of every bare turn-end row whose task has
+# none, logging it as absorbed. A missing meta is the only test - kind,
+# backend, and liveness are not read - so every dispatched task, secondmates
+# included, keeps its signals exactly as before. An unrecorded status log is
+# absorbed only while its new span holds no captain-relevant event: a home
+# that writes a status line by hand for a task it never dispatched (a decision
+# record, a recovered or torn-down task's final word) still surfaces it.
+unrecorded_signals_absorb() {  # <scan_signals-output>
+  local sf sig f base task absorbed='' record needs_decision rc
+  while IFS=$(printf '\t') read -r sf sig f; do
+    [ -n "$sf" ] || continue
+    base=${f##*/}
+    case "$base" in
+      *.status) task=${base%.status} ;;
+      *) task=${base%.turn-ended} ;;
+    esac
+    if [ -n "$task" ] && [ ! -e "$STATE/$task.meta" ] && [ ! -L "$STATE/$task.meta" ]; then
+      case "$f" in
+        *.status)
+          record=''; needs_decision=0
+          status_span_first_actionable_record "$f" "$(fm_wake_signal_seen_size "$STATE" "$f")" record needs_decision
+          rc=$?
+          if [ "$rc" -ne 1 ] || [ "$needs_decision" -eq 1 ]; then
+            printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
+            continue
+          fi
+          fm_wake_status_reported_commit "$STATE" "$f" "$sig" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; }
+          ;;
+        *) printf '%s' "$sig" > "$sf" || { printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"; continue; } ;;
+      esac
+      case " $absorbed " in *" $f "*) ;; *) absorbed="$absorbed $f" ;; esac
+      continue
+    fi
+    printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
+  done <<EOF
+$1
+EOF
+  [ -z "$absorbed" ] || triage_log "absorbed signal for unrecorded task (no state/<id>.meta):$absorbed"
+}
+
 # Deliver a durably queued process-event result to firstmate. Publication is
 # owned by bin/fm-procevent.sh - by the runner at capture time and by reconcile's
 # re-announcement - so this decides only whether a queued check record has been
@@ -2484,6 +2525,12 @@ EOF
     # home_summary_refresh_detached for why publication stays off the beacon's
     # path. Publication failure stays side-band.
     home_summary_refresh_detached
+    # A signal file whose task has no state/<id>.meta belongs to nothing this
+    # home supervises: a torn-down task's late write, or a worker's own helper
+    # writing under an id firstmate never dispatched. Its seen marker advances
+    # so it does not re-fire, it is logged, and it never reaches the queue; an
+    # unrecorded task has no endpoint, decision, or worker firstmate could act on.
+    pending=$(unrecorded_signals_absorb "$pending")
     files=""
     while IFS=$(printf '\t') read -r sf sig f; do
       [ -n "$sf" ] || continue
@@ -2491,6 +2538,8 @@ EOF
     done <<EOF
 $pending
 EOF
+  fi
+  if [ -n "$pending" ]; then
     reason="signal:$files"
     # Triage: a signal is ACTIONABLE when any of these holds (cheapest first):
     #   - the away-mode daemon owns triage (afk) and wants every wake;

@@ -463,16 +463,20 @@ const handlers = {};
 mod.default({ on: (name, fn) => { handlers[name] = fn; } });
 // ctx.isIdle() reads false at a natural TUI agent_end on omp; the extension
 // must go idle on a plain agent_end regardless of it.
-const ctx = { isIdle: () => false };
+const ctx = { isIdle: () => false, agent: { kind: "main", id: "Main", name: "main", depth: 0 } };
+// omp rebinds the factory into subagent sessions; their handlers see kind "sub".
+const subCtx = { isIdle: () => false, agent: { kind: "sub", id: "0-Task", name: "task", depth: 1, parentId: "Main" } };
 switch (process.env.MODE) {
   case "handlers": console.log(Object.keys(handlers).sort().join(" ")); break;
   case "agent-start": await handlers["agent_start"]({ type: "agent_start" }, ctx); break;
   case "end-continuing": await handlers["agent_end"]({ type: "agent_end", willContinue: true }, ctx); break;
   case "end-final": await handlers["agent_end"]({ type: "agent_end" }, ctx); break;
   case "turn-end": await handlers["turn_end"]({ type: "turn_end", turnIndex: 0 }, ctx); break;
+  case "sub-end-final": await handlers["agent_end"]({ type: "agent_end" }, subCtx); break;
+  case "sub-turn-end": await handlers["turn_end"]({ type: "turn_end", turnIndex: 0 }, subCtx); break;
   default: throw new Error("unknown mode " + process.env.MODE);
 }
-if (process.env.MODE === "turn-end") {
+if (process.env.MODE === "turn-end" || process.env.MODE === "sub-turn-end" || process.env.MODE === "sub-end-final") {
   await new Promise((resolve) => setTimeout(resolve, 200));
 }
 EOF
@@ -505,6 +509,14 @@ test_busy_extension_lifecycle() {
 
   out=$(drive_omp_ext "$ext" agent-start) || fail "agent_start drive failed: $out"
   [ "$(fm_busy_classify tmux fake:w omp "$id" "$state")" = "busy omp-ext" ] || fail "agent_start must classify 'busy omp-ext'"
+
+  # A subagent the worker spawned finishing its own run must not record the
+  # task idle or ring the turn-end marker while main is still waiting on it.
+  rm -f "$state/$id.turn-ended"
+  out=$(drive_omp_ext "$ext" sub-end-final) || fail "subagent agent_end drive failed: $out"
+  [ "$(fm_busy_classify tmux fake:w omp "$id" "$state")" = "busy omp-ext" ] || fail "a subagent's agent_end must not record the worker idle"
+  out=$(drive_omp_ext "$ext" sub-turn-end) || fail "subagent turn_end drive failed: $out"
+  [ ! -e "$state/$id.turn-ended" ] || fail "a subagent's turn_end must not ring the worker's turn-end marker"
 
   out=$(drive_omp_ext "$ext" end-continuing) || fail "continuing agent_end drive failed: $out"
   [ "$(fm_busy_classify tmux fake:w omp "$id" "$state")" = "busy omp-ext" ] || fail "agent_end with willContinue must stay busy (a session_stop continuation is coming)"

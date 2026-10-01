@@ -1519,6 +1519,24 @@ tests/fm-bootstrap.test.sh
 
 The fake-Orca suite covers readiness, registration, create response parsing, metadata routing, popup-safe submit, and path-matched release refusal.
 
+### Terminal absence after a reboot or respawn
+
+Verified 2026-09-30 against `/Applications/Orca.app` bundle version 1.4.218, for a terminal lost to a host reboot whose task was then respawned onto a new terminal.
+
+```sh
+orca terminal read --terminal term_31857703-8a6d-4702-93b6-ac8b020e0321 --limit 1 --json
+orca terminal list --json
+```
+
+Observed:
+
+```text
+read: {"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}  exit 1
+list: ok=true truncated=false totalCount=20 rows=20 omittedHostIds=[] listed=false
+```
+
+A live terminal's read succeeds and the same list names it, so `fm_backend_orca_capture` reports proven absence only for a stale-handle read whose handle a complete list omits; `tests/fm-backend-orca.test.sh` pins every incomplete-list and other-error case as unreadable.
+
 ## cmux
 
 The current compatibility floor is cmux 0.64, and the active live evidence uses 0.64.17 build 97 on macOS aarch64.
@@ -2009,6 +2027,7 @@ After the rule, the same live Herdr capture read `empty`, a steer's doorbell lan
 | Exit | `bin/fm-control.sh <id> exit` typed `/quit`; Herdr then reported the pane `dead` |
 | Extension loading | a file named both by `-e` and by `<cwd>/.omp/extensions` loads twice; discovery is top-level and cwd-only |
 | Extension tools | the openai-codex model invokes a registered tool by writing `xd://<tool>` through omp's virtual-file bridge |
+| Subagent events | omp 18.4.4, 2026-09-30: `omp -p --no-session -e <probe.ts>` with a prompt that spawned one task subagent logged `agent_start`, `turn_end`, and `agent_end` for `ctx.agent.kind=sub id=Pong` while the main run was still open, then the main `agent_end` for `kind=main id=Main`; the worker extension therefore ignores every `kind=sub` event, so a subagent's end cannot record the worker idle or ring its turn-end marker (`tests/fm-omp-harness.test.sh` `test_busy_extension_lifecycle`) |
 
 ### End-to-end
 

@@ -197,22 +197,59 @@ fm_backend_orca_worktree_path() {
 }
 
 # fm_backend_orca_capture: one bounded tail read of the recorded terminal.
-# Returns FM_BACKEND_CAPTURE_ABSENT (bin/fm-backend.sh) only when Orca answers
-# the read successfully and reports the terminal `exited`: Orca derives that
-# status from a disconnected PTY with a recorded exit code, which is positive
-# proof the endpoint is gone (a closed tab reads this way, with an empty tail).
-# Every other failure - a CLI error, ok:false (including terminal_handle_stale,
-# which Orca also raises for a renderer or generation change while a terminal
-# may still be live), an unparseable answer, or status `unknown` - stays an
-# ordinary read failure, because an unreadable read never proves absence.
+# Returns FM_BACKEND_CAPTURE_ABSENT (bin/fm-backend.sh) only on positive proof
+# the endpoint is gone: either Orca answers the read successfully and reports
+# the terminal `exited` (a disconnected PTY with a recorded exit code; a closed
+# tab reads this way, with an empty tail), or the read fails and a successful,
+# complete `orca terminal list` omits the handle (fm_backend_orca_terminal_listed).
+# A terminal that no longer exists at all - a kernel-panic reboot, a respawn
+# onto a new terminal - answers its read with ok:false terminal_handle_stale,
+# which Orca also raises for a renderer or generation change while the terminal
+# may still be live, so that error alone never proves absence; the inventory
+# read is what separates the two. Every other failure - a CLI error, an
+# unparseable answer, status `unknown`, or a list that failed, was truncated,
+# omitted a host, or still names the handle - stays an ordinary read failure.
 fm_backend_orca_capture() {  # <terminal-id> <lines>
-  local terminal=$1 lines=${2:-40} out rc
+  local terminal=$1 lines=${2:-40} out rc listed
   fm_backend_orca_tool_check || return 1
-  out=$(orca terminal read --terminal "$terminal" --limit "$lines" --json) || return 1
-  fm_backend_orca_json_text "$out"
+  out=$(orca terminal read --terminal "$terminal" --limit "$lines" --json)
   rc=$?
-  [ "$rc" -ne 3 ] || return "$FM_BACKEND_CAPTURE_ABSENT"
+  if [ "$rc" -eq 0 ]; then
+    fm_backend_orca_json_text "$out"
+    rc=$?
+    [ "$rc" -ne 3 ] || return "$FM_BACKEND_CAPTURE_ABSENT"
+    [ "$rc" -ne 0 ] || return 0
+  else
+    rc=1
+  fi
+  case "$out" in *'"terminal_handle_stale"'*) ;; *) return "$rc" ;; esac
+  listed=$(fm_backend_orca_terminal_listed "$terminal" 2>/dev/null) || return "$rc"
+  [ "$listed" != absent ] || return "$FM_BACKEND_CAPTURE_ABSENT"
   return "$rc"
+}
+
+# fm_backend_orca_terminal_listed: whether a successful, complete inventory of
+# live Orca terminals includes <terminal-id>. Prints `present` or `absent` and
+# returns 0 only when the list call succeeded with ok:true, reported
+# truncated:false, omitted no execution host, and returned exactly totalCount
+# rows; any other answer returns 1 and proves nothing.
+fm_backend_orca_terminal_listed() {  # <terminal-id>
+  local out
+  out=$(orca terminal list --json 2>/dev/null) || return 1
+  printf '%s' "$out" | node -e '
+const fs = require("fs");
+const want = process.argv[1];
+let data;
+try { data = JSON.parse(fs.readFileSync(0, "utf8")); } catch { process.exit(1); }
+if (!data || data.ok !== true) process.exit(1);
+const r = data.result || {};
+const rows = r.terminals;
+if (!Array.isArray(rows) || r.truncated !== false) process.exit(1);
+if (typeof r.totalCount !== "number" || r.totalCount !== rows.length) process.exit(1);
+const omitted = r.hostScope && r.hostScope.omittedHostIds;
+if (!Array.isArray(omitted) || omitted.length !== 0) process.exit(1);
+process.stdout.write(rows.some((t) => t && t.handle === want) ? "present" : "absent");
+' "$1"
 }
 
 fm_backend_orca_json_text() {  # <json> ; exit 2 = ok:false, 3 = terminal exited

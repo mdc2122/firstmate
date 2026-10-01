@@ -566,6 +566,46 @@ test_spawn_writes_orca_metadata_and_launches_harness() {
   pass "fm-spawn.sh --backend orca: reuses implicit terminal, records metadata, launches harness"
 }
 
+# Respawning a task onto a new Orca terminal overwrites its record without any
+# teardown of the old terminal, so the spawn itself retires the watcher markers
+# of the endpoint the record stopped naming. Markers of an endpoint another
+# record still names survive.
+test_respawn_retires_superseded_endpoint_watcher_markers() {
+  local proj wt data state config id out marker
+  id="orcarespawnz1"
+  proj="$TMP_ROOT/respawn-project"
+  wt="$TMP_ROOT/respawn-wt"
+  data="$TMP_ROOT/respawn-data"
+  state="$TMP_ROOT/respawn-state"
+  config="$TMP_ROOT/respawn-config"
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  mkdir -p "$data/$id" "$state" "$config"
+  write_spawn_brief "$data" "$id"
+  touch "$state/.last-watcher-beat"
+  fm_write_meta "$state/$id.meta" "window=fm-$id" "endpoint_task_id=$id" "backend=orca" "terminal=term-old" "worktree=$wt" "kind=ship"
+  fm_write_meta "$state/other.meta" "window=fm-other" "endpoint_task_id=other" "backend=orca" "terminal=term-shared" "kind=ship"
+  for marker in .stale- .count- .hash- .paused- .wedge-escalations-; do
+    printf 'x' > "$state/${marker}term-old"
+    printf 'x' > "$state/${marker}term-shared"
+  done
+  orca_case respawn
+  printf '1\n' > "$RESP/1.exit"
+  printf '{"ok":true,"result":{"repo":{"id":"repo-spawn"}}}\n' > "$RESP/2.out"
+  printf '{"ok":true,"result":{"worktree":{"id":"22ec401f-7dac-404b-b795-9594ac95aba0::%s","path":"%s"},"terminal":{"handle":"term-new"}}}\n' "$wt" "$wt" > "$RESP/3.out"
+  out=$( HOME="$SPAWN_HOME" CLAUDE_CONFIG_DIR='' PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
+    FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
+    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 \
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude --mode no-mistakes --yolo off --backend orca 2>&1 )
+  expect_code 0 $? "respawn onto a new Orca terminal should succeed"$'\n'"$out"
+  assert_grep "terminal=term-new" "$state/$id.meta" "respawn did not record the new terminal"
+  for marker in .stale- .count- .hash- .paused- .wedge-escalations-; do
+    [ ! -e "$state/${marker}term-old" ] || fail "respawn left the superseded endpoint's ${marker} marker behind"
+    [ -e "$state/${marker}term-shared" ] || fail "respawn retired ${marker} for an endpoint another record still names"
+  done
+  rm -rf "/tmp/fm-$id"
+  pass "fm-spawn.sh: a respawn onto a new Orca terminal retires the superseded endpoint's watcher markers"
+}
+
 test_spawn_refuses_orca_secondmate_before_home_mutation() {
   local home subhome data state config id out status
   id="orcasmz1"
@@ -846,8 +886,10 @@ test_capture_reports_exited_terminal_as_proven_absent() {
   orca_case capture-exited
   printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"exited","tail":[]}}}\n' > "$RESP/1.out"
   printf '{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}\n' > "$RESP/2.out"
-  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"unknown","tail":[]}}}\n' > "$RESP/3.out"
-  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"running","tail":["$ "]}}}\n' > "$RESP/4.out"
+  # The stale-handle read consults the inventory, which still names it.
+  printf '{"ok":true,"result":{"terminals":[{"handle":"term-x"}],"hostScope":{"hostIds":["local"],"omittedHostIds":[]},"totalCount":1,"truncated":false}}\n' > "$RESP/3.out"
+  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"unknown","tail":[]}}}\n' > "$RESP/4.out"
+  printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"running","tail":["$ "]}}}\n' > "$RESP/5.out"
   out=$(PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" bash -c '
     . "$0/bin/fm-backend.sh"
     for i in 1 2 3 4; do
@@ -860,6 +902,47 @@ test_capture_reports_exited_terminal_as_proven_absent() {
   case "$out" in *"2:3:"*|*"3:3:"*) fail "an unreadable or unknown Orca read was reported as proven absent: $out" ;; esac
   assert_contains "$out" "4:0:\$ " "a running Orca terminal did not read as a live pane"
   pass "fm_backend_capture: only an exited Orca terminal is proven absent"
+}
+
+# A terminal that no longer exists at all (a reboot, a respawn onto a new
+# terminal) answers its read with ok:false terminal_handle_stale, an error Orca
+# also raises for a still-live terminal, so only a successful, complete
+# `terminal list` that omits the handle turns it into proven absence. A list
+# that names the handle, fails, is truncated, or omits a host proves nothing.
+test_capture_stale_handle_absent_only_when_complete_list_omits_it() {
+  local out stale list_absent list_present
+  orca_case capture-list-absence
+  stale='{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}'
+  list_absent='{"ok":true,"result":{"terminals":[{"handle":"other"}],"hostScope":{"hostIds":["local"],"omittedHostIds":[]},"totalCount":1,"truncated":false}}'
+  list_present='{"ok":true,"result":{"terminals":[{"handle":"term-x"}],"hostScope":{"hostIds":["local"],"omittedHostIds":[]},"totalCount":1,"truncated":false}}'
+  # 1: stale read + complete list without the handle -> absent
+  printf '%s\n' "$stale" > "$RESP/1.out"; printf '%s\n' "$list_absent" > "$RESP/2.out"
+  # 2: stale read + list naming the handle -> unreadable
+  printf '%s\n' "$stale" > "$RESP/3.out"; printf '%s\n' "$list_present" > "$RESP/4.out"
+  # 3: stale read + failed list call -> unreadable
+  printf '%s\n' "$stale" > "$RESP/5.out"; printf '1\n' > "$RESP/6.exit"
+  # 4: stale read + truncated list -> unreadable
+  printf '%s\n' "$stale" > "$RESP/7.out"
+  printf '%s\n' '{"ok":true,"result":{"terminals":[],"hostScope":{"hostIds":["local"],"omittedHostIds":[]},"totalCount":3,"truncated":true}}' > "$RESP/8.out"
+  # 5: stale read + list that omitted an execution host -> unreadable
+  printf '%s\n' "$stale" > "$RESP/9.out"
+  printf '%s\n' '{"ok":true,"result":{"terminals":[],"hostScope":{"hostIds":["local"],"omittedHostIds":["remote"]},"totalCount":0,"truncated":false}}' > "$RESP/10.out"
+  # 6: a different read error never consults the list -> unreadable
+  printf '%s\n' '{"ok":false,"error":{"code":"runtime_unavailable","message":"down"}}' > "$RESP/11.out"
+  printf '%s\n' "$list_absent" > "$RESP/12.out"
+  out=$(PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" bash -c '
+    . "$0/bin/fm-backend.sh"
+    for i in 1 2 3 4 5 6; do
+      fm_backend_capture orca term-x 40 >/dev/null 2>&1; rc=$?
+      printf "%s:%s\n" "$i" "$([ "$rc" -eq "$FM_BACKEND_CAPTURE_ABSENT" ] && echo absent || echo "rc$rc")"
+    done' "$ROOT")
+  assert_contains "$out" "1:absent" "a stale-handle read omitted from a complete list was not proven absent: $out"
+  for i in 2 3 4 5 6; do
+    case "$out" in *"$i:absent"*) fail "case $i was proven absent without a complete list omitting the handle: $out" ;; esac
+  done
+  [ "$(grep -c $'\x1f''list'$'\x1f' "$LOG")" -eq 5 ] \
+    || fail "the inventory was consulted for a read error other than a stale handle: $(cat "$LOG")"
+  pass "fm_backend_capture: a stale Orca handle is proven absent only when a complete terminal list omits it"
 }
 
 test_scout_teardown_removes_orca_worktree_via_helper() {
@@ -1477,6 +1560,7 @@ test_worktree_and_terminal_helpers_parse_json
 test_worktree_create_removes_worktree_when_path_missing
 test_spawn_preserves_orca_metadata_when_pathless_worktree_cleanup_fails
 test_spawn_writes_orca_metadata_and_launches_harness
+test_respawn_retires_superseded_endpoint_watcher_markers
 test_spawn_refuses_orca_secondmate_before_home_mutation
 test_spawn_refuses_orca_when_runtime_not_ready
 test_spawn_refuses_orca_nonisolated_worktree
