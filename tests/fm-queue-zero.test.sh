@@ -62,8 +62,9 @@ sweep() {  # <home> <args...>
   PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_QUEUE_ZERO_NOW="$NOW" "$SWEEP" "$@"
 }
 
-# A fake Paperclip: GET answers come from $home/pc/<route>.json; PATCH bodies
-# are appended to $home/pc/patches.log. The key arrives on stdin (-H @-).
+# A fake Paperclip: GET answers come from $home/pc/<route>.json (an issue's
+# latest comment from comments-<id>.json, else none); PATCH bodies are
+# appended to $home/pc/patches.log. The key arrives on stdin (-H @-).
 install_fake_paperclip() {  # <home>
   local home=$1
   mkdir -p "$home/pc"
@@ -92,6 +93,7 @@ case "\$method \$path" in
   "GET /cli-auth/me") body=\$(cat "\$pc/me.json") ;;
   "GET /companies/co1/issues?"*) body=\$(cat "\$pc/issues.json") ;;
   "GET /companies/co1/approvals?"*) body=\$(cat "\$pc/approvals.json") ;;
+  "GET /issues/"*"/comments?"*) [ ! -f "\$pc/comments-down" ] || { printf '%s\n' "\$path" >> "\$pc/comments.log"; printf 'curl: (28) Operation timed out'; exit 28; }; f="\$pc/comments-\${path#/issues/}"; f="\${f%%/comments\?*}.json"; body=\$(cat "\$f" 2>/dev/null || printf '[]') ;;
   "GET /issues/"*) f="\$pc/issue-\${path#/issues/}.json"; [ -f "\$f" ] || { printf 'missing\n404'; exit 0; }; body=\$(cat "\$f") ;;
   "PATCH /issues/"*) printf '%s %s\n' "\${path#/issues/}" "\$data" >> "\$pc/patches.log"; body='{}' ;;
   *) printf 'unknown\n404'; exit 0 ;;
@@ -290,6 +292,84 @@ test_paperclip_rows_join_the_queue_wake_and_failure_is_visible() {
   pass "Paperclip rows join the one wake, an unreadable board is an error row, and unconfigured homes skip it"
 }
 
+# Paperclip refuses a monitor on a blocked issue, so its owner dates the next
+# check with an `fm-next-check:` line in the latest comment. A future date with
+# an owner hides a stalled or no-blocker issue; a passed date, a malformed
+# line, or blockers that are all done does not.
+test_paperclip_blocked_comment_marker_dates_the_next_check() {
+  local home out
+  home=$(make_home pc-marker)
+  install_fake_paperclip "$home"
+  cat > "$home/pc/issues.json" <<'JSON'
+[
+ {"id":"m1","identifier":"FIR-18","title":"future dated","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-104","status":"in_progress"}],"blockerAttention":{"state":"needs_attention"},
+  "monitorNextCheckAt":null},
+ {"id":"m2","identifier":"FIR-20","title":"past dated","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-133","status":"in_review"}],"blockerAttention":{"state":"needs_attention"}},
+ {"id":"m3","identifier":"FIR-13","title":"malformed marker","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-105","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m4","identifier":"FIR-91","title":"no owner named","status":"blocked","blockedBy":[]},
+ {"id":"m5","identifier":"FIR-57","title":"marker not on its own line","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-106","status":"in_review"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m6","identifier":"FIR-58","title":"time without seconds","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-107","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m7","identifier":"FIR-89","title":"leading space","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-108","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"m8","identifier":"FIR-134","title":"dated but blockers done","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-109","status":"done"}],"blockerAttention":{"state":"needs_attention"}}
+]
+JSON
+  printf '%s' '[{"body":"Both blockers are healthy waits.\n\nfm-next-check: 2026-10-01T18:00:00Z owner=coordinator"}]' > "$home/pc/comments-m1.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-01T11:59:59Z owner=engineer"}]' > "$home/pc/comments-m2.json"
+  printf '%s' '[{"body":"fm-next-check: tomorrow morning owner=engineer"}]' > "$home/pc/comments-m3.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00:00Z"}]' > "$home/pc/comments-m4.json"
+  printf '%s' '[{"body":"I will set fm-next-check: 2026-10-03T00:00:00Z owner=engineer later"}]' > "$home/pc/comments-m5.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00Z owner=engineer"}]' > "$home/pc/comments-m6.json"
+  printf '%s' '[{"body":" fm-next-check: 2026-10-03T00:00:00Z owner=engineer"}]' > "$home/pc/comments-m7.json"
+  printf '%s' '[{"body":"fm-next-check: 2026-10-03T00:00:00Z owner=coordinator"}]' > "$home/pc/comments-m8.json"
+  out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
+  assert_not_contains "$out" "FIR-18 " "a blocked issue whose latest comment dates a future check with an owner was named"
+  assert_contains "$out" "stalled FIR-20" "a blocked issue whose comment-dated check has passed was not named again"
+  assert_contains "$out" "stalled FIR-13" "a blocked issue with a malformed date marker was hidden"
+  assert_contains "$out" "no-blocker FIR-91" "a date marker naming no owner hid the issue"
+  assert_contains "$out" "stalled FIR-57" "a marker that does not start its line hid the issue"
+  assert_contains "$out" "stalled FIR-58" "a marker time without seconds hid the issue"
+  assert_contains "$out" "stalled FIR-89" "a marker with a leading space hid the issue"
+  assert_contains "$out" "stale-edge FIR-134" "a future marker hid a blocked issue whose blockers are all done"
+  FM_QUEUE_ZERO_NOW=2026-10-01T18:00:01Z PATH="$home/fakebin:$PATH" FM_HOME="$home" "$SWEEP" scan > "$home/later.out" \
+    || fail "later sweep scan failed"
+  assert_contains "$(cat "$home/later.out")" "stalled FIR-18" "a comment-dated blocked issue was not named once its date passed"
+  pass "a future fm-next-check comment with an owner hides a blocked issue until the date passes; malformed markers and stale edges do not"
+}
+
+# A board that stops answering after the issue list must not stretch the scan
+# by one curl timeout per blocked issue: the first transport failure ends the
+# comment reads, and every unread issue stays listed.
+test_paperclip_comment_transport_failure_stops_comment_reads() {
+  local home out
+  home=$(make_home pc-comments-down)
+  install_fake_paperclip "$home"
+  cat > "$home/pc/issues.json" <<'JSON'
+[
+ {"id":"d1","identifier":"FIR-201","title":"one","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-301","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"d2","identifier":"FIR-202","title":"two","status":"blocked",
+  "blockedBy":[{"identifier":"FIR-302","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"d3","identifier":"FIR-203","title":"three","status":"blocked","blockedBy":[]}
+]
+JSON
+  : > "$home/pc/comments-down"
+  out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
+  [ "$(wc -l < "$home/pc/comments.log" | tr -d ' ')" = 1 ] \
+    || fail "comment reads continued after a transport failure: $(cat "$home/pc/comments.log")"
+  assert_contains "$out" "stalled FIR-201" "an unread blocked issue was hidden"
+  assert_contains "$out" "stalled FIR-202" "an unread blocked issue was hidden"
+  assert_contains "$out" "no-blocker FIR-203" "an unread blocked issue was hidden"
+  assert_not_contains "$out" "error paperclip" "a comment transport failure became a board error"
+  pass "the first comment transport failure stops the comment reads and unread issues stay listed"
+}
+
 test_paperclip_release_is_guarded() {
   local home out
   home=$(make_home pc-release)
@@ -321,5 +401,7 @@ test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode
 test_failed_append_does_not_suppress_the_episode
 test_paperclip_scan_classifies_stuck_items
+test_paperclip_blocked_comment_marker_dates_the_next_check
+test_paperclip_comment_transport_failure_stops_comment_reads
 test_paperclip_rows_join_the_queue_wake_and_failure_is_visible
 test_paperclip_release_is_guarded
