@@ -2458,6 +2458,7 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   fi
   local outcome="$out.process" completed="$out.completed" program
   rm -f "$outcome" "$outcome.exit" "$completed"
+  # shellcheck disable=SC2016 # Perl expands these variables, not the shell.
   program='use POSIX qw(:sys_wait_h);
     my ($record, @command) = @ARGV;
     my $pid = fork;
@@ -2481,6 +2482,7 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   set +e
   if [ "$stream" -eq 1 ]; then
     if [ "$bound" -gt 0 ]; then
+      # shellcheck disable=SC2016 # The child bash expands this literal command body.
       fm_run_timed "$bound" bash -c \
         'perl -e "$1" "$2" "$3" "$4" 2>&1 | tee "$5"; rc=${PIPESTATUS[0]}; printf "%s\n" "$rc" >"$6"; exit "$rc"' \
         _ "$program" "$outcome" "$interpreter" "$script" "$out" "$completed"

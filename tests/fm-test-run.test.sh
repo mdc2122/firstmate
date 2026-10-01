@@ -1472,16 +1472,19 @@ test_infra_flake_retry_classification() {
   cp "$ROOT/tests/git-config-helpers.sh" "$ROOT/tests/lib.sh" "$tmp/tests/"
   runner="$tmp/bin/fm-test-run.sh"
   write_process_fixture() {
+    # shellcheck disable=SC2016 # Fixture variables expand when the generated script runs.
     printf '%s\n' '#!/bin/bash' \
       'n=$(cat "$FX/'"$1"'.count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" >"$FX/'"$1"'.count"' \
       'if [ "$n" -eq 1 ]; then' "$2" 'else' "$3" 'fi' >"$tmp/tests/$1.test.sh"
   }
+  # shellcheck disable=SC2016 # Interpreter variables are evaluated inside the fixture.
   write_process_fixture stock 'echo "ok - stock interpreter"; [ "$BASH" = /bin/bash ]; [ "$FM_TEST_ONLY" = selected-regression ]' 'exit 99'
   FM_TEST_SCRIPT_BASH=/bin/bash FM_TEST_ONLY=selected-regression FX="$tmp/fx" \
     FM_TEST_STEP_BUDGET_SECS=5 "$runner" --jobs 1 --per-script-timeout-secs auto \
     --retry-infra-flakes tests/stock.test.sh >"$tmp/stock.out" 2>&1 \
     || fail "stock interpreter or selected regression was not preserved: $(cat "$tmp/stock.out")"
   [ "$(grep -c '^ok - ' "$tmp/stock.out")" -eq 1 ] || fail "runner changed passing-case counts"
+  # shellcheck disable=SC2016 # The fixture records its own child PID and signals itself.
   write_process_fixture orphan 'sleep 60 & echo "$!" >"$FX/orphan.pid"; kill -KILL $$' 'echo "ok - recovered"'
   local began=$SECONDS
   FX="$tmp/fx" "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 2 \
@@ -1491,6 +1494,7 @@ test_infra_flake_retry_classification() {
   [ "$(cat "$tmp/fx/orphan.count")" = 2 ] || fail "orphan attempt was not retried"
   local kind
   for kind in success assertion; do
+    # shellcheck disable=SC2016 # The fixture resolves its library path at execution time.
     write_process_fixture "pipe-$kind" '. "$(dirname "$0")/lib.sh"; sleep 60 & fail "assertion before stream drain"' 'exit 99'
     if [ "$kind" = success ]; then
       write_process_fixture "pipe-$kind" 'sleep 60 & echo "ok - before exit"; exit 0' 'exit 99'
@@ -1515,6 +1519,7 @@ PYTEST
   write_process_fixture signal 'kill -TERM $$' 'echo "ok - recovered"'
   write_process_fixture persistent 'kill -KILL $$' 'kill -KILL $$'
   write_process_fixture timeout 'sleep 60' 'echo "ok - recovered"'
+  # shellcheck disable=SC2016 # The fixture resolves its library path at execution time.
   write_process_fixture assertion '. "$(dirname "$0")/lib.sh"; fail "spawn assertion failed
 No space left on device"' 'echo "ok - must not run"'
   write_process_fixture diagnostic 'echo "No space left on device"; exit 1' 'echo "ok - must not run"'
