@@ -1,0 +1,4 @@
+{'exit': 0, 'retry_signature': 'signal-9', 'timed_out': False}
+{'exit': 1, 'retry_signature': '', 'timed_out': False}
+{'exit': 1, 'retry_signature': '', 'timed_out': True}
+{'exit': 0, 'retry_signature': '', 'timed_out': False}

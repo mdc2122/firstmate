@@ -1,0 +1,27 @@
+FM_TEST_BEGIN 2026-10-01T10:48:37Z tests/zz-signal.test.sh family=unclassified expected_gate_skip=none
+first attempt, dying by SIGKILL
+FM_TEST_RETRY 2026-10-01T10:48:37Z tests/zz-signal.test.sh signature=signal-9 first_exit=137
+ok - passed on retry
+fm-test-run: retried infra flake: tests/zz-signal.test.sh: signature=signal-9 first_exit=137 exit=0
+::warning file=tests/zz-signal.test.sh,title=Retried infra flake::tests/zz-signal.test.sh failed with infrastructure signature signal-9 (exit 137) and was retried once; retry exit 0
+FM_TEST_END 2026-10-01T10:48:37Z tests/zz-signal.test.sh exit=0 duration_ms=475 gate_skip=false
+FM_TEST_BEGIN 2026-10-01T10:48:37Z tests/zz-assert.test.sh family=unclassified expected_gate_skip=none
+not ok - assertion failed: connection reset by peer
+FM_TEST_END 2026-10-01T10:48:38Z tests/zz-assert.test.sh exit=1 duration_ms=303 gate_skip=false
+FM_TEST_BEGIN 2026-10-01T10:48:38Z tests/zz-lingering.test.sh family=unclassified expected_gate_skip=none
+not ok - fail() while background child holds stdout
+not ok - timed out: tests/zz-lingering.test.sh exceeded its per-script bound of 5s and was terminated
+::error file=tests/zz-lingering.test.sh,title=Test timed out::tests/zz-lingering.test.sh exceeded its per-script bound of 5s and was terminated
+FM_TEST_END 2026-10-01T10:48:44Z tests/zz-lingering.test.sh exit=1 duration_ms=5768 gate_skip=false
+FM_TEST_BEGIN 2026-10-01T10:48:44Z tests/zz-pass.test.sh family=unclassified expected_gate_skip=none
+ok - fine
+FM_TEST_END 2026-10-01T10:48:44Z tests/zz-pass.test.sh exit=0 duration_ms=356 gate_skip=false
+FM_TEST_SUMMARY total=4 failed=2 skipped_gate=0 duration_ms=8209
+FM_TEST_SUMMARY_FAMILY family=unclassified count=4 duration_ms=6902 failed=2
+FM_TEST_RETRIED_FLAKE script=tests/zz-signal.test.sh signature=signal-9 first_exit=137 exit=0
+FM_TEST_TIMED_OUT script=tests/zz-lingering.test.sh bound_secs=5
+FM_TEST_SLOWEST rank=1 script=tests/zz-lingering.test.sh duration_ms=5768
+FM_TEST_SLOWEST rank=2 script=tests/zz-signal.test.sh duration_ms=475
+FM_TEST_SLOWEST rank=3 script=tests/zz-pass.test.sh duration_ms=356
+FM_TEST_SLOWEST rank=4 script=tests/zz-assert.test.sh duration_ms=303
+fm-test-run: wrote timing artifact: /tmp/fmtr/s2.json

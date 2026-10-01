@@ -1,0 +1,32 @@
+### A: budget 8s, bound 5s, hang -> real timeout, retry skipped (budget can't cover bound)
+FM_TEST_BEGIN 2026-10-01T10:48:54Z tests/zz-hang.test.sh family=unclassified expected_gate_skip=none
+ok - started
+not ok - timed out: tests/zz-hang.test.sh exceeded its per-script bound of 5s and was terminated
+fm-test-run: not retried: tests/zz-hang.test.sh: 1s of the shared step budget of 8s cannot cover its 5s bound (signature=timeout first_exit=124)
+FM_TEST_END 2026-10-01T10:49:00Z tests/zz-hang.test.sh exit=124 duration_ms=6026 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=6451
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=6026 failed=1
+FM_TEST_TIMED_OUT script=tests/zz-hang.test.sh bound_secs=5
+FM_TEST_SLOWEST rank=1 script=tests/zz-hang.test.sh duration_ms=6026
+rc=1
+### B: budget 3s, bound 5s, hang then pass -> budget exhausted (125), later script not started, no retry
+FM_TEST_BEGIN 2026-10-01T10:49:01Z tests/zz-hang.test.sh family=unclassified expected_gate_skip=none
+ok - started
+not ok - budget exhausted: tests/zz-hang.test.sh was terminated after 2s when the shared step budget of 3s ran out (infrastructure failure)
+FM_TEST_END 2026-10-01T10:49:04Z tests/zz-hang.test.sh exit=125 duration_ms=2882 gate_skip=false
+FM_TEST_BEGIN 2026-10-01T10:49:04Z tests/zz-pass.test.sh family=unclassified expected_gate_skip=none
+not ok - not started: tests/zz-pass.test.sh exhausted the shared step budget of 3s before starting (infrastructure failure)
+FM_TEST_END 2026-10-01T10:49:05Z tests/zz-pass.test.sh exit=125 duration_ms=373 gate_skip=false
+FM_TEST_SUMMARY total=2 failed=2 skipped_gate=0 duration_ms=4078
+FM_TEST_SUMMARY_FAMILY family=unclassified count=2 duration_ms=3255 failed=2
+FM_TEST_SLOWEST rank=1 script=tests/zz-hang.test.sh duration_ms=2882
+FM_TEST_SLOWEST rank=2 script=tests/zz-pass.test.sh duration_ms=373
+rc=1
+### C: no --retry-infra-flakes: signal kill is NOT retried (gate rigor unchanged by default)
+FM_TEST_BEGIN 2026-10-01T10:49:05Z tests/zz-signal.test.sh family=unclassified expected_gate_skip=none
+first attempt, dying by SIGKILL
+FM_TEST_END 2026-10-01T10:49:05Z tests/zz-signal.test.sh exit=137 duration_ms=225 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=599
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=225 failed=1
+FM_TEST_SLOWEST rank=1 script=tests/zz-signal.test.sh duration_ms=225
+rc=1

@@ -1,0 +1,15 @@
+FM_TEST_BEGIN 2026-10-01T10:48:19Z tests/zz-hang.test.sh family=unclassified expected_gate_skip=none
+ok - started
+not ok - timed out: tests/zz-hang.test.sh exceeded its per-script bound of 5s and was terminated
+FM_TEST_RETRY 2026-10-01T10:48:24Z tests/zz-hang.test.sh signature=timeout first_exit=124
+ok - started
+not ok - timed out: tests/zz-hang.test.sh exceeded its per-script bound of 5s and was terminated
+fm-test-run: retried infra flake: tests/zz-hang.test.sh: signature=timeout first_exit=124 exit=124
+FM_TEST_END 2026-10-01T10:48:30Z tests/zz-hang.test.sh exit=124 duration_ms=11250 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=11736
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=11250 failed=1
+FM_TEST_TIMED_OUT script=tests/zz-hang.test.sh bound_secs=5
+FM_TEST_RETRIED_FLAKE script=tests/zz-hang.test.sh signature=timeout first_exit=124 exit=124
+FM_TEST_SLOWEST rank=1 script=tests/zz-hang.test.sh duration_ms=11250
+fm-test-run: wrote timing artifact: /tmp/fmtr/s1.json
+bin/fm-test-run.sh --per-script-timeout-secs 5 --retry-infra-flakes --json    0.33s user 0.34s system 5% cpu 12.331 total
