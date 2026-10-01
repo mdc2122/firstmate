@@ -2245,12 +2245,20 @@ TS
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   wait_for_geometry_text "$snapshot" "visible row two" \
     || fail "Pi Calm hidden-block geometry E2E did not complete the /skill:ahoy turn"
+  # /reload is refused while the run is still active, and the final text renders
+  # before the run settles. Calm hides Pi's stock working indicator and shows the
+  # working ship instead, so settling means every run-active signal is gone: Pi's
+  # stock "Working" row or border (<=0.84 and >=0.85 spellings), the ship's sail,
+  # and its hull. The ship widget is removed only after Pi clears its streaming state.
   i=0
-  while [ "$i" -lt 120 ]; do
+  while :; do
     capture_geometry_viewport "$snapshot"
-    # Pi <=0.84 rendered a "Working..." transcript row; Pi >=0.85 embeds the
-    # indicator in the editor border as "Working". Match either spelling.
-    tail -12 "$snapshot" | grep -Eq "Working(\\.\\.\\.)?([[:space:]]|─|$)" || break
+    if ! grep -Eq "Working(\\.\\.\\.)?([[:space:]]|─|$)" "$snapshot" \
+      && ! grep -Fq '◿│◣' "$snapshot" \
+      && ! grep -Fq '╲▁▁▁╱' "$snapshot"; then
+      break
+    fi
+    [ "$i" -lt 400 ] || fail "Pi Calm hidden-block geometry E2E run did not settle after the /skill:ahoy turn"
     sleep 0.05
     i=$((i + 1))
   done

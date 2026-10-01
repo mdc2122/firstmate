@@ -113,13 +113,19 @@ assert_present "$PUBLISH_HOME/.fm-secondmate-home" \
 pass "remote provisioning publishes durable parent state before its completion marker"
 
 # --- the remote host's tracked code root, real git repos, one project --------
+# Untracked dependency installs (CI's .opencode/plugins/node_modules) never reach
+# a real clone, and committing them would push the fixture past git's
+# loose-object threshold.
 (
   cd "$ROOT" || exit
-  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config -cf - .
+  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config --exclude=node_modules -cf - .
 ) | (cd "$REMOTE_ROOT" && tar -xf -)
 install_remote_herdr_fixture "$REMOTE_ROOT" "$HERDR_STATE" "$HERDR_LOG" \
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 git -C "$REMOTE_ROOT" init -q -b main
+# A detached auto-gc after the fixture commit prunes loose objects while the
+# seeding step's local clone is still copying them.
+git -C "$REMOTE_ROOT" config gc.auto 0
 git -C "$REMOTE_ROOT" config user.email test@example.com
 git -C "$REMOTE_ROOT" config user.name Test
 git -C "$REMOTE_ROOT" add .
