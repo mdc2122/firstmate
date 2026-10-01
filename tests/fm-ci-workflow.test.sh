@@ -133,8 +133,9 @@ CAPS
 }
 
 # Cancellation makes an undersized cap costlier: a falsely tripped job now also
-# discards a run nobody replaced. These bounds were measured, not guessed.
-test_measured_lanes_keep_their_existing_bounds() {
+# discards a run nobody replaced. These caps include the enclosing step budgets
+# sized to at least twice the measured green p90 lane times.
+test_measured_lanes_keep_their_budgeted_bounds() {
   local job expected actual
   while read -r job expected; do
     [ -n "$job" ] || continue
@@ -142,13 +143,13 @@ test_measured_lanes_keep_their_existing_bounds() {
     [ "$actual" = "$expected" ] \
       || fail "$job timeout must stay $expected minutes, got $actual"
   done <<'CAPS'
-tests-portable-parallel-1 10
-tests-portable-parallel-2 10
-tests-portable-serial 45
+tests-portable-parallel-1 25
+tests-portable-parallel-2 25
+tests-portable-serial 62
 tests-herdr 75
-macos-stock-bash 10
+macos-stock-bash 16
 CAPS
-  pass "the already-measured lane bounds are unchanged"
+  pass "measured lane bounds allow the enclosing per-test budgets"
 }
 
 test_pr_pushes_supersede_within_one_pr
@@ -156,4 +157,4 @@ test_separate_prs_do_not_cancel_each_other
 test_main_pushes_are_never_cancelled
 test_every_job_has_a_finite_timeout
 test_previously_unbounded_jobs_keep_their_caps
-test_measured_lanes_keep_their_existing_bounds
+test_measured_lanes_keep_their_budgeted_bounds

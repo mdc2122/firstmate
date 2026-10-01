@@ -67,7 +67,7 @@ That is not hypothetical: by 2026-09-01 the lane had grown from 116 to 139 scrip
 Refresh the hints whenever the serial lane gains scripts, rather than waiting for that bound to trip.
 
 `bin/fm-test-run.sh` owns the per-shard packing, so its `--check-coverage` output is the current account of lane size, shard composition, and balance rather than a copied table.
-Run 34342484144 observed a shard reach about 20 minutes of passing work; by 2026-09-29 the slowest shard ran past 27 minutes, so the job cap is now 45 minutes to keep hang-tripwire margin for job setup and runner-speed spread.
+Run 34342484144 observed a shard reach about 20 minutes of passing work; by 2026-09-29 the slowest shard ran past 27 minutes, so the job cap keeps hang-tripwire margin for job setup and runner-speed spread; the [Timeouts](#timeouts) section points to the current bound.
 
 The single longest script, `tests/fm-watch-triage.test.sh` at 262626 ms, is the floor for any shard count.
 
@@ -83,7 +83,8 @@ jq -r '.scripts[] | [.path, .duration_ms] | @tsv' /tmp/fm-serial/*/*.json \
 bin/fm-test-run.sh --check-coverage
 ```
 
-A timed-out shard uploads no artifact, so pick runs where every serial shard is green or the lane's slowest scripts go unmeasured in exactly the shard that needs them most.
+A per-script timeout still allows the runner to write its artifact, but an enclosing step or job cancellation can prevent that write.
+Pick runs where every serial shard is green: failed or timeout durations are not healthy packing measurements.
 Measure native-Windows-only scripts through the focused Git Bash runner and retain that `duration_ms` separately, because the portable CI shards skip them.
 
 ## Coverage guard
@@ -109,8 +110,19 @@ Portable shards, each portable serial shard, and the Herdr lane upload runner-ge
 | Lane | Bound | Rationale |
 |---|---|---|
 | portable parallel 1/2 | See [CI workflow](../.github/workflows/ci.yml) | The workflow owns the parallel cap rationale and its evidence limits. |
-| portable serial 1-5 | job `timeout-minutes: 45` | On 2026-09-29 the lane measured about 108 minutes of script time with `tests/fm-watch-triage.test.sh` alone about 15 minutes, and the slowest shard ran past 27 minutes; the 45-minute cap remains a hang tripwire while leaving margin for job setup and runner-speed spread. |
-| Herdr | family-run step `timeout-minutes: 20`; job `timeout-minutes: 75` backstop | Healthy runs finished around 7 minutes before this lane gained `fm-backend-herdr-focus-flash-e2e`, which measures about 2 minutes against a real lab locally, so the step bound is still the hang tripwire (cleanup and timing artifacts still upload) while the job cap stays a last-resort backstop. Refresh this figure from the lane's uploaded timing artifact. |
+| portable serial 1-5 | See [CI workflow](../.github/workflows/ci.yml) | On 2026-09-29 the lane measured about 108 minutes of script time with `tests/fm-watch-triage.test.sh` alone about 15 minutes, and the slowest shard ran past 27 minutes; the job cap remains a hang tripwire while leaving margin for job setup and runner-speed spread, and the step budget exceeds twice the measured green shard p90. |
+| Herdr | family-run step bound and job backstop in the [CI workflow](../.github/workflows/ci.yml) | Healthy runs finished around 7 minutes before this lane gained `fm-backend-herdr-focus-flash-e2e`, which measures about 2 minutes against a real lab locally; the step budget exceeds twice the measured green p90, so the step bound is still the hang tripwire (cleanup and timing artifacts still upload) while the job cap stays a last-resort backstop. Refresh this figure from the lane's uploaded timing artifact. |
 
 Timeouts are intended as hang tripwires; a passing coverage guard does not establish a healthy job duration.
 `.github/workflows/ci.yml` owns the exact numbers.
+
+The [CI workflow](../.github/workflows/ci.yml) enables the runner's measured per-script bounds and shared step budget with reporting margin in every behavior lane, including stock-macOS compatibility.
+[`bin/fm-test-run.sh`](../bin/fm-test-run.sh)'s header and `--help` own timeout mechanics; `per_script_timeout_auto_secs` owns the measured bound table and its provenance.
+Refresh an entry from the timing artifacts whenever a script's slowest healthy run approaches its bound, the same way the shard hints are refreshed.
+
+## Infrastructure flake retry
+
+The workflow enables the runner's opt-in process-level infrastructure retry in every behavior lane.
+The runner's header and `--help` own eligibility and log markers; its JSON writer owns timing fields.
+[`tests/fm-test-run.test.sh`](../tests/fm-test-run.test.sh) covers process outcomes, recorded-exit retry vetoes during stream-draining timeouts, shared serial budgets, and stock-Bash final-attempt counts and failure transcripts.
+Use the labeled logs, step summaries, and timing artifacts to count retries across runs rather than losing that evidence in manual reruns.

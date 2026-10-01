@@ -515,7 +515,7 @@ PY
   cp "$ROOT/tests/git-config-helpers.sh" "$timeout_repo/tests/"
   cat >"$timeout_repo/bin/fm-timeout-lib.sh" <<'SH'
 fm_run_timed() {
-  [ "$1" -eq 900 ] || return 99
+  [ "$1" -gt 0 ] || return 99
   return 124
 }
 SH
@@ -1432,8 +1432,10 @@ SH
   [ "$rc" -ne 0 ] || fail "a terminated script must fail the run: $(cat "$tmp/out")"
   [ "$((ended - began))" -lt 120 ] \
     || fail "the per-script bound did not stop a 600s hang (took $((ended - began))s)"
-  grep -Fq 'exceeded the per-script bound' "$tmp/out" \
-    || fail "the terminated script was not named: $(cat "$tmp/out")"
+  grep -Fq "not ok - timed out: $hang exceeded its per-script bound of 3s" "$tmp/out" \
+    || fail "the terminated script was not named with its bound: $(cat "$tmp/out")"
+  grep -Fq "FM_TEST_TIMED_OUT script=$hang bound_secs=3" "$tmp/out" \
+    || fail "the run summary did not list the timed-out script: $(cat "$tmp/out")"
   grep -Eq 'FM_TEST_END .* exit=124 ' "$tmp/out" \
     || fail "a terminated script must be recorded as exit 124: $(cat "$tmp/out")"
   # The run still completes and accounts for the script, rather than dying.
@@ -1460,6 +1462,158 @@ SH
 
   rm -rf "$tmp"
   pass "--per-script-timeout-secs turns a hung script into a bounded failure"
+}
+
+test_infra_flake_retry_classification() {
+  local tmp runner rc f
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-process.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests" "$tmp/fx"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$ROOT/tests/lib.sh" "$tmp/tests/"
+  runner="$tmp/bin/fm-test-run.sh"
+  write_process_fixture() {
+    # shellcheck disable=SC2016 # Fixture variables expand when the generated script runs.
+    printf '%s\n' '#!/bin/bash' \
+      'n=$(cat "$FX/'"$1"'.count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" >"$FX/'"$1"'.count"' \
+      'if [ "$n" -eq 1 ]; then' "$2" 'else' "$3" 'fi' >"$tmp/tests/$1.test.sh"
+  }
+  # shellcheck disable=SC2016 # Interpreter variables are evaluated inside the fixture.
+  write_process_fixture stock 'echo "ok - stock interpreter"; [ "$BASH" = /bin/bash ]; [ "$FM_TEST_ONLY" = selected-regression ]' 'exit 99'
+  FM_TEST_SCRIPT_BASH=/bin/bash FM_TEST_ONLY=selected-regression FX="$tmp/fx" \
+    FM_TEST_STEP_BUDGET_SECS=5 "$runner" --jobs 1 --per-script-timeout-secs auto \
+    --retry-infra-flakes tests/stock.test.sh >"$tmp/stock.out" 2>&1 \
+    || fail "stock interpreter or selected regression was not preserved: $(cat "$tmp/stock.out")"
+  [ "$(grep -c '^ok - ' "$tmp/stock.out")" -eq 1 ] || fail "runner changed passing-case counts"
+  # shellcheck disable=SC2016 # The fixture records its own child PID and signals itself.
+  write_process_fixture orphan 'sleep 60 & echo "$!" >"$FX/orphan.pid"; kill -KILL $$' 'echo "ok - recovered"'
+  local began=$SECONDS
+  FX="$tmp/fx" "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 2 \
+    tests/orphan.test.sh >"$tmp/orphan.out" 2>&1 \
+    || fail "orphaned stdout prevented recovery: $(cat "$tmp/orphan.out")"
+  [ "$((SECONDS - began))" -lt 10 ] || fail "stream draining escaped the bound"
+  [ "$(cat "$tmp/fx/orphan.count")" = 2 ] || fail "orphan attempt was not retried"
+  local kind
+  for kind in success assertion; do
+    # shellcheck disable=SC2016 # The fixture resolves its library path at execution time.
+    write_process_fixture "pipe-$kind" '. "$(dirname "$0")/lib.sh"; sleep 60 & fail "assertion before stream drain"' 'exit 99'
+    if [ "$kind" = success ]; then
+      write_process_fixture "pipe-$kind" 'sleep 60 & echo "ok - before exit"; exit 0' 'exit 99'
+    fi
+    set +e
+    FX="$tmp/fx" GITHUB_ACTIONS=true "$runner" --jobs 1 --per-script-timeout-secs 2 --retry-infra-flakes \
+      --json "$tmp/pipe-$kind.json" "tests/pipe-$kind.test.sh" >"$tmp/pipe-$kind.out" 2>&1
+    rc=$?
+    set -e
+    [ "$rc" -eq 1 ] || fail "incomplete $kind stream must fail"
+    [ "$(cat "$tmp/fx/pipe-$kind.count")" = 1 ] || fail "recorded $kind exit was retried"
+    grep -Fq 'not ok - timed out:' "$tmp/pipe-$kind.out" || fail "stream timeout had no named verdict"
+    grep -Fq 'title=Test timed out' "$tmp/pipe-$kind.out" || fail "stream timeout had no annotation"
+    python3 - "$tmp/pipe-$kind.json" "$kind" <<'PYTEST' || fail "stream timeout absent from JSON"
+import json, sys
+row = json.load(open(sys.argv[1]))['scripts'][0]
+assert row['timed_out'] and row['timeout_secs'] == 2
+assert row['exit'] == (1 if sys.argv[2] == 'assertion' else 124)
+assert not row['retried_infra_flake']
+PYTEST
+  done
+  write_process_fixture signal 'kill -TERM $$' 'echo "ok - recovered"'
+  write_process_fixture persistent 'kill -KILL $$' 'kill -KILL $$'
+  write_process_fixture timeout 'sleep 60' 'echo "ok - recovered"'
+  # shellcheck disable=SC2016 # The fixture resolves its library path at execution time.
+  write_process_fixture assertion '. "$(dirname "$0")/lib.sh"; fail "spawn assertion failed
+No space left on device"' 'echo "ok - must not run"'
+  write_process_fixture diagnostic 'echo "No space left on device"; exit 1' 'echo "ok - must not run"'
+  write_process_fixture explicit-signal-status 'exit 143' 'echo "ok - must not run"'
+  write_process_fixture explicit-timeout-status 'exit 124' 'echo "ok - must not run"'
+  set +e
+  FX="$tmp/fx" "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 2 \
+    --json "$tmp/result.json" tests/signal.test.sh tests/persistent.test.sh \
+    tests/timeout.test.sh tests/assertion.test.sh tests/diagnostic.test.sh \
+    tests/explicit-signal-status.test.sh tests/explicit-timeout-status.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "remaining failures must fail the run: $(cat "$tmp/out")"
+  for f in signal:2 persistent:2 timeout:2 assertion:1 diagnostic:1 explicit-signal-status:1 explicit-timeout-status:1; do
+    [ "$(cat "$tmp/fx/${f%%:*}.count")" = "${f#*:}" ] || fail "wrong attempt count for $f: $(cat "$tmp/out")"
+  done
+  python3 - "$tmp/result.json" <<'PYTEST' || fail "process outcomes were not labeled correctly"
+import json, sys
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+for name, reason in [('signal', 'signal-15'), ('persistent', 'signal-9'), ('timeout', 'timeout')]:
+    row = by['tests/' + name + '.test.sh']
+    assert row['retried_infra_flake'] and row['retry_signature'] == reason
+assert by['tests/signal.test.sh']['exit'] == 0
+assert by['tests/timeout.test.sh']['exit'] == 0
+assert not by['tests/timeout.test.sh']['timed_out']
+for name in ['assertion', 'diagnostic', 'explicit-signal-status', 'explicit-timeout-status']:
+    assert not by['tests/' + name + '.test.sh']['retried_infra_flake']
+PYTEST
+  rm -f "$tmp/fx/signal.count"
+  set +e
+  FX="$tmp/fx" "$runner" tests/signal.test.sh >"$tmp/off" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] && [ "$(cat "$tmp/fx/signal.count")" = 1 ] || fail "retry must be opt-in"
+  set +e
+  FM_TEST_SCRIPT_BASH="$tmp/missing-bash" "$runner" --retry-infra-flakes \
+    --json "$tmp/start.json" tests/signal.test.sh >"$tmp/start.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "startup failure must fail"
+  python3 - "$tmp/start.json" <<'PYTEST' || fail "startup failure was not retried and labeled"
+import json, sys
+row = json.load(open(sys.argv[1]))['scripts'][0]
+assert row['retry_signature'] == 'start-error' and row['exit'] == 125
+PYTEST
+  rm -rf "$tmp"
+  pass "only observed process signals, startup failures, and timeouts retry once"
+}
+
+# CI lanes and --changed bound each script from the measured table rather than
+# one number, so a known-slow healthy script is not killed by the bound sized
+# for ordinary scripts, and an ordinary script still fails long before a slow
+# one's bound would.
+test_auto_timeout_bounds_every_script_from_its_table() {
+  local tmp repo runner ordinary slow rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-auto-bound.XXXXXX")
+  repo="$tmp/repo"
+  runner="$repo/bin/fm-test-run.sh"
+  mkdir -p "$repo/bin" "$repo/tests"
+  cp "$RUNNER" "$runner"
+  cp "$ROOT/tests/git-config-helpers.sh" "$repo/tests/"
+  chmod +x "$runner"
+  cat >"$repo/bin/fm-timeout-lib.sh" <<'SH'
+fm_run_timed() {
+  local bound=$1 script
+  shift
+  # The streamed wrapper passes the script before output/completion sidecars;
+  # the captured supervisor passes it as the final command argument.
+  if [ "$1" = bash ]; then script=${8}; else script=${!#}; fi
+  printf '%s %s\n' "$bound" "$script" >>"$BOUNDS_LOG"
+  "$@"
+}
+SH
+  for f in fm-watch-triage.test.sh fm-brief.test.sh; do
+    printf '#!/usr/bin/env bash\necho "ok - %s"\n' "$f" >"$repo/tests/$f"
+  done
+  BOUNDS_LOG="$tmp/bounds" "$runner" --jobs 1 --per-script-timeout-secs auto \
+    tests/fm-watch-triage.test.sh tests/fm-brief.test.sh >"$tmp/out" 2>&1 \
+    || fail "auto-bounded run failed: $(cat "$tmp/out")"
+  slow=$(awk '/fm-watch-triage/ { print $1 }' "$tmp/bounds")
+  ordinary=$(awk '/fm-brief/ { print $1 }' "$tmp/bounds")
+  [ -n "$slow" ] && [ -n "$ordinary" ] || fail "auto did not bound every script: $(cat "$tmp/bounds")"
+  # fm-watch-triage's slowest healthy CI run measured 1250s.
+  [ "$slow" -gt 1250 ] || fail "auto would kill fm-watch-triage's measured healthy run: bound ${slow}s"
+  [ "$ordinary" -gt 0 ] && [ "$ordinary" -lt "$slow" ] \
+    || fail "an ordinary script must get a positive bound below the slow script's: ${ordinary}s vs ${slow}s"
+
+  set +e
+  "$runner" --per-script-timeout-secs soon tests/fm-brief.test.sh >"$tmp/bad" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || fail "a bound that is neither seconds nor auto must be refused, got $rc: $(cat "$tmp/bad")"
+  rm -rf "$tmp"
+  pass "--per-script-timeout-secs auto bounds each script from its measured table"
 }
 
 # The duration regression this guard exists for: a suite whose scripts are all
@@ -1687,11 +1841,11 @@ puts JSON.generate(
     || fail "could not read step timeout from parsed workflow"
   [ "$job_timeout" = 75 ] \
     || fail "tests-herdr job backstop must stay 75 minutes, got $job_timeout"
-  [ "$step_timeout" = 20 ] \
-    || fail "family-run step timeout must be 20 minutes, got $step_timeout"
+  [ "$step_timeout" = 24 ] \
+    || fail "family-run step timeout must be 24 minutes, got $step_timeout"
   [ "$step_timeout" -lt "$job_timeout" ] \
     || fail "family-run step timeout must be below the job backstop"
-  pass "Herdr CI family-run step times out at 20 min under a 75 min job backstop"
+  pass "Herdr CI family-run step times out at 24 min under a 75 min job backstop"
 }
 
 test_aggregate_json() {
@@ -1736,6 +1890,167 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
+test_stock_workflow_counts_final_attempt_and_reports_failure() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-stock-transcript.XXXXXX")
+  ruby -ryaml -e '
+    step = YAML.load_file(ARGV[0]).fetch("jobs").fetch("macos-stock-bash").fetch("steps").find { |s| s["run"] }
+    puts step.fetch("run")
+  ' "$ROOT/.github/workflows/ci.yml" >"$tmp/step.sh"
+  python3 - "$tmp/step.sh" "$tmp/check.sh" <<'PYTEST'
+from pathlib import Path
+import sys
+body = Path(sys.argv[1]).read_text()
+a = body.index('check_stock_test() {')
+b = body.index('\ncheck_stock_test tests/', a)
+Path(sys.argv[2]).write_text(body[a:b] + '\n')
+PYTEST
+  /bin/bash -c '
+    set -eu
+    . "$1"
+    run_stock_test() {
+      printf "%s\n" "FM_TEST_BEGIN first" "ok - partial" "FM_TEST_RETRY again" "ok - final one" "ok - final two"
+    }
+    check_stock_test fixture 2
+  ' _ "$tmp/check.sh" >"$tmp/pass.out" || fail "stock workflow counted both attempts"
+  set +e
+  /bin/bash -c '
+    set -eu
+    . "$1"
+    run_stock_test() { echo "not ok - timed out: named-fixture"; return 1; }
+    check_stock_test fixture 2
+  ' _ "$tmp/check.sh" >"$tmp/fail.out"
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "stock workflow swallowed failure"
+  grep -Fxq 'not ok - timed out: named-fixture' "$tmp/fail.out" || fail "stock workflow lost failure transcript"
+  rm -rf "$tmp"
+  pass "stock workflow checks final attempt and prints failed transcripts"
+}
+
+test_step_budget_is_owned_by_each_runner() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-budget-owner.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests" "$tmp/child/bin" "$tmp/child/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$RUNNER" "$tmp/child/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/child/tests/"
+  printf '#!/bin/bash\necho "ok - nested unbounded run"\n' >"$tmp/child/tests/plain.test.sh"
+  cat >"$tmp/tests/parent.test.sh" <<'SH'
+#!/bin/bash
+[ -z "${FM_TEST_STEP_BUDGET_SECS:-}" ] || exit 99
+"$CHILD/bin/fm-test-run.sh" tests/plain.test.sh || exit 98
+FM_TEST_STEP_BUDGET_SECS=5 "$CHILD/bin/fm-test-run.sh" tests/plain.test.sh
+rc=$?
+[ "$rc" -eq 2 ] || exit 97
+echo "ok - explicit child budget requires timeout helper"
+SH
+  set +e
+  CHILD="$tmp/child" FM_TEST_STEP_BUDGET_SECS=10 "$tmp/bin/fm-test-run.sh" \
+    tests/parent.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "parent budget leaked or explicit child budget was ignored: $(cat "$tmp/out")"
+  grep -Fq 'ok - nested unbounded run' "$tmp/out" || fail "nested runner did not execute"
+  rm -rf "$tmp"
+  pass "step budget stays private while child runners accept explicit budgets"
+}
+
+test_exhausted_budget_does_not_start_or_retry() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-not-started.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  printf '#!/bin/bash\nsleep 10\n' >"$tmp/tests/first.test.sh"
+  # Expand START_LOG in the generated fixture, not while writing it.
+  # shellcheck disable=SC2016
+  printf '#!/bin/bash\necho started >>"$START_LOG"\n' >"$tmp/tests/later.test.sh"
+  set +e
+  START_LOG="$tmp/started" FM_TEST_STEP_BUDGET_SECS=3 "$tmp/bin/fm-test-run.sh" \
+    --jobs 1 --per-script-timeout-secs auto --retry-infra-flakes \
+    --json "$tmp/result.json" tests/first.test.sh tests/later.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] && [ ! -e "$tmp/started" ] || fail "exhausted budget started a script"
+  grep -q 'not started: tests/later.test.sh' "$tmp/out" || fail "missing not-started diagnostic"
+  grep -q 'budget exhausted: tests/first.test.sh .* step budget of 3s' "$tmp/out" \
+    || fail "budget-capped kill was not reported as budget exhaustion: $(cat "$tmp/out")"
+  ! grep -q 'timed out:\|FM_TEST_RETRY' "$tmp/out" \
+    || fail "budget exhaustion was reported as a timeout or retried: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "budget-exhausted script was labeled a timeout or flake"
+import json, sys
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+for path in ('tests/first.test.sh', 'tests/later.test.sh'):
+    assert by[path]['exit'] == 125 and not by[path]['timed_out'], by[path]
+    assert not by[path]['retried_infra_flake'], by[path]
+PY
+  rm -rf "$tmp"
+  pass "budget exhaustion is reported plainly without timeout retry"
+}
+
+test_timeout_without_budget_for_retry_keeps_timeout() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-no-retry-budget.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  printf '#!/bin/bash\nsleep 600\n' >"$tmp/tests/hang.test.sh"
+  set +e
+  FM_TEST_STEP_BUDGET_SECS=6 "$tmp/bin/fm-test-run.sh" --jobs 1 \
+    --per-script-timeout-secs 4 --retry-infra-flakes \
+    --json "$tmp/result.json" tests/hang.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "hung script without retry budget must fail, got $rc: $(cat "$tmp/out")"
+  grep -q 'timed out: tests/hang.test.sh exceeded its per-script bound of 4s' "$tmp/out" \
+    || fail "real timeout was not named: $(cat "$tmp/out")"
+  ! grep -q 'budget exhausted\|not started\|FM_TEST_RETRY' "$tmp/out" \
+    || fail "retry ran without budget to cover its bound: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "real timeout lost its record or was labeled a flake"
+import json, sys
+hang = json.load(open(sys.argv[1]))['scripts'][0]
+assert hang['timed_out'] and hang['exit'] == 124, hang
+assert not hang['retried_infra_flake'], hang
+PY
+  rm -rf "$tmp"
+  pass "a timeout whose retry the step budget cannot cover keeps its timeout record"
+}
+
+test_serial_family_shares_timeout_budget() {
+  local tmp runner rc began ended
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-step-budget.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  runner="$tmp/bin/fm-test-run.sh"
+  printf '#!/bin/bash\nsleep 2\necho "ok - preceding work"\n' >"$tmp/tests/fm-backend-herdr-focus-flash-e2e.test.sh"
+  printf '#!/bin/bash\nsleep 600\n' >"$tmp/tests/fm-backend-herdr-presentation-e2e.test.sh"
+  began=$SECONDS
+  set +e
+  FM_TEST_STEP_BUDGET_SECS=15 "$runner" --family real-herdr-gated \
+    --per-script-timeout-secs auto --json "$tmp/result.json" >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  ended=$SECONDS
+  [ "$rc" -eq 1 ] && [ "$((ended - began))" -lt 25 ] \
+    || fail "serial family outran shared budget: $(cat "$tmp/out")"
+  grep -q 'budget exhausted: tests/fm-backend-herdr-presentation-e2e.test.sh .* step budget of 15s' "$tmp/out" \
+    || fail "serial family did not name its budget exhaustion: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "serial family labeled its budget exhaustion a timeout"
+import json, sys
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+assert by['tests/fm-backend-herdr-focus-flash-e2e.test.sh']['exit'] == 0
+hang = by['tests/fm-backend-herdr-presentation-e2e.test.sh']
+assert not hang['timed_out'] and hang['exit'] == 125
+PY
+  rm -rf "$tmp"
+  pass "serial family bounds a hang by the remaining shared step budget"
+}
+
+test_exhausted_budget_does_not_start_or_retry
+test_timeout_without_budget_for_retry_keeps_timeout
 test_list_all_exact_suite_coverage
 test_family_selection
 test_single_script_selection
@@ -1772,6 +2087,11 @@ test_changed_shared_fixture_selects_its_readers
 test_concurrent_runs_are_ordered_longest_first
 test_per_script_timeout_bounds_a_hang
 test_max_wall_ms_is_a_result_not_advice
+test_infra_flake_retry_classification
+test_auto_timeout_bounds_every_script_from_its_table
+test_serial_family_shares_timeout_budget
+test_step_budget_is_owned_by_each_runner
+test_stock_workflow_counts_final_attempt_and_reports_failure
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json
