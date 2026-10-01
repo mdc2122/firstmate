@@ -111,6 +111,9 @@ jobs:
           echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable parallel shard 1
+        timeout-minutes: 7
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 390
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -153,6 +156,9 @@ jobs:
           npm install -g tasks-axi
           tasks-axi --version
       - name: Run portable parallel shard 2
+        timeout-minutes: 7
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 390
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
@@ -225,7 +231,9 @@ jobs:
           echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run portable serial shard ${{ matrix.shard }}
+        timeout-minutes: 40
         env:
+          FM_TEST_STEP_BUDGET_SECS: 2340
           # job-total rather than a literal, so shrinking or growing the matrix
           # without matching bin/fm-test-run.sh is refused instead of quietly
           # leaving a shard of the required lane unrun.
@@ -350,6 +358,8 @@ jobs:
         # Comfortably above the ~7 min healthy wall and far below the 75 min
         # job backstop. A hang must fail this step so cleanup still runs.
         timeout-minutes: 20
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 1140
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"

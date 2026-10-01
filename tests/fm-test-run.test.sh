@@ -1492,10 +1492,10 @@ n=\$(cat "\$FX/$1.count" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" >"\$F
 if [ "\$n" -eq 1 ]; then $2; else $3; fi
 SH
   }
-  write_fixture flake.test.sh '"$FX/disk-full-tool"; echo "not ok - setup"; exit 1' 'echo "ok - healthy"'
+  write_fixture flake.test.sh ': "No space left on device"; "$FX/disk-full-tool"; exit 1' 'echo "ok - healthy"'
   write_fixture persistent.test.sh '"$FX/disk-full-tool"; exit 1' '"$FX/disk-full-tool"; exit 1'
-  write_fixture assertion.test.sh 'echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
-  write_fixture own-text.test.sh 'echo "not ok - Too many open files"; exit 1' 'echo "ok - would pass"'
+  write_fixture assertion.test.sh '"$FX/disk-full-tool"; echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
+  write_fixture own-text.test.sh 'echo "fixture: Too many open files"; echo "FAIL: assertion"; exit 1' 'echo "ok - would pass"'
   write_fixture hang.test.sh '"$FX/disk-full-tool"; sleep 60' 'echo "ok - would pass"'
 
   set +e
@@ -1557,7 +1557,7 @@ PY
   # A concurrent worker retries the same way, and its replayed log keeps the
   # first attempt and the retry marker ahead of the deciding attempt. Both
   # names are individually proven isolated, so they run as concurrent workers.
-  write_fixture fm-cd-pretool-check.test.sh '"$FX/disk-full-tool"; echo "not ok - setup"; exit 1' 'echo "ok - healthy"'
+  write_fixture fm-cd-pretool-check.test.sh '"$FX/disk-full-tool"; exit 1' 'echo "ok - healthy"'
   write_fixture fm-pr-merge.test.sh 'echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
   rm -f "$tmp/fx/"*.count
   set +e
@@ -1574,7 +1574,7 @@ import sys
 lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding="utf-8")]
 def at(pred):
     return next(i for i, l in enumerate(lines) if pred(l))
-first = at(lambda l: l == "not ok - setup")
+first = at(lambda l: l == "fatal: write error: No space left on device")
 retry = at(lambda l: l.startswith("FM_TEST_RETRY ") and "fm-cd-pretool-check" in l)
 healthy = at(lambda l: l == "ok - healthy")
 end = at(lambda l: l.startswith("FM_TEST_END ") and "fm-cd-pretool-check" in l and " exit=0 " in l)
@@ -1902,6 +1902,36 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
+test_serial_family_shares_timeout_budget() {
+  local tmp runner rc began ended
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-step-budget.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  runner="$tmp/bin/fm-test-run.sh"
+  printf '#!/bin/bash\nsleep 2\necho "ok - preceding work"\n' >"$tmp/tests/fm-backend-herdr-focus-flash-e2e.test.sh"
+  printf '#!/bin/bash\nsleep 600\n' >"$tmp/tests/fm-backend-herdr-presentation-e2e.test.sh"
+  began=$SECONDS
+  set +e
+  FM_TEST_STEP_BUDGET_SECS=5 "$runner" --family real-herdr-gated \
+    --per-script-timeout-secs auto --json "$tmp/result.json" >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  ended=$SECONDS
+  [ "$rc" -eq 1 ] && [ "$((ended - began))" -lt 10 ] \
+    || fail "serial family outran shared budget: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "serial family did not record its remaining-time timeout"
+import json, sys
+by = {s['path']: s for s in json.load(open(sys.argv[1]))['scripts']}
+assert by['tests/fm-backend-herdr-focus-flash-e2e.test.sh']['exit'] == 0
+hang = by['tests/fm-backend-herdr-presentation-e2e.test.sh']
+assert hang['timed_out'] and hang['exit'] == 124
+assert 0 < hang['timeout_secs'] <= 3
+PY
+  rm -rf "$tmp"
+  pass "serial family bounds a hang by the remaining shared step budget"
+}
+
 test_list_all_exact_suite_coverage
 test_family_selection
 test_single_script_selection
@@ -1940,6 +1970,7 @@ test_per_script_timeout_bounds_a_hang
 test_max_wall_ms_is_a_result_not_advice
 test_infra_flake_retry_classification
 test_auto_timeout_bounds_every_script_from_its_table
+test_serial_family_shares_timeout_budget
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json

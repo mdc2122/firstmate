@@ -81,9 +81,10 @@
 #                   after the run and so cannot catch a hang on its own.
 #                   A timed-out script is never retried.
 #                   External interruption cleanup is outside this runner's
-#                   guarantee; configured per-script bounds remain authoritative.
+#                   guarantee. FM_TEST_STEP_BUDGET_SECS caps all attempts to a
+#                   shared invocation deadline; CI reserves reporting margin.
 #   --retry-infra-flakes
-#                   rerun a failed script exactly once when its output contains
+#                   rerun a failed script exactly once when its terminal diagnostic contains
 #                   one of the infrastructure signatures listed in
 #                   infra_flake_signatures below (disk, memory, file-descriptor,
 #                   or process-limit exhaustion, DNS failure, unreachable
@@ -256,9 +257,7 @@ now_iso() {
 # explicit entry is a script whose slowest healthy CI run, across 30 fork CI
 # runs on 2026-09-30, came too near the default; its bound keeps at least 1.6x
 # headroom over that slowest run, so a hang fails here, named, rather than when
-# the job or step cap kills the lane with no explanation. Where that headroom
-# exceeds the remaining lane cap, the cap stays the effective backstop for that
-# script. Raise an entry only with a measured slower healthy run.
+# the job or step cap kills the lane with no explanation.
 per_script_timeout_auto_secs() {  # <script path or basename>
   case "${1##*/}" in
     fm-watch-triage.test.sh) echo 2100 ;;  # slowest 1250s; serial job cap 45m
@@ -287,8 +286,7 @@ script_timeout_secs() {  # <script>
 # under test. Deliberately absent: connection resets, refusals, and timeouts,
 # because many suites drive local servers and pipes whose own resets are the
 # product behavior under test, and a timed-out script, which the per-script
-# bound already reports. A signature that the script's own source contains is
-# a fixture string the test prints on purpose, so it does not qualify there.
+# bound already reports.
 infra_flake_signatures() {
   cat <<'SIGS'
 disk-full	no space left on device
@@ -303,13 +301,14 @@ network-unreachable	network is unreachable
 SIGS
 }
 
-# Echo the id of the first infrastructure signature in <out> that <script>'s own
-# source does not contain; fail when there is none.
-infra_flake_signature_in() {  # <out> <script>
-  local out=$1 script=$2 id text
+infra_flake_signature_in() {  # <out>
+  local out=$1 id text terminal
+  terminal=$(awk 'NF { line=$0 } END { print line }' "$out")
+  if printf '%s\n' "$terminal" | grep -Eiq 'not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expected|fixture)([^[:alnum:]_]|$)'; then
+    return 1
+  fi
   while IFS=$'\t' read -r id text; do
-    grep -iqF -- "$text" "$out" 2>/dev/null || continue
-    grep -iqF -- "$text" "$script" 2>/dev/null && continue
+    printf '%s\n' "$terminal" | grep -iqF -- "$text" || continue
     printf '%s\n' "$id"
     return 0
   done < <(infra_flake_signatures)
@@ -2123,6 +2122,12 @@ esac
 [ "$JOBS" -ge 1 ] || die "--jobs must be >= 1"
 [ "$JOBS" -le "$JOBS_MAX" ] || die "--jobs is capped at $JOBS_MAX (got $JOBS)"
 
+if [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
+  case "$FM_TEST_STEP_BUDGET_SECS" in
+    *[!0-9]*) die "FM_TEST_STEP_BUDGET_SECS requires a positive integer" ;;
+  esac
+  [ "$FM_TEST_STEP_BUDGET_SECS" -gt 0 ] || die "FM_TEST_STEP_BUDGET_SECS requires a positive integer"
+fi
 if [ -n "$MAX_WALL_MS" ]; then
   case "$MAX_WALL_MS" in
     ''|*[!0-9]*) die "--max-wall-ms requires a positive integer" ;;
@@ -2337,7 +2342,7 @@ if [ "$JOBS" -gt 1 ]; then
   rm -f "$SCHEDULE_TMP"
 fi
 
-if [ "$PER_SCRIPT_TIMEOUT_SECS" != 0 ]; then
+if [ "$PER_SCRIPT_TIMEOUT_SECS" != 0 ] || [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
   [ -r "$ROOT/bin/fm-timeout-lib.sh" ] || die "per-script timeout helper not found: bin/fm-timeout-lib.sh"
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$ROOT/bin/fm-timeout-lib.sh"
@@ -2471,6 +2476,19 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   local rc
   : "$id"
   bound=$(script_timeout_secs "$script")
+  if [ -n "${FM_TEST_STEP_BUDGET_SECS:-}" ]; then
+    local remaining
+    remaining=$(( (RUN_STARTED_MS + FM_TEST_STEP_BUDGET_SECS * 1000 - $(now_ms)) / 1000 ))
+    if [ "$remaining" -le 0 ]; then
+      printf 'not ok - timed out: %s exhausted the shared step budget before starting\n' "$script" >"$out"
+      printf '1\n' >"$out.timeout"
+      [ "$stream" -eq 1 ] && cat "$out"
+      return 124
+    fi
+    if [ "$bound" -eq 0 ] || [ "$bound" -gt "$remaining" ]; then
+      bound=$remaining
+    fi
+  fi
   set +e
   if [ "$stream" -eq 1 ]; then
     if [ "$bound" -gt 0 ]; then
@@ -2514,7 +2532,7 @@ run_script_attempts() {  # <script> <out> <stream> <id>
   if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ] || [ -e "$out.timeout" ]; then
     return "$rc"
   fi
-  signature=$(infra_flake_signature_in "$out" "$script") || return "$rc"
+  signature=$(infra_flake_signature_in "$out") || return "$rc"
   marker=$(printf 'FM_TEST_RETRY %s %s signature=%s first_exit=%s' \
     "$(now_iso)" "$script" "$signature" "$rc")
   if [ "$stream" -eq 1 ]; then
