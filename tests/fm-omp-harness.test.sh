@@ -882,8 +882,14 @@ mod.default({
   sendUserMessage(m) { sent.push(m); return undefined; },
 });
 await handlers.get("session_start")({}, {});
-await new Promise((r) => setTimeout(r, Number(process.env.WAIT_MS)));
-const wakes = sent.filter((m) => /signal: omp-replay [AB] done/.test(m));
+// Wait until EXPECT wakes arrived (a slow host must not drop a late re-arm),
+// or WAIT_MS elapsed when asserting that nothing more arrives.
+const delivered = () => sent.filter((m) => /signal: omp-replay [AB] done/.test(m));
+const deadline = Date.now() + Number(process.env.WAIT_MS);
+while (Date.now() < deadline && !(Number(process.env.EXPECT) > 0 && delivered().length >= Number(process.env.EXPECT))) {
+  await new Promise((r) => setTimeout(r, 50));
+}
+const wakes = delivered();
 if (process.env.CONSUME === "1") {
   for (const m of wakes) await handlers.get("before_agent_start")({ prompt: m }, {});
 }
@@ -892,12 +898,12 @@ const count = (label) => wakes.filter((m) => m.includes(`omp-replay ${label} don
 process.stdout.write(`${count("A")},${count("B")}`);
 process.exit(0);
 EOF
-  omp_replay_session() {  # <consume> <wait-ms>
+  omp_replay_session() {  # <consume> <wait-ms> [expected-wakes]
     FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
       FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
-      EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" CONSUME="$1" WAIT_MS="$2" node "$dir/session.mjs" 2>&1
+      EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" CONSUME="$1" WAIT_MS="$2" EXPECT="${3:-0}" node "$dir/session.mjs" 2>&1
   }
-  OMP_REPLAY_FIRST=$(omp_replay_session 0 4000)
+  OMP_REPLAY_FIRST=$(omp_replay_session 0 30000 "$(printf '%s\n' $wakes | wc -l)")
   OMP_REPLAY_HANDOFF=absent
   [ -e "$home/state/extensions/omp-primary-watch/session-replacement-actionable.json" ] && OMP_REPLAY_HANDOFF=present
   awk -F '\t' -v cutoff="$ack" '$2 > cutoff' "$home/state/.wake-queue" > "$home/state/.wake-queue.ack"
