@@ -11,14 +11,16 @@
 //     still tracked at before_agent_start / message_start exactly as on Pi.
 //   - omp reports no session_shutdown reason, so EVERY shutdown with a pending
 //     actionable close persists the replacement handoff. Each record is bound
-//     to the durable wake queue when its close is observed: the highest queued
-//     sequence (the watcher appends its row before printing the reason) and
-//     the still-unacknowledged state/.watcher-down generation. The next owning
-//     session_start, in this process or a later one, replays a record only
-//     while a queued row at or below that sequence or that recovery generation
-//     is still unacknowledged; a record main already acknowledged is retired
-//     unreplayed. A record with no readable binding is always replayed, so an
-//     unacknowledged close is never lost across /new or a restart.
+//     to its own wake row when its close is observed: the queue sequence the
+//     watcher just appended before printing the reason, plus the unacknowledged
+//     state/.watcher-down generation as a staleness guard. Acknowledgement is
+//     decided per wake: the next owning session_start, in this process or a
+//     later one, replays a record only while that exact sequence is still
+//     queued in state/.wake-queue and the recovery generation is unchanged;
+//     any other record main already acknowledged is retired unreplayed. The
+//     generation is shared by every row of an episode, so it never keeps a
+//     record alive on its own. A record with no readable binding is always
+//     replayed, so an unacknowledged close is never lost across /new or a restart.
 //   - The Pi supervision branch is out of scope for omp: every actionable wake
 //     is delivered to main, so no branch offer is made and no calm presentation
 //     hooks exist.
@@ -298,8 +300,8 @@ function unackedRecoveryGeneration(): string {
   return match ? match[1] : "";
 }
 
-// Bind a close to the acknowledgement state it must outlive. The watcher queued
-// this close's row (sequence <= the counter now) before printing its reason.
+// Bind a close to its own wake row: the watcher queued that row, advancing the
+// sequence counter, immediately before printing the close's reason.
 function acknowledgementBinding(): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration"> {
   try {
     const seq = readFileSync(wakeQueueSeqFile, "utf8").trim();
@@ -310,18 +312,15 @@ function acknowledgementBinding(): Pick<PendingActionableClose, "wakeQueueSeq" |
   }
 }
 
-// docs/watcher-continuity.md owns this replay rule: a bound record replays only
-// while its queued rows or its recovery generation remain unacknowledged.
+// docs/watcher-continuity.md owns this per-wake replay rule: a bound record
+// replays only while its own row is still queued under an unchanged generation.
 function actionableStillUnacknowledged(pending: PendingActionableClose): boolean {
   if (pending.wakeQueueSeq === undefined) return true;
   try {
-    const bound = pending.wakeQueueSeq;
-    const queued = readOptional(wakeQueue).split("\n").some((row) => {
-      const seq = row.split("\t")[1];
-      return seq !== undefined && /^[0-9]+$/.test(seq) && Number(seq) <= bound;
-    });
-    if (queued) return true;
-    return pending.recoveryGeneration !== "" && pending.recoveryGeneration === unackedRecoveryGeneration();
+    if (pending.recoveryGeneration !== unackedRecoveryGeneration()) return false;
+    return readOptional(wakeQueue)
+      .split("\n")
+      .some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq));
   } catch {
     return true;
   }
