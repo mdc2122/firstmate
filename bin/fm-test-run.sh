@@ -304,9 +304,15 @@ SIGS
 }
 
 infra_flake_signature_in() {  # <out>
-  local out=$1 id text terminal
-  terminal=$(awk 'NF { line=$0 } END { print line }' "$out")
-  if grep -Eiq 'not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expect|expected|fixture)([^[:alnum:]_]|$)' "$out"; then
+  local out=$1 id text terminal block verdict
+  verdict='not ok|(^|[^[:alnum:]_])(fail|failed|assert|assertion|assertionerror|expect|expected|fixture)([^[:alnum:]_]|$)'
+  block=$(awk -v verdict="$verdict" '
+    /^[[:space:]]*ok - / && !locked { block=""; next }
+    { block=block $0 "\n"; if (tolower($0) ~ verdict) locked=1 }
+    END { printf "%s", block }
+  ' "$out")
+  terminal=$(printf '%s\n' "$block" | awk 'NF { line=$0 } END { print line }')
+  if printf '%s\n' "$block" | grep -Eiq "$verdict"; then
     return 1
   fi
   while IFS=$'\t' read -r id text; do

@@ -1484,6 +1484,9 @@ test_infra_flake_retry_classification() {
   # comes from a helper outside the test script, as it would on a real runner.
   printf '#!/bin/sh\necho "fatal: write error: No space left on device" >&2\nexit 1\n' >"$tmp/fx/disk-full-tool"
   chmod +x "$tmp/fx/disk-full-tool"
+  mkdir -p "$tmp/fx/fakebin"
+  printf '#!/bin/sh\necho "mkdir: cannot create directory: No space left on device" >&2\nexit 1\n' >"$tmp/fx/fakebin/mkdir"
+  chmod +x "$tmp/fx/fakebin/mkdir"
   # <name> <first-attempt body> <later-attempt body>; every attempt is counted.
   write_fixture() {
     cat >"$repo/tests/$1" <<SH
@@ -1493,10 +1496,12 @@ if [ "\$n" -eq 1 ]; then $2; else $3; fi
 SH
   }
   write_fixture flake.test.sh ': "No space left on device"; "$FX/disk-full-tool"; exit 1' 'echo "ok - healthy"'
+  write_fixture passing-then-infra.test.sh 'set -e; echo "ok - a failed replacement keeps the standing posture live"; PATH="$FX/fakebin:$PATH" mkdir -p "$FX/home/fakebin"' 'echo "ok - healthy"'
   write_fixture persistent.test.sh '"$FX/disk-full-tool"; exit 1' '"$FX/disk-full-tool"; exit 1'
   write_fixture assertion.test.sh '"$FX/disk-full-tool"; echo "not ok - expected 2, got 3"; exit 1' 'echo "ok - would pass"'
   write_fixture own-text.test.sh 'echo "fixture: Too many open files"; echo "FAIL: assertion"; exit 1' 'echo "ok - would pass"'
-  write_fixture multiline.test.sh '. "$FX/test-lib/lib.sh"; fail "spawn assertion failed
+  write_fixture multiline.test.sh '. "$FX/test-lib/lib.sh"; echo "ok - earlier expected failure handled"; fail "spawn assertion failed
+ok - captured tool output
 $("$FX/disk-full-tool" 2>&1)"' 'echo "ok - would pass"'
   mkdir -p "$tmp/fx/test-lib"
   cp "$ROOT/tests/lib.sh" "$ROOT/tests/git-config-helpers.sh" "$tmp/fx/test-lib/"
@@ -1506,11 +1511,11 @@ $("$FX/disk-full-tool" 2>&1)"' 'echo "ok - would pass"'
   FX="$tmp/fx" GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$tmp/summary.md" \
     "$runner" --jobs 1 --retry-infra-flakes --per-script-timeout-secs 3 --json "$tmp/run.json" \
     tests/flake.test.sh tests/persistent.test.sh tests/assertion.test.sh \
-    tests/own-text.test.sh tests/multiline.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
+    tests/own-text.test.sh tests/multiline.test.sh tests/passing-then-infra.test.sh tests/hang.test.sh >"$tmp/out" 2>"$tmp/err"
   rc=$?
   set -e
   [ "$rc" -eq 1 ] || fail "remaining failures must still fail the run, got $rc: $(cat "$tmp/out")"
-  for f in flake:2 persistent:2 assertion:1 own-text:1 multiline:1 hang:1; do
+  for f in flake:2 persistent:2 passing-then-infra:2 assertion:1 own-text:1 multiline:1 hang:1; do
     [ "$(cat "$tmp/fx/${f%%:*}.test.sh.count")" = "${f#*:}" ] \
       || fail "${f%%:*} ran $(cat "$tmp/fx/${f%%:*}.test.sh.count") times, expected ${f#*:}: $(cat "$tmp/out")"
   done
@@ -1522,7 +1527,7 @@ $("$FX/disk-full-tool" 2>&1)"' 'echo "ok - would pass"'
     || fail "the passing flake was not labeled in the run summary: $(cat "$tmp/out")"
   grep -Fxq 'FM_TEST_RETRIED_FLAKE script=tests/persistent.test.sh signature=disk-full first_exit=1 exit=1' "$tmp/out" \
     || fail "a flake that failed again was not labeled with its retry exit: $(cat "$tmp/out")"
-  grep -Fq 'FM_TEST_SUMMARY total=6 failed=5' "$tmp/out" \
+  grep -Fq 'FM_TEST_SUMMARY total=7 failed=5' "$tmp/out" \
     || fail "a retried script must be counted once: $(cat "$tmp/out")"
   grep -Fq '::warning file=tests/flake.test.sh,title=Retried infra flake::' "$tmp/out" \
     || fail "the retried flake had no warning annotation: $(cat "$tmp/out")"
@@ -1543,11 +1548,15 @@ assert by["tests/flake.test.sh"]["retried_infra_flake"] is True
 assert by["tests/flake.test.sh"]["retry_signature"] == "disk-full"
 assert by["tests/flake.test.sh"]["first_attempt_exit"] == 1
 assert by["tests/flake.test.sh"]["exit"] == 0
+assert by["tests/passing-then-infra.test.sh"]["retried_infra_flake"] is True
+assert by["tests/passing-then-infra.test.sh"]["retry_signature"] == "disk-full"
+assert by["tests/passing-then-infra.test.sh"]["first_attempt_exit"] == 1
+assert by["tests/passing-then-infra.test.sh"]["exit"] == 0
 assert by["tests/assertion.test.sh"]["retried_infra_flake"] is False
 assert by["tests/multiline.test.sh"]["retried_infra_flake"] is False
 assert by["tests/multiline.test.sh"]["exit"] == 1
 assert by["tests/hang.test.sh"]["timed_out"] is True and by["tests/hang.test.sh"]["timeout_secs"] == 3
-assert doc["summary"]["retried_infra_flakes"] == 2
+assert doc["summary"]["retried_infra_flakes"] == 3
 assert doc["summary"]["timed_out"] == 1
 PY
 
