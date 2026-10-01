@@ -1990,6 +1990,34 @@ PY
   pass "budget exhaustion is reported plainly without timeout retry"
 }
 
+test_timeout_without_budget_for_retry_keeps_timeout() {
+  local tmp rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-no-retry-budget.XXXXXX")
+  mkdir -p "$tmp/bin" "$tmp/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
+  cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
+  printf '#!/bin/bash\nsleep 600\n' >"$tmp/tests/hang.test.sh"
+  set +e
+  FM_TEST_STEP_BUDGET_SECS=6 "$tmp/bin/fm-test-run.sh" --jobs 1 \
+    --per-script-timeout-secs 4 --retry-infra-flakes \
+    --json "$tmp/result.json" tests/hang.test.sh >"$tmp/out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || fail "hung script without retry budget must fail, got $rc: $(cat "$tmp/out")"
+  grep -q 'timed out: tests/hang.test.sh exceeded its per-script bound of 4s' "$tmp/out" \
+    || fail "real timeout was not named: $(cat "$tmp/out")"
+  ! grep -q 'budget exhausted\|not started\|FM_TEST_RETRY' "$tmp/out" \
+    || fail "retry ran without budget to cover its bound: $(cat "$tmp/out")"
+  python3 - "$tmp/result.json" <<'PY' || fail "real timeout lost its record or was labeled a flake"
+import json, sys
+hang = json.load(open(sys.argv[1]))['scripts'][0]
+assert hang['timed_out'] and hang['exit'] == 124, hang
+assert not hang['retried_infra_flake'], hang
+PY
+  rm -rf "$tmp"
+  pass "a timeout whose retry the step budget cannot cover keeps its timeout record"
+}
+
 test_serial_family_shares_timeout_budget() {
   local tmp runner rc began ended
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-step-budget.XXXXXX")
@@ -2022,6 +2050,7 @@ PY
 }
 
 test_exhausted_budget_does_not_start_or_retry
+test_timeout_without_budget_for_retry_keeps_timeout
 test_list_all_exact_suite_coverage
 test_family_selection
 test_single_script_selection
