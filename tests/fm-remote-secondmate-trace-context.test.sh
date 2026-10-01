@@ -38,9 +38,12 @@ trap 'FM_HOME="$PARENT" FM_PROCEVENT_CLAIM_ROOT="$CLAIMS" "$ROOT/bin/fm-proceven
 # The remote host's tracked code root is this branch, as a real git repository:
 # fm-on and the remote entrypoint both require the dispatched command to be
 # tracked there, and the remote side runs the real scripts under test.
+# Untracked dependency installs (CI's .opencode/plugins/node_modules) never reach
+# a real clone, and committing them would push the fixture past git's
+# loose-object threshold.
 (
   cd "$ROOT" || exit
-  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config -cf - .
+  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config --exclude=node_modules -cf - .
 ) | (cd "$REMOTE_ROOT" && tar -xf -)
 
 # The remote host runs the Herdr fixture, whose every invocation is logged
@@ -93,6 +96,9 @@ chmod +x "$REMOTE_ROOT/bin/tmux"
 install_remote_herdr_fixture "$REMOTE_ROOT" "$HERDR_STATE" "$HERDR_LOG" \
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 git -C "$REMOTE_ROOT" init -q -b main
+# A detached auto-gc after the fixture commit prunes loose objects while the
+# seeding step's local clone is still copying them.
+git -C "$REMOTE_ROOT" config gc.auto 0
 git -C "$REMOTE_ROOT" config user.email test@example.com
 git -C "$REMOTE_ROOT" config user.name Test
 git -C "$REMOTE_ROOT" add .

@@ -47,10 +47,12 @@ trap cleanup EXIT
 
 # Materialize the current branch as the remote host's tracked code root. The
 # fixture is a real git repository because provisioning and guarded sync exercise
-# the same clone and fast-forward path as a second Mac.
+# the same clone and fast-forward path as a second Mac. Untracked dependency
+# installs (CI's .opencode/plugins/node_modules) never reach a real clone, and
+# committing them would push the fixture past git's loose-object threshold.
 (
   cd "$ROOT" || exit
-  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config -cf - .
+  tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config --exclude=node_modules -cf - .
 ) | (cd "$REMOTE_ROOT" && tar -xf -)
 cat > "$REMOTE_ROOT/bin/tmux" <<SH
 #!/usr/bin/env bash
@@ -98,6 +100,9 @@ chmod +x "$REMOTE_ROOT/bin/tmux"
 install_remote_herdr_fixture "$REMOTE_ROOT" "$HERDR_STATE" "$HERDR_LOG" \
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 git -C "$REMOTE_ROOT" init -q -b main
+# A detached auto-gc after the fixture commit prunes loose objects while the
+# provisioning step's local clone is still copying them.
+git -C "$REMOTE_ROOT" config gc.auto 0
 git -C "$REMOTE_ROOT" config user.email test@example.com
 git -C "$REMOTE_ROOT" config user.name Test
 git -C "$REMOTE_ROOT" add .
