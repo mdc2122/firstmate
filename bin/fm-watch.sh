@@ -2529,8 +2529,8 @@ EOF
     # A signal file whose task has no state/<id>.meta belongs to nothing this
     # home supervises: a torn-down task's late write, or a worker's own helper
     # writing under an id firstmate never dispatched. Its seen marker advances
-    # so it does not re-fire, it is logged, and it never reaches the queue; an
-    # unrecorded task has no endpoint, decision, or worker firstmate could act on.
+    # so routine chatter does not re-fire or reach the queue. Captain-relevant
+    # status spans and failed classification/marker commits still surface.
     pending=$(unrecorded_signals_absorb "$pending")
     files=""
     while IFS=$(printf '\t') read -r sf sig f; do

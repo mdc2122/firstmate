@@ -1535,7 +1535,8 @@ read: {"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_ha
 list: ok=true truncated=false totalCount=20 rows=20 omittedHostIds=[] listed=false
 ```
 
-A live terminal's read succeeds and the same list names it, so `fm_backend_orca_capture` reports proven absence only for a stale-handle read whose handle a complete list omits; `tests/fm-backend-orca.test.sh` pins every incomplete-list and other-error case as unreadable.
+A live terminal's read succeeds and the same list names it.
+`tests/fm-backend-orca.test.sh` covers exited reads, stale-handle omission, present handles, failed lists, truncated lists, omitted hosts, and other read errors; [`architecture.md`](../architecture.md#event-driven-supervision) owns the absence policy.
 
 ## cmux
 
@@ -2027,7 +2028,7 @@ After the rule, the same live Herdr capture read `empty`, a steer's doorbell lan
 | Exit | `bin/fm-control.sh <id> exit` typed `/quit`; Herdr then reported the pane `dead` |
 | Extension loading | a file named both by `-e` and by `<cwd>/.omp/extensions` loads twice; discovery is top-level and cwd-only |
 | Extension tools | the openai-codex model invokes a registered tool by writing `xd://<tool>` through omp's virtual-file bridge |
-| Subagent events | omp 18.4.4, 2026-09-30: `omp -p --no-session -e <probe.ts>` with a prompt that spawned one task subagent logged `agent_start`, `turn_end`, and `agent_end` for `ctx.agent.kind=sub id=Pong` while the main run was still open, then the main `agent_end` for `kind=main id=Main`; the worker extension therefore ignores every `kind=sub` event, so a subagent's end cannot record the worker idle or ring its turn-end marker (`tests/fm-omp-harness.test.sh` `test_busy_extension_lifecycle`) |
+| Subagent events | omp 18.4.4, 2026-09-30: `omp -p --no-session -e <probe.ts>` with a prompt that spawned one task subagent logged `agent_start`, `turn_end`, and `agent_end` for `ctx.agent.kind=sub id=Pong` while the main run was still open, then the main `agent_end` for `kind=main id=Main`; `tests/fm-omp-harness.test.sh` `test_busy_extension_lifecycle` covers subagent end/turn-end isolation; the worker-extension template in `bin/fm-spawn.sh` owns event selection |
 
 ### End-to-end
 
