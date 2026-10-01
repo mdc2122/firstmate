@@ -1489,6 +1489,27 @@ test_infra_flake_retry_classification() {
     || fail "orphaned stdout prevented recovery: $(cat "$tmp/orphan.out")"
   [ "$((SECONDS - began))" -lt 10 ] || fail "stream draining escaped the bound"
   [ "$(cat "$tmp/fx/orphan.count")" = 2 ] || fail "orphan attempt was not retried"
+  local kind
+  for kind in success assertion; do
+    write_process_fixture "pipe-$kind" '. "$(dirname "$0")/lib.sh"; sleep 60 & fail "assertion before stream drain"' 'exit 99'
+    if [ "$kind" = success ]; then
+      write_process_fixture "pipe-$kind" 'sleep 60 & echo "ok - before exit"; exit 0' 'exit 99'
+    fi
+    set +e
+    FX="$tmp/fx" GITHUB_ACTIONS=true "$runner" --jobs 1 --per-script-timeout-secs 2 \
+      --json "$tmp/pipe-$kind.json" "tests/pipe-$kind.test.sh" >"$tmp/pipe-$kind.out" 2>&1
+    rc=$?
+    set -e
+    [ "$rc" -eq 1 ] || fail "incomplete $kind stream must fail"
+    grep -Fq 'not ok - timed out:' "$tmp/pipe-$kind.out" || fail "stream timeout had no named verdict"
+    grep -Fq 'title=Test timed out' "$tmp/pipe-$kind.out" || fail "stream timeout had no annotation"
+    python3 - "$tmp/pipe-$kind.json" <<'PYTEST' || fail "stream timeout absent from JSON"
+import json, sys
+row = json.load(open(sys.argv[1]))['scripts'][0]
+assert row['timed_out'] and row['timeout_secs'] == 2 and row['exit'] == 124
+assert not row['retried_infra_flake']
+PYTEST
+  done
   write_process_fixture signal 'kill -TERM $$' 'echo "ok - recovered"'
   write_process_fixture persistent 'kill -KILL $$' 'kill -KILL $$'
   write_process_fixture timeout 'sleep 60' 'echo "ok - recovered"'

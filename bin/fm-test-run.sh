@@ -2448,8 +2448,8 @@ run_script_bounded() {  # <script> <out> <stream> <id>
       bound=$remaining
     fi
   fi
-  local outcome="$out.process" program
-  rm -f "$outcome"
+  local outcome="$out.process" completed="$out.completed" program
+  rm -f "$outcome" "$completed"
   program='use POSIX qw(:sys_wait_h);
     my ($record, @command) = @ARGV;
     my $pid = fork;
@@ -2471,8 +2471,8 @@ run_script_bounded() {  # <script> <out> <stream> <id>
   if [ "$stream" -eq 1 ]; then
     if [ "$bound" -gt 0 ]; then
       fm_run_timed "$bound" bash -c \
-        'perl -e "$1" "$2" "$3" "$4" 2>&1 | tee "$5"; exit "${PIPESTATUS[0]}"' \
-        _ "$program" "$outcome" "$interpreter" "$script" "$out"
+        'perl -e "$1" "$2" "$3" "$4" 2>&1 | tee "$5"; rc=${PIPESTATUS[0]}; printf "%s\n" "$rc" >"$6"; exit "$rc"' \
+        _ "$program" "$outcome" "$interpreter" "$script" "$out" "$completed"
       rc=$?
     else
       perl -e "$program" "$outcome" "$interpreter" "$script" 2>&1 | tee "$out"
@@ -2485,7 +2485,10 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     perl -e "$program" "$outcome" "$interpreter" "$script" >"$out" 2>&1
     rc=$?
   fi
-  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ] && [ "$(cat "$outcome" 2>/dev/null)" != exit ]; then
+  if [ "$bound" -gt 0 ] && [ "$rc" -eq 124 ] && {
+    { [ "$stream" -eq 1 ] && [ ! -s "$completed" ]; } ||
+    { [ "$stream" -ne 1 ] && [ "$(cat "$outcome" 2>/dev/null)" != exit ]; }
+  }; then
     printf 'not ok - timed out: %s exceeded its per-script bound of %ss and was terminated\n' \
       "$script" "$bound" >>"$out"
     printf '%s\n' "$bound" >"$out.timeout"
