@@ -2449,7 +2449,7 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     fi
   fi
   local outcome="$out.process" completed="$out.completed" program
-  rm -f "$outcome" "$completed"
+  rm -f "$outcome" "$outcome.exit" "$completed"
   program='use POSIX qw(:sys_wait_h);
     my ($record, @command) = @ARGV;
     my $pid = fork;
@@ -2465,7 +2465,10 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     if (WIFSIGNALED($status)) {
       my $signal = WTERMSIG($status); print $f "signal-$signal"; exit(128 + $signal);
     }
-    print $f "exit"; exit(WEXITSTATUS($status));'
+    my $code = WEXITSTATUS($status);
+    open(my $exit_record, ">", "$record.exit") or exit 125;
+    print $exit_record $code; close($exit_record);
+    print $f "exit"; exit($code);'
   local interpreter=${FM_TEST_SCRIPT_BASH:-bash}
   set +e
   if [ "$stream" -eq 1 ]; then
@@ -2493,6 +2496,11 @@ run_script_bounded() {  # <script> <out> <stream> <id>
       "$script" "$bound" >>"$out"
     printf '%s\n' "$bound" >"$out.timeout"
     [ "$stream" -eq 1 ] && tail -1 "$out"
+    if [ "$(cat "$outcome" 2>/dev/null)" = exit ]; then
+      local script_exit
+      script_exit=$(cat "$outcome.exit")
+      [ "$script_exit" -eq 0 ] || rc=$script_exit
+    fi
   fi
   return "$rc"
 }
@@ -2509,6 +2517,9 @@ run_script_attempts() {  # <script> <out> <stream> <id>
   run_script_bounded "$script" "$out" "$stream" "$id"
   rc=$?
   if [ "$rc" -eq 0 ] || [ "$RETRY_INFRA_FLAKES" -ne 1 ]; then
+    return "$rc"
+  fi
+  if [ "$(cat "$out.process" 2>/dev/null)" = exit ]; then
     return "$rc"
   fi
   if [ -s "$out.timeout" ]; then

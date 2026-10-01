@@ -1496,17 +1496,19 @@ test_infra_flake_retry_classification() {
       write_process_fixture "pipe-$kind" 'sleep 60 & echo "ok - before exit"; exit 0' 'exit 99'
     fi
     set +e
-    FX="$tmp/fx" GITHUB_ACTIONS=true "$runner" --jobs 1 --per-script-timeout-secs 2 \
+    FX="$tmp/fx" GITHUB_ACTIONS=true "$runner" --jobs 1 --per-script-timeout-secs 2 --retry-infra-flakes \
       --json "$tmp/pipe-$kind.json" "tests/pipe-$kind.test.sh" >"$tmp/pipe-$kind.out" 2>&1
     rc=$?
     set -e
     [ "$rc" -eq 1 ] || fail "incomplete $kind stream must fail"
+    [ "$(cat "$tmp/fx/pipe-$kind.count")" = 1 ] || fail "recorded $kind exit was retried"
     grep -Fq 'not ok - timed out:' "$tmp/pipe-$kind.out" || fail "stream timeout had no named verdict"
     grep -Fq 'title=Test timed out' "$tmp/pipe-$kind.out" || fail "stream timeout had no annotation"
-    python3 - "$tmp/pipe-$kind.json" <<'PYTEST' || fail "stream timeout absent from JSON"
+    python3 - "$tmp/pipe-$kind.json" "$kind" <<'PYTEST' || fail "stream timeout absent from JSON"
 import json, sys
 row = json.load(open(sys.argv[1]))['scripts'][0]
-assert row['timed_out'] and row['timeout_secs'] == 2 and row['exit'] == 124
+assert row['timed_out'] and row['timeout_secs'] == 2
+assert row['exit'] == (1 if sys.argv[2] == 'assertion' else 124)
 assert not row['retried_infra_flake']
 PYTEST
   done
