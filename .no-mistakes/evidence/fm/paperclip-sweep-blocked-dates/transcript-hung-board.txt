@@ -1,0 +1,13 @@
+# board answers issues list, then hangs every comments read; 9 blocked issues; FM_PAPERCLIP_CURL_SECS=3
+stalled FIR-18 - dated by coordinator, waiting on FIR-104 [blocker attention needs_attention; waiting on FIR-104; no dated next check]
+no-blocker FIR-20 - dated, no blocker, unblock unknown [blocked with no blocker, no unblock owner, and no dated next check]
+stalled FIR-13 - date already passed [blocker attention stalled; waiting on FIR-105; no dated next check]
+stalled FIR-91 - no-seconds marker [blocker attention stalled; waiting on FIR-106; no dated next check]
+stalled FIR-57 - leading-space marker [blocker attention stalled; waiting on FIR-107; no dated next check]
+stalled FIR-58 - fractional-seconds marker [blocker attention stalled; waiting on FIR-108; no dated next check]
+stalled FIR-89 - no owner named [blocker attention stalled; waiting on FIR-109; no dated next check]
+stale-edge FIR-134 - dated but all blockers done [blocked but blockers done: FIR-110]
+stalled FIR-200 - undated, no comment [blocker attention stalled; waiting on FIR-111; no dated next check]
+[exit 0]
+elapsed: 4s
+comment GETs completed: 0 (the emulator logs only after a request finishes; the hung read was cut by the 3s curl timeout). 9 sequential reads would have taken >=27s; 4s total = one read, then the loop stopped and every unread issue stayed listed.

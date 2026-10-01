@@ -1,0 +1,11 @@
+[
+ {"id":"i18","identifier":"FIR-18","title":"dated by coordinator, waiting on FIR-104","status":"blocked","blockedBy":[{"identifier":"FIR-104","status":"in_progress"}],"blockerAttention":{"state":"needs_attention"},"monitorNextCheckAt":null},
+ {"id":"i20","identifier":"FIR-20","title":"dated, no blocker, unblock unknown","status":"blocked","blockedBy":[]},
+ {"id":"i13","identifier":"FIR-13","title":"date already passed","status":"blocked","blockedBy":[{"identifier":"FIR-105","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"i91","identifier":"FIR-91","title":"no-seconds marker","status":"blocked","blockedBy":[{"identifier":"FIR-106","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"i57","identifier":"FIR-57","title":"leading-space marker","status":"blocked","blockedBy":[{"identifier":"FIR-107","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"i58","identifier":"FIR-58","title":"fractional-seconds marker","status":"blocked","blockedBy":[{"identifier":"FIR-108","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"i89","identifier":"FIR-89","title":"no owner named","status":"blocked","blockedBy":[{"identifier":"FIR-109","status":"in_progress"}],"blockerAttention":{"state":"stalled"}},
+ {"id":"i134","identifier":"FIR-134","title":"dated but all blockers done","status":"blocked","blockedBy":[{"identifier":"FIR-110","status":"done"}],"blockerAttention":{"state":"needs_attention"}},
+ {"id":"i200","identifier":"FIR-200","title":"undated, no comment","status":"blocked","blockedBy":[{"identifier":"FIR-111","status":"in_progress"}],"blockerAttention":{"state":"stalled"}}
+]
