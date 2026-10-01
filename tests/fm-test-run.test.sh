@@ -1841,11 +1841,11 @@ puts JSON.generate(
     || fail "could not read step timeout from parsed workflow"
   [ "$job_timeout" = 75 ] \
     || fail "tests-herdr job backstop must stay 75 minutes, got $job_timeout"
-  [ "$step_timeout" = 20 ] \
-    || fail "family-run step timeout must be 20 minutes, got $step_timeout"
+  [ "$step_timeout" = 24 ] \
+    || fail "family-run step timeout must be 24 minutes, got $step_timeout"
   [ "$step_timeout" -lt "$job_timeout" ] \
     || fail "family-run step timeout must be below the job backstop"
-  pass "Herdr CI family-run step times out at 20 min under a 75 min job backstop"
+  pass "Herdr CI family-run step times out at 24 min under a 75 min job backstop"
 }
 
 test_aggregate_json() {
@@ -1964,6 +1964,8 @@ test_exhausted_budget_does_not_start_or_retry() {
   cp "$RUNNER" "$ROOT/bin/fm-timeout-lib.sh" "$tmp/bin/"
   cp "$ROOT/tests/git-config-helpers.sh" "$tmp/tests/"
   printf '#!/bin/bash\nsleep 2\n' >"$tmp/tests/first.test.sh"
+  # Expand START_LOG in the generated fixture, not while writing it.
+  # shellcheck disable=SC2016
   printf '#!/bin/bash\necho started >>"$START_LOG"\n' >"$tmp/tests/later.test.sh"
   set +e
   START_LOG="$tmp/started" FM_TEST_STEP_BUDGET_SECS=1 "$tmp/bin/fm-test-run.sh" \
