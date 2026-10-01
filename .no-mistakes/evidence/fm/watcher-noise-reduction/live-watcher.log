@@ -1,0 +1,20 @@
+routine append classified endpoint: v2	r1:3430007374726f6e673a31363737373233323a3535373835393434333a313739303832393638312e39393138373232373000526567756c61722046696c653a313030363434002d007265616461626c65007265616461626c65	40@strong:16777232:557859443:1790829681.991872270
+routine append classified endpoint: v2	r1:3538007374726f6e673a31363737373233323a3535373835393434333a313739303832393638312e39393138373232373000526567756c61722046696c653a313030363434002d007265616461626c65007265616461626c65	58@strong:16777232:557859443:1790829681.991872270
+routine append classified endpoint: v2	r1:3736007374726f6e673a31363737373233323a3535373835393434333a313739303832393638312e39393138373232373000526567756c61722046696c653a313030363434002d007265616461626c65007265616461626c65	76@strong:16777232:557859443:1790829681.991872270
+Helper turn-end and repeated routine appends: watcher alive, queue empty.
+[2026-09-30T23:41:31-0500] absorbed signal for unrecorded task (no state/<id>.meta): /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.status /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.turn-ended
+[2026-09-30T23:41:40-0500] absorbed signal for unrecorded task (no state/<id>.meta): /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.status
+
+Actionable helper status stdout:
+signal: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.status
+
+Durable queue:
+1790829717	1	signal	ghost.status	signal: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.status
+1790829719	2	signal	ghost.status	signal: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/helpers/state/ghost.status
+
+Recorded stopped worker stdout:
+signal: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3TVAHSBF3XMXSXKDGK2FGPQ/.test-local/recorded/state/worker.turn-ended
+
+Real Orca missing endpoint: silent
+
+[2026-09-30T23:42:38-0500] retired stale tracking for a proven-absent endpoint of finished task finished: term_00000000-0000-4000-8000-000000000000

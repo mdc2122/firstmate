@@ -1,0 +1,7 @@
+Focused fm-watch-triage selectors on the actual host:
+Initial test_unrecorded_task_signal_absorbed: timed out waiting for actionable helper exit (10-second budget).
+Manual real-product run with 90-second observation budget: actionable helper and recorded worker both surfaced.
+Retry of focused triage script exceeded the 300-second command budget.
+Separate churn run: first two absorb scenarios passed; test_turn_ended_churn_absorb_bounded timed out waiting for exit.
+Retry with locally widened exit waits: first churn absorption timed out instead.
+No product failure established; timing-sensitive harness remains unreliable on this host.
