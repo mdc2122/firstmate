@@ -1234,12 +1234,15 @@ test_sigterm_during_marker_wait_releases_watch_lock() {
     "$WATCH" > "$out" 2>&1 &
   wpid=$!
   i=0
-  while [ "$i" -lt 100 ] && [ ! -e "$state/.watch.lock" ]; do
+  # Lock-directory creation precedes the claim and cleanup-trap installation.
+  # The first beacon is published only after both have completed, immediately
+  # before the recovery-marker work, so it synchronizes this TERM with startup.
+  while [ "$i" -lt 100 ] && [ ! -e "$state/.last-watcher-beat" ]; do
     sleep 0.05
     i=$((i + 1))
   done
-  [ -e "$state/.watch.lock" ] \
-    || { kill "$wpid" "$holder_pid" 2>/dev/null || true; fail "watcher never acquired its lock: $(cat "$out")"; }
+  [ -e "$state/.last-watcher-beat" ] \
+    || { kill "$wpid" "$holder_pid" 2>/dev/null || true; fail "watcher never published its startup beacon: $(cat "$out")"; }
 
   kill -TERM "$wpid" 2>/dev/null || true
   # Free the marker lock so the cleanup path's bounded publish can finish.
