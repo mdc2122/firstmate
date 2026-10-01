@@ -29,7 +29,8 @@
 #                       next check, and no activity for FM_PAPERCLIP_STALE_HOURS
 #   recovery            an open issue carrying an active or escalated recovery
 #                       action (orphaned or inspect-only executions)
-#   approval            a pending approval older than FM_PAPERCLIP_APPROVAL_AGE_HOURS
+#   approval            a pending approval at least FM_PAPERCLIP_APPROVAL_AGE_MINUTES
+#                       old (default 0: every pending approval, next sweep)
 #
 # A "dated next check" is the issue's monitor (monitorNextCheckAt) still in the
 # future. Paperclip refuses a monitor on a blocked issue (HTTP 422) and its
@@ -78,8 +79,9 @@ Usage:
   fm-paperclip-sweep.sh --help                print this help
 
 Configuration (environment wins over <FM_HOME>/.env): FM_PAPERCLIP_URL,
-FM_PAPERCLIP_KEY_FILE, optional FM_PAPERCLIP_COMPANY. See docs/configuration.md
-"Paperclip sweep".
+FM_PAPERCLIP_KEY_FILE, optional FM_PAPERCLIP_COMPANY, and
+FM_PAPERCLIP_APPROVAL_AGE_MINUTES (default 0, whole minutes; 0 lists every
+pending approval on the next sweep). See docs/configuration.md "Paperclip sweep".
 EOF
 }
 
@@ -100,13 +102,26 @@ PC_COMPANY=$(config_get FM_PAPERCLIP_COMPANY)
 CURL_SECS=${FM_PAPERCLIP_CURL_SECS:-8}
 case "$CURL_SECS" in ''|*[!0-9]*|0) CURL_SECS=8 ;; esac
 
-hours_setting() {  # <name> <default>
+stale_hours_setting() {  # <name> <default>
   local v=${!1:-$2}
   case "$v" in ''|*[!0-9]*|0) v=$2 ;; esac
   printf '%s' "$v"
 }
-APPROVAL_AGE_HOURS=$(hours_setting FM_PAPERCLIP_APPROVAL_AGE_HOURS 4)
-STALE_HOURS=$(hours_setting FM_PAPERCLIP_STALE_HOURS 6)
+STALE_HOURS=$(stale_hours_setting FM_PAPERCLIP_STALE_HOURS 6)
+
+# FM_PAPERCLIP_APPROVAL_AGE_MINUTES: how old a pending approval must be before
+# the scan lists it, in whole minutes. The default 0 lists every pending
+# approval on the next sweep (no built-in wait), an explicit 0 means the same,
+# and an unset or malformed value falls back to 0. Unlike the hour settings
+# above it is read through config_get, so the home .env can set it while the
+# environment still wins.
+approval_age_setting() {  # -> minutes
+  local v
+  v=$(config_get FM_PAPERCLIP_APPROVAL_AGE_MINUTES)
+  case "$v" in ''|*[!0-9]*) v=0 ;; esac
+  printf '%s' "$v"
+}
+APPROVAL_AGE_SECS=$(( $(approval_age_setting) * 60 ))
 
 NOW=${FM_QUEUE_ZERO_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 
@@ -246,7 +261,7 @@ scan_rows() {
         --slurpfile l "$tmp/latest.ndjson" \
         --argjson now "$now_epoch" \
         --argjson stale_secs "$((STALE_HOURS * 3600))" \
-        --argjson approval_secs "$((APPROVAL_AGE_HOURS * 3600))" \
+        --argjson approval_secs "$APPROVAL_AGE_SECS" \
         "\$i[0] as \$issues | \$a[0] as \$approvals | (\$l | from_entries) as \$latest | $DEFS $CLASSIFY" 2>/dev/null); then
       API_ERROR="unexpected response shape"
       rc=1

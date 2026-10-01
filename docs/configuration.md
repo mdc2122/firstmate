@@ -610,7 +610,8 @@ FM_PAPERCLIP_KEY_FILE=   # path to a file holding a board API key; ~/ is expande
 FM_PAPERCLIP_COMPANY=    # optional company id; discovered from the key when it sees exactly one
 ```
 
-`FM_PAPERCLIP_APPROVAL_AGE_HOURS` (default 4) is how long a pending approval may wait before it is surfaced, and `FM_PAPERCLIP_STALE_HOURS` (default 6) is how long an in-progress issue with no run and no dated next check may sit idle.
+`FM_PAPERCLIP_APPROVAL_AGE_MINUTES` (default 0) is how old a pending approval must be, in whole minutes, before the sweep surfaces it; 0 lists every pending approval on the next sweep, so a fresh approval reaches firstmate on the next queue inbox-zero check instead of after a built-in wait.
+It reads like the instance settings above (the environment wins over `.env`), while `FM_PAPERCLIP_STALE_HOURS` (default 6, whole hours, how long an in-progress issue with no run and no dated next check may sit idle) reads only the environment.
 Paperclip refuses a monitor (`monitorNextCheckAt`) on a blocked issue, and its `unblockDescriptor` carries no date, so a blocked issue's owner dates the next check with one line in an issue comment:
 
 ```text
