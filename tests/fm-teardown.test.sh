@@ -1811,6 +1811,102 @@ test_local_only_force_overrides_unpushed() {
   pass "local-only worktree with unpushed work is torn down under --force (escape hatch)"
 }
 
+# A finished scout: its record has passed the captain-call inventory and its
+# report exists, so only the worktree-artifact guard can still refuse cleanup.
+write_scout_task() {  # <case-dir> <report-body>
+  local case_dir=$1 body=$2
+  write_meta "$case_dir" no-mistakes scout
+  printf '%s\n' 'decisions_reviewed=1' 'decision_keys=' >> "$case_dir/state/task-x1.meta"
+  mkdir -p "$case_dir/data/task-x1"
+  printf '%s\n' "$body" > "$case_dir/data/task-x1/report.md"
+}
+
+test_scout_report_citing_worktree_only_file_refuses_until_copied() {
+  local case_dir rc answers
+  case_dir=$(make_case scout-cited-artifact)
+  answers="$case_dir/wt/bakeoff/answers.jsonl"
+  mkdir -p "$case_dir/wt/bakeoff"
+  printf '{"task":1,"answer":"42","grade":"pass"}\n' > "$answers"
+  write_scout_task "$case_dir" "# Bake-off
+
+All graded answers are in \`$answers:1\`; the harness is described below."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-cited-artifact: teardown should refuse while the report cites a worktree-only file"
+  assert_grep "bakeoff/answers.jsonl" "$case_dir/stderr" \
+    "scout-cited-artifact: the refusal did not name the cited worktree-only file"
+  assert_grep "data/task-x1/" "$case_dir/stderr" \
+    "scout-cited-artifact: the refusal did not name copying into the task's data directory as the remedy"
+  assert_grep "commit it and push it" "$case_dir/stderr" \
+    "scout-cited-artifact: the refusal did not name commit-and-push as the remedy"
+  assert_present "$answers" "scout-cited-artifact: the refusal deleted the cited file"
+  assert_present "$case_dir/state/task-x1.meta" "scout-cited-artifact: the refusal erased the task record"
+
+  cp "$answers" "$case_dir/data/task-x1/answers.jsonl"
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-cited-artifact: teardown should succeed once the cited file is copied to data/<id>/: $(cat "$case_dir/stderr")"
+  assert_absent "$case_dir/state/task-x1.meta" "scout-cited-artifact: the completed teardown left the task record"
+  assert_present "$case_dir/data/task-x1/answers.jsonl" "scout-cited-artifact: teardown removed the preserved copy"
+  pass "a scout whose report cites a worktree-only file is refused until that file is copied into data/<id>/"
+}
+
+test_scout_report_only_teardown_succeeds() {
+  local case_dir rc i
+  case_dir=$(make_case scout-report-only)
+  # Ordinary scratch never refuses: a small uncited file, a scratch edit, and
+  # a dependency tree larger than either threshold.
+  printf 'probe\n' > "$case_dir/wt/notes.txt"
+  mkdir -p "$case_dir/wt/node_modules/pkg"
+  for i in $(seq 1 30); do printf 'module %s\n' "$i" > "$case_dir/wt/node_modules/pkg/m$i.js"; done
+  head -c 100000 /dev/zero > "$case_dir/wt/node_modules/pkg/bundle.js"
+  write_scout_task "$case_dir" "# Finding
+
+The refusal lives in the upstream project (https://example.com/repo/blob/main/src/check.go#L40).
+Reproduced with a one-line probe; nothing else is needed."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-report-only: a report-only scout should tear down: $(cat "$case_dir/stderr")"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "scout-report-only: teardown printed a REFUSED line"
+  assert_absent "$case_dir/state/task-x1.meta" "scout-report-only: the completed teardown left the task record"
+  pass "a plain report-only scout tears down despite small scratch and dependency trees"
+}
+
+test_scout_large_uncited_artifact_dir_refuses() {
+  local case_dir rc i
+  case_dir=$(make_case scout-artifact-dir)
+  mkdir -p "$case_dir/wt/runs/grades"
+  for i in $(seq 1 25); do printf 'answer %s\n' "$i" > "$case_dir/wt/runs/grades/a$i.txt"; done
+  write_scout_task "$case_dir" "# Finding
+
+Model B wins; see the summary table above."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-artifact-dir: teardown should refuse a large untracked artifact directory"
+  assert_grep "runs/ (25 files)" "$case_dir/stderr" \
+    "scout-artifact-dir: the refusal did not name the untracked artifact directory"
+  assert_present "$case_dir/wt/runs/grades/a1.txt" "scout-artifact-dir: the refusal deleted the artifacts"
+  assert_present "$case_dir/state/task-x1.meta" "scout-artifact-dir: the refusal erased the task record"
+
+  set +e
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-artifact-dir: --force should override the artifact refusal: $(cat "$case_dir/stderr")"
+  pass "a scout worktree holding a large untracked artifact directory is refused unless --force discards it"
+}
+
 # Mark the case's home as a secondmate home bound to a parent: teardown and
 # fm-pr-check run with FM_HOME="$case_dir/home" so the parent-channel
 # publishers resolve that binding while the task state stays in $case_dir/state.
@@ -3672,6 +3768,9 @@ test_local_only_merged_to_local_main_allows
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
+test_scout_report_citing_worktree_only_file_refuses_until_copied
+test_scout_report_only_teardown_succeeds
+test_scout_large_uncited_artifact_dir_refuses
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
