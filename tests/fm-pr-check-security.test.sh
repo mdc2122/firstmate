@@ -2553,7 +2553,9 @@ test_merged_poll_row_names_no_authority_when_no_record_grants_one() {
 run_ready_signal_cycle() {  # <dir> <label>
   local dir=$1 label=$2 rc
   set +e
-  FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
+  # These cycles run fm-pr-check.sh inside the watcher; give loaded CI runners room.
+  FM_TEST_WATCH_ALARM=${FM_TEST_WATCH_ALARM:-120} \
+    FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
     FM_TEST_GLAB_LOG="$dir/glab.log" FM_TEST_GUARD_LOG="$dir/guard.log" \
     run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
   rc=$?
