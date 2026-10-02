@@ -84,8 +84,8 @@
 # than 20 files. Gitignored build output and caches are scratch by definition
 # and never count toward (b), nor do common build and cache directories
 # (SCOUT_ARTIFACT_PRUNE_NAMES). In a worktree of the firstmate repo itself,
-# neither (a) nor (b) counts the files its .omp/extensions/*.ts write into a
-# worktree-local state/ when no FM_HOME-scoped state exists there
+# neither (a) nor (b) counts the named runtime files its .omp/extensions/*.ts
+# write into a worktree-local state/ when run there without FM_HOME
 # (scout_artifact_path_is_omp_marker; they hold no work) unless the report
 # cites one by its own path. When nothing refuses, teardown warns, listing the
 # largest untracked items, ignored ones included, before deleting them.
