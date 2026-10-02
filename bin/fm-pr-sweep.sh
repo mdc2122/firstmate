@@ -15,12 +15,19 @@
 # state/<id>.meta whose kind is neither scout nor secondmate and whose recorded
 # worktree is on a named branch. Every registered GitHub repository - each
 # clone under this home's projects directory with a github.com origin - is
-# asked once for its open pull requests, and each non-draft, same-repository
-# PR whose head branch is a swept task's branch is matched to that task. So a
-# task opening several PRs, or a PR in another registered repository, is
-# found by branch name alone.
+# asked once for its open pull requests. A non-draft, same-repository PR whose
+# head branch carries a swept task's branch name is a candidate, but a name
+# match alone never arms anything; ownership is proven by commit:
+#   - same repository (the task worktree's origin): the PR's head commit must
+#     be the task worktree's HEAD;
+#   - another registered repository: the PR's head commit must exist in the
+#     task's recorded worktree= or project= clone.
+# Candidates are keyed by (repository, branch), so tasks sharing a branch name
+# in different repositories never collide. Two tasks owning one (repository,
+# branch), two tasks proving one cross-repository PR, or a candidate whose
+# head commit proves no task is reported by wake and never armed.
 #
-# For each matched PR whose checks are all green by bin/fm-pr-lib.sh's
+# For each owned PR whose checks are all green by bin/fm-pr-lib.sh's
 # fm_pr_github_checks_not_green (an empty or unreadable rollup is not green):
 #   - already armed for that exact PR, or its merge already delivered: nothing;
 #   - the task records yolo=on: arm it through bin/fm-pr-check.sh, the single
@@ -41,7 +48,8 @@
 # `check` prints each queued wake reason (nothing when nothing is due) and
 # exits 0 even when a repository cannot be read; a read failure is logged to
 # stderr and retried next sweep. FM_PR_SWEEP_GH_TIMEOUT (default 20) bounds
-# each GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default 60) each arm.
+# each GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default 60) each arm; a read
+# that times out ends the run's reads, so a degraded network costs one read.
 # FM_PROJECTS_OVERRIDE points at a different projects directory (tests).
 set -u
 export LC_ALL=C
@@ -78,9 +86,26 @@ ARM_TIMEOUT=$(whole_setting FM_PR_SWEEP_ARM_TIMEOUT 60)
 
 log() { printf 'fm-pr-sweep: %s\n' "$1" >&2; }
 
-# "<branch>\t<task>" for every swept task, one per line.
-task_branches() {
-  local meta task kind wt branch
+# "<owner>/<repo>" (lowercase) for a GitHub origin URL; fails otherwise.
+github_repo() {  # <url>
+  local url=$1
+  case "$url" in
+    https://github.com/*) url=${url#https://github.com/} ;;
+    git@github.com:*) url=${url#git@github.com:} ;;
+    ssh://git@github.com/*) url=${url#ssh://git@github.com/} ;;
+    *) return 1 ;;
+  esac
+  url=${url%/}
+  url=${url%.git}
+  case "$url" in */*/*|*[!A-Za-z0-9._/-]*|/*|*/|'') return 1 ;; esac
+  case "$url" in */*) ;; *) return 1 ;; esac
+  printf '%s\n' "$url" | tr '[:upper:]' '[:lower:]'
+}
+
+# "<repo>\t<branch>\t<task>\t<head>\t<worktree>\t<project>" for every swept
+# task, one per line; <repo> is empty when the worktree has no GitHub origin.
+task_rows() {
+  local meta task kind wt branch head repo
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] && [ ! -L "$meta" ] || continue
     task=$(basename "$meta" .meta)
@@ -91,27 +116,63 @@ task_branches() {
     [ -n "$wt" ] && [ -d "$wt" ] || continue
     branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null) || continue
     [ -n "$branch" ] || continue
-    printf '%s\t%s\n' "$branch" "$task"
+    head=$(git -C "$wt" rev-parse --verify --quiet HEAD 2>/dev/null) || continue
+    repo=$(github_repo "$(git -C "$wt" remote get-url origin 2>/dev/null)") || repo=
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$repo" "$branch" "$task" "$head" "$wt" "$(fm_meta_get "$meta" project)"
   done
 }
 
 # "<owner>/<repo>" for every registered GitHub clone, deduplicated.
 registered_repos() {
-  local dir url
+  local dir
   for dir in "$PROJECTS"/*/; do
     [ -d "$dir" ] || continue
-    url=$(git -C "$dir" remote get-url origin 2>/dev/null) || continue
-    case "$url" in
-      https://github.com/*) url=${url#https://github.com/} ;;
-      git@github.com:*) url=${url#git@github.com:} ;;
-      ssh://git@github.com/*) url=${url#ssh://git@github.com/} ;;
-      *) continue ;;
-    esac
-    url=${url%/}
-    url=${url%.git}
-    case "$url" in */*/*|*[!A-Za-z0-9._/-]*|/*|*/) continue ;; esac
-    printf '%s\n' "$url"
+    github_repo "$(git -C "$dir" remote get-url origin 2>/dev/null)" || continue
   done | sort -u
+}
+
+# 0 when commit <sha> exists in any of the given git directories.
+commit_in() {  # <sha> <dir>...
+  local sha=$1 dir
+  shift
+  for dir in "$@"; do
+    [ -n "$dir" ] && [ -d "$dir" ] || continue
+    git -C "$dir" cat-file -e "$sha^{commit}" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Resolve the task owning PR <repo> <branch> <sha> from $TASKS. Sets
+# OWNER_TASK (the owning task, or a comma-joined label when none is proven)
+# and OWNER_NOTE (empty when ownership is proven, else why it is not).
+pr_owner() {  # <repo> <branch> <sha>
+  local t_repo t_branch t_task t_head t_wt t_project names=""
+  local own="" own_n=0 own_head="" proven="" proven_n=0
+  while IFS=$'\t' read -r t_repo t_branch t_task t_head t_wt t_project; do
+    [ "$t_branch" = "$2" ] || continue
+    names="$names${names:+,}$t_task"
+    if [ "$t_repo" = "$1" ]; then
+      own=$t_task; own_head=$t_head; own_n=$((own_n + 1))
+    elif commit_in "$3" "$t_wt" "$t_project"; then
+      proven=$t_task; proven_n=$((proven_n + 1))
+    fi
+  done <<EOF
+$TASKS
+EOF
+  OWNER_TASK=$names
+  OWNER_NOTE=
+  if [ "$own_n" -gt 1 ]; then
+    OWNER_NOTE="several tasks ($names) are on that branch of $1"
+  elif [ "$own_n" -eq 1 ]; then
+    OWNER_TASK=$own
+    [ "$own_head" = "$3" ] || OWNER_NOTE="its head commit is not $own's worktree HEAD"
+  elif [ "$proven_n" -eq 1 ]; then
+    OWNER_TASK=$proven
+  elif [ "$proven_n" -gt 1 ]; then
+    OWNER_NOTE="its head commit is in several tasks' clones ($names)"
+  else
+    OWNER_NOTE="its head commit is in no clone recorded for $names"
+  fi
 }
 
 # 0 when <task>'s armed poll names exactly <url>; sets nothing else.
@@ -122,39 +183,55 @@ armed_for() {  # <task> <provider> <host> <path> <number>
 }
 
 action_check() {
-  local branches repos repo json prs pr url branch task meta red armed_any
+  local branches repos repo json prs pr url branch sha task meta red armed_any
   local provider host path number out rc reason entry read_failed=0
   local -a wakes=() keys=() keep=()
-  branches=$(task_branches)
-  [ -n "$branches" ] || { record_write; return 0; }
+  TASKS=$(task_rows)
+  [ -n "$TASKS" ] || { record_write; return 0; }
+  branches=$(printf '%s\n' "$TASKS" | cut -f2 | sort -u)
   repos=$(registered_repos)
   [ -n "$repos" ] || { record_write; return 0; }
   command -v gh >/dev/null 2>&1 || { log "gh not found; sweep skipped"; return 0; }
   command -v jq >/dev/null 2>&1 || { log "jq not found; sweep skipped"; return 0; }
   while IFS= read -r repo; do
     [ -n "$repo" ] || continue
-    if ! json=$(fm_run_timed "$GH_TIMEOUT" gh pr list --repo "$repo" --state open --limit 100 \
-        --json url,headRefName,isDraft,isCrossRepository,statusCheckRollup 2>/dev/null) \
-      || ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
-      log "could not read open pull requests for $repo; retried next sweep"
+    rc=0
+    json=$(fm_run_timed "$GH_TIMEOUT" gh pr list --repo "$repo" --state open --limit 100 \
+      --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup 2>/dev/null) || rc=$?
+    if [ "$rc" -ne 0 ] || ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
       read_failed=1
+      if [ "$rc" -eq 124 ]; then
+        log "reading open pull requests for $repo timed out; remaining repositories retried next sweep"
+        break
+      fi
+      log "could not read open pull requests for $repo; retried next sweep"
       continue
     fi
     prs=$(printf '%s' "$json" | jq -c --arg branches "$branches" '
-      ($branches | split("\n") | map(select(. != "") | split("\t") | {key: .[0], value: .[1]}) | from_entries) as $map
-      | .[] | select((.isDraft | not) and (.isCrossRepository | not) and ($map[.headRefName] != null))
-      | {url, branch: .headRefName, task: $map[.headRefName], pr: .}') || continue
+      ($branches | split("\n") | map(select(. != ""))) as $names
+      | .[] | select((.isDraft | not) and (.isCrossRepository | not) and (.headRefName as $b | $names | index($b)))
+      | {url, branch: .headRefName, sha: (.headRefOid // ""), pr: .}') || continue
     while IFS= read -r pr; do
       [ -n "$pr" ] || continue
       url=$(printf '%s' "$pr" | jq -r .url)
-      task=$(printf '%s' "$pr" | jq -r .task)
       branch=$(printf '%s' "$pr" | jq -r .branch)
+      sha=$(printf '%s' "$pr" | jq -r .sha)
       fm_pr_url_parse "$url" || continue
       provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
       # Green only by the shared rule, and never on an empty rollup.
       printf '%s' "$pr" | jq -e '(.pr.statusCheckRollup | type) == "array" and (.pr.statusCheckRollup | length) > 0' >/dev/null || continue
       red=$(fm_pr_github_checks_not_green "$(printf '%s' "$pr" | jq -c .pr)") || continue
       [ -z "$red" ] || continue
+      case "$sha" in ''|*[!0-9a-f]*) continue ;; esac
+      pr_owner "$repo" "$branch" "$sha"
+      task=$OWNER_TASK
+      if [ -n "$OWNER_NOTE" ]; then
+        keep+=("$task $url")
+        seen "$task $url" && continue
+        wakes+=("check: pr-sweep: green PR $url on branch $branch was not armed: $OWNER_NOTE; arm it with bin/fm-pr-check.sh <task> $url only if it is that task's PR and its merge is authorized")
+        keys+=("pr-sweep-$repo-$branch")
+        continue
+      fi
       armed_for "$task" "$provider" "$host" "$path" "$number" && continue
       fm_pr_poll_merge_already_notified "$STATE" "$task" "$provider" "$host" "$path" "$number" && continue
       meta="$STATE/$task.meta"
@@ -165,7 +242,7 @@ action_check() {
         out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
           fm_run_timed "$ARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" "$task" "$url" 2>&1) || rc=$?
         if [ "$rc" -eq 0 ]; then
-          log "armed merge poll for $task from its green branch PR: $url"
+          log "armed merge poll for $task from its green PR at its own commit: $url"
           continue
         fi
         reason="check: pr-sweep: green PR $url on $task's branch $branch could not be armed (rc=$rc): $(printf '%s' "$out" | tr '\r\n\t' '   ' | cut -c1-400)"

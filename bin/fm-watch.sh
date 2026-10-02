@@ -116,8 +116,9 @@
 #                          the forge-side sweep (bin/fm-pr-sweep.sh, every
 #                          FM_PR_SWEEP_INTERVAL) found a green open PR on a
 #                          live task's branch that it did not arm: a non-yolo
-#                          task, a task already polling another PR, or a
-#                          refused arm; once per PR. Several in one sweep wake
+#                          task, a task already polling another PR, a refused
+#                          arm, or a PR whose head commit proves no single
+#                          task owns it; once per PR. Several in one sweep wake
 #                          as one count line, each row queued separately
 #   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
 #                          an armed GitHub merge poll's pull request has had every
@@ -249,8 +250,13 @@ HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
 HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
 PR_SWEEP_INTERVAL=${FM_PR_SWEEP_INTERVAL:-$HEARTBEAT}  # seconds between forge-side PR sweeps (bin/fm-pr-sweep.sh)
 case "$PR_SWEEP_INTERVAL" in ''|*[!0-9]*|0) PR_SWEEP_INTERVAL=600 ;; esac
-PR_SWEEP_TIMEOUT=${FM_PR_SWEEP_TIMEOUT:-240}  # seconds allowed for one whole forge-side PR sweep
-case "$PR_SWEEP_TIMEOUT" in ''|*[!0-9]*|0) PR_SWEEP_TIMEOUT=240 ;; esac
+PR_SWEEP_TIMEOUT=${FM_PR_SWEEP_TIMEOUT:-90}  # seconds allowed for one whole forge-side PR sweep
+case "$PR_SWEEP_TIMEOUT" in ''|*[!0-9]*|0) PR_SWEEP_TIMEOUT=90 ;; esac
+case "$WATCHER_STALE_GRACE" in
+  ''|*[!0-9]*) ;;
+  *) [ "$PR_SWEEP_TIMEOUT" -le $((WATCHER_STALE_GRACE / 3)) ] || [ "$WATCHER_STALE_GRACE" -lt 3 ] \
+       || PR_SWEEP_TIMEOUT=$((WATCHER_STALE_GRACE / 3)) ;;
+esac
 QUEUE_ZERO_INTERVAL=${FM_QUEUE_ZERO_INTERVAL:-900}  # seconds between queue inbox-zero checks (bin/fm-queue-zero.sh)
 case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
@@ -2990,9 +2996,10 @@ EOF
   # PR is found within one interval however quiet the fleet is. Its stderr
   # diagnostics go to the triage log; only its queued wake lines wake firstmate.
   if [ "$(age_of "$STATE/.last-pr-sweep")" -ge "$PR_SWEEP_INTERVAL" ]; then
-    touch "$STATE/.last-pr-sweep"
+    touch "$STATE/.last-pr-sweep" "$STATE/.last-watcher-beat"
     FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
       run_action_capture "$PR_SWEEP_TIMEOUT" "$SCRIPT_DIR/fm-pr-sweep.sh" check || exit 1
+    touch "$STATE/.last-watcher-beat"
     pr_sweep_wakes=$(printf '%s\n' "$FM_CHECK_RESULT" | grep '^check: pr-sweep: ' || true)
     pr_sweep_logs=$(printf '%s\n' "$FM_CHECK_RESULT" | grep -v '^check: pr-sweep: ' | tr '\n' ' ' || true)
     [ -z "${pr_sweep_logs// /}" ] || triage_log "pr sweep (rc=$FM_ACTION_STATUS): $pr_sweep_logs"
