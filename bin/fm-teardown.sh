@@ -79,9 +79,12 @@
 # the report cites resolves inside the worktree to a file that no surviving ref
 # holds - untracked, ignored, or added only in the index or in commits that no
 # remote-tracking branch and no local default branch reaches (edits to tracked
-# files stay scratch) - or (b) an untracked or ignored entry is significant on
-# its own: a file over 64 KiB, or a new directory holding more than 20 files.
-# Common build and cache directories (SCOUT_ARTIFACT_PRUNE_NAMES) never count.
+# files stay scratch) - or (b) an untracked entry the report does not cite is
+# significant on its own: a file over 64 KiB, or a new directory holding more
+# than 20 files. Gitignored build output and caches are scratch by definition
+# and never count toward (b), nor do common build and cache directories
+# (SCOUT_ARTIFACT_PRUNE_NAMES). When nothing refuses, teardown warns, listing
+# the largest untracked items, ignored ones included, before deleting them.
 # Content with a byte-identical copy anywhere under data/<task-id>/ counts as
 # preserved, so the remedy is to copy it there, where it survives cleanup with
 # the home's private records, or to commit and push it. Like the landed-work
@@ -1861,7 +1864,7 @@ scout_report_path_tokens() {  # <report>
 }
 
 validate_scout_worktree_artifacts() {  # <report>
-  local report=$1 wt=${WT%/} tok rel listing entry files count unsaved size default kib
+  local report=$1 wt=${WT%/} tok rel listing all_listing largest entry files count unsaved size default kib
   local cited='' cited_rels='' artifacts=''
   local -a survivors=(--remotes)
   [ -n "$wt" ] && [ -d "$wt" ] || return 0
@@ -1877,8 +1880,8 @@ validate_scout_worktree_artifacts() {  # <report>
         survivors+=("refs/heads/$default")
       fi
       SCOUT_ARTIFACT_NEW=$(
-        git -c core.quotePath=false -C "$WT" diff --name-only --relative --diff-filter=A HEAD -- &&
-        git -c core.quotePath=false -C "$WT" log --format= --name-only --relative --diff-filter=A HEAD --not "${survivors[@]}" --
+        git -c core.quotePath=false -C "$WT" diff --no-renames --name-only --relative --diff-filter=A HEAD -- &&
+        git -c core.quotePath=false -C "$WT" log --no-renames --format= --name-only --relative --diff-filter=A HEAD --not "${survivors[@]}" --
       ) || { scout_artifact_uninspectable "files added only locally"; return 1; }
     fi
   fi
@@ -1913,14 +1916,17 @@ validate_scout_worktree_artifacts() {  # <report>
 $(scout_report_path_tokens "$report")
 EOF
 
-  # (b) Untracked or ignored entries large enough to be output worth keeping.
+  # (b) Uncited untracked entries, never gitignored ones, large enough to be
+  # output worth keeping.
   if [ "$SCOUT_ARTIFACT_GIT" = 1 ]; then
-    listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --directory --no-empty-directory) \
+    listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard --directory --no-empty-directory) \
+      && all_listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --directory --no-empty-directory) \
       || { scout_artifact_uninspectable "untracked files"; return 1; }
   else
     listing=$(find "$SCOUT_ARTIFACT_ROOT" -mindepth 1 -maxdepth 1 -print | while IFS= read -r entry; do
       if [ -d "$entry" ] && [ ! -L "$entry" ]; then printf '%s/\n' "${entry##*/}"; else printf '%s\n' "${entry##*/}"; fi
     done)
+    all_listing=$listing
   fi
   kib=$SCOUT_ARTIFACT_MAX_KIB
   while IFS= read -r entry; do
@@ -1959,14 +1965,29 @@ EOF
 $listing
 EOF
 
-  [ -n "$cited$artifacts" ] || return 0
+  if [ -z "$cited$artifacts" ]; then
+    largest=$(while IFS= read -r entry; do
+      entry=${entry%/}
+      [ -n "$entry" ] || continue
+      size=$(du -sk "$SCOUT_ARTIFACT_ROOT/$entry" 2>/dev/null) || continue
+      printf '%s\t%s\n' "${size%%[!0-9]*}" "$entry"
+    done <<EOF | sort -rn | head -n 5
+$all_listing
+EOF
+)
+    if [ -n "$largest" ]; then
+      echo "warning: cleaning up scout task $ID deletes these untracked or ignored items in its worktree $WT (largest first, KiB):" >&2
+      printf '%s\n' "$largest" | sed 's/^/  /' >&2
+    fi
+    return 0
+  fi
   echo "REFUSED: scout task $ID's worktree $WT holds work that exists nowhere else, and cleanup would delete it." >&2
   if [ -n "$cited" ]; then
     echo "Paths its report cites that exist only in the worktree:" >&2
     printf '%s' "$cited" >&2
   fi
   if [ -n "$artifacts" ]; then
-    echo "Untracked or ignored output over ${kib} KiB, or new directories over $SCOUT_ARTIFACT_MAX_DIR_FILES files:" >&2
+    echo "Untracked, not gitignored output the report does not cite, over ${kib} KiB or in new directories over $SCOUT_ARTIFACT_MAX_DIR_FILES files:" >&2
     printf '%s' "$artifacts" >&2
   fi
   echo "Preserve each one first: copy it into $DATA/$ID/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown." >&2

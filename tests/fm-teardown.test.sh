@@ -1859,12 +1859,16 @@ All graded answers are in \`$answers:1\`; the harness is described below."
 test_scout_report_only_teardown_succeeds() {
   local case_dir rc i
   case_dir=$(make_case scout-report-only)
-  # Ordinary scratch never refuses: a small uncited file, a scratch edit, and
-  # a dependency tree larger than either threshold.
+  # Ordinary scratch never refuses: a small uncited file, a scratch edit, a
+  # dependency tree larger than either threshold, and gitignored build output.
   printf 'probe\n' > "$case_dir/wt/notes.txt"
   mkdir -p "$case_dir/wt/node_modules/pkg"
   for i in $(seq 1 30); do printf 'module %s\n' "$i" > "$case_dir/wt/node_modules/pkg/m$i.js"; done
   head -c 100000 /dev/zero > "$case_dir/wt/node_modules/pkg/bundle.js"
+  printf '%s\n' '/probe-bin' '/out/' > "$case_dir/wt/.gitignore"
+  head -c 200000 /dev/zero > "$case_dir/wt/probe-bin"
+  mkdir -p "$case_dir/wt/out"
+  for i in $(seq 1 30); do printf 'object %s\n' "$i" > "$case_dir/wt/out/o$i.o"; done
   write_scout_task "$case_dir" "# Finding
 
 The refusal lives in the upstream project (https://example.com/repo/blob/main/src/check.go#L40).
@@ -1876,8 +1880,34 @@ Reproduced with a one-line probe; nothing else is needed."
   set -e
   expect_code 0 "$rc" "scout-report-only: a report-only scout should tear down: $(cat "$case_dir/stderr")"
   ! grep -q REFUSED "$case_dir/stderr" || fail "scout-report-only: teardown printed a REFUSED line"
+  assert_grep "probe-bin" "$case_dir/stderr" \
+    "scout-report-only: the cleanup warning did not list the largest ignored file"
   assert_absent "$case_dir/state/task-x1.meta" "scout-report-only: the completed teardown left the task record"
-  pass "a plain report-only scout tears down despite small scratch and dependency trees"
+  pass "a plain report-only scout tears down despite small scratch, dependency trees, and gitignored output"
+}
+
+test_scout_report_citing_locally_moved_file_refuses() {
+  local case_dir rc
+  case_dir=$(make_case scout-moved-artifact)
+  printf 'print("harness")\n' > "$case_dir/wt/harness.py"
+  git -C "$case_dir/wt" add harness.py
+  git -C "$case_dir/wt" -c user.email=t@t -c user.name=t commit -q -m "add harness"
+  mkdir -p "$case_dir/wt/bench"
+  git -C "$case_dir/wt" mv harness.py bench/harness.py
+  git -C "$case_dir/wt" -c user.email=t@t -c user.name=t commit -q -m "move harness"
+  write_scout_task "$case_dir" "# Bake-off
+
+The harness is \`bench/harness.py\`."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-moved-artifact: teardown should refuse while the report cites a file added and moved only in local commits"
+  assert_grep "bench/harness.py" "$case_dir/stderr" \
+    "scout-moved-artifact: the refusal did not name the moved cited file"
+  assert_present "$case_dir/wt/bench/harness.py" "scout-moved-artifact: the refusal deleted the cited file"
+  pass "a scout whose report cites a file added then moved only in local commits is refused"
 }
 
 test_scout_large_uncited_artifact_dir_refuses() {
@@ -3771,6 +3801,7 @@ test_local_only_force_overrides_unpushed
 test_scout_report_citing_worktree_only_file_refuses_until_copied
 test_scout_report_only_teardown_succeeds
 test_scout_large_uncited_artifact_dir_refuses
+test_scout_report_citing_locally_moved_file_refuses
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
