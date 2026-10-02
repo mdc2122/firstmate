@@ -2548,6 +2548,105 @@ test_merged_poll_row_names_no_authority_when_no_record_grants_one() {
   pass "poll distinguishes attended authorization from external landing"
 }
 
+# --- merge poll armed from the worker's ready line ----------------------------
+
+run_ready_signal_cycle() {  # <dir> <label>
+  local dir=$1 label=$2 rc
+  set +e
+  FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
+    FM_TEST_GLAB_LOG="$dir/glab.log" FM_TEST_GUARD_LOG="$dir/guard.log" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "$label: ready-signal watcher cycle failed (rc=$rc): $(cat "$dir/$label.err")"
+  case "$(cat "$dir/$label.out")" in
+    signal:*task-a.status*) ;;
+    *) fail "$label: the ready line did not still wake firstmate: $(cat "$dir/$label.out")" ;;
+  esac
+}
+
+assert_poll_armed_for() {  # <state> <url> <label>
+  local state=$1 url=$2 label=$3
+  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" \
+    || fail "$label: no authenticated merge poll was armed"
+  [ "$FM_PR_DATA_URL" = "$url" ] || fail "$label: armed poll names $FM_PR_DATA_URL, not $url"
+  [ "$(grep -c '^pr=' "$state/task-a.meta")" = 1 ] \
+    || fail "$label: task metadata does not record exactly one pr="
+  grep -qxF "pr=$url" "$state/task-a.meta" || fail "$label: task metadata does not record pr=$url"
+  ! grep -F 'merge poll not armed' "$state/.wake-queue" >/dev/null 2>&1 \
+    || fail "$label: a successful arm queued a failure row"
+}
+
+test_ready_line_arms_merge_poll_once_and_rearms_on_change() {
+  local dir state url_a url_b before
+  url_a=https://github.com/o/r/pull/395
+  url_b=https://github.com/o/r/pull/396
+  dir=$(make_case ready-line-autoarm)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  printf 'working: validating\ndone: PR %s checks green\n' "$url_a" > "$state/task-a.status"
+
+  run_ready_signal_cycle "$dir" first
+  assert_poll_armed_for "$state" "$url_a" "no-mistakes ready line"
+  ack_watcher_cycle "$state" || fail "first ready-line wake acknowledgement failed"
+
+  before=$(poll_artifact_snapshot "$state" task-a)
+  printf 'done: PR %s\n' "$url_a" >> "$state/task-a.status"
+  run_ready_signal_cycle "$dir" repeat
+  [ "$(poll_artifact_snapshot "$state" task-a)" = "$before" ] \
+    || fail "a repeated ready line for the armed PR re-registered its poll"
+  ack_watcher_cycle "$state" || fail "repeat ready-line wake acknowledgement failed"
+
+  printf 'done: PR %s\n' "$url_b" >> "$state/task-a.status"
+  run_ready_signal_cycle "$dir" changed
+  assert_poll_armed_for "$state" "$url_b" "direct-PR ready line for a new PR"
+  pass "a ready line arms its merge poll once, a repeat is a no-op, and a new PR re-arms"
+}
+
+test_non_ready_lines_arm_nothing() {
+  local dir state
+  dir=$(make_case ready-line-malformed)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  write_task_meta "$dir" scout-a
+  printf 'kind=scout\n' >> "$state/scout-a.meta"
+  {
+    printf 'done: PR https://github.com/o/r/pull/abc checks green\n'
+    printf 'done: PR https://github.com/o/r/pull/7 merged and more\n'
+    printf 'done: see PR https://github.com/o/r/pull/8\n'
+    printf 'working: PR https://github.com/o/r/pull/9 checks green\n'
+    printf 'done: PR http://github.com/o/r/pull/10\n'
+    printf 'done: report written\n'
+  } > "$state/task-a.status"
+  printf 'done: PR https://github.com/o/r/pull/11 checks green\n' > "$state/scout-a.status"
+
+  run_ready_signal_cycle "$dir" malformed
+  for id in task-a scout-a; do
+    [ ! -e "$state/$id.check.sh" ] && [ ! -e "$state/$id.pr-poll" ] \
+      || fail "$id: a non-ready line armed a merge poll"
+    ! grep -q '^pr=' "$state/$id.meta" || fail "$id: a non-ready line recorded pr="
+  done
+  ! grep -F 'merge poll not armed' "$state/.wake-queue" >/dev/null 2>&1 \
+    || fail "a non-ready line queued an arming failure"
+  pass "malformed, non-PR, non-done, and scout ready lines arm nothing"
+}
+
+test_refused_ready_line_arm_is_queued() {
+  local dir state url
+  url=https://gitlab.com/group/project/-/merge_requests/4
+  dir=$(make_case ready-line-refused)
+  state="$dir/home/state"
+  rm -f "$dir/fakebin/glab"
+  write_task_meta "$dir" task-a
+  printf 'done: PR %s checks green\n' "$url" > "$state/task-a.status"
+
+  run_ready_signal_cycle "$dir" refused
+  [ ! -e "$state/task-a.check.sh" ] || fail "a refused arm left a merge poll behind"
+  grep -F "check: merge poll not armed for task-a $url (rc=1)" "$state/.wake-queue" >/dev/null \
+    || fail "a refused arm was not queued for firstmate: $(cat "$state/.wake-queue" 2>/dev/null)"
+  pass "a ready line whose arm is refused queues the failure beside its signal"
+}
+
 # --- yolo merge posture applied by the poll ----------------------------------
 
 test_yolo_poll_merges_a_green_pr() {
@@ -2907,6 +3006,9 @@ test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
 test_merged_poll_row_names_no_authority_when_no_record_grants_one
+test_ready_line_arms_merge_poll_once_and_rearms_on_change
+test_non_ready_lines_arm_nothing
+test_refused_ready_line_arm_is_queued
 test_yolo_poll_merges_a_green_pr
 test_yolo_poll_reports_only_for_non_yolo_and_red
 test_yolo_poll_queued_merge_keeps_polling

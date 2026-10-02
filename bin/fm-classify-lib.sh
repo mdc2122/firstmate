@@ -387,6 +387,21 @@ status_line_note() {  # <status-line> -> text after the first colon, trimmed
   fi
   printf '%s' "$n"
 }
+# The PR URL a worker's ready signal names, printed unvalidated; returns 1 for
+# any other line. The ready signal is a whole `done: PR <url>` line (direct-PR)
+# or `done: PR <url> checks green` line (no-mistakes), whose worker-facing
+# wording bin/fm-dod-lib.sh owns. Callers validate the URL with
+# bin/fm-pr-lib.sh's fm_pr_url_parse before acting on it.
+status_line_ready_pr_url() {  # <status-line> -> url
+  local url
+  [ "$(status_line_verb "$1")" = "done" ] || return 1
+  url=$(status_line_note "$1")
+  url=${url%"${url##*[![:space:]]}"}
+  case "$url" in "PR "*) url=${url#PR } ;; *) return 1 ;; esac
+  url=${url% checks green}
+  case "$url" in ''|*[[:space:]]*) return 1 ;; esac
+  printf '%s' "$url"
+}
 _fm_decision_key() {  # <status-line> -> key slug, or "default" when no token
   local k
   if _fm_key_before_colon "$1"; then
@@ -1810,6 +1825,22 @@ status_span_first_actionable() {  # <status-file> <start-offset>
 
 status_span_has_actionable() {  # <status-file> <start-offset>
   status_span_first_actionable_record "$1" "${2:-0}" > /dev/null
+}
+
+# The PR URL named by the LAST ready-signal line (status_line_ready_pr_url) in
+# the bytes [start, end) of a status log; returns 1 when the span holds none.
+# Only newline-terminated lines count, so a line still being appended can never
+# yield a truncated URL that parses as a different PR.
+status_span_ready_pr_url() {  # <status-file> <start-offset> <end-offset>
+  local f=$1 start=$2 end=$3 line url found=''
+  case "$start$end" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$end" -gt "$start" ] || return 1
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+  while IFS= read -r line; do
+    url=$(status_line_ready_pr_url "$line") && found=$url
+  done < <(_fm_status_read_span "$f" "$start" "$((end - start))" 2>/dev/null)
+  [ -n "$found" ] || return 1
+  printf '%s' "$found"
 }
 
 # Classify WHY an idle/stale crew MIGHT be safely absorbed instead of surfaced,
