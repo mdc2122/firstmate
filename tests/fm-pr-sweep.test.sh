@@ -144,7 +144,7 @@ EOF
 # moving the worktree: the new commit lives in the shared clone only.
 pipeline_commit() {  # <home> <task> <parent> <message>
   local wt="$1/wt-$2"
-  git -C "$wt" commit-tree "$3^{tree}" -p "$3" -m "$4"
+  git -C "$wt" -c user.name=fm -c user.email=fm@example.invalid commit-tree "$3^{tree}" -p "$3" -m "$4"
 }
 
 sweep() {  # <home>
@@ -365,7 +365,7 @@ test_descendant_through_a_merge_commit_is_refused() {
   wt_head=$(head_of "$home" t1)
   # A merge of an unrelated side commit on top of the worktree HEAD.
   side=$(pipeline_commit "$home" t1 "$(git -C "$home/projects/viral-moment" rev-parse main)" "side work")
-  merged=$(git -C "$home/wt-t1" commit-tree "$wt_head^{tree}" -p "$wt_head" -p "$side" -m "merge side")
+  merged=$(git -C "$home/wt-t1" -c user.name=fm -c user.email=fm@example.invalid commit-tree "$wt_head^{tree}" -p "$wt_head" -p "$side" -m "merge side")
   forge_prs "$home" o/viral-moment "41|fm/t1|$GREEN|$merged"
 
   sweep "$home"
