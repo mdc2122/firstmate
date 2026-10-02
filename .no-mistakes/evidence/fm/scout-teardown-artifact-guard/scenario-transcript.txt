@@ -1,0 +1,47 @@
+=== Scenario 1: bake-off incident reproduction ===
+$ fm-teardown.sh task-x1 1 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/err  -> exit 1
+    REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/wt holds work that exists nowhere else, and cleanup would delete it.
+    Paths its report cites that exist only in the worktree:
+      bakeoff/answers/answers.jsonl
+      bakeoff/harness.py
+      bakeoff/tasks/ (30 files not preserved)
+    Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+    Use --force only after the captain explicitly approves discarding them.
+
+worktree files still present: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/wt/bakeoff/answers/answers.jsonl /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/wt/bakeoff/harness.py 
+
+--- remedy: commit everything and push to origin, then retry ---
+$ fm-teardown.sh task-x1 0 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/bakeoff/err  -> exit 0
+
+task record present after teardown? no
+answers preserved on origin:      407 lines
+
+=== Scenario 2 (adversarial): report cites a GITIGNORED file -> still refuses ===
+$ fm-teardown.sh task-x1 1 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-ignored/err  -> exit 1
+    REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-ignored/wt holds work that exists nowhere else, and cleanup would delete it.
+    Paths its report cites that exist only in the worktree:
+      results/grades.csv
+    Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-ignored/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+    Use --force only after the captain explicitly approves discarding them.
+
+=== Scenario 3 (adversarial): report cites a directory holding worktree-only files -> refuses ===
+$ fm-teardown.sh task-x1 1 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-dir/err  -> exit 1
+    REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-dir/wt holds work that exists nowhere else, and cleanup would delete it.
+    Paths its report cites that exist only in the worktree:
+      runs/ (1 files not preserved)
+    Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-dir/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+    Use --force only after the captain explicitly approves discarding them.
+
+=== Scenario 4: report cites a tracked file already on origin -> no refusal ===
+$ fm-teardown.sh task-x1 0 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/cited-tracked/err  -> exit 0
+
+=== Scenario 5: --force overrides the cited-artifact refusal ===
+$ fm-teardown.sh task-x1 1 /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/force/err  -> exit 1
+    REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/force/wt holds work that exists nowhere else, and cleanup would delete it.
+    Paths its report cites that exist only in the worktree:
+      only-here.txt
+    Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/force/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+    Use --force only after the captain explicitly approves discarding them.
+
+$ fm-teardown.sh task-x1 0 (--force) /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.I2G2EY/force/err  -> exit 0 (--force)
+

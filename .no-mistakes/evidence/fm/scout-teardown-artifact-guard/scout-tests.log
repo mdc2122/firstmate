@@ -1,0 +1,5 @@
+ok - a scout whose report cites a worktree-only file is refused until that file is copied into data/<id>/
+ok - a plain report-only scout tears down despite small scratch, dependency trees, and gitignored output
+ok - a scout worktree holding a large untracked artifact directory is refused unless --force discards it
+ok - a scout whose report cites a file added then moved only in local commits is refused
+ok - an uncited embedded repository holding worktree-only files refuses scout teardown
