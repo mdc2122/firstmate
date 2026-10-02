@@ -1,0 +1,15 @@
+## scenario=cite-state-dir fm-root=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3Z8RJE5Q70RPME85C9DJ6YV
+## worktree untracked/ignored files:
+   state/.omp-turnend-extension-loaded
+   state/.omp-watch-extension-loaded
+   state/extensions/omp-primary-watch/session-generations.log
+   state/extensions/omp-primary-watch/session-replacement-actionable.json
+## report:
+   # Loose ends
+   
+   The worktree's state/ held only omp runtime markers; nothing in `state/` is a deliverable.
+## fm-teardown.sh exit=0
+## stderr:
+   warning: cleaning up scout task task-x1 deletes these untracked or ignored items in its worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fmtd.Wv5gnB/wt (largest first, KiB):
+     16	state
+## task meta after: removed

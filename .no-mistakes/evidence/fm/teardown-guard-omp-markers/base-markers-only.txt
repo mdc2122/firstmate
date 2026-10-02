@@ -1,0 +1,15 @@
+## scenario=markers-only fm-root=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.ooLRiYRlbm
+## worktree untracked/ignored files:
+   state/.omp-turnend-extension-loaded
+   state/.omp-watch-extension-loaded
+   state/extensions/omp-primary-watch/session-generations.log
+   state/extensions/omp-primary-watch/session-replacement-actionable.json
+## report:
+   # Loose ends
+   
+   Swept the open loose ends; nothing here is a deliverable.
+## fm-teardown.sh exit=0
+## stderr:
+   warning: cleaning up scout task task-x1 deletes these untracked or ignored items in its worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fmtd.IlUXnP/wt (largest first, KiB):
+     16	state
+## task meta after: removed

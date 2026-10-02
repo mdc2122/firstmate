@@ -1,0 +1,15 @@
+## scenario=cwd-markers fm-root=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.ooLRiYRlbm
+## worktree untracked/ignored files:
+   state/.omp-turnend-extension-loaded
+## report:
+   # Loose ends
+   
+   Nothing in `state/` is a deliverable; it is runtime noise, not work.
+## fm-teardown.sh exit=1
+## stderr:
+   REFUSED: scout task task-x1's worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fmtd.DAi4ez/wt holds work that exists nowhere else, and cleanup would delete it.
+   Paths its report cites that exist only in the worktree:
+     state/ (1 files not preserved)
+   Preserve each one first: copy it into /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fmtd.DAi4ez/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+   Use --force only after the captain explicitly approves discarding them.
+## task meta after: present

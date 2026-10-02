@@ -1,0 +1,12 @@
+## scenario=cwd-markers fm-root=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M3Z8RJE5Q70RPME85C9DJ6YV
+## worktree untracked/ignored files:
+   state/.omp-turnend-extension-loaded
+## report:
+   # Loose ends
+   
+   Nothing in `state/` is a deliverable; it is runtime noise, not work.
+## fm-teardown.sh exit=0
+## stderr:
+   warning: cleaning up scout task task-x1 deletes these untracked or ignored items in its worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fmtd.V49xrS/wt (largest first, KiB):
+     4	state
+## task meta after: removed
