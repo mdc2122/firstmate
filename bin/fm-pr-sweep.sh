@@ -19,7 +19,13 @@
 # head branch carries a swept task's branch name is a candidate, but a name
 # match alone never arms anything; ownership is proven by commit:
 #   - same repository (the task worktree's origin): the PR's head commit must
-#     be the task worktree's HEAD;
+#     be the task worktree's HEAD, or descend from it through commits that are
+#     all on the PR's own branch with no merge among them - the shape a
+#     no-mistakes run leaves when it pushes its fix commits on top of the
+#     worker's commit. The descent is read from GitHub (the compare of the
+#     worktree HEAD with the forge-reported PR head, and the PR's commit
+#     list), never fetched into the worker's repository; any other relation,
+#     or one that cannot be read, is refused;
 #   - another registered repository: the PR's head commit must exist in the
 #     task's recorded worktree= or project= clone.
 # Candidates are keyed by (repository, branch), so tasks sharing a branch name
@@ -148,8 +154,10 @@ commit_in() {  # <sha> <dir>...
 }
 
 # Resolve the task owning PR <repo> <branch> <sha> from $TASKS. Sets
-# OWNER_TASK (the owning task, or a comma-joined label when none is proven)
-# and OWNER_NOTE (empty when ownership is proven, else why it is not).
+# OWNER_TASK (the owning task, or a comma-joined label when none is proven),
+# OWNER_NOTE (empty when ownership is proven, else why it is not), and
+# OWNER_BASE (the same-repository task's worktree HEAD when the PR head
+# differs from it, so the caller proves the descent; empty otherwise).
 pr_owner() {  # <repo> <branch> <sha>
   local t_repo t_branch t_task t_head t_wt t_project names=""
   local own="" own_n=0 own_head="" proven="" proven_n=0
@@ -166,11 +174,12 @@ $TASKS
 EOF
   OWNER_TASK=$names
   OWNER_NOTE=
+  OWNER_BASE=
   if [ "$own_n" -gt 1 ]; then
     OWNER_NOTE="several tasks ($names) are on that branch of $1"
   elif [ "$own_n" -eq 1 ]; then
     OWNER_TASK=$own
-    [ "$own_head" = "$3" ] || OWNER_NOTE="its head commit is not $own's worktree HEAD"
+    [ "$own_head" = "$3" ] || OWNER_BASE=$own_head
   elif [ "$proven_n" -eq 1 ]; then
     OWNER_TASK=$proven
   elif [ "$proven_n" -gt 1 ]; then
@@ -178,6 +187,34 @@ EOF
   else
     OWNER_NOTE="its head commit is in no clone recorded for $names"
   fi
+}
+
+# 0 when PR <url> in <repo> at forge-reported head <sha> descends from the
+# task's worktree HEAD <base> through commits that are all single-parent and
+# all in the PR's own commit list; 1 when GitHub shows any other relation;
+# 2 when either read fails or times out (DESCENT_RC carries 124 for a timeout).
+pr_head_descends() {  # <repo> <url> <base> <sha>
+  local repo=$1 url=$2 base=$3 sha=$4 cmp pr_commits rc=0
+  DESCENT_RC=0
+  cmp=$(fm_run_timed "$GH_TIMEOUT" gh api "repos/$repo/compare/$base...$sha" \
+    --jq '{status, behind_by, commits: [.commits[] | {sha, parents: (.parents | length)}]}' 2>/dev/null) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    # GitHub answers 404 for a base it does not have: a local commit never
+    # pushed is not on the PR's branch, so that is a refusal, not a read error.
+    DESCENT_RC=$rc
+    [ "$rc" -eq 124 ] && return 2
+    return 1
+  fi
+  printf '%s' "$cmp" | jq -e '.status == "ahead" and .behind_by == 0 and (.commits | length) > 0
+    and all(.commits[]; .parents == 1)' >/dev/null 2>&1 || return 1
+  rc=0
+  pr_commits=$(fm_run_timed "$GH_TIMEOUT" gh pr view "$url" --json commits --jq '[.commits[].oid]' 2>/dev/null) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    DESCENT_RC=$rc
+    return 2
+  fi
+  printf '%s' "$cmp" | jq -e --argjson onpr "$pr_commits" --arg sha "$sha" '
+    ([.commits[].sha] | last) == $sha and all(.commits[].sha; . as $s | $onpr | index($s))' >/dev/null 2>&1
 }
 
 # 0 when <task>'s armed poll names exactly <url>; sets nothing else.
@@ -253,6 +290,22 @@ action_check() {
       printf '%s' "$pr" | jq -e '(.statusCheckRollup | type) == "array" and (.statusCheckRollup | length) > 0' >/dev/null || continue
       red=$(fm_pr_github_checks_not_green "$pr") || continue
       [ -z "$red" ] || continue
+      DESCENT_RC=0
+      if [ -z "$OWNER_NOTE" ] && [ -n "$OWNER_BASE" ]; then
+        if pr_head_descends "$repo" "$url" "$OWNER_BASE" "$sha"; then
+          :
+        elif [ "$DESCENT_RC" -eq 124 ]; then
+          read_failed=1
+          log "proving $url descends from $task's worktree HEAD timed out; remaining reads retried next sweep"
+          break 2
+        elif [ "$DESCENT_RC" -ne 0 ] && [ "$DESCENT_RC" -ne 1 ]; then
+          read_failed=1
+          log "could not prove $url descends from $task's worktree HEAD; retried next sweep"
+          continue
+        else
+          OWNER_NOTE="its head commit neither is nor descends only through its own branch's commits from $task's worktree HEAD"
+        fi
+      fi
       if [ -n "$OWNER_NOTE" ]; then
         keep+=("$task $url")
         seen "$task $url" && continue
@@ -268,7 +321,7 @@ action_check() {
         out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
           fm_run_timed "$ARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" "$task" "$url" 2>&1) || rc=$?
         if [ "$rc" -eq 0 ]; then
-          log "armed merge poll for $task from its green PR at its own commit: $url"
+          log "armed merge poll for $task from its green PR at a commit it owns: $url"
           continue
         fi
         reason="check: pr-sweep: green PR $url on $task's branch $branch could not be armed (rc=$rc): $(printf '%s' "$out" | tr '\r\n\t' '   ' | cut -c1-400)"
