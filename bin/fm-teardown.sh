@@ -1809,17 +1809,36 @@ scout_artifact_find_files() {  # <dir>
 # worktree-relative directory <rel>, never inside a pruned name; outside git,
 # every regular file below it.
 scout_artifact_untracked_files() {  # <rel>
-  local rel=$1 list f
   if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
-    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$rel"
+    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1"
     return
   fi
-  list=$(git --literal-pathspecs -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard -- "$rel") || return 1
+  scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1"
+}
+
+# Absolute paths of the regular files `git ls-files <args>` lists in <repo>,
+# skipping pruned names. An embedded repository, which the outer listing shows
+# only as its directory, contributes every non-ignored file it holds, tracked
+# or not, since none of them is in the outer repository.
+scout_artifact_repo_files() {  # <repo> <ls-files-args...>
+  local repo=$1 list f
+  shift
+  list=$(git --literal-pathspecs -c core.quotePath=false -C "$repo" ls-files "$@") || return 1
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     if scout_artifact_path_pruned "$f"; then continue; fi
-    f="$SCOUT_ARTIFACT_ROOT/$f"
-    if [ -f "$f" ] && [ ! -L "$f" ]; then printf '%s\n' "$f"; fi
+    case "$f" in
+      */)
+        f="$repo/${f%/}"
+        if [ -d "$f" ] && [ ! -L "$f" ]; then
+          scout_artifact_repo_files "$f" --cached --others --exclude-standard || return 1
+        fi
+        ;;
+      *)
+        f="$repo/$f"
+        if [ -f "$f" ] && [ ! -L "$f" ]; then printf '%s\n' "$f"; fi
+        ;;
+    esac
   done <<EOF
 $list
 EOF

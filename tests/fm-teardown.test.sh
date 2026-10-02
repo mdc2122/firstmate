@@ -1891,6 +1891,30 @@ Reproduced with a one-line probe; nothing else is needed."
   pass "a plain report-only scout tears down despite small scratch, dependency trees, and gitignored output"
 }
 
+test_scout_uncited_embedded_repo_refuses() {
+  local case_dir rc i
+  case_dir=$(make_case scout-embedded-repo)
+  git init -q "$case_dir/wt/harness"
+  printf '%s\n' '*.log' > "$case_dir/wt/harness/.gitignore"
+  for i in $(seq 1 25); do printf 'grade %s\n' "$i" > "$case_dir/wt/harness/g$i.txt"; done
+  git -C "$case_dir/wt/harness" add .
+  git -C "$case_dir/wt/harness" -c user.email=t@t -c user.name=t commit -q -m "harness"
+  head -c 200000 /dev/zero > "$case_dir/wt/harness/run.log"
+  write_scout_task "$case_dir" "# Finding
+
+Model B wins; see the summary table above."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-embedded-repo: teardown should refuse an uncited embedded repository holding worktree-only files"
+  assert_grep "harness/ (26 files)" "$case_dir/stderr" \
+    "scout-embedded-repo: the refusal did not name the embedded repository with its non-ignored file count"
+  assert_present "$case_dir/wt/harness/g1.txt" "scout-embedded-repo: the refusal deleted the harness"
+  pass "an uncited embedded repository holding worktree-only files refuses scout teardown"
+}
+
 test_scout_report_citing_locally_moved_file_refuses() {
   local case_dir rc
   case_dir=$(make_case scout-moved-artifact)
@@ -3807,6 +3831,7 @@ test_scout_report_citing_worktree_only_file_refuses_until_copied
 test_scout_report_only_teardown_succeeds
 test_scout_large_uncited_artifact_dir_refuses
 test_scout_report_citing_locally_moved_file_refuses
+test_scout_uncited_embedded_repo_refuses
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
