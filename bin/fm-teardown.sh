@@ -1795,15 +1795,34 @@ scout_artifact_path_pruned() {  # <relative-path>
 }
 
 # Regular files below <dir>, never descending into a pruned name.
-scout_artifact_find_files() {  # <dir> [find-tests...]
+scout_artifact_find_files() {  # <dir>
   local dir=$1 name
   local -a prune=()
-  shift
   for name in $SCOUT_ARTIFACT_PRUNE_NAMES; do
     [ "${#prune[@]}" -eq 0 ] || prune+=( -o )
     prune+=( -name "$name" )
   done
-  find "$dir" -mindepth 1 -type d \( "${prune[@]}" \) -prune -o -type f "$@" -print
+  find "$dir" -mindepth 1 -type d \( "${prune[@]}" \) -prune -o -type f -print
+}
+
+# Absolute paths of the untracked, not gitignored regular files below
+# worktree-relative directory <rel>, never inside a pruned name; outside git,
+# every regular file below it.
+scout_artifact_untracked_files() {  # <rel>
+  local rel=$1 list f
+  if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
+    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$rel"
+    return
+  fi
+  list=$(git --literal-pathspecs -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard -- "$rel") || return 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if scout_artifact_path_pruned "$f"; then continue; fi
+    f="$SCOUT_ARTIFACT_ROOT/$f"
+    if [ -f "$f" ] && [ ! -L "$f" ]; then printf '%s\n' "$f"; fi
+  done <<EOF
+$list
+EOF
 }
 
 # Prints each of the given absolute file paths that has no byte-identical copy
@@ -1937,7 +1956,7 @@ EOF
     entry="$SCOUT_ARTIFACT_ROOT/$rel"
     [ ! -L "$entry" ] || continue
     if [ -d "$entry" ]; then
-      files=$(scout_artifact_find_files "$entry") || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
+      files=$(scout_artifact_untracked_files "$rel") || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
       count=0
       [ -z "$files" ] || count=$(printf '%s\n' "$files" | wc -l)
       if [ "$((count))" -gt "$SCOUT_ARTIFACT_MAX_DIR_FILES" ]; then
@@ -1945,8 +1964,12 @@ EOF
         [ -z "$unsaved" ] || artifacts="$artifacts  $rel/ ($((count)) files)"$'\n'
         continue
       fi
-      files=$(scout_artifact_find_files "$entry" -size "+${kib}k") \
-        || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
+      files=$(while IFS= read -r entry; do
+          [ -z "$entry" ] || find "$entry" -prune -type f -size "+${kib}k" -print || exit 1
+        done <<EOF
+$files
+EOF
+) || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
     elif [ -f "$entry" ]; then
       files=$(find "$entry" -prune -type f -size "+${kib}k" -print) \
         || { scout_artifact_uninspectable "untracked file $rel"; return 1; }

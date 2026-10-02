@@ -1865,10 +1865,15 @@ test_scout_report_only_teardown_succeeds() {
   mkdir -p "$case_dir/wt/node_modules/pkg"
   for i in $(seq 1 30); do printf 'module %s\n' "$i" > "$case_dir/wt/node_modules/pkg/m$i.js"; done
   head -c 100000 /dev/zero > "$case_dir/wt/node_modules/pkg/bundle.js"
-  printf '%s\n' '/probe-bin' '/out/' > "$case_dir/wt/.gitignore"
+  printf '%s\n' '/probe-bin' '/out/' '*.bin' '*.log' > "$case_dir/wt/.gitignore"
   head -c 200000 /dev/zero > "$case_dir/wt/probe-bin"
   mkdir -p "$case_dir/wt/out"
   for i in $(seq 1 30); do printf 'object %s\n' "$i" > "$case_dir/wt/out/o$i.o"; done
+  # An untracked directory whose only large or numerous files are gitignored.
+  mkdir -p "$case_dir/wt/exp"
+  printf 'print("probe")\n' > "$case_dir/wt/exp/run.py"
+  head -c 200000 /dev/zero > "$case_dir/wt/exp/model.bin"
+  for i in $(seq 1 30); do printf 'step %s\n' "$i" > "$case_dir/wt/exp/s$i.log"; done
   write_scout_task "$case_dir" "# Finding
 
 The refusal lives in the upstream project (https://example.com/repo/blob/main/src/check.go#L40).
