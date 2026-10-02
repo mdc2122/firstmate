@@ -1,0 +1,71 @@
+=== A: PR head = worktree HEAD + 2 linear commits (real GitHub compare status=ahead)
+worktree HEAD: 0706fa4d513426c0961720732198d6e0f7b54cdd
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/0706fa4d513426c0961720732198d6e0f7b54cdd...b6289046c5b1db0220ffdd472e480387534d01c3 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: https://github.com/cli/cli/pull/101
+pr-sweep wakes queued: 0
+sweep stdout:
+sweep stderr:
+  fm-pr-sweep: armed merge poll for t1 from its green PR at a commit it owns: https://github.com/cli/cli/pull/101
+
+=== B: PR head descends via a MERGE commit
+worktree HEAD: b6289046c5b1db0220ffdd472e480387534d01c3
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/b6289046c5b1db0220ffdd472e480387534d01c3...1863cb7c0f1d27e9479a95edb30ba97fcc6c01b1 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: (not armed)
+pr-sweep wakes queued: 1
+sweep stdout:
+  check: pr-sweep: green PR https://github.com/cli/cli/pull/102 on branch fm/t1 was not armed: its head commit neither is nor descends only through its own branch's commits from t1's worktree HEAD; arm it with bin/fm-pr-check.sh <task> https://github.com/cli/cli/pull/102 only if it is that task's PR and its merge is authorized
+sweep stderr:
+
+=== C: PR head is BEHIND the worktree HEAD
+worktree HEAD: b6289046c5b1db0220ffdd472e480387534d01c3
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/b6289046c5b1db0220ffdd472e480387534d01c3...3bc352e06367cdae0dc8e708b1f7ddf0aa24c7eb --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: (not armed)
+pr-sweep wakes queued: 1
+sweep stdout:
+  check: pr-sweep: green PR https://github.com/cli/cli/pull/103 on branch fm/t1 was not armed: its head commit neither is nor descends only through its own branch's commits from t1's worktree HEAD; arm it with bin/fm-pr-check.sh <task> https://github.com/cli/cli/pull/103 only if it is that task's PR and its merge is authorized
+sweep stderr:
+
+=== D: worktree HEAD is a local commit GitHub never saw (real HTTP 404)
+worktree HEAD: d3583db33d8e30b4a7b0702834d25d7fb3b55368
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/d3583db33d8e30b4a7b0702834d25d7fb3b55368...b6289046c5b1db0220ffdd472e480387534d01c3 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: (not armed)
+pr-sweep wakes queued: 1
+sweep stdout:
+  check: pr-sweep: green PR https://github.com/cli/cli/pull/104 on branch fm/t1 was not armed: its head commit neither is nor descends only through its own branch's commits from t1's worktree HEAD; arm it with bin/fm-pr-check.sh <task> https://github.com/cli/cli/pull/104 only if it is that task's PR and its merge is authorized
+sweep stderr:
+
+=== E1: compare fails with a non-404 error (real HTTP 401 via invalid GH_TOKEN)
+worktree HEAD: 0706fa4d513426c0961720732198d6e0f7b54cdd
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/0706fa4d513426c0961720732198d6e0f7b54cdd...b6289046c5b1db0220ffdd472e480387534d01c3 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: (not armed)
+pr-sweep wakes queued: 0
+sweep stdout:
+sweep stderr:
+  fm-pr-sweep: could not prove https://github.com/cli/cli/pull/105 descends from t1's worktree HEAD; retried next sweep
+
+=== E2: same home, next sweep with valid auth
+worktree HEAD: 0706fa4d513426c0961720732198d6e0f7b54cdd
+real gh calls:
+  REAL-GH api repos/cli/cli/compare/0706fa4d513426c0961720732198d6e0f7b54cdd...b6289046c5b1db0220ffdd472e480387534d01c3 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+  REAL-GH api repos/cli/cli/compare/0706fa4d513426c0961720732198d6e0f7b54cdd...b6289046c5b1db0220ffdd472e480387534d01c3 --jq {status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}
+armed url: https://github.com/cli/cli/pull/105
+pr-sweep wakes queued: 0
+sweep stdout:
+sweep stderr:
+  fm-pr-sweep: armed merge poll for t1 from its green PR at a commit it owns: https://github.com/cli/cli/pull/105
+
+=== F: PR head == worktree HEAD (no compare needed)
+worktree HEAD: b6289046c5b1db0220ffdd472e480387534d01c3
+real gh calls:
+  (none)
+armed url: https://github.com/cli/cli/pull/106
+pr-sweep wakes queued: 0
+sweep stdout:
+sweep stderr:
+  fm-pr-sweep: armed merge poll for t1 from its green PR at a commit it owns: https://github.com/cli/cli/pull/106
+

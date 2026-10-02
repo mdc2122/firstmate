@@ -1,0 +1,6 @@
+$ gh api repos/cli/cli/compare/d3583db33d8e30b4a7b0702834d25d7fb3b55368...b6289046c5b1db0220ffdd472e480387534d01c3
+gh: Not Found (HTTP 404)
+rc=1
+$ GH_TOKEN=invalid gh api repos/cli/cli/compare/0706fa4d...b6289046
+gh: Bad credentials (HTTP 401)
+rc=1
