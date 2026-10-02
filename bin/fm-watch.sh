@@ -112,6 +112,13 @@
 #                          URL fm_pr_url_parse accepts, so nothing was armed
 #                          (ready_pr_polls_arm); arm it by hand with
 #                          bin/fm-pr-check.sh
+#   check: pr-sweep: green PR <url> on <task>'s branch <branch> ...
+#                          the forge-side sweep (bin/fm-pr-sweep.sh, every
+#                          FM_PR_SWEEP_INTERVAL) found a green open PR on a
+#                          live task's branch that it did not arm: a non-yolo
+#                          task, a task already polling another PR, or a
+#                          refused arm; once per PR. Several in one sweep wake
+#                          as one count line, each row queued separately
 #   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
 #                          an armed GitHub merge poll's pull request has had every
 #                          check green but could not merge for
@@ -240,6 +247,10 @@ POLL=${FM_POLL:-15}                   # seconds between cycles
 WATCHER_STALE_GRACE=${FM_WATCHER_STALE_GRACE:-${FM_GUARD_GRACE:-$(fm_poll_derived_grace "$POLL")}}
 HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
 HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
+PR_SWEEP_INTERVAL=${FM_PR_SWEEP_INTERVAL:-$HEARTBEAT}  # seconds between forge-side PR sweeps (bin/fm-pr-sweep.sh)
+case "$PR_SWEEP_INTERVAL" in ''|*[!0-9]*|0) PR_SWEEP_INTERVAL=600 ;; esac
+PR_SWEEP_TIMEOUT=${FM_PR_SWEEP_TIMEOUT:-240}  # seconds allowed for one whole forge-side PR sweep
+case "$PR_SWEEP_TIMEOUT" in ''|*[!0-9]*|0) PR_SWEEP_TIMEOUT=240 ;; esac
 QUEUE_ZERO_INTERVAL=${FM_QUEUE_ZERO_INTERVAL:-900}  # seconds between queue inbox-zero checks (bin/fm-queue-zero.sh)
 case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
@@ -2969,6 +2980,27 @@ EOF
     FM_HOME="$FM_HOME" run_check_capture "$SCRIPT_DIR/fm-queue-zero.sh" check || exit 1
     if [ -n "$FM_CHECK_RESULT" ]; then
       wake "$FM_CHECK_RESULT"
+    fi
+  fi
+
+  # Forge-side merge-poll backstop (bin/fm-pr-sweep.sh owns the branch match,
+  # the green rule, arming through bin/fm-pr-check.sh, and the once-per-PR
+  # durable wake). It runs on the base heartbeat interval through its own
+  # .last-pr-sweep marker, not the backed-off heartbeat, so an unarmed green
+  # PR is found within one interval however quiet the fleet is. Its stderr
+  # diagnostics go to the triage log; only its queued wake lines wake firstmate.
+  if [ "$(age_of "$STATE/.last-pr-sweep")" -ge "$PR_SWEEP_INTERVAL" ]; then
+    touch "$STATE/.last-pr-sweep"
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+      run_action_capture "$PR_SWEEP_TIMEOUT" "$SCRIPT_DIR/fm-pr-sweep.sh" check || exit 1
+    pr_sweep_wakes=$(printf '%s\n' "$FM_CHECK_RESULT" | grep '^check: pr-sweep: ' || true)
+    pr_sweep_logs=$(printf '%s\n' "$FM_CHECK_RESULT" | grep -v '^check: pr-sweep: ' | tr '\n' ' ' || true)
+    [ -z "${pr_sweep_logs// /}" ] || triage_log "pr sweep (rc=$FM_ACTION_STATUS): $pr_sweep_logs"
+    if [ -n "$pr_sweep_wakes" ]; then
+      case "$pr_sweep_wakes" in
+        *$'\n'*) wake "check: pr-sweep: $(printf '%s\n' "$pr_sweep_wakes" | wc -l | tr -d ' ') green PRs on task branches need attention" ;;
+        *) wake "$pr_sweep_wakes" ;;
+      esac
     fi
   fi
 
