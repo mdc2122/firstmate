@@ -83,8 +83,12 @@
 # significant on its own: a file over 64 KiB, or a new directory holding more
 # than 20 files. Gitignored build output and caches are scratch by definition
 # and never count toward (b), nor do common build and cache directories
-# (SCOUT_ARTIFACT_PRUNE_NAMES). When nothing refuses, teardown warns, listing
-# the largest untracked items, ignored ones included, before deleting them.
+# (SCOUT_ARTIFACT_PRUNE_NAMES). In a worktree of the firstmate repo itself,
+# neither (a) nor (b) counts the named runtime files its .omp/extensions/*.ts
+# write into a worktree-local state/ when run there without FM_HOME
+# (scout_artifact_path_is_omp_marker; they hold no work) unless the report
+# cites one by its own path. When nothing refuses, teardown warns, listing the
+# largest untracked items, ignored ones included, before deleting them.
 # Content with a byte-identical copy anywhere under data/<task-id>/ counts as
 # preserved, so the remedy is to copy it there, where it survives cleanup with
 # the home's private records, or to commit and push it. Like the landed-work
@@ -1772,6 +1776,7 @@ SCOUT_ARTIFACT_MAX_KIB=64
 SCOUT_ARTIFACT_MAX_DIR_FILES=20
 SCOUT_ARTIFACT_PRUNE_NAMES='.git .claude node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .eggs target dist build .next .nuxt .svelte-kit .turbo .parcel-cache .gradle .terraform coverage .cache .yarn .pnpm-store .direnv vendor'
 SCOUT_ARTIFACT_GIT=0
+SCOUT_ARTIFACT_OMP=0
 SCOUT_ARTIFACT_ROOT=
 SCOUT_ARTIFACT_NEW=
 SCOUT_ARTIFACT_SAVED_HASHES=
@@ -1794,6 +1799,30 @@ scout_artifact_path_pruned() {  # <relative-path>
   done
 }
 
+# True when the worktree is a firstmate-repo worktree and a worktree-relative
+# path is one of the files its .omp/extensions/*.ts write as runtime markers.
+scout_artifact_path_is_omp_marker() {  # <relative-path>
+  [ "$SCOUT_ARTIFACT_OMP" = 1 ] || return 1
+  case "$1" in
+    state/.omp-watch-extension-loaded|state/.omp-turnend-extension-loaded) return 0 ;;
+    state/extensions/omp-primary-watch/session-generations.log) return 0 ;;
+    state/extensions/omp-primary-watch/session-replacement-actionable.json) return 0 ;;
+  esac
+  return 1
+}
+
+# Prints each of the given absolute worktree file paths that is not an omp
+# runtime marker.
+scout_artifact_drop_omp_markers() {  # <newline-separated absolute paths>
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    scout_artifact_path_is_omp_marker "${f#"$SCOUT_ARTIFACT_ROOT"/}" || printf '%s\n' "$f"
+  done <<EOF
+$1
+EOF
+}
+
 # Regular files below <dir>, never descending into a pruned name.
 scout_artifact_find_files() {  # <dir>
   local dir=$1 name
@@ -1806,14 +1835,16 @@ scout_artifact_find_files() {  # <dir>
 }
 
 # Absolute paths of the untracked, not gitignored regular files below
-# worktree-relative directory <rel>, never inside a pruned name; outside git,
-# every regular file below it.
+# worktree-relative directory <rel>, never inside a pruned name or an omp
+# runtime marker; outside git, every such regular file below it.
 scout_artifact_untracked_files() {  # <rel>
+  local files
   if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
-    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1"
-    return
+    files=$(scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1") || return 1
+  else
+    files=$(scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1") || return 1
   fi
-  scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1"
+  scout_artifact_drop_omp_markers "$files"
 }
 
 # Absolute paths of the regular files `git ls-files <args>` lists in <repo>,
@@ -1864,10 +1895,11 @@ scout_artifact_unsaved() {  # <newline-separated absolute paths>
 # Absolute paths of the files at or under worktree-relative <rel> whose content
 # no surviving ref holds: untracked, ignored, or added only in commits or an
 # index that exist only here. Edits to tracked files are scratch the report
-# describes, never a refusal, and a cited directory skips pruned names below it.
+# describes, never a refusal, and a cited directory skips pruned names and omp
+# runtime markers below it.
 scout_artifact_risk_files() {  # <rel>
-  local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked
-  {
+  local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked files
+  files=$({
     if [ -d "$path" ]; then scout_artifact_find_files "$path"; else printf '%s\n' "$path"; fi
   } | {
     if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
@@ -1881,7 +1913,8 @@ scout_artifact_risk_files() {  # <rel>
         !($0 in kept)
       ' <(printf '%s\n' "$SCOUT_ARTIFACT_NEW") <(printf '%s\n' "$tracked") -
     fi
-  }
+  }) || return 1
+  if [ -d "$path" ]; then scout_artifact_drop_omp_markers "$files"; else printf '%s\n' "$files"; fi
 }
 
 # Path-shaped tokens the report cites: markdown and quoting stripped, URLs
@@ -1908,10 +1941,14 @@ validate_scout_worktree_artifacts() {  # <report>
   [ -n "$wt" ] && [ -d "$wt" ] || return 0
   SCOUT_ARTIFACT_ROOT=$(canonical_existing_dir "$wt") || { scout_artifact_uninspectable "its location"; return 1; }
   SCOUT_ARTIFACT_GIT=0
+  SCOUT_ARTIFACT_OMP=0
   SCOUT_ARTIFACT_NEW=
   SCOUT_ARTIFACT_SAVED_HASHES=
   if git -C "$WT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     SCOUT_ARTIFACT_GIT=1
+    if [ "$(git -C "$WT" ls-files -- .omp/extensions/fm-primary-omp-watch.ts .omp/extensions/fm-primary-turnend-guard.ts | wc -l)" -eq 2 ]; then
+      SCOUT_ARTIFACT_OMP=1
+    fi
     if git -C "$WT" rev-parse --verify -q HEAD >/dev/null; then
       if default=$(default_branch 2>/dev/null) \
          && git -C "$WT" show-ref --verify --quiet "refs/heads/$default"; then
@@ -1972,6 +2009,7 @@ EOF
     rel=${entry%/}
     [ -n "$rel" ] || continue
     if scout_artifact_path_pruned "$rel/"; then continue; fi
+    scout_artifact_path_is_omp_marker "$rel" && continue
     if printf '%s' "$cited_rels" | grep -Fxq -- "$rel"; then continue; fi
     entry="$SCOUT_ARTIFACT_ROOT/$rel"
     [ ! -L "$entry" ] || continue
@@ -2012,6 +2050,7 @@ EOF
     largest=$(while IFS= read -r entry; do
       entry=${entry%/}
       [ -n "$entry" ] || continue
+      scout_artifact_path_is_omp_marker "$entry" && continue
       size=$(du -sk "$SCOUT_ARTIFACT_ROOT/$entry" 2>/dev/null) || continue
       printf '%s\t%s\n' "${size%%[!0-9]*}" "$entry"
     done <<EOF | sort -rn | head -n 5
