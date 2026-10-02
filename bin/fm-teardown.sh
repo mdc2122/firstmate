@@ -1776,7 +1776,6 @@ validate_worktree_teardown_safety() {
 SCOUT_ARTIFACT_MAX_KIB=64
 SCOUT_ARTIFACT_MAX_DIR_FILES=20
 SCOUT_ARTIFACT_PRUNE_NAMES='.git .claude node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .eggs target dist build .next .nuxt .svelte-kit .turbo .parcel-cache .gradle .terraform coverage .cache .yarn .pnpm-store .direnv vendor'
-SCOUT_ARTIFACT_OMP_MARKER_GLOBS='state/.omp-*-extension-loaded'
 SCOUT_ARTIFACT_GIT=0
 SCOUT_ARTIFACT_ROOT=
 SCOUT_ARTIFACT_NEW=
@@ -1805,16 +1804,9 @@ scout_artifact_path_pruned() {  # <relative-path>
 # (kept separate from SCOUT_ARTIFACT_PRUNE_NAMES because those match any path
 # component, while these are exact worktree-relative shapes).
 scout_artifact_path_is_omp_marker() {  # <relative-path>
-  local rel=$1 glob
-  case "/$rel/" in
-    /state/extensions/|/state/extensions/*/) return 0 ;;
+  case "/$1/" in
+    /state/.omp-*-extension-loaded/|/state/extensions/|/state/extensions/*/) return 0 ;;
   esac
-  for glob in $SCOUT_ARTIFACT_OMP_MARKER_GLOBS; do
-    # shellcheck disable=SC2254  # the unquoted expansion is the glob being matched
-    case "$rel" in
-      $glob) return 0 ;;
-    esac
-  done
   return 1
 }
 

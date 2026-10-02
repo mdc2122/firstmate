@@ -1965,6 +1965,26 @@ The worktree's state/ held only omp runtime markers; nothing in \`state/\` is a 
   pass "a scout report citing a state/ that holds only omp runtime markers tears down cleanly"
 }
 
+test_scout_omp_marker_exemption_ignores_cwd_markers() {
+  local case_dir rc
+  case_dir=$(make_case scout-omp-markers-cwd)
+  mkdir -p "$case_dir/home/state" "$case_dir/wt/state"
+  printf 'sha256:deadbeef\n4242\n' > "$case_dir/home/state/.omp-watch-extension-loaded"
+  printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-turnend-extension-loaded"
+  write_scout_task "$case_dir" "# Loose ends
+
+Swept state/.omp-turnend-extension-loaded; it is runtime noise, not work."
+
+  set +e
+  (cd "$case_dir/home" && run_teardown "$case_dir") > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-omp-markers-cwd: a cited omp marker must not refuse teardown when the cwd's state/ holds other markers: $(cat "$case_dir/stderr")"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "scout-omp-markers-cwd: teardown printed a REFUSED line"
+  assert_absent "$case_dir/state/task-x1.meta" "scout-omp-markers-cwd: the completed teardown left the task record"
+  pass "the omp marker exemption holds regardless of markers in the caller's working directory"
+}
+
 test_scout_omp_markers_do_not_mask_cited_work() {
   local case_dir rc answers
   case_dir=$(make_case scout-omp-markers-cited)
@@ -3913,6 +3933,7 @@ test_scout_report_citing_locally_moved_file_refuses
 test_scout_uncited_embedded_repo_refuses
 test_scout_omp_runtime_markers_alone_tear_down
 test_scout_report_citing_omp_marker_parent_tears_down
+test_scout_omp_marker_exemption_ignores_cwd_markers
 test_scout_omp_markers_do_not_mask_cited_work
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
