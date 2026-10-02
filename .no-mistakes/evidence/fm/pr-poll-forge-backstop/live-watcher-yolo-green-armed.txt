@@ -1,0 +1,13 @@
+== scenario yolo-green (yolo=on foreign=no); status log has NO 'done: PR' line
+== forge: [] [{"url":"https://github.com/mdc2122/viral-moment/pull/395","headRefName":"fm/t1","headRefOid":"ca11fd43a110f8954e2f30929b9708566e2777c4","isDraft":false,"isCrossRepository":false,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-10-01T00:00:00Z"}]}] 
+== watcher rc=124
+== watcher stdout (wake to firstmate):
+== gh calls:
+pr list --repo mdc2122/trending-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+pr list --repo mdc2122/viral-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+pr view https://github.com/mdc2122/viral-moment/pull/395 --json headRefOid -q .headRefOid
+== armed poll for t1:
+ARMED https://github.com/mdc2122/viral-moment/pull/395
+== state/.pr-sweep:
+== wake queue rows:
+== triage (pr sweep):

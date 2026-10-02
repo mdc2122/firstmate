@@ -1,0 +1,15 @@
+== scenario nonyolo-green (yolo=off foreign=no); status log has NO 'done: PR' line
+== forge: [] [{"url":"https://github.com/mdc2122/viral-moment/pull/395","headRefName":"fm/t1","headRefOid":"c95cd2396869ecd70fc5f85a0485843444ec208b","isDraft":false,"isCrossRepository":false,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-10-01T00:00:00Z"}]}] 
+== watcher rc=0
+== watcher stdout (wake to firstmate):
+check: pr-sweep: green PR https://github.com/mdc2122/viral-moment/pull/395 on t1's branch fm/t1 has no merge poll; arm it with bin/fm-pr-check.sh t1 https://github.com/mdc2122/viral-moment/pull/395 when its merge is authorized
+== gh calls:
+pr list --repo mdc2122/trending-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+pr list --repo mdc2122/viral-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+== armed poll for t1:
+NOT ARMED
+== state/.pr-sweep:
+seen=t1 https://github.com/mdc2122/viral-moment/pull/395
+== wake queue rows:
+1	check	pr-sweep-t1	check: pr-sweep: green PR https://github.com/mdc2122/viral-moment/pull/395 on t1's branch fm/t1 has no merge poll; arm it with bin/fm-pr-check.sh t1 https://github.com/mdc2122/viral-moment/pull/395 when its merge is authorized
+== triage (pr sweep):

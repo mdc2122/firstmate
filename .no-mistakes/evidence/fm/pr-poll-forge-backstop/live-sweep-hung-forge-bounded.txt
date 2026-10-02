@@ -1,0 +1,5 @@
+== degraded network: every gh call hangs 100s; FM_PR_SWEEP_GH_TIMEOUT=3; 2 registered repos
+fm-pr-sweep: reading open pull requests for mdc2122/trending-moment timed out; remaining repositories retried next sweep
+rc=0 elapsed=4s
+== gh calls attempted:
+hang pr list --repo mdc2122/trending-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup

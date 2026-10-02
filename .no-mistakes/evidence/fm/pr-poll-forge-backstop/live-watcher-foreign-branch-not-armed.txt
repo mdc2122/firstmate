@@ -1,0 +1,15 @@
+== scenario foreign-same-branch (yolo=on foreign=yes); status log has NO 'done: PR' line
+== forge: [{"url":"https://github.com/mdc2122/trending-moment/pull/44","headRefName":"fm/t1","headRefOid":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","isDraft":false,"isCrossRepository":false,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-10-01T00:00:00Z"}]}] [] 
+== watcher rc=0
+== watcher stdout (wake to firstmate):
+check: pr-sweep: green PR https://github.com/mdc2122/trending-moment/pull/44 on branch fm/t1 was not armed: its head commit is in no clone recorded for t1; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/trending-moment/pull/44 only if it is that task's PR and its merge is authorized
+== gh calls:
+pr list --repo mdc2122/trending-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+pr list --repo mdc2122/viral-moment --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+== armed poll for t1:
+NOT ARMED
+== state/.pr-sweep:
+seen=t1 https://github.com/mdc2122/trending-moment/pull/44
+== wake queue rows:
+1	check	pr-sweep-mdc2122/trending-moment-fm/t1	check: pr-sweep: green PR https://github.com/mdc2122/trending-moment/pull/44 on branch fm/t1 was not armed: its head commit is in no clone recorded for t1; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/trending-moment/pull/44 only if it is that task's PR and its merge is authorized
+== triage (pr sweep):
