@@ -47,9 +47,13 @@
 #
 # `check` prints each queued wake reason (nothing when nothing is due) and
 # exits 0 even when a repository cannot be read; a read failure is logged to
-# stderr and retried next sweep. FM_PR_SWEEP_GH_TIMEOUT (default 20) bounds
-# each GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default 60) each arm; a read
-# that times out ends the run's reads, so a degraded network costs one read.
+# stderr and retried next sweep. The repository listing asks only for
+# lightweight fields; the check rollup is read per candidate PR afterwards,
+# because listing every open PR's rollup at once makes GitHub's GraphQL
+# gateway answer 504 on a busy upstream repository. FM_PR_SWEEP_GH_TIMEOUT
+# (default 20) bounds each GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default
+# 60) each arm; a read that times out ends the run's reads, so a degraded
+# network costs one read.
 # FM_PROJECTS_OVERRIDE points at a different projects directory (tests).
 set -u
 export LC_ALL=C
@@ -197,7 +201,7 @@ action_check() {
     [ -n "$repo" ] || continue
     rc=0
     json=$(fm_run_timed "$GH_TIMEOUT" gh pr list --repo "$repo" --state open --limit 100 \
-      --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup 2>/dev/null) || rc=$?
+      --json url,headRefName,headRefOid,isDraft,isCrossRepository 2>/dev/null) || rc=$?
     if [ "$rc" -ne 0 ] || ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
       read_failed=1
       if [ "$rc" -eq 124 ]; then
@@ -210,7 +214,7 @@ action_check() {
     prs=$(printf '%s' "$json" | jq -c --arg branches "$branches" '
       ($branches | split("\n") | map(select(. != ""))) as $names
       | .[] | select((.isDraft | not) and (.isCrossRepository | not) and (.headRefName as $b | $names | index($b)))
-      | {url, branch: .headRefName, sha: (.headRefOid // ""), pr: .}') || continue
+      | {url, branch: .headRefName, sha: (.headRefOid // "")}') || continue
     while IFS= read -r pr; do
       [ -n "$pr" ] || continue
       url=$(printf '%s' "$pr" | jq -r .url)
@@ -218,11 +222,24 @@ action_check() {
       sha=$(printf '%s' "$pr" | jq -r .sha)
       fm_pr_url_parse "$url" || continue
       provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
-      # Green only by the shared rule, and never on an empty rollup.
-      printf '%s' "$pr" | jq -e '(.pr.statusCheckRollup | type) == "array" and (.pr.statusCheckRollup | length) > 0' >/dev/null || continue
-      red=$(fm_pr_github_checks_not_green "$(printf '%s' "$pr" | jq -c .pr)") || continue
-      [ -z "$red" ] || continue
       case "$sha" in ''|*[!0-9a-f]*) continue ;; esac
+      # Green only by the shared rule, and never on an empty rollup. The
+      # rollup is read for this candidate alone; an unreadable one is treated
+      # as not green and reconsidered next sweep.
+      rc=0
+      pr=$(fm_run_timed "$GH_TIMEOUT" gh pr view "$url" --json statusCheckRollup 2>/dev/null) || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        read_failed=1
+        if [ "$rc" -eq 124 ]; then
+          log "reading checks for $url timed out; remaining reads retried next sweep"
+          break 2
+        fi
+        log "could not read checks for $url; retried next sweep"
+        continue
+      fi
+      printf '%s' "$pr" | jq -e '(.statusCheckRollup | type) == "array" and (.statusCheckRollup | length) > 0' >/dev/null || continue
+      red=$(fm_pr_github_checks_not_green "$pr") || continue
+      [ -z "$red" ] || continue
       pr_owner "$repo" "$branch" "$sha"
       task=$OWNER_TASK
       handled=0

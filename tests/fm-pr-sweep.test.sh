@@ -28,10 +28,14 @@ GREEN='[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"
 RED='[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-10-01T00:00:00Z"}]'
 PENDING='[{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null,"startedAt":"2026-10-01T00:00:00Z"}]'
 
-# A home with a fake gh: `gh pr list --repo <owner>/<repo>` prints
-# $home/forge/<owner>__<repo>.json (or fails when that file is absent), and
-# `gh pr view` (fm-pr-check.sh's head lookup) prints nothing, so no pr_head is
-# recorded.
+# A home with a fake gh that answers from $home/forge/<owner>__<repo>.json:
+#   - `gh pr list --repo <owner>/<repo> --json <fields>` prints only those
+#     fields, and fails with GitHub's 504 when the fields include
+#     statusCheckRollup, which is how the real gateway answers a busy upstream
+#     repository; an absent fixture file fails as an unreadable repository;
+#   - `gh pr view <url> --json statusCheckRollup` prints that PR's rollup;
+#   - any other `gh pr view` (fm-pr-check.sh's head lookup) prints nothing, so
+#     no pr_head is recorded.
 make_home() {  # <name>
   local home="$TMP_ROOT/$1"
   mkdir -p "$home/state" "$home/data" "$home/projects" "$home/forge" "$home/fakebin"
@@ -40,11 +44,25 @@ make_home() {  # <name>
   cat > "$home/fakebin/gh" <<SH
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$home/forge/gh.log"
-[ "\${1:-} \${2:-}" = "pr list" ] || exit 1
-while [ \$# -gt 0 ]; do [ "\$1" = --repo ] && repo=\$2; shift; done
-f="$home/forge/\${repo//\//__}.json"
-[ -f "\$f" ] || exit 1
-cat "\$f"
+cmd="\${1:-} \${2:-}"
+repo= fields= url=\${3:-}
+while [ \$# -gt 0 ]; do
+  case "\$1" in --repo) repo=\$2 ;; --json) fields=\$2 ;; esac
+  shift
+done
+case "\$cmd" in
+  "pr list")
+    case ",\$fields," in *,statusCheckRollup,*) echo 'HTTP 504: 504 Gateway Timeout (https://api.github.com/graphql)' >&2; exit 1 ;; esac
+    f="$home/forge/\${repo//\//__}.json"
+    [ -f "\$f" ] || exit 1
+    jq -c --arg fields "\$fields" '[.[] | with_entries(select(.key as \$k | \$fields | split(",") | index(\$k)))]' "\$f"
+    ;;
+  "pr view")
+    [ "\$fields" = statusCheckRollup ] || exit 1
+    cat "$home"/forge/*.json | jq -c --arg url "\$url" 'select(type == "array") | .[] | select(.url == \$url) | {statusCheckRollup}' | head -1 | grep . || exit 1
+    ;;
+  *) exit 1 ;;
+esac
 SH
   chmod +x "$home/fakebin/gh"
   printf '%s\n' "$home"
