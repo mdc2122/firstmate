@@ -223,23 +223,6 @@ action_check() {
       fm_pr_url_parse "$url" || continue
       provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
       case "$sha" in ''|*[!0-9a-f]*) continue ;; esac
-      # Green only by the shared rule, and never on an empty rollup. The
-      # rollup is read for this candidate alone; an unreadable one is treated
-      # as not green and reconsidered next sweep.
-      rc=0
-      pr=$(fm_run_timed "$GH_TIMEOUT" gh pr view "$url" --json statusCheckRollup 2>/dev/null) || rc=$?
-      if [ "$rc" -ne 0 ]; then
-        read_failed=1
-        if [ "$rc" -eq 124 ]; then
-          log "reading checks for $url timed out; remaining reads retried next sweep"
-          break 2
-        fi
-        log "could not read checks for $url; retried next sweep"
-        continue
-      fi
-      printf '%s' "$pr" | jq -e '(.statusCheckRollup | type) == "array" and (.statusCheckRollup | length) > 0' >/dev/null || continue
-      red=$(fm_pr_github_checks_not_green "$pr") || continue
-      [ -z "$red" ] || continue
       pr_owner "$repo" "$branch" "$sha"
       task=$OWNER_TASK
       handled=0
@@ -250,6 +233,25 @@ action_check() {
         fi
       done
       [ "$handled" -eq 0 ] || continue
+      # Green only by the shared rule, and never on an empty rollup. The
+      # rollup is read for this candidate alone, together with its head; an
+      # unreadable rollup, or one for a head other than the listed one, is
+      # treated as not green and reconsidered next sweep.
+      rc=0
+      pr=$(fm_run_timed "$GH_TIMEOUT" gh pr view "$url" --json headRefOid,statusCheckRollup 2>/dev/null) || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        read_failed=1
+        if [ "$rc" -eq 124 ]; then
+          log "reading checks for $url timed out; remaining reads retried next sweep"
+          break 2
+        fi
+        log "could not read checks for $url; retried next sweep"
+        continue
+      fi
+      printf '%s' "$pr" | jq -e --arg sha "$sha" '.headRefOid == $sha' >/dev/null || continue
+      printf '%s' "$pr" | jq -e '(.statusCheckRollup | type) == "array" and (.statusCheckRollup | length) > 0' >/dev/null || continue
+      red=$(fm_pr_github_checks_not_green "$pr") || continue
+      [ -z "$red" ] || continue
       if [ -n "$OWNER_NOTE" ]; then
         keep+=("$task $url")
         seen "$task $url" && continue
