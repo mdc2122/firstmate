@@ -1818,6 +1818,18 @@ scout_artifact_path_is_omp_marker() {  # <relative-path>
   return 1
 }
 
+# Prints each of the given absolute worktree file paths that is not an omp
+# runtime marker.
+scout_artifact_drop_omp_markers() {  # <newline-separated absolute paths>
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    scout_artifact_path_is_omp_marker "${f#"$SCOUT_ARTIFACT_ROOT"/}" || printf '%s\n' "$f"
+  done <<EOF
+$1
+EOF
+}
+
 # Regular files below <dir>, never descending into a pruned name.
 scout_artifact_find_files() {  # <dir>
   local dir=$1 name
@@ -1830,14 +1842,16 @@ scout_artifact_find_files() {  # <dir>
 }
 
 # Absolute paths of the untracked, not gitignored regular files below
-# worktree-relative directory <rel>, never inside a pruned name; outside git,
-# every regular file below it.
+# worktree-relative directory <rel>, never inside a pruned name or an omp
+# runtime marker; outside git, every such regular file below it.
 scout_artifact_untracked_files() {  # <rel>
+  local files
   if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
-    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1"
-    return
+    files=$(scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1") || return 1
+  else
+    files=$(scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1") || return 1
   fi
-  scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1"
+  scout_artifact_drop_omp_markers "$files"
 }
 
 # Absolute paths of the regular files `git ls-files <args>` lists in <repo>,
@@ -1889,9 +1903,10 @@ scout_artifact_unsaved() {  # <newline-separated absolute paths>
 # no surviving ref holds: untracked, ignored, or added only in commits or an
 # index that exist only here. Edits to tracked files are scratch the report
 # describes, never a refusal, and a cited directory skips pruned names below it.
+# omp runtime markers are never listed.
 scout_artifact_risk_files() {  # <rel>
-  local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked
-  {
+  local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked files
+  files=$({
     if [ -d "$path" ]; then scout_artifact_find_files "$path"; else printf '%s\n' "$path"; fi
   } | {
     if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
@@ -1905,7 +1920,8 @@ scout_artifact_risk_files() {  # <rel>
         !($0 in kept)
       ' <(printf '%s\n' "$SCOUT_ARTIFACT_NEW") <(printf '%s\n' "$tracked") -
     fi
-  }
+  }) || return 1
+  scout_artifact_drop_omp_markers "$files"
 }
 
 # Path-shaped tokens the report cites: markdown and quoting stripped, URLs
@@ -1963,7 +1979,6 @@ validate_scout_worktree_artifacts() {  # <report>
       *) rel=$tok ;;
     esac
     case "/$rel/" in *//*|*/../*|*/./*|*/.git/*) continue ;; esac
-    scout_artifact_path_is_omp_marker "$rel" && continue
     [ ! -L "$SCOUT_ARTIFACT_ROOT/$rel" ] && [ -e "$SCOUT_ARTIFACT_ROOT/$rel" ] || continue
     files=$(scout_artifact_risk_files "$rel") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }
     unsaved=$(scout_artifact_unsaved "$files") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }

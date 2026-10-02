@@ -1944,6 +1944,27 @@ Swept state/.omp-turnend-extension-loaded, state/.omp-watch-extension-loaded, an
   pass "a scout worktree whose state/ holds only omp runtime markers tears down cleanly"
 }
 
+test_scout_report_citing_omp_marker_parent_tears_down() {
+  local case_dir rc i
+  case_dir=$(make_case scout-omp-markers-parent)
+  write_omp_runtime_markers "$case_dir"
+  for i in $(seq 1 25); do
+    printf 'gen %s\n' "$i" > "$case_dir/wt/state/extensions/omp-primary-watch/gen-$i.log"
+  done
+  write_scout_task "$case_dir" "# Loose ends
+
+The worktree's state/ held only omp runtime markers; nothing in \`state/\` is a deliverable."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-omp-markers-parent: citing state/ that holds only omp runtime markers must not refuse teardown: $(cat "$case_dir/stderr")"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "scout-omp-markers-parent: teardown printed a REFUSED line"
+  assert_absent "$case_dir/state/task-x1.meta" "scout-omp-markers-parent: the completed teardown left the task record"
+  pass "a scout report citing a state/ that holds only omp runtime markers tears down cleanly"
+}
+
 test_scout_omp_markers_do_not_mask_cited_work() {
   local case_dir rc answers
   case_dir=$(make_case scout-omp-markers-cited)
@@ -3891,6 +3912,7 @@ test_scout_large_uncited_artifact_dir_refuses
 test_scout_report_citing_locally_moved_file_refuses
 test_scout_uncited_embedded_repo_refuses
 test_scout_omp_runtime_markers_alone_tear_down
+test_scout_report_citing_omp_marker_parent_tears_down
 test_scout_omp_markers_do_not_mask_cited_work
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
