@@ -1838,20 +1838,22 @@ status_span_has_actionable() {  # <status-file> <start-offset>
   status_span_first_actionable_record "$1" "${2:-0}" > /dev/null
 }
 
-# The PR URL named by the LAST ready-signal line (status_line_ready_pr_url) in
-# the bytes [start, end) of a status log; returns 1 when the span holds none.
-# Only newline-terminated lines count, so a line still being appended can never
-# yield a truncated URL that parses as a different PR.
-status_span_ready_pr_url() {  # <status-file> <start-offset> <end-offset>
-  local f=$1 start=$2 end=$3 line url found='' any=''
+# Every PR URL named by a ready-signal line (status_line_ready_pr_url) in the
+# bytes [start, end) of a status log, one per line in log order and still
+# unvalidated; returns 1 when the span holds none. Only newline-terminated lines
+# count, so a line still being appended can never yield a truncated URL that
+# parses as a different PR.
+status_span_ready_pr_urls() {  # <status-file> <start-offset> <end-offset>
+  local f=$1 start=$2 end=$3 line url found=''
   case "$start$end" in ''|*[!0-9]*) return 1 ;; esac
   [ "$end" -gt "$start" ] || return 1
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   while IFS= read -r line; do
-    url=$(status_line_ready_pr_url "$line") && { found=$url; any=1; }
+    url=$(status_line_ready_pr_url "$line") || continue
+    printf '%s\n' "$url"
+    found=1
   done < <(_fm_status_read_span "$f" "$start" "$((end - start))" 2>/dev/null)
-  [ -n "$any" ] || return 1
-  printf '%s' "$found"
+  [ -n "$found" ]
 }
 
 # Classify WHY an idle/stale crew MIGHT be safely absorbed instead of surfaced,

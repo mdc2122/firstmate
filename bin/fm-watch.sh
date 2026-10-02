@@ -1865,16 +1865,17 @@ signal_files_actionable() {  # <status-file> ...
 # only the newly appended span [classified position, captured endpoint), so a
 # line is considered exactly once and an interrupted cycle re-reads it.
 # For each ordinary task (scouts and secondmates never deliver a PR this way)
-# whose span holds a ready line naming a canonical PR URL, it runs
+# whose span holds a ready line naming a canonical PR URL, it takes the last
+# such line and runs
 # bin/fm-pr-check.sh, the single owner of validation, metadata, sidecar, and
 # registration, unless that exact PR is already armed or its merge was already
 # delivered. A ready line naming a different PR re-arms through the same owner.
-# A ready line whose URL does not parse, and a refused or expired arm, are
+# A span whose ready lines name no URL that parses, and a refused or expired arm, are
 # each queued as their own check row beside the signal, so firstmate learns the
 # poll is missing instead of assuming it. Never wakes by itself: the ready line
 # still reaches firstmate through the ordinary signal.
 ready_pr_polls_arm() {
-  local f task meta start end ident url kind out provider host path number
+  local f task meta start end ident url urls candidate kind out provider host path number
   while IFS=$(printf '\t') read -r f end ident; do
     [ -n "$f" ] || continue
     task=$(basename "$f"); task=${task%.status}
@@ -1884,13 +1885,19 @@ ready_pr_polls_arm() {
     kind=$(fm_meta_get "$meta" kind)
     case "$kind" in scout|secondmate) continue ;; esac
     start=$(fm_wake_signal_seen_size "$STATE" "$f")
-    url=$(status_span_ready_pr_url "$f" "$start" "$end") || continue
-    if ! fm_pr_url_parse "$url"; then
+    urls=$(status_span_ready_pr_urls "$f" "$start" "$end") || continue
+    url=
+    while IFS= read -r candidate; do
+      fm_pr_url_parse "$candidate" && url=$candidate
+    done <<< "$urls"
+    if [ -z "$url" ]; then
+      url=${urls##*$'\n'}
       triage_log "ready line for $task names no canonical PR URL; merge poll not armed: $url"
       fm_wake_append check "pr-autoarm-$task" \
         "check: merge poll not armed for $task: ready line names no canonical PR URL: $url" || exit 1
       continue
     fi
+    fm_pr_url_parse "$url" || continue
     provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
     # The validity check re-parses the armed sidecar, so the ready line's own
     # identity is compared from the locals captured above.

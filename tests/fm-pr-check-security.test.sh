@@ -2616,6 +2616,20 @@ test_ready_line_with_trailing_prose_arms() {
   pass "a ready line with trailing prose arms the PR it names"
 }
 
+test_valid_ready_line_wins_over_later_unparseable_mention() {
+  local dir state url
+  url=https://github.com/o/r/pull/395
+  dir=$(make_case ready-line-then-unparseable)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  printf 'done: PR %s checks green\ndone: also see PR https://github.com/o/r/pull/abc\n' "$url" \
+    > "$state/task-a.status"
+
+  run_ready_signal_cycle "$dir" valid-then-unparseable
+  assert_poll_armed_for "$state" "$url" "valid ready line followed by an unparseable mention"
+  pass "a later unparseable PR mention does not hide an earlier valid ready line"
+}
+
 test_unparseable_pr_mention_queues_notice() {
   local dir state line
   dir=$(make_case ready-line-unparseable)
@@ -3037,6 +3051,7 @@ test_merged_poll_row_carries_the_merge_authority
 test_merged_poll_row_names_no_authority_when_no_record_grants_one
 test_ready_line_arms_merge_poll_once_and_rearms_on_change
 test_ready_line_with_trailing_prose_arms
+test_valid_ready_line_wins_over_later_unparseable_mention
 test_unparseable_pr_mention_queues_notice
 test_done_line_without_pr_mention_arms_nothing
 test_refused_ready_line_arm_is_queued
