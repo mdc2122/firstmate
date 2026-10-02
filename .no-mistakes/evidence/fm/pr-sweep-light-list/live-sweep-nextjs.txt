@@ -1,0 +1,33 @@
+=== SWEEP 1 (live vercel/next.js)
+exit=0
+--- stdout (wakes)
+check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99506 on tgreen's branch jstory/hoist-app-page-render-headers has no merge poll; arm it with bin/fm-pr-check.sh tgreen https://github.com/vercel/next.js/pull/99506 when its merge is authorized
+check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99464 on branch sebbie/test-gtm-xss was not armed: its head commit is not tstale's worktree HEAD; arm it with bin/fm-pr-check.sh <task> https://github.com/vercel/next.js/pull/99464 only if it is that task's PR and its merge is authorized
+--- stderr
+--- gh calls
+pr list --repo vercel/next.js --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository
+pr view https://github.com/vercel/next.js/pull/99571 --json headRefOid,statusCheckRollup
+pr view https://github.com/vercel/next.js/pull/99506 --json headRefOid,statusCheckRollup
+pr view https://github.com/vercel/next.js/pull/99464 --json headRefOid,statusCheckRollup
+--- state/.pr-sweep
+seen=tgreen https://github.com/vercel/next.js/pull/99506
+seen=tstale https://github.com/vercel/next.js/pull/99464
+--- wake queue rows
+1	check	pr-sweep-tgreen	check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99506 on tgreen's branch jstory/hoist-app-page-render-headers has no merge poll; arm it with bin/fm-pr-check.sh tgreen https://gith
+2	check	pr-sweep-vercel/next.js-sebbie/test-gtm-xss	check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99464 on branch sebbie/test-gtm-xss was not armed: its head commit is not tstale's worktree HEAD; arm i
+
+=== SWEEP 2 (same state)
+exit=0
+--- stdout (wakes)
+--- stderr
+--- gh calls
+pr list --repo vercel/next.js --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository
+pr view https://github.com/vercel/next.js/pull/99571 --json headRefOid,statusCheckRollup
+pr view https://github.com/vercel/next.js/pull/99506 --json headRefOid,statusCheckRollup
+pr view https://github.com/vercel/next.js/pull/99464 --json headRefOid,statusCheckRollup
+--- state/.pr-sweep
+seen=tgreen https://github.com/vercel/next.js/pull/99506
+seen=tstale https://github.com/vercel/next.js/pull/99464
+--- wake queue rows
+1	check	pr-sweep-tgreen	check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99506 on tgreen's branch jstory/hoist-app-page-render-headers has no merge poll; arm it with bin/fm-pr-check.sh tgreen https://gith
+2	check	pr-sweep-vercel/next.js-sebbie/test-gtm-xss	check: pr-sweep: green PR https://github.com/vercel/next.js/pull/99464 on branch sebbie/test-gtm-xss was not armed: its head commit is not tstale's worktree HEAD; arm i

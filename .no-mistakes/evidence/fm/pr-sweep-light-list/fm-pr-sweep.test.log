@@ -1,0 +1,10 @@
+ok - a green unarmed cross-repo PR whose head commit is in the yolo task's clone is armed with no done line
+ok - an already armed PR is a no-op
+ok - an already armed PR costs no per-PR check read
+ok - a green rollup for a head other than the listed one is reconsidered next sweep, not armed
+ok - red, pending, draft, empty-rollup, and scout PRs are never armed or reported
+ok - a non-yolo green PR wakes once, and again only after it leaves and returns
+ok - an unreadable repository is reported and never causes a repeat wake
+ok - a same-name branch PR whose head commit the task does not hold is woken about, never armed
+ok - two tasks sharing a branch name in different repos are each matched to their own PR
+ok - an already armed PR whose head differs from the worktree HEAD is never reported as not armed

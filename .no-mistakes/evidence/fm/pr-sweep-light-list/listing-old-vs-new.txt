@@ -1,0 +1,16 @@
+== cli/cli OLD listing (with statusCheckRollup)
+71
+gh pr list --repo $r --state open --limit 100 --json   0.07s user 0.03s system 1% cpu 4.922 total
+jq length  0.01s user 0.00s system 0% cpu 4.920 total
+== cli/cli NEW listing (lightweight)
+71
+gh pr list --repo $r --state open --limit 100 --json   0.04s user 0.02s system 10% cpu 0.650 total
+jq length  0.00s user 0.00s system 1% cpu 0.648 total
+== vercel/next.js OLD listing (with statusCheckRollup)
+HTTP 504: 504 Gateway Timeout (https://api.github.com/graphql)
+gh pr list --repo $r --state open --limit 100 --json   0.04s user 0.02s system 0% cpu 11.240 total
+jq length  0.00s user 0.00s system 0% cpu 11.238 total
+== vercel/next.js NEW listing (lightweight)
+100
+gh pr list --repo $r --state open --limit 100 --json   0.05s user 0.02s system 12% cpu 0.628 total
+jq length  0.00s user 0.00s system 1% cpu 0.627 total

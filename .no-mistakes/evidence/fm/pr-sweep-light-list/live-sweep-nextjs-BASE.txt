@@ -1,0 +1,7 @@
+=== BASE b2d570e sweep against live vercel/next.js (same home, fresh record)
+fm-pr-sweep: could not read open pull requests for vercel/next.js; retried next sweep
+exit=0
+--- gh calls
+pr list --repo vercel/next.js --state open --limit 100 --json url,headRefName,headRefOid,isDraft,isCrossRepository,statusCheckRollup
+--- wake queue
+(none)
