@@ -36,6 +36,11 @@ PENDING='[{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusio
 #   - `gh pr view <url> --json headRefOid,statusCheckRollup` prints that PR's
 #     rollup and its head, which is viewHeadRefOid when the fixture sets one
 #     (a push landing between the listing and the view);
+#   - `gh api repos/<owner>/<repo>/compare/<base>...<head>` answers from the
+#     real history of $home/projects/*: base unknown to every clone is 404,
+#     otherwise GitHub's status, behind_by, and the commits base..head with
+#     their parent counts; while $home/forge/compare-fails exists it fails
+#     as GitHub's gateway does (HTTP 502);
 #   - any other `gh pr view` (fm-pr-check.sh's head lookup) prints nothing, so
 #     no pr_head is recorded.
 make_home() {  # <name>
@@ -46,10 +51,10 @@ make_home() {  # <name>
   cat > "$home/fakebin/gh" <<SH
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$home/forge/gh.log"
-cmd="\${1:-} \${2:-}"
-repo= fields= url=\${3:-}
+cmd="\${1:-} \${2:-}" path=\${2:-}
+repo= fields= filter=. url=\${3:-}
 while [ \$# -gt 0 ]; do
-  case "\$1" in --repo) repo=\$2 ;; --json) fields=\$2 ;; esac
+  case "\$1" in --repo) repo=\$2 ;; --json) fields=\$2 ;; --jq) filter=\$2 ;; esac
   shift
 done
 case "\$cmd" in
@@ -63,7 +68,30 @@ case "\$cmd" in
     [ "\$fields" = headRefOid,statusCheckRollup ] || exit 1
     cat "$home"/forge/*.json | jq -c --arg url "\$url" 'select(type == "array") | .[] | select(.url == \$url) | {headRefOid: (.viewHeadRefOid // .headRefOid), statusCheckRollup}' | head -1 | grep . || exit 1
     ;;
-  *) exit 1 ;;
+  "api repos/"*)
+    [ ! -f "$home/forge/compare-fails" ] || { echo 'gh: HTTP 502: Bad Gateway' >&2; exit 1; }
+    spec=\${path#repos/*/*/compare/}
+    base=\${spec%...*} head=\${spec#*...}
+    for g in "$home"/projects/*/; do
+      git -C "\$g" cat-file -e "\$base^{commit}" 2>/dev/null && git -C "\$g" cat-file -e "\$head^{commit}" 2>/dev/null || continue
+      if git -C "\$g" merge-base --is-ancestor "\$base" "\$head"; then
+        [ "\$base" = "\$head" ] && status=identical || status=ahead
+        behind=0
+      else
+        status=diverged
+        behind=\$(git -C "\$g" rev-list --count "\$head..\$base")
+      fi
+      git -C "\$g" rev-list --reverse --parents "\$base..\$head" \
+        | jq -R -s -c --arg status "\$status" --argjson behind "\$behind" '
+          {status: \$status, behind_by: \$behind,
+           commits: [split("\n")[] | select(. != "") | split(" ") | {sha: .[0], parents: [.[1:][] | {sha: .}]}]}' \
+        | jq -c "\$filter"
+      exit 0
+    done
+    echo '{"message":"Not Found","status":"404"}'
+    echo 'gh: Not Found (HTTP 404)' >&2
+    exit 1
+    ;;
 esac
 SH
   chmod +x "$home/fakebin/gh"
@@ -110,6 +138,13 @@ EOF
       '. + [{url:$url, headRefName:$b, headRefOid:$sha, isDraft:($d == "draft"), isCrossRepository:false, statusCheckRollup:$r}]')
   done
   printf '%s\n' "$json" > "$home/forge/${repo//\//__}.json"
+}
+
+# Commit on top of <task>'s worktree branch as the pipeline would, without
+# moving the worktree: the new commit lives in the shared clone only.
+pipeline_commit() {  # <home> <task> <parent> <message>
+  local wt="$1/wt-$2"
+  git -C "$wt" -c user.name=fm -c user.email=fm@example.invalid commit-tree "$3^{tree}" -p "$3" -m "$4"
 }
 
 sweep() {  # <home>
@@ -279,7 +314,7 @@ test_same_name_branch_with_foreign_commits_is_never_armed() {
   [ "$(sweep_rows "$home")" = 2 ] || fail "each unowned green PR did not queue exactly one wake"
   grep -F 'pull/12 on branch fix-readme was not armed: its head commit is in no clone recorded for t1' "$home/sweep.out" >/dev/null \
     || fail "the foreign cross-repo PR wake did not explain itself: $(cat "$home/sweep.out")"
-  grep -F "pull/13 on branch fix-readme was not armed: its head commit is not t1's worktree HEAD" "$home/sweep.out" >/dev/null \
+  grep -F "pull/13 on branch fix-readme was not armed: its head commit neither is nor descends only through its own branch's commits from t1's worktree HEAD" "$home/sweep.out" >/dev/null \
     || fail "the same-repo PR at another commit did not explain itself: $(cat "$home/sweep.out")"
   pass "a same-name branch PR whose head commit the task does not hold is woken about, never armed"
 }
@@ -301,6 +336,82 @@ test_tasks_sharing_a_branch_name_in_different_repos_each_match() {
     || fail "task b was not armed for its own repo's PR: $(cat "$home/sweep.err" "$home/sweep.out")"
   [ "$(sweep_rows "$home")" = 0 ] || fail "two correctly owned PRs queued a wake"
   pass "two tasks sharing a branch name in different repos are each matched to their own PR"
+}
+
+test_pipeline_fix_commits_on_top_of_worktree_head_are_armed() {
+  local home wt_head fix1 fix2 url
+  home=$(make_home descendant)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  wt_head=$(head_of "$home" t1)
+  fix1=$(pipeline_commit "$home" t1 "$wt_head" "no-mistakes(review): fix")
+  fix2=$(pipeline_commit "$home" t1 "$fix1" "no-mistakes(document): docs")
+  url=https://github.com/o/viral-moment/pull/30
+  forge_prs "$home" o/viral-moment "30|fm/t1|$GREEN|$fix2"
+  [ "$(head_of "$home" t1)" = "$wt_head" ] || fail "fixture moved the worktree"
+
+  sweep "$home"
+  [ "$(armed_url "$home" t1)" = "$url" ] \
+    || fail "a PR whose head descends from the worktree HEAD through its own commits was not armed: $(cat "$home/sweep.err" "$home/sweep.out")"
+  [ "$(sweep_rows "$home")" = 0 ] || fail "an owned descendant PR queued a wake"
+  pass "a PR head carrying pipeline fix commits on top of the worktree HEAD is armed"
+}
+
+test_descendant_through_a_merge_commit_is_refused() {
+  local home wt_head side merged
+  home=$(make_home descendant-merge)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  wt_head=$(head_of "$home" t1)
+  # A merge of an unrelated side commit on top of the worktree HEAD.
+  side=$(pipeline_commit "$home" t1 "$(git -C "$home/projects/viral-moment" rev-parse main)" "side work")
+  merged=$(git -C "$home/wt-t1" -c user.name=fm -c user.email=fm@example.invalid commit-tree "$wt_head^{tree}" -p "$wt_head" -p "$side" -m "merge side")
+  forge_prs "$home" o/viral-moment "41|fm/t1|$GREEN|$merged"
+
+  sweep "$home"
+  ! armed_url "$home" t1 >/dev/null || fail "a descendant carrying a merge commit was armed"
+  ! grep -q '^pr=' "$home/state/t1.meta" || fail "a refused descendant recorded pr="
+  [ "$(sweep_rows "$home")" = 1 ] || fail "the refused descendant did not queue exactly one wake: $(cat "$home/sweep.out")"
+  pass "a descendant head through a merge commit is refused and reported, never armed"
+}
+
+test_unreadable_descent_is_retried_not_refused() {
+  local home wt_head fix url
+  home=$(make_home descendant-unreadable)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  wt_head=$(head_of "$home" t1)
+  fix=$(pipeline_commit "$home" t1 "$wt_head" "no-mistakes(review): fix")
+  url=https://github.com/o/viral-moment/pull/31
+  forge_prs "$home" o/viral-moment "31|fm/t1|$GREEN|$fix"
+  : > "$home/forge/compare-fails"
+
+  sweep "$home"
+  ! armed_url "$home" t1 >/dev/null || fail "a PR whose descent could not be read was armed"
+  [ "$(sweep_rows "$home")" = 0 ] || fail "an unreadable descent was reported as a refusal: $(cat "$home/sweep.out")"
+  grep -F "could not prove $url descends from t1's worktree HEAD; retried next sweep" "$home/sweep.err" >/dev/null \
+    || fail "the unreadable descent was not logged: $(cat "$home/sweep.err")"
+
+  rm -f "$home/forge/compare-fails"
+  sweep "$home"
+  [ "$(armed_url "$home" t1)" = "$url" ] || fail "the PR was not armed once its descent could be read"
+  [ "$(sweep_rows "$home")" = 0 ] || fail "a PR armed after a failed read queued a wake"
+  pass "a compare that cannot be read is retried next sweep, never reported as a refusal"
+}
+
+test_pr_head_not_descending_from_worktree_head_is_refused() {
+  local home behind
+  home=$(make_home not-descendant)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  # The PR head is the worktree's parent: GitHub reports it behind, not ahead.
+  behind=$(git -C "$home/wt-t1" rev-parse HEAD~1)
+  forge_prs "$home" o/viral-moment "50|fm/t1|$GREEN|$behind"
+
+  sweep "$home"
+  ! armed_url "$home" t1 >/dev/null || fail "a PR head that does not descend from the worktree HEAD was armed"
+  [ "$(sweep_rows "$home")" = 1 ] || fail "the refused PR did not queue exactly one wake"
+  pass "a PR head that does not descend from the worktree HEAD is refused"
 }
 
 test_armed_pr_ahead_of_worktree_head_is_not_reported() {
@@ -331,3 +442,7 @@ test_unreadable_repo_keeps_earlier_reports
 test_same_name_branch_with_foreign_commits_is_never_armed
 test_tasks_sharing_a_branch_name_in_different_repos_each_match
 test_armed_pr_ahead_of_worktree_head_is_not_reported
+test_pipeline_fix_commits_on_top_of_worktree_head_are_armed
+test_descendant_through_a_merge_commit_is_refused
+test_unreadable_descent_is_retried_not_refused
+test_pr_head_not_descending_from_worktree_head_is_refused
