@@ -71,8 +71,25 @@
 # for the common case where there is no remote at all.
 # Scout tasks (kind=scout in meta) carve out of that check: their worktree is
 # declared scratch and the report at data/<task-id>/report.md is the work
-# product. Teardown proceeds only once the report exists and the shared
-# unresolved-decision completion gate verifies its captain-held inventory.
+# product. Teardown proceeds only once the report exists, the shared
+# unresolved-decision completion gate verifies its captain-held inventory, and
+# nothing worth keeping exists only in the worktree, because a long-running
+# investigation's harness and raw outputs are lost with it otherwise.
+# validate_scout_worktree_artifacts refuses, naming each path, when (a) a path
+# the report cites resolves inside the worktree to a file that no surviving ref
+# holds - untracked, ignored, or added only in the index or in commits that no
+# remote-tracking branch and no local default branch reaches (edits to tracked
+# files stay scratch) - or (b) an untracked entry the report does not cite is
+# significant on its own: a file over 64 KiB, or a new directory holding more
+# than 20 files. Gitignored build output and caches are scratch by definition
+# and never count toward (b), nor do common build and cache directories
+# (SCOUT_ARTIFACT_PRUNE_NAMES). When nothing refuses, teardown warns, listing
+# the largest untracked items, ignored ones included, before deleting them.
+# Content with a byte-identical copy anywhere under data/<task-id>/ counts as
+# preserved, so the remedy is to copy it there, where it survives cleanup with
+# the home's private records, or to commit and push it. Like the landed-work
+# refusal, only --force with the captain's explicit discard authority overrides
+# it; a worktree that cannot be inspected refuses too.
 # Before destructive cleanup, teardown validates task check artifacts as
 # ordinary single-link files on the state device. It refuses and preserves
 # task state when that proof fails; otherwise it removes the task's check,
@@ -159,7 +176,8 @@
 # leased home and state in place instead of hiding a still-held lease.
 # Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
-#   checks, and discards secondmate child work for kind=secondmate. Only use it
+#   and worktree-artifact checks, and discards secondmate child work for
+#   kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.
 #   --legacy-record accepts a task record that predates the spawn_gen field:
 #   teardown then proceeds only when the recorded endpoint is confirmed dead or
@@ -1745,6 +1763,281 @@ validate_worktree_teardown_safety() {
   fi
 }
 
+# Scout worktree-artifact guard; the script header owns the contract. The
+# pruned names are build and cache trees a package manager or compiler
+# regenerates, plus Firstmate's own .claude settings, kept separate from
+# FM_WORKTREE_WRITE_PRUNE because a home that widens that liveness probe must
+# not thereby widen this refusal.
+SCOUT_ARTIFACT_MAX_KIB=64
+SCOUT_ARTIFACT_MAX_DIR_FILES=20
+SCOUT_ARTIFACT_PRUNE_NAMES='.git .claude node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .eggs target dist build .next .nuxt .svelte-kit .turbo .parcel-cache .gradle .terraform coverage .cache .yarn .pnpm-store .direnv vendor'
+SCOUT_ARTIFACT_GIT=0
+SCOUT_ARTIFACT_ROOT=
+SCOUT_ARTIFACT_NEW=
+SCOUT_ARTIFACT_SAVED_HASHES=
+
+scout_artifact_uninspectable() {  # <what>
+  echo "REFUSED: cannot inspect scout task $ID's worktree $WT for $1." >&2
+  echo "Nothing was changed. Restore the worktree, or get the captain's explicit OK to discard it, then --force." >&2
+  return 1
+}
+
+# True when any directory component of a relative path is a pruned name.
+scout_artifact_path_pruned() {  # <relative-path>
+  local rest=$1 part
+  while :; do
+    case "$rest" in
+      */*) part=${rest%%/*}; rest=${rest#*/} ;;
+      *) return 1 ;;
+    esac
+    case " $SCOUT_ARTIFACT_PRUNE_NAMES " in *" $part "*) return 0 ;; esac
+  done
+}
+
+# Regular files below <dir>, never descending into a pruned name.
+scout_artifact_find_files() {  # <dir>
+  local dir=$1 name
+  local -a prune=()
+  for name in $SCOUT_ARTIFACT_PRUNE_NAMES; do
+    [ "${#prune[@]}" -eq 0 ] || prune+=( -o )
+    prune+=( -name "$name" )
+  done
+  find "$dir" -mindepth 1 -type d \( "${prune[@]}" \) -prune -o -type f -print
+}
+
+# Absolute paths of the untracked, not gitignored regular files below
+# worktree-relative directory <rel>, never inside a pruned name; outside git,
+# every regular file below it.
+scout_artifact_untracked_files() {  # <rel>
+  if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
+    scout_artifact_find_files "$SCOUT_ARTIFACT_ROOT/$1"
+    return
+  fi
+  scout_artifact_repo_files "$SCOUT_ARTIFACT_ROOT" --others --exclude-standard -- "$1"
+}
+
+# Absolute paths of the regular files `git ls-files <args>` lists in <repo>,
+# skipping pruned names. An embedded repository, which the outer listing shows
+# only as its directory, contributes every non-ignored file it holds, tracked
+# or not, since none of them is in the outer repository.
+scout_artifact_repo_files() {  # <repo> <ls-files-args...>
+  local repo=$1 list f
+  shift
+  list=$(git --literal-pathspecs -c core.quotePath=false -C "$repo" ls-files "$@") || return 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if scout_artifact_path_pruned "$f"; then continue; fi
+    case "$f" in
+      */)
+        f="$repo/${f%/}"
+        if [ -d "$f" ] && [ ! -L "$f" ]; then
+          scout_artifact_repo_files "$f" --cached --others --exclude-standard || return 1
+        fi
+        ;;
+      *)
+        f="$repo/$f"
+        if [ -f "$f" ] && [ ! -L "$f" ]; then printf '%s\n' "$f"; fi
+        ;;
+    esac
+  done <<EOF
+$list
+EOF
+}
+
+# Prints each of the given absolute file paths that has no byte-identical copy
+# anywhere under data/<task-id>/.
+scout_artifact_unsaved() {  # <newline-separated absolute paths>
+  local paths=$1 hashes
+  [ -n "$paths" ] || return 0
+  if [ -z "$SCOUT_ARTIFACT_SAVED_HASHES" ]; then
+    printf '%s\n' "$paths"
+    return 0
+  fi
+  hashes=$(printf '%s\n' "$paths" | git hash-object --no-filters --stdin-paths) || return 1
+  awk 'FNR == 1 { file++ }
+    file == 1 { saved[$0] = 1; next }
+    file == 2 { hash[FNR] = $0; next }
+    !(hash[FNR] in saved)
+  ' <(printf '%s\n' "$SCOUT_ARTIFACT_SAVED_HASHES") <(printf '%s\n' "$hashes") <(printf '%s\n' "$paths")
+}
+
+# Absolute paths of the files at or under worktree-relative <rel> whose content
+# no surviving ref holds: untracked, ignored, or added only in commits or an
+# index that exist only here. Edits to tracked files are scratch the report
+# describes, never a refusal, and a cited directory skips pruned names below it.
+scout_artifact_risk_files() {  # <rel>
+  local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked
+  {
+    if [ -d "$path" ]; then scout_artifact_find_files "$path"; else printf '%s\n' "$path"; fi
+  } | {
+    if [ "$SCOUT_ARTIFACT_GIT" != 1 ]; then
+      cat
+    else
+      tracked=$(git --literal-pathspecs -c core.quotePath=false -C "$WT" ls-files -- "$rel") || exit 1
+      ROOT="$SCOUT_ARTIFACT_ROOT/" awk '
+        FNR == 1 { file++ }
+        file == 1 { added[$0] = 1; next }
+        file == 2 { if ($0 != "" && !($0 in added)) kept[ENVIRON["ROOT"] $0] = 1; next }
+        !($0 in kept)
+      ' <(printf '%s\n' "$SCOUT_ARTIFACT_NEW") <(printf '%s\n' "$tracked") -
+    fi
+  }
+}
+
+# Path-shaped tokens the report cites: markdown and quoting stripped, URLs
+# skipped, trailing line references (:12, :12-30, #L12) removed, and only
+# tokens holding a slash or a file extension kept, so a prose word that
+# happens to name a directory is never read as a citation.
+scout_report_path_tokens() {  # <report>
+  perl -ne '
+    for my $t (split /[\s\x60\x22\x27()<>\[\]{}|,;=*]+/) {
+      next if $t eq "" || $t =~ m{://};
+      $t =~ s/#L\d.*\z//;
+      1 while $t =~ s/(?::\d+(?:-\d+)?)+\z// || $t =~ s/[.:!?]+\z//;
+      next unless $t =~ m{/} || $t =~ /\.[A-Za-z0-9]{1,10}\z/;
+      $t =~ s{\A(?:\./)+}{};
+      $t =~ s{/+\z}{};
+      print "$t\n" if length $t && $t ne "." && $t ne "..";
+    }' "$1" | LC_ALL=C sort -u
+}
+
+validate_scout_worktree_artifacts() {  # <report>
+  local report=$1 wt=${WT%/} tok rel listing all_listing largest entry files count unsaved size default kib
+  local cited='' cited_rels='' artifacts=''
+  local -a survivors=(--remotes)
+  [ -n "$wt" ] && [ -d "$wt" ] || return 0
+  SCOUT_ARTIFACT_ROOT=$(canonical_existing_dir "$wt") || { scout_artifact_uninspectable "its location"; return 1; }
+  SCOUT_ARTIFACT_GIT=0
+  SCOUT_ARTIFACT_NEW=
+  SCOUT_ARTIFACT_SAVED_HASHES=
+  if git -C "$WT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    SCOUT_ARTIFACT_GIT=1
+    if git -C "$WT" rev-parse --verify -q HEAD >/dev/null; then
+      if default=$(default_branch 2>/dev/null) \
+         && git -C "$WT" show-ref --verify --quiet "refs/heads/$default"; then
+        survivors+=("refs/heads/$default")
+      fi
+      SCOUT_ARTIFACT_NEW=$(
+        git -c core.quotePath=false -C "$WT" diff --no-renames --name-only --relative --diff-filter=A HEAD -- &&
+        git -c core.quotePath=false -C "$WT" log --no-renames --format= --name-only --relative --diff-filter=A HEAD --not "${survivors[@]}" --
+      ) || { scout_artifact_uninspectable "files added only locally"; return 1; }
+    fi
+  fi
+  if [ -d "$DATA/$ID" ]; then
+    SCOUT_ARTIFACT_SAVED_HASHES=$(find "$DATA/$ID" -type f -print | git hash-object --no-filters --stdin-paths) \
+      || { scout_artifact_uninspectable "copies already under $DATA/$ID"; return 1; }
+  fi
+
+  # (a) Paths the report cites that resolve inside the worktree.
+  while IFS= read -r tok; do
+    [ -n "$tok" ] || continue
+    case "$tok" in \~/*) tok="$HOME/${tok#\~/}" ;; esac
+    case "$tok" in
+      "$wt"/*) rel=${tok#"$wt"/} ;;
+      "$SCOUT_ARTIFACT_ROOT"/*) rel=${tok#"$SCOUT_ARTIFACT_ROOT"/} ;;
+      /*|'~'*|'$'*|-*) continue ;;
+      *) rel=$tok ;;
+    esac
+    case "/$rel/" in *//*|*/../*|*/./*|*/.git/*) continue ;; esac
+    [ ! -L "$SCOUT_ARTIFACT_ROOT/$rel" ] && [ -e "$SCOUT_ARTIFACT_ROOT/$rel" ] || continue
+    files=$(scout_artifact_risk_files "$rel") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }
+    unsaved=$(scout_artifact_unsaved "$files") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }
+    [ -n "$unsaved" ] || continue
+    cited_rels="$cited_rels$rel"$'\n'
+    if [ -d "$SCOUT_ARTIFACT_ROOT/$rel" ]; then
+      count=$(printf '%s\n' "$unsaved" | wc -l)
+      cited="$cited  $rel/ ($((count)) files not preserved)"$'\n'
+    else
+      cited="$cited  $rel"$'\n'
+    fi
+  done <<EOF
+$(scout_report_path_tokens "$report")
+EOF
+
+  # (b) Uncited untracked entries, never gitignored ones, large enough to be
+  # output worth keeping.
+  if [ "$SCOUT_ARTIFACT_GIT" = 1 ]; then
+    if ! listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard --directory --no-empty-directory) \
+      || ! all_listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --directory --no-empty-directory); then
+      scout_artifact_uninspectable "untracked files"; return 1
+    fi
+  else
+    listing=$(find "$SCOUT_ARTIFACT_ROOT" -mindepth 1 -maxdepth 1 -print | while IFS= read -r entry; do
+      if [ -d "$entry" ] && [ ! -L "$entry" ]; then printf '%s/\n' "${entry##*/}"; else printf '%s\n' "${entry##*/}"; fi
+    done)
+    all_listing=$listing
+  fi
+  kib=$SCOUT_ARTIFACT_MAX_KIB
+  while IFS= read -r entry; do
+    rel=${entry%/}
+    [ -n "$rel" ] || continue
+    if scout_artifact_path_pruned "$rel/"; then continue; fi
+    if printf '%s' "$cited_rels" | grep -Fxq -- "$rel"; then continue; fi
+    entry="$SCOUT_ARTIFACT_ROOT/$rel"
+    [ ! -L "$entry" ] || continue
+    if [ -d "$entry" ]; then
+      files=$(scout_artifact_untracked_files "$rel") || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
+      count=0
+      [ -z "$files" ] || count=$(printf '%s\n' "$files" | wc -l)
+      if [ "$((count))" -gt "$SCOUT_ARTIFACT_MAX_DIR_FILES" ]; then
+        unsaved=$(scout_artifact_unsaved "$files") || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
+        [ -z "$unsaved" ] || artifacts="$artifacts  $rel/ ($((count)) files)"$'\n'
+        continue
+      fi
+      files=$(while IFS= read -r file; do
+          [ -z "$file" ] || find "$file" -prune -type f -size "+${kib}k" -print || exit 1
+        done <<EOF
+$files
+EOF
+) || { scout_artifact_uninspectable "untracked directory $rel"; return 1; }
+    elif [ -f "$entry" ]; then
+      files=$(find "$entry" -prune -type f -size "+${kib}k" -print) \
+        || { scout_artifact_uninspectable "untracked file $rel"; return 1; }
+    else
+      continue
+    fi
+    unsaved=$(scout_artifact_unsaved "$files") || { scout_artifact_uninspectable "untracked path $rel"; return 1; }
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      size=$(wc -c < "$entry")
+      artifacts="$artifacts  ${entry#"$SCOUT_ARTIFACT_ROOT"/} ($((size)) bytes)"$'\n'
+    done <<EOF
+$unsaved
+EOF
+  done <<EOF
+$listing
+EOF
+
+  if [ -z "$cited$artifacts" ]; then
+    largest=$(while IFS= read -r entry; do
+      entry=${entry%/}
+      [ -n "$entry" ] || continue
+      size=$(du -sk "$SCOUT_ARTIFACT_ROOT/$entry" 2>/dev/null) || continue
+      printf '%s\t%s\n' "${size%%[!0-9]*}" "$entry"
+    done <<EOF | sort -rn | head -n 5
+$all_listing
+EOF
+)
+    if [ -n "$largest" ]; then
+      echo "warning: cleaning up scout task $ID deletes these untracked or ignored items in its worktree $WT (largest first, KiB):" >&2
+      printf '%s\n' "$largest" | sed 's/^/  /' >&2
+    fi
+    return 0
+  fi
+  echo "REFUSED: scout task $ID's worktree $WT holds work that exists nowhere else, and cleanup would delete it." >&2
+  if [ -n "$cited" ]; then
+    echo "Paths its report cites that exist only in the worktree:" >&2
+    printf '%s' "$cited" >&2
+  fi
+  if [ -n "$artifacts" ]; then
+    echo "Untracked, not gitignored output the report does not cite, over ${kib} KiB or in new directories over $SCOUT_ARTIFACT_MAX_DIR_FILES files:" >&2
+    printf '%s' "$artifacts" >&2
+  fi
+  echo "Preserve each one first: copy it into $DATA/$ID/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown." >&2
+  echo "Use --force only after the captain explicitly approves discarding them." >&2
+  return 1
+}
+
 # Fix 1 (see script header): does the active-or-most-recent no-mistakes run in
 # worktree $1 belong to THIS task, and is it parked at a gate awaiting an agent
 # that is about to be removed? Prints nothing; returns 0 only on a genuine
@@ -3189,6 +3482,9 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
     echo "REFUSED: scout task $ID has not passed the captain-call completion gate." >&2
     echo "Inventory its report and any visual review through bin/fm-captain-hold.sh before teardown." >&2
     exit 1
+  fi
+  if teardown_owns_worktree; then
+    validate_scout_worktree_artifacts "$REPORT" || exit 1
   fi
 fi
 

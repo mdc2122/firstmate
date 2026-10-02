@@ -18,7 +18,9 @@
 #        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
-#   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
+#   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is
+#   scratch, so harnesses, raw evidence, and long-running outputs go under
+#   data/<task-id>/ beside the report.
 #   It offers the Lavish review loop only when `fm-bootstrap.sh lavish-compatible`
 #   confirms the supported lavish-axi floor; otherwise it asks for a text report.
 #   --secondmate writes a persistent secondmate charter. The project list
@@ -375,11 +377,15 @@ $HERDR_SECTION
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
 This is a SCOUT task: the deliverable is a written report, not a PR.
 The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
-The report is the only thing that survives, so anything worth keeping must be in it.
+Only \`$DATA/$ID/\` survives: the report, plus anything else you put in that directory.
+Write every reusable harness, every piece of raw evidence, and every long-running output (benchmarks, model runs, grades, datasets) under \`$DATA/$ID/\` from the start - never only in the worktree - and cite it there from the report.
+When a harness deserves a home in a repository, keep it in \`$DATA/$ID/\` anyway and recommend in the report that it be committed and pushed; you never push it yourself.
+If a run will take more than a few minutes, say so in the report and keep its outputs streaming into \`$DATA/$ID/\` so an interruption or cleanup cannot erase hours of work.
+Teardown refuses while the report cites a worktree-only file or the worktree holds large untracked output, so copy anything you still need into \`$DATA/$ID/\` before reporting done.
 
 # Rules
 1. Never push to any remote and never open a PR.
-2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
+2. Stay inside this worktree; the only places you may write outside it are \`$DATA/$ID/\` (the report and the evidence beside it) and the status file below.
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
