@@ -28,10 +28,16 @@ GREEN='[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"
 RED='[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-10-01T00:00:00Z"}]'
 PENDING='[{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null,"startedAt":"2026-10-01T00:00:00Z"}]'
 
-# A home with a fake gh: `gh pr list --repo <owner>/<repo>` prints
-# $home/forge/<owner>__<repo>.json (or fails when that file is absent), and
-# `gh pr view` (fm-pr-check.sh's head lookup) prints nothing, so no pr_head is
-# recorded.
+# A home with a fake gh that answers from $home/forge/<owner>__<repo>.json:
+#   - `gh pr list --repo <owner>/<repo> --json <fields>` prints only those
+#     fields, and fails with GitHub's 504 when the fields include
+#     statusCheckRollup, which is how the real gateway answers a busy upstream
+#     repository; an absent fixture file fails as an unreadable repository;
+#   - `gh pr view <url> --json headRefOid,statusCheckRollup` prints that PR's
+#     rollup and its head, which is viewHeadRefOid when the fixture sets one
+#     (a push landing between the listing and the view);
+#   - any other `gh pr view` (fm-pr-check.sh's head lookup) prints nothing, so
+#     no pr_head is recorded.
 make_home() {  # <name>
   local home="$TMP_ROOT/$1"
   mkdir -p "$home/state" "$home/data" "$home/projects" "$home/forge" "$home/fakebin"
@@ -40,11 +46,25 @@ make_home() {  # <name>
   cat > "$home/fakebin/gh" <<SH
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$home/forge/gh.log"
-[ "\${1:-} \${2:-}" = "pr list" ] || exit 1
-while [ \$# -gt 0 ]; do [ "\$1" = --repo ] && repo=\$2; shift; done
-f="$home/forge/\${repo//\//__}.json"
-[ -f "\$f" ] || exit 1
-cat "\$f"
+cmd="\${1:-} \${2:-}"
+repo= fields= url=\${3:-}
+while [ \$# -gt 0 ]; do
+  case "\$1" in --repo) repo=\$2 ;; --json) fields=\$2 ;; esac
+  shift
+done
+case "\$cmd" in
+  "pr list")
+    case ",\$fields," in *,statusCheckRollup,*) echo 'HTTP 504: 504 Gateway Timeout (https://api.github.com/graphql)' >&2; exit 1 ;; esac
+    f="$home/forge/\${repo//\//__}.json"
+    [ -f "\$f" ] || exit 1
+    jq -c --arg fields "\$fields" '[.[] | with_entries(select(.key as \$k | \$fields | split(",") | index(\$k)))]' "\$f"
+    ;;
+  "pr view")
+    [ "\$fields" = headRefOid,statusCheckRollup ] || exit 1
+    cat "$home"/forge/*.json | jq -c --arg url "\$url" 'select(type == "array") | .[] | select(.url == \$url) | {headRefOid: (.viewHeadRefOid // .headRefOid), statusCheckRollup}' | head -1 | grep . || exit 1
+    ;;
+  *) exit 1 ;;
+esac
 SH
   chmod +x "$home/fakebin/gh"
   printf '%s\n' "$home"
@@ -146,6 +166,37 @@ test_already_armed_pr_is_a_noop() {
     || fail "a second sweep re-registered an already armed PR"
   [ "$(sweep_rows "$home")" = 0 ] || fail "an already armed PR queued a wake"
   pass "an already armed PR is a no-op"
+}
+
+test_already_armed_pr_costs_no_check_read() {
+  local home
+  home=$(make_home armed-no-read)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  forge_prs "$home" o/viral-moment "5|fm/t1|$GREEN|$(head_of "$home" t1)"
+  sweep "$home"
+  [ -n "$(armed_url "$home" t1)" ] || fail "fixture arm failed"
+  : > "$home/forge/gh.log"
+
+  sweep "$home"
+  ! grep -q '^pr view .*--json headRefOid,statusCheckRollup' "$home/forge/gh.log" \
+    || fail "a sweep read checks for an already armed PR: $(cat "$home/forge/gh.log")"
+  pass "an already armed PR costs no per-PR check read"
+}
+
+test_green_rollup_for_a_newer_head_is_not_armed() {
+  local home json
+  home=$(make_home head-moved)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 on viral-moment
+  forge_prs "$home" o/viral-moment "5|fm/t1|$GREEN|$(head_of "$home" t1)"
+  json=$(jq -c '.[0].viewHeadRefOid = "0123456789abcdef0123456789abcdef01234567"' "$home/forge/o__viral-moment.json")
+  printf '%s\n' "$json" > "$home/forge/o__viral-moment.json"
+
+  sweep "$home"
+  ! armed_url "$home" t1 >/dev/null || fail "a green rollup read for a head other than the listed one armed the PR"
+  [ "$(sweep_rows "$home")" = 0 ] || fail "a head that moved between the listing and the view queued a wake"
+  pass "a green rollup for a head other than the listed one is reconsidered next sweep, not armed"
 }
 
 test_red_pending_draft_and_scout_prs_are_not_armed() {
@@ -272,6 +323,8 @@ test_armed_pr_ahead_of_worktree_head_is_not_reported() {
 
 test_green_unarmed_branch_pr_is_armed_with_no_done_line
 test_already_armed_pr_is_a_noop
+test_already_armed_pr_costs_no_check_read
+test_green_rollup_for_a_newer_head_is_not_armed
 test_red_pending_draft_and_scout_prs_are_not_armed
 test_non_yolo_green_pr_wakes_once
 test_unreadable_repo_keeps_earlier_reports
