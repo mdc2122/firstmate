@@ -1,0 +1,90 @@
+=== incident-exact
+--- worker status log:
+working: validating
+done: PR https://github.com/mdc2122/viral-moment/pull/395 checks green
+--- fm-watch.sh exit=0 stdout (wake emitted to firstmate):
+signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/incident-exact/home/state/task-a.status
+--- task meta pr= :
+pr=https://github.com/mdc2122/viral-moment/pull/395
+--- merge poll artifacts:
+task-a.check.sh
+task-a.pr-poll
+authenticated poll armed for: https://github.com/mdc2122/viral-moment/pull/395
+--- triage log (autoarm lines):
+[2026-10-01T20:33:32-0500] armed merge poll for task-a from its ready line: https://github.com/mdc2122/viral-moment/pull/395
+(none)
+--- wake queue rows:
+1790904812	1	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/incident-exact/home/state/task-a.status
+1790904814	2	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/incident-exact/home/state/task-a.status
+
+=== trailing-prose
+--- worker status log:
+done: PR https://github.com/mdc2122/viral-moment/pull/395 checks green — slice 2 (risk low).
+--- fm-watch.sh exit=0 stdout (wake emitted to firstmate):
+signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/trailing-prose/home/state/task-a.status
+--- task meta pr= :
+pr=https://github.com/mdc2122/viral-moment/pull/395
+--- merge poll artifacts:
+task-a.check.sh
+task-a.pr-poll
+authenticated poll armed for: https://github.com/mdc2122/viral-moment/pull/395
+--- triage log (autoarm lines):
+[2026-10-01T20:33:58-0500] armed merge poll for task-a from its ready line: https://github.com/mdc2122/viral-moment/pull/395
+(none)
+--- wake queue rows:
+1790904838	1	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/trailing-prose/home/state/task-a.status
+1790904840	2	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/trailing-prose/home/state/task-a.status
+
+=== valid-then-unparseable
+--- worker status log:
+done: PR https://github.com/mdc2122/viral-moment/pull/395 checks green
+done: also see PR https://github.com/o/r/pull/abc
+--- fm-watch.sh exit=0 stdout (wake emitted to firstmate):
+signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/valid-then-unparseable/home/state/task-a.status
+--- task meta pr= :
+pr=https://github.com/mdc2122/viral-moment/pull/395
+--- merge poll artifacts:
+task-a.check.sh
+task-a.pr-poll
+authenticated poll armed for: https://github.com/mdc2122/viral-moment/pull/395
+--- triage log (autoarm lines):
+[2026-10-01T20:34:27-0500] armed merge poll for task-a from its ready line: https://github.com/mdc2122/viral-moment/pull/395
+(none)
+--- wake queue rows:
+1790904868	1	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/valid-then-unparseable/home/state/task-a.status
+1790904869	2	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/valid-then-unparseable/home/state/task-a.status
+
+=== unparseable-only
+--- worker status log:
+done: PR https://github.com/o/r/pull/abc checks green
+--- fm-watch.sh exit=0 stdout (wake emitted to firstmate):
+signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/unparseable-only/home/state/task-a.status
+--- task meta pr= :
+(none)
+--- merge poll artifacts:
+(none)
+no authenticated poll
+--- triage log (autoarm lines):
+[2026-10-01T20:34:36-0500] ready line for task-a names no canonical PR URL; merge poll not armed: https://github.com/o/r/pull/abc
+(none)
+--- wake queue rows:
+1790904876	1	check	pr-autoarm-task-a	check: merge poll not armed for task-a: ready line names no canonical PR URL: https://github.com/o/r/pull/abc
+1790904877	2	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/unparseable-only/home/state/task-a.status
+1790904878	3	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/unparseable-only/home/state/task-a.status
+
+=== no-pr-mention
+--- worker status log:
+done: report written
+--- fm-watch.sh exit=0 stdout (wake emitted to firstmate):
+signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/no-pr-mention/home/state/task-a.status
+--- task meta pr= :
+(none)
+--- merge poll artifacts:
+(none)
+no authenticated poll
+--- triage log (autoarm lines):
+(none)
+--- wake queue rows:
+1790904886	1	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/no-pr-mention/home/state/task-a.status
+1790904887	2	signal	task-a.status	signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.8Sc4ba/no-pr-mention/home/state/task-a.status
+

@@ -1,0 +1,6 @@
+ok - a ready line arms its merge poll once, a repeat is a no-op, and a new PR re-arms
+ok - a ready line with trailing prose arms the PR it names
+ok - a later unparseable PR mention does not hide an earlier valid ready line
+ok - a done line mentioning a PR it cannot parse queues the not-armed notice
+ok - a done line with no PR mention, a non-done line, and a scout arm and queue nothing
+ok - a ready line whose arm is refused queues the failure beside its signal

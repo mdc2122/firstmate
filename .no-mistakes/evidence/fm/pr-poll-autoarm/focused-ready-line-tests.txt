@@ -1,0 +1,12 @@
+ok - a ready line arms its merge poll once, a repeat is a no-op, and a new PR re-arms
+  (test_ready_line_arms_merge_poll_once_and_rearms_on_change: 38s)
+ok - a ready line with trailing prose arms the PR it names
+  (test_ready_line_with_trailing_prose_arms: 9s)
+ok - a later unparseable PR mention does not hide an earlier valid ready line
+  (test_valid_ready_line_wins_over_later_unparseable_mention: 10s)
+ok - a done line mentioning a PR it cannot parse queues the not-armed notice
+  (test_unparseable_pr_mention_queues_notice: 33s)
+ok - a done line with no PR mention, a non-done line, and a scout arm and queue nothing
+  (test_done_line_without_pr_mention_arms_nothing: 19s)
+ok - a ready line whose arm is refused queues the failure beside its signal
+  (test_refused_ready_line_arm_is_queued: 10s)
