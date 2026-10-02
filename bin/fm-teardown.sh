@@ -83,13 +83,12 @@
 # significant on its own: a file over 64 KiB, or a new directory holding more
 # than 20 files. Gitignored build output and caches are scratch by definition
 # and never count toward (b), nor do common build and cache directories
-# (SCOUT_ARTIFACT_PRUNE_NAMES), nor do omp's own runtime markers in a
-# worktree (scout_artifact_path_is_omp_marker: the state/.omp-*-extension-
-# loaded files and the state/extensions/ tree omp's .omp/extensions/*.ts
-# write into a worktree-local state/ when no FM_HOME-scoped state exists
-# there; they hold no work), which both (a) and (b) skip. When nothing
-# refuses, teardown warns, listing the largest untracked items, ignored ones
-# included, before deleting them.
+# (SCOUT_ARTIFACT_PRUNE_NAMES). In a worktree of the firstmate repo itself,
+# neither (a) nor (b) counts the files its .omp/extensions/*.ts write into a
+# worktree-local state/ when no FM_HOME-scoped state exists there
+# (scout_artifact_path_is_omp_marker; they hold no work) unless the report
+# cites one by its own path. When nothing refuses, teardown warns, listing the
+# largest untracked items, ignored ones included, before deleting them.
 # Content with a byte-identical copy anywhere under data/<task-id>/ counts as
 # preserved, so the remedy is to copy it there, where it survives cleanup with
 # the home's private records, or to commit and push it. Like the landed-work
@@ -1777,6 +1776,7 @@ SCOUT_ARTIFACT_MAX_KIB=64
 SCOUT_ARTIFACT_MAX_DIR_FILES=20
 SCOUT_ARTIFACT_PRUNE_NAMES='.git .claude node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .eggs target dist build .next .nuxt .svelte-kit .turbo .parcel-cache .gradle .terraform coverage .cache .yarn .pnpm-store .direnv vendor'
 SCOUT_ARTIFACT_GIT=0
+SCOUT_ARTIFACT_OMP=0
 SCOUT_ARTIFACT_ROOT=
 SCOUT_ARTIFACT_NEW=
 SCOUT_ARTIFACT_SAVED_HASHES=
@@ -1799,13 +1799,14 @@ scout_artifact_path_pruned() {  # <relative-path>
   done
 }
 
-# True when a worktree-relative path is one of omp's own runtime markers: a
-# state/.omp-*-extension-loaded file or anything at or below state/extensions/
-# (kept separate from SCOUT_ARTIFACT_PRUNE_NAMES because those match any path
-# component, while these are exact worktree-relative shapes).
+# True when the worktree is a firstmate-repo worktree and a worktree-relative
+# path is one of the files its .omp/extensions/*.ts write as runtime markers.
 scout_artifact_path_is_omp_marker() {  # <relative-path>
-  case "/$1/" in
-    /state/.omp-*-extension-loaded/|/state/extensions/|/state/extensions/*/) return 0 ;;
+  [ "$SCOUT_ARTIFACT_OMP" = 1 ] || return 1
+  case "$1" in
+    state/.omp-watch-extension-loaded|state/.omp-turnend-extension-loaded) return 0 ;;
+    state/extensions/omp-primary-watch/session-generations.log) return 0 ;;
+    state/extensions/omp-primary-watch/session-replacement-actionable.json) return 0 ;;
   esac
   return 1
 }
@@ -1894,8 +1895,8 @@ scout_artifact_unsaved() {  # <newline-separated absolute paths>
 # Absolute paths of the files at or under worktree-relative <rel> whose content
 # no surviving ref holds: untracked, ignored, or added only in commits or an
 # index that exist only here. Edits to tracked files are scratch the report
-# describes, never a refusal, and a cited directory skips pruned names below it.
-# omp runtime markers are never listed.
+# describes, never a refusal, and a cited directory skips pruned names and omp
+# runtime markers below it.
 scout_artifact_risk_files() {  # <rel>
   local rel=$1 path="$SCOUT_ARTIFACT_ROOT/$1" tracked files
   files=$({
@@ -1913,7 +1914,7 @@ scout_artifact_risk_files() {  # <rel>
       ' <(printf '%s\n' "$SCOUT_ARTIFACT_NEW") <(printf '%s\n' "$tracked") -
     fi
   }) || return 1
-  scout_artifact_drop_omp_markers "$files"
+  if [ -d "$path" ]; then scout_artifact_drop_omp_markers "$files"; else printf '%s\n' "$files"; fi
 }
 
 # Path-shaped tokens the report cites: markdown and quoting stripped, URLs
@@ -1940,10 +1941,14 @@ validate_scout_worktree_artifacts() {  # <report>
   [ -n "$wt" ] && [ -d "$wt" ] || return 0
   SCOUT_ARTIFACT_ROOT=$(canonical_existing_dir "$wt") || { scout_artifact_uninspectable "its location"; return 1; }
   SCOUT_ARTIFACT_GIT=0
+  SCOUT_ARTIFACT_OMP=0
   SCOUT_ARTIFACT_NEW=
   SCOUT_ARTIFACT_SAVED_HASHES=
   if git -C "$WT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     SCOUT_ARTIFACT_GIT=1
+    if [ "$(git -C "$WT" ls-files -- .omp/extensions/fm-primary-omp-watch.ts .omp/extensions/fm-primary-turnend-guard.ts | wc -l)" -eq 2 ]; then
+      SCOUT_ARTIFACT_OMP=1
+    fi
     if git -C "$WT" rev-parse --verify -q HEAD >/dev/null; then
       if default=$(default_branch 2>/dev/null) \
          && git -C "$WT" show-ref --verify --quiet "refs/heads/$default"; then

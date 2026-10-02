@@ -1915,24 +1915,37 @@ Model B wins; see the summary table above."
   pass "an uncited embedded repository holding worktree-only files refuses scout teardown"
 }
 
-# omp auto-loads .omp/extensions/*.ts in a worktree and writes its runtime
-# markers into a worktree-local state/ when no FM_HOME-scoped state exists
-# there; those markers hold no work and must never keep a scout alive.
+# omp auto-loads .omp/extensions/*.ts in a firstmate-repo worktree and writes
+# its runtime markers into a worktree-local state/ when no FM_HOME-scoped state
+# exists there; those markers hold no work and must never keep a scout alive.
+mark_firstmate_repo_worktree() {  # <case-dir>
+  local case_dir=$1
+  mkdir -p "$case_dir/project/.omp/extensions"
+  printf '// watch\n' > "$case_dir/project/.omp/extensions/fm-primary-omp-watch.ts"
+  printf '// turnend\n' > "$case_dir/project/.omp/extensions/fm-primary-turnend-guard.ts"
+  git -C "$case_dir/project" add .omp
+  git -C "$case_dir/project" -c user.email=t@t -c user.name=t commit -q -m "omp extensions"
+  git -C "$case_dir/project" push -q origin main
+  git -C "$case_dir/wt" merge -q --ff-only main
+}
+
 write_omp_runtime_markers() {  # <case-dir>
   local case_dir=$1
   mkdir -p "$case_dir/wt/state/extensions/omp-primary-watch"
   printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-turnend-extension-loaded"
   printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-watch-extension-loaded"
   printf 'gen owner=start\n' > "$case_dir/wt/state/extensions/omp-primary-watch/session-generations.log"
+  printf '{"version":2,"pending":[]}\n' > "$case_dir/wt/state/extensions/omp-primary-watch/session-replacement-actionable.json"
 }
 
 test_scout_omp_runtime_markers_alone_tear_down() {
   local case_dir rc
   case_dir=$(make_case scout-omp-markers)
+  mark_firstmate_repo_worktree "$case_dir"
   write_omp_runtime_markers "$case_dir"
   write_scout_task "$case_dir" "# Loose ends
 
-Swept state/.omp-turnend-extension-loaded, state/.omp-watch-extension-loaded, and state/extensions/ during the pass; none of it is work."
+Swept the open loose ends; nothing here is a deliverable."
 
   set +e
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
@@ -1945,12 +1958,10 @@ Swept state/.omp-turnend-extension-loaded, state/.omp-watch-extension-loaded, an
 }
 
 test_scout_report_citing_omp_marker_parent_tears_down() {
-  local case_dir rc i
+  local case_dir rc
   case_dir=$(make_case scout-omp-markers-parent)
+  mark_firstmate_repo_worktree "$case_dir"
   write_omp_runtime_markers "$case_dir"
-  for i in $(seq 1 25); do
-    printf 'gen %s\n' "$i" > "$case_dir/wt/state/extensions/omp-primary-watch/gen-$i.log"
-  done
   write_scout_task "$case_dir" "# Loose ends
 
 The worktree's state/ held only omp runtime markers; nothing in \`state/\` is a deliverable."
@@ -1968,21 +1979,63 @@ The worktree's state/ held only omp runtime markers; nothing in \`state/\` is a 
 test_scout_omp_marker_exemption_ignores_cwd_markers() {
   local case_dir rc
   case_dir=$(make_case scout-omp-markers-cwd)
+  mark_firstmate_repo_worktree "$case_dir"
   mkdir -p "$case_dir/home/state" "$case_dir/wt/state"
   printf 'sha256:deadbeef\n4242\n' > "$case_dir/home/state/.omp-watch-extension-loaded"
   printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-turnend-extension-loaded"
   write_scout_task "$case_dir" "# Loose ends
 
-Swept state/.omp-turnend-extension-loaded; it is runtime noise, not work."
+Nothing in \`state/\` is a deliverable; it is runtime noise, not work."
 
   set +e
   (cd "$case_dir/home" && run_teardown "$case_dir") > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
-  expect_code 0 "$rc" "scout-omp-markers-cwd: a cited omp marker must not refuse teardown when the cwd's state/ holds other markers: $(cat "$case_dir/stderr")"
+  expect_code 0 "$rc" "scout-omp-markers-cwd: an omp marker under a cited state/ must not refuse teardown when the cwd's state/ holds other markers: $(cat "$case_dir/stderr")"
   ! grep -q REFUSED "$case_dir/stderr" || fail "scout-omp-markers-cwd: teardown printed a REFUSED line"
   assert_absent "$case_dir/state/task-x1.meta" "scout-omp-markers-cwd: the completed teardown left the task record"
   pass "the omp marker exemption holds regardless of markers in the caller's working directory"
+}
+
+test_scout_omp_marker_cited_by_its_own_path_refuses() {
+  local case_dir rc
+  case_dir=$(make_case scout-omp-marker-cited)
+  mark_firstmate_repo_worktree "$case_dir"
+  write_omp_runtime_markers "$case_dir"
+  write_scout_task "$case_dir" "# Watch handoff
+
+The pending handoff is in state/extensions/omp-primary-watch/session-replacement-actionable.json."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-omp-marker-cited: an omp marker the report cites by its own path must refuse teardown"
+  assert_grep "session-replacement-actionable.json" "$case_dir/stderr" \
+    "scout-omp-marker-cited: the refusal did not name the cited file"
+  assert_present "$case_dir/state/task-x1.meta" "scout-omp-marker-cited: the refusal erased the task record"
+  pass "an omp marker the report cites by its own path still refuses scout teardown"
+}
+
+test_scout_project_state_extensions_cited_refuses() {
+  local case_dir rc
+  case_dir=$(make_case scout-project-state-extensions)
+  mkdir -p "$case_dir/wt/state/extensions"
+  printf 'export const plugin = 1;\n' > "$case_dir/wt/state/extensions/foo.ts"
+  write_scout_task "$case_dir" "# Plugin
+
+Wrote the plugin to state/extensions/foo.ts."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-project-state-extensions: a project scout citing state/extensions/foo.ts must refuse teardown"
+  assert_grep "state/extensions/foo.ts" "$case_dir/stderr" \
+    "scout-project-state-extensions: the refusal did not name the cited file"
+  assert_present "$case_dir/wt/state/extensions/foo.ts" "scout-project-state-extensions: the refusal deleted the cited file"
+  assert_present "$case_dir/state/task-x1.meta" "scout-project-state-extensions: the refusal erased the task record"
+  pass "a project scout citing a file under its own state/extensions/ still refuses teardown"
 }
 
 test_scout_omp_markers_do_not_mask_cited_work() {
@@ -1991,6 +2044,7 @@ test_scout_omp_markers_do_not_mask_cited_work() {
   answers="$case_dir/wt/findings/answers.jsonl"
   mkdir -p "$case_dir/wt/findings"
   printf '{"task":1,"answer":"42"}\n' > "$answers"
+  mark_firstmate_repo_worktree "$case_dir"
   write_omp_runtime_markers "$case_dir"
   write_scout_task "$case_dir" "# Sweep
 
@@ -3934,6 +3988,8 @@ test_scout_uncited_embedded_repo_refuses
 test_scout_omp_runtime_markers_alone_tear_down
 test_scout_report_citing_omp_marker_parent_tears_down
 test_scout_omp_marker_exemption_ignores_cwd_markers
+test_scout_omp_marker_cited_by_its_own_path_refuses
+test_scout_project_state_extensions_cited_refuses
 test_scout_omp_markers_do_not_mask_cited_work
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
