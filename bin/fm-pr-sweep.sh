@@ -23,9 +23,9 @@
 #     all on the PR's own branch with no merge among them - the shape a
 #     no-mistakes run leaves when it pushes its fix commits on top of the
 #     worker's commit. The descent is read from GitHub (the compare of the
-#     worktree HEAD with the forge-reported PR head, and the PR's commit
-#     list), never fetched into the worker's repository; any other relation,
-#     or one that cannot be read, is refused;
+#     worktree HEAD with the forge-reported PR head), never fetched into the
+#     worker's repository; any other relation is refused, and a compare that
+#     cannot be read is retried next sweep;
 #   - another registered repository: the PR's head commit must exist in the
 #     task's recorded worktree= or project= clone.
 # Candidates are keyed by (repository, branch), so tasks sharing a branch name
@@ -189,32 +189,29 @@ EOF
   fi
 }
 
-# 0 when PR <url> in <repo> at forge-reported head <sha> descends from the
-# task's worktree HEAD <base> through commits that are all single-parent and
-# all in the PR's own commit list; 1 when GitHub shows any other relation;
-# 2 when either read fails or times out (DESCENT_RC carries 124 for a timeout).
-pr_head_descends() {  # <repo> <url> <base> <sha>
-  local repo=$1 url=$2 base=$3 sha=$4 cmp pr_commits rc=0
+# 0 when forge-reported head <sha> in <repo> descends from the task's
+# worktree HEAD <base> through single-parent commits only; 1 when GitHub shows
+# any other relation, or answers 404 for a base it does not have (a local
+# commit never pushed is not on the PR's branch); 2 when the compare cannot be
+# read (DESCENT_RC carries 124 for a timeout).
+pr_head_descends() {  # <repo> <base> <sha>
+  local cmp err rc=0
   DESCENT_RC=0
-  cmp=$(fm_run_timed "$GH_TIMEOUT" gh api "repos/$repo/compare/$base...$sha" \
-    --jq '{status, behind_by, commits: [.commits[] | {sha, parents: (.parents | length)}]}' 2>/dev/null) || rc=$?
-  if [ "$rc" -ne 0 ]; then
-    # GitHub answers 404 for a base it does not have: a local commit never
-    # pushed is not on the PR's branch, so that is a refusal, not a read error.
-    DESCENT_RC=$rc
-    [ "$rc" -eq 124 ] && return 2
-    return 1
-  fi
-  printf '%s' "$cmp" | jq -e '.status == "ahead" and .behind_by == 0 and (.commits | length) > 0
-    and all(.commits[]; .parents == 1)' >/dev/null 2>&1 || return 1
-  rc=0
-  pr_commits=$(fm_run_timed "$GH_TIMEOUT" gh pr view "$url" --json commits --jq '[.commits[].oid]' 2>/dev/null) || rc=$?
+  err=$(mktemp) || return 2
+  cmp=$(fm_run_timed "$GH_TIMEOUT" gh api "repos/$1/compare/$2...$3" \
+    --jq '{status, behind_by, commits: [.commits[] | {parents: (.parents | length)}]}' 2>"$err") || rc=$?
   if [ "$rc" -ne 0 ]; then
     DESCENT_RC=$rc
+    if [ "$rc" -ne 124 ] && grep -q 'HTTP 404' "$err"; then
+      rm -f "$err"
+      return 1
+    fi
+    rm -f "$err"
     return 2
   fi
-  printf '%s' "$cmp" | jq -e --argjson onpr "$pr_commits" --arg sha "$sha" '
-    ([.commits[].sha] | last) == $sha and all(.commits[].sha; . as $s | $onpr | index($s))' >/dev/null 2>&1
+  rm -f "$err"
+  printf '%s' "$cmp" | jq -e '.status == "ahead" and .behind_by == 0 and (.commits | length) > 0
+    and all(.commits[]; .parents == 1)' >/dev/null 2>&1
 }
 
 # 0 when <task>'s armed poll names exactly <url>; sets nothing else.
@@ -290,20 +287,19 @@ action_check() {
       printf '%s' "$pr" | jq -e '(.statusCheckRollup | type) == "array" and (.statusCheckRollup | length) > 0' >/dev/null || continue
       red=$(fm_pr_github_checks_not_green "$pr") || continue
       [ -z "$red" ] || continue
-      DESCENT_RC=0
       if [ -z "$OWNER_NOTE" ] && [ -n "$OWNER_BASE" ]; then
-        if pr_head_descends "$repo" "$url" "$OWNER_BASE" "$sha"; then
-          :
-        elif [ "$DESCENT_RC" -eq 124 ]; then
+        rc=0
+        pr_head_descends "$repo" "$OWNER_BASE" "$sha" || rc=$?
+        if [ "$rc" -eq 1 ]; then
+          OWNER_NOTE="its head commit neither is nor descends only through its own branch's commits from $task's worktree HEAD"
+        elif [ "$rc" -ne 0 ]; then
           read_failed=1
-          log "proving $url descends from $task's worktree HEAD timed out; remaining reads retried next sweep"
-          break 2
-        elif [ "$DESCENT_RC" -ne 0 ] && [ "$DESCENT_RC" -ne 1 ]; then
-          read_failed=1
+          if [ "$DESCENT_RC" -eq 124 ]; then
+            log "proving $url descends from $task's worktree HEAD timed out; remaining reads retried next sweep"
+            break 2
+          fi
           log "could not prove $url descends from $task's worktree HEAD; retried next sweep"
           continue
-        else
-          OWNER_NOTE="its head commit neither is nor descends only through its own branch's commits from $task's worktree HEAD"
         fi
       fi
       if [ -n "$OWNER_NOTE" ]; then
