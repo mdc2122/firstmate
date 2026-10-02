@@ -1957,9 +1957,10 @@ EOF
   # (b) Uncited untracked entries, never gitignored ones, large enough to be
   # output worth keeping.
   if [ "$SCOUT_ARTIFACT_GIT" = 1 ]; then
-    listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard --directory --no-empty-directory) \
-      && all_listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --directory --no-empty-directory) \
-      || { scout_artifact_uninspectable "untracked files"; return 1; }
+    if ! listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --exclude-standard --directory --no-empty-directory) \
+      || ! all_listing=$(git -c core.quotePath=false -C "$WT" ls-files --others --directory --no-empty-directory); then
+      scout_artifact_uninspectable "untracked files"; return 1
+    fi
   else
     listing=$(find "$SCOUT_ARTIFACT_ROOT" -mindepth 1 -maxdepth 1 -print | while IFS= read -r entry; do
       if [ -d "$entry" ] && [ ! -L "$entry" ]; then printf '%s/\n' "${entry##*/}"; else printf '%s\n' "${entry##*/}"; fi
@@ -1983,8 +1984,8 @@ EOF
         [ -z "$unsaved" ] || artifacts="$artifacts  $rel/ ($((count)) files)"$'\n'
         continue
       fi
-      files=$(while IFS= read -r entry; do
-          [ -z "$entry" ] || find "$entry" -prune -type f -size "+${kib}k" -print || exit 1
+      files=$(while IFS= read -r file; do
+          [ -z "$file" ] || find "$file" -prune -type f -size "+${kib}k" -print || exit 1
         done <<EOF
 $files
 EOF
