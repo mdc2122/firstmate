@@ -387,6 +387,32 @@ status_line_note() {  # <status-line> -> text after the first colon, trimmed
   fi
   printf '%s' "$n"
 }
+# The PR URL a worker's ready signal names, printed unvalidated; returns 1 for
+# a line that is no ready signal. The ready signal is a `done: PR <url> ...`
+# line (bin/fm-dod-lib.sh owns its worker-facing wording): the URL is the first
+# whitespace-delimited token after `PR `, minus trailing `,;).`, so trailing
+# prose such as `checks green` is ignored. Any other `done:` line that mentions
+# `PR http` prints its whole note, which never parses as a URL, so the caller
+# reports it instead of dropping it. Callers validate the result with
+# bin/fm-pr-lib.sh's fm_pr_url_parse before acting on it.
+status_line_ready_pr_url() {  # <status-line> -> url
+  local note url
+  [ "$(status_line_verb "$1")" = "done" ] || return 1
+  note=$(status_line_note "$1")
+  case "$note" in
+    "PR "*)
+      url=${note#PR }
+      url=${url#"${url%%[![:space:]]*}"}
+      url=${url%%[[:space:]]*}
+      while :; do
+        case "$url" in *[,\;\).]) url=${url%?} ;; *) break ;; esac
+      done
+      printf '%s' "$url"
+      ;;
+    *"PR http"*) printf '%s' "$note" ;;
+    *) return 1 ;;
+  esac
+}
 _fm_decision_key() {  # <status-line> -> key slug, or "default" when no token
   local k
   if _fm_key_before_colon "$1"; then
@@ -1810,6 +1836,24 @@ status_span_first_actionable() {  # <status-file> <start-offset>
 
 status_span_has_actionable() {  # <status-file> <start-offset>
   status_span_first_actionable_record "$1" "${2:-0}" > /dev/null
+}
+
+# Every PR URL named by a ready-signal line (status_line_ready_pr_url) in the
+# bytes [start, end) of a status log, one per line in log order and still
+# unvalidated; returns 1 when the span holds none. Only newline-terminated lines
+# count, so a line still being appended can never yield a truncated URL that
+# parses as a different PR.
+status_span_ready_pr_urls() {  # <status-file> <start-offset> <end-offset>
+  local f=$1 start=$2 end=$3 line url found=''
+  case "$start$end" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$end" -gt "$start" ] || return 1
+  [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
+  while IFS= read -r line; do
+    url=$(status_line_ready_pr_url "$line") || continue
+    printf '%s\n' "$url"
+    found=1
+  done < <(_fm_status_read_span "$f" "$start" "$((end - start))" 2>/dev/null)
+  [ -n "$found" ]
 }
 
 # Classify WHY an idle/stale crew MIGHT be safely absorbed instead of surfaced,

@@ -101,6 +101,17 @@
 #   check: rejected unauthenticated PR poll retirement receipts: <paths>
 #                          invalid pending retirements were preserved without
 #                          running a check or removing poll artifacts
+#   check: merge poll not armed for <task> <url> (rc=<n>): <output>
+#                          a worker's `done: PR <url>` ready line named a
+#                          canonical PR, but arming its merge poll through
+#                          bin/fm-pr-check.sh was refused or timed out
+#                          (ready_pr_polls_arm); queued beside that line's own
+#                          signal, which a successful arm leaves unchanged
+#   check: merge poll not armed for <task>: ready line names no canonical PR URL: <text>
+#                          a worker's `done:` line mentions a PR but names no
+#                          URL fm_pr_url_parse accepts, so nothing was armed
+#                          (ready_pr_polls_arm); arm it by hand with
+#                          bin/fm-pr-check.sh
 #   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
 #                          an armed GitHub merge poll's pull request has had every
 #                          check green but could not merge for
@@ -234,6 +245,8 @@ case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
+PR_AUTOARM_TIMEOUT=${FM_PR_AUTOARM_TIMEOUT:-60}  # seconds allowed for arming a merge poll from a ready line
+case "$PR_AUTOARM_TIMEOUT" in ''|*[!0-9]*|0) PR_AUTOARM_TIMEOUT=60 ;; esac
 PR_GREEN_BLOCKED_SECS=${FM_PR_GREEN_BLOCKED_SECS:-1800}  # green-but-unmergeable PR age before its one wake
 case "$PR_GREEN_BLOCKED_SECS" in
   ''|*[!0-9]*) PR_GREEN_BLOCKED_SECS=1800 ;;
@@ -1695,7 +1708,7 @@ FM_ACTIVE_CHECK_PGID=
 FM_CHECK_OUTPUT=
 FM_CHECK_RESULT=
 FM_CHECK_SIGNAL_PENDING=
-FM_MERGE_ATTEMPT_STATUS=
+FM_ACTION_STATUS=
 
 fm_check_output_cleanup() {
   [ -z "$FM_CHECK_OUTPUT" ] || rm -f -- "$FM_CHECK_OUTPUT"
@@ -1755,24 +1768,25 @@ run_check_capture() {
   fm_check_output_cleanup
 }
 
-# The watcher's own forge-requesting action (the yolo merge attempt in the
-# check loop) runs under the same supervision as a *.check.sh: bounded by
-# YOLO_MERGE_TIMEOUT, killable through the tracked process group while it
-# runs, and signal-deferred exactly like run_check_capture. Unlike a check it
-# keeps the command's exit status in FM_MERGE_ATTEMPT_STATUS and its combined
-# output in FM_CHECK_RESULT, because a refused, failed, or expired merge
-# attempt is triaged from both.
-run_merge_attempt_capture() {
-  local pgid
+# The watcher's own state-changing actions (the yolo merge attempt in the check
+# loop and the ready-signal merge-poll arming in the signal block) run under the
+# same supervision as a *.check.sh: bounded by <bound> seconds, killable through
+# the tracked process group while they run, and signal-deferred exactly like
+# run_check_capture. Unlike a check it keeps the command's exit status in
+# FM_ACTION_STATUS and its combined output in FM_CHECK_RESULT, because a
+# refused, failed, or expired action is triaged from both.
+run_action_capture() {  # <bound> <script> [args...]
+  local pgid bound=$1
+  shift
   fm_check_output_cleanup
   FM_CHECK_RESULT=
-  FM_MERGE_ATTEMPT_STATUS=
+  FM_ACTION_STATUS=
   FM_CHECK_OUTPUT=$(mktemp "$STATE/.fm-check-output.XXXXXX") || return 1
   chmod 0600 "$FM_CHECK_OUTPUT" || { fm_check_output_cleanup; return 1; }
   FM_CHECK_SIGNAL_PENDING=
   trap 'FM_CHECK_SIGNAL_PENDING=1' HUP INT TERM
   set -m
-  ( FM_CHECK_OWNED_GROUP=1 run_check_process "$YOLO_MERGE_TIMEOUT" "$@" ) \
+  ( FM_CHECK_OWNED_GROUP=1 run_check_process "$bound" "$@" ) \
     > "$FM_CHECK_OUTPUT" 2>&1 &
   FM_ACTIVE_CHECK_PID=$!
   FM_ACTIVE_CHECK_PGID=$FM_ACTIVE_CHECK_PID
@@ -1785,8 +1799,8 @@ run_merge_attempt_capture() {
     return 1
   fi
   [ -z "$FM_CHECK_SIGNAL_PENDING" ] || exit 1
-  FM_MERGE_ATTEMPT_STATUS=0
-  wait "$FM_ACTIVE_CHECK_PID" 2>/dev/null || FM_MERGE_ATTEMPT_STATUS=$?
+  FM_ACTION_STATUS=0
+  wait "$FM_ACTIVE_CHECK_PID" 2>/dev/null || FM_ACTION_STATUS=$?
   FM_ACTIVE_CHECK_PID=
   fm_active_check_stop || { fm_check_output_cleanup; return 1; }
   FM_CHECK_RESULT=$(cat "$FM_CHECK_OUTPUT" 2>/dev/null || true)
@@ -1842,6 +1856,73 @@ signal_files_actionable() {  # <status-file> ...
     fi
   done
   return "$found"
+}
+
+# Arm the merge poll a worker's ready signal asks for, so it never depends on
+# firstmate remembering bin/fm-pr-check.sh after reading the `done: PR <url>`
+# line. Runs on the coalesced signal batch, after signal_files_actionable has
+# captured each status endpoint and before the seen markers commit, and reads
+# only the newly appended span [classified position, captured endpoint), so a
+# line is considered exactly once and an interrupted cycle re-reads it.
+# For each ordinary task (scouts and secondmates never deliver a PR this way)
+# whose span holds a ready line naming a canonical PR URL, it takes the last
+# such line and runs
+# bin/fm-pr-check.sh, the single owner of validation, metadata, sidecar, and
+# registration, unless that exact PR is already armed or its merge was already
+# delivered. A ready line naming a different PR re-arms through the same owner.
+# A span whose ready lines name no URL that parses, and a refused or expired arm, are
+# each queued as their own check row beside the signal, so firstmate learns the
+# poll is missing instead of assuming it. Never wakes by itself: the ready line
+# still reaches firstmate through the ordinary signal.
+ready_pr_polls_arm() {
+  local f task meta start end ident url urls candidate kind out provider host path number
+  while IFS=$(printf '\t') read -r f end ident; do
+    [ -n "$f" ] || continue
+    task=$(basename "$f"); task=${task%.status}
+    fm_pr_task_id_valid "$task" || continue
+    meta="$STATE/$task.meta"
+    [ -f "$meta" ] && [ ! -L "$meta" ] || continue
+    kind=$(fm_meta_get "$meta" kind)
+    case "$kind" in scout|secondmate) continue ;; esac
+    start=$(fm_wake_signal_seen_size "$STATE" "$f")
+    urls=$(status_span_ready_pr_urls "$f" "$start" "$end") || continue
+    url=
+    while IFS= read -r candidate; do
+      fm_pr_url_parse "$candidate" && url=$candidate
+    done <<< "$urls"
+    if [ -z "$url" ]; then
+      url=${urls##*$'\n'}
+      triage_log "ready line for $task names no canonical PR URL; merge poll not armed: $url"
+      fm_wake_append check "pr-autoarm-$task" \
+        "check: merge poll not armed for $task: ready line names no canonical PR URL: $url" || exit 1
+      continue
+    fi
+    fm_pr_url_parse "$url" || continue
+    provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
+    # The validity check re-parses the armed sidecar, so the ready line's own
+    # identity is compared from the locals captured above.
+    if fm_pr_poll_artifacts_valid "$STATE" "$task" "$SCRIPT_DIR/fm-pr-poll.sh" \
+      && [ "$FM_PR_DATA_PROVIDER" = "$provider" ] && [ "$FM_PR_DATA_HOST" = "$host" ] \
+      && [ "$FM_PR_DATA_PATH" = "$path" ] && [ "$FM_PR_DATA_NUMBER" = "$number" ]; then
+      continue
+    fi
+    if fm_pr_poll_merge_already_notified "$STATE" "$task" "$provider" "$host" "$path" "$number"; then
+      triage_log "ready line for $task names $url, whose merge was already delivered; not re-arming"
+      continue
+    fi
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+      run_action_capture "$PR_AUTOARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" "$task" "$url" || exit 1
+    out=$(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')
+    if [ "$FM_ACTION_STATUS" -eq 0 ]; then
+      triage_log "armed merge poll for $task from its ready line: $url"
+    else
+      triage_log "merge poll for $task not armed from its ready line (rc=$FM_ACTION_STATUS): $out"
+      fm_wake_append check "pr-autoarm-$task" \
+        "check: merge poll not armed for $task $url (rc=$FM_ACTION_STATUS): $out" || exit 1
+    fi
+  done <<EOF
+$FM_SIGNAL_SURFACE_ENDPOINTS
+EOF
 }
 
 # Surfaced-marker bookkeeping for the heartbeat backstop is owned by
@@ -2397,8 +2478,8 @@ while :; do
             pr_poll_control_release || exit 1
             FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
               FM_ROOT_OVERRIDE="$FM_ROOT" \
-              run_merge_attempt_capture "$SCRIPT_DIR/fm-pr-merge.sh" "$id" "$url" || exit 1
-            merge_attempt_rc=$FM_MERGE_ATTEMPT_STATUS
+              run_action_capture "$YOLO_MERGE_TIMEOUT" "$SCRIPT_DIR/fm-pr-merge.sh" "$id" "$url" || exit 1
+            merge_attempt_rc=$FM_ACTION_STATUS
             merge_attempt_out=$FM_CHECK_RESULT
             if [ "$merge_attempt_rc" -eq 0 ] \
               && fm_pr_poll_merge_already_notified "$STATE" "$id" \
@@ -2570,6 +2651,9 @@ EOF
     # shellcheck disable=SC2086  # $files is a space-separated status-path list (ids carry no spaces)
     signal_files_actionable $files
     signal_actionable=$?
+    # A ready signal arms its merge poll here, before the batch's markers commit
+    # or its wake is queued, so the poll is armed by the time firstmate reads it.
+    ready_pr_polls_arm
     # A decision-owned file's queued row payload is marked "needs-decision:"
     # instead of the ordinary "signal:" below (other files in the same batch
     # keep the ordinary payload). The wake reason line itself, and every

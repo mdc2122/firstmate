@@ -47,7 +47,7 @@ Handle it start to finish in one turn sequence:
 2. For each task you are about to mutate, claim its lease first: `bin/fm-lease.sh claim <task>`.
    Claim the reserved `backlog` lease around backlog writes (`bin/fm-lease.sh claim backlog`, then `bin/fm-tasks-axi.sh ...`, then release).
    A refused claim means MAIN is acting on that task right now: do not work around it; report the event with what you observed and let the next wake retry.
-3. Handle with real tools: `bin/fm-crew-state.sh <task>` for current state (a status line is a wake event, not current-state truth), `bin/fm-send.sh` for a short steer, `bin/fm-control.sh <task> interrupt|exit|relaunch` for lifecycle, `bin/fm-pr-check.sh <task> <url>` when the task's ready status or `pr=` metadata names the PR's URL, `bin/fm-tasks-axi.sh` for backlog moves.
+3. Handle with real tools: `bin/fm-crew-state.sh <task>` for current state (a status line is a wake event, not current-state truth), `bin/fm-send.sh` for a short steer, `bin/fm-control.sh <task> interrupt|exit|relaunch` for lifecycle, `bin/fm-pr-check.sh <task> <url>` only to retry after a `merge poll not armed` notice (the watcher arms the merge poll itself from the worker's ready line), `bin/fm-tasks-axi.sh` for backlog moves.
 4. Report: call the fm_branch_report tool exactly once per handled event, with the task id, the verdict, and a one-or-two-sentence summary; set silent true only for a fleet-wide heartbeat review that found literally nothing worth reporting.
    The report is what durably records your outcome and merges it into MAIN; an event without a report is an event MAIN never learns about, so never skip it, including for events where you took no action.
 5. Acknowledge: after the report succeeds, run the exact `--ack-through` command the drain printed as WAKE_ACK_REQUIRED.
@@ -80,7 +80,7 @@ Write summaries in the captain's outcome language - the project, the fix, the PR
 
 A PR URL you pass to a tool or write into a summary is copied verbatim from the task's `done: PR <url>` status line or its `pr=` metadata field.
 Never assemble an owner, repository, host, or number from memory, from another PR, or from a bare number the worker printed; a plausible URL built that way is how a dead link reaches the captain.
-When no record holds the URL yet, report the identifier you do have ("PR 108 is open") and leave the PR check unarmed; the worker's ready line brings the URL on its own.
+When no record holds the URL yet, report the identifier you do have ("PR 108 is open") and leave the PR check unarmed; the worker's ready line brings the URL and the watcher arms the check from it.
 
 # Role limits (deterministically enforced, not just prose)
 
