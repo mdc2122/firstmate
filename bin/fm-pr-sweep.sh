@@ -28,7 +28,8 @@
 # head commit proves no task is reported by wake and never armed.
 #
 # For each owned PR whose checks are all green by bin/fm-pr-lib.sh's
-# fm_pr_github_checks_not_green (an empty or unreadable rollup is not green):
+# fm_pr_github_checks_not_green (an empty or unreadable rollup, or one read
+# at a head other than the listed one, is not green):
 #   - already armed for that exact PR, or its merge already delivered: nothing;
 #   - the task records yolo=on: arm it through bin/fm-pr-check.sh, the single
 #     owner of validation, metadata, sidecar, and registration;
@@ -48,12 +49,12 @@
 # `check` prints each queued wake reason (nothing when nothing is due) and
 # exits 0 even when a repository cannot be read; a read failure is logged to
 # stderr and retried next sweep. The repository listing asks only for
-# lightweight fields; the check rollup is read per candidate PR afterwards,
-# because listing every open PR's rollup at once makes GitHub's GraphQL
-# gateway answer 504 on a busy upstream repository. FM_PR_SWEEP_GH_TIMEOUT
-# (default 20) bounds each GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default
-# 60) each arm; a read that times out ends the run's reads, so a degraded
-# network costs one read.
+# lightweight fields; the check rollup is read afterwards, only for a
+# candidate not already armed or merge-delivered, because listing every open
+# PR's rollup at once makes GitHub's GraphQL gateway answer 504 on a busy
+# upstream repository. FM_PR_SWEEP_GH_TIMEOUT (default 20) bounds each
+# GitHub read and FM_PR_SWEEP_ARM_TIMEOUT (default 60) each arm; a read
+# that times out ends the run's reads, so a degraded network costs one read.
 # FM_PROJECTS_OVERRIDE points at a different projects directory (tests).
 set -u
 export LC_ALL=C
