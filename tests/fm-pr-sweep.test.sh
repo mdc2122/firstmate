@@ -119,6 +119,8 @@ test_green_unarmed_branch_pr_is_armed_with_no_done_line() {
   forge_prs "$home" o/viral-moment "3|fm/other|$GREEN|$(head_of "$home" t1)"
   forge_prs "$home" o/trending-moment "7|fm/t1|$GREEN|$(head_of "$home" t1)"
   [ ! -e "$home/state/t1.status" ] || fail "fixture unexpectedly has a status log"
+  ! git -C "$home/projects/trending-moment" cat-file -e "$(head_of "$home" t1)^{commit}" 2>/dev/null \
+    || fail "fixture: the PR head must exist only in the task's own clone"
 
   sweep "$home"
   [ "$(armed_url "$home" t1)" = "$url" ] \
@@ -250,6 +252,24 @@ test_tasks_sharing_a_branch_name_in_different_repos_each_match() {
   pass "two tasks sharing a branch name in different repos are each matched to their own PR"
 }
 
+test_armed_pr_ahead_of_worktree_head_is_not_reported() {
+  local home url pushed
+  home=$(make_home armed-ahead)
+  add_project "$home" viral-moment o/viral-moment
+  add_task "$home" t1 fm/t1 off viral-moment
+  url=https://github.com/o/viral-moment/pull/21
+  pushed=$(git -C "$home/projects/viral-moment" rev-parse main)
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_ROOT_OVERRIDE="$ROOT" PATH="$home/fakebin:$BASE_PATH" \
+    "$ROOT/bin/fm-pr-check.sh" t1 "$url" >/dev/null 2>&1 || fail "fixture arm through fm-pr-check.sh failed"
+  [ "$(armed_url "$home" t1)" = "$url" ] || fail "fixture arm did not register"
+  forge_prs "$home" o/viral-moment "21|fm/t1|$GREEN|$pushed"
+
+  sweep "$home"
+  [ "$(sweep_rows "$home")" = 0 ] || fail "an already armed PR whose head is not the worktree HEAD was reported: $(cat "$home/sweep.out")"
+  [ ! -s "$home/sweep.out" ] || fail "an already armed PR printed a wake: $(cat "$home/sweep.out")"
+  pass "an already armed PR whose head differs from the worktree HEAD is never reported as not armed"
+}
+
 test_green_unarmed_branch_pr_is_armed_with_no_done_line
 test_already_armed_pr_is_a_noop
 test_red_pending_draft_and_scout_prs_are_not_armed
@@ -257,3 +277,4 @@ test_non_yolo_green_pr_wakes_once
 test_unreadable_repo_keeps_earlier_reports
 test_same_name_branch_with_foreign_commits_is_never_armed
 test_tasks_sharing_a_branch_name_in_different_repos_each_match
+test_armed_pr_ahead_of_worktree_head_is_not_reported

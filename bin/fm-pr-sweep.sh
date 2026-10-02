@@ -183,7 +183,7 @@ armed_for() {  # <task> <provider> <host> <path> <number>
 }
 
 action_check() {
-  local branches repos repo json prs pr url branch sha task meta red armed_any
+  local branches repos repo json prs pr url branch sha task meta red armed_any handled
   local provider host path number out rc reason entry read_failed=0
   local -a wakes=() keys=() keep=()
   TASKS=$(task_rows)
@@ -225,6 +225,14 @@ action_check() {
       case "$sha" in ''|*[!0-9a-f]*) continue ;; esac
       pr_owner "$repo" "$branch" "$sha"
       task=$OWNER_TASK
+      handled=0
+      for entry in ${task//,/ }; do
+        if armed_for "$entry" "$provider" "$host" "$path" "$number" \
+          || fm_pr_poll_merge_already_notified "$STATE" "$entry" "$provider" "$host" "$path" "$number"; then
+          handled=1
+        fi
+      done
+      [ "$handled" -eq 0 ] || continue
       if [ -n "$OWNER_NOTE" ]; then
         keep+=("$task $url")
         seen "$task $url" && continue
@@ -232,8 +240,6 @@ action_check() {
         keys+=("pr-sweep-$repo-$branch")
         continue
       fi
-      armed_for "$task" "$provider" "$host" "$path" "$number" && continue
-      fm_pr_poll_merge_already_notified "$STATE" "$task" "$provider" "$host" "$path" "$number" && continue
       meta="$STATE/$task.meta"
       armed_any=0
       fm_pr_poll_artifacts_valid "$STATE" "$task" "$SCRIPT_DIR/fm-pr-poll.sh" && armed_any=1
