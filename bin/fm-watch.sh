@@ -107,6 +107,11 @@
 #                          bin/fm-pr-check.sh was refused or timed out
 #                          (ready_pr_polls_arm); queued beside that line's own
 #                          signal, which a successful arm leaves unchanged
+#   check: merge poll not armed for <task>: ready line names no canonical PR URL: <text>
+#                          a worker's `done:` line mentions a PR but names no
+#                          URL fm_pr_url_parse accepts, so nothing was armed
+#                          (ready_pr_polls_arm); arm it by hand with
+#                          bin/fm-pr-check.sh
 #   check: <check>: green-unmergeable <url> for <minutes>m: <reason>
 #                          an armed GitHub merge poll's pull request has had every
 #                          check green but could not merge for
@@ -1864,9 +1869,9 @@ signal_files_actionable() {  # <status-file> ...
 # bin/fm-pr-check.sh, the single owner of validation, metadata, sidecar, and
 # registration, unless that exact PR is already armed or its merge was already
 # delivered. A ready line naming a different PR re-arms through the same owner.
-# A line whose URL does not parse arms nothing. A refused or expired arm is
-# queued as its own check row beside the signal, so firstmate learns the poll
-# is missing instead of assuming it. Never wakes by itself: the ready line
+# A ready line whose URL does not parse, and a refused or expired arm, are
+# each queued as their own check row beside the signal, so firstmate learns the
+# poll is missing instead of assuming it. Never wakes by itself: the ready line
 # still reaches firstmate through the ordinary signal.
 ready_pr_polls_arm() {
   local f task meta start end ident url kind out provider host path number
@@ -1881,7 +1886,9 @@ ready_pr_polls_arm() {
     start=$(fm_wake_signal_seen_size "$STATE" "$f")
     url=$(status_span_ready_pr_url "$f" "$start" "$end") || continue
     if ! fm_pr_url_parse "$url"; then
-      triage_log "ready line for $task names no canonical PR URL; merge poll not armed"
+      triage_log "ready line for $task names no canonical PR URL; merge poll not armed: $url"
+      fm_wake_append check "pr-autoarm-$task" \
+        "check: merge poll not armed for $task: ready line names no canonical PR URL: $url" || exit 1
       continue
     fi
     provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER

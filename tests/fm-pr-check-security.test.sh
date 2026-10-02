@@ -2603,32 +2603,61 @@ test_ready_line_arms_merge_poll_once_and_rearms_on_change() {
   pass "a ready line arms its merge poll once, a repeat is a no-op, and a new PR re-arms"
 }
 
-test_non_ready_lines_arm_nothing() {
-  local dir state
-  dir=$(make_case ready-line-malformed)
+test_ready_line_with_trailing_prose_arms() {
+  local dir state url
+  url=https://github.com/o/r/pull/395
+  dir=$(make_case ready-line-trailing-prose)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  printf 'done: PR %s, checks green \342\200\224 slice 2 (risk low).\n' "$url" > "$state/task-a.status"
+
+  run_ready_signal_cycle "$dir" trailing-prose
+  assert_poll_armed_for "$state" "$url" "ready line with trailing prose"
+  pass "a ready line with trailing prose arms the PR it names"
+}
+
+test_unparseable_pr_mention_queues_notice() {
+  local dir state line
+  dir=$(make_case ready-line-unparseable)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  : > "$state/task-a.status"
+  for line in \
+    'done: PR https://github.com/o/r/pull/abc checks green' \
+    'done: see PR https://github.com/o/r/pull/8'; do
+    printf '%s\n' "$line" >> "$state/task-a.status"
+    run_ready_signal_cycle "$dir" unparseable
+    [ ! -e "$state/task-a.check.sh" ] && [ ! -e "$state/task-a.pr-poll" ] \
+      || fail "'$line' armed a merge poll"
+    ! grep -q '^pr=' "$state/task-a.meta" || fail "'$line' recorded pr="
+    grep -F "check: merge poll not armed for task-a: ready line names no canonical PR URL" \
+      "$state/.wake-queue" >/dev/null \
+      || fail "'$line' queued no notice: $(cat "$state/.wake-queue" 2>/dev/null)"
+    ack_watcher_cycle "$state" || fail "'$line' wake acknowledgement failed"
+  done
+  pass "a done line mentioning a PR it cannot parse queues the not-armed notice"
+}
+
+test_done_line_without_pr_mention_arms_nothing() {
+  local dir state id
+  dir=$(make_case ready-line-no-pr)
   state="$dir/home/state"
   write_task_meta "$dir" task-a
   write_task_meta "$dir" scout-a
   printf 'kind=scout\n' >> "$state/scout-a.meta"
-  {
-    printf 'done: PR https://github.com/o/r/pull/abc checks green\n'
-    printf 'done: PR https://github.com/o/r/pull/7 merged and more\n'
-    printf 'done: see PR https://github.com/o/r/pull/8\n'
-    printf 'working: PR https://github.com/o/r/pull/9 checks green\n'
-    printf 'done: PR http://github.com/o/r/pull/10\n'
-    printf 'done: report written\n'
-  } > "$state/task-a.status"
+  printf 'working: PR https://github.com/o/r/pull/9 checks green\ndone: report written\n' \
+    > "$state/task-a.status"
   printf 'done: PR https://github.com/o/r/pull/11 checks green\n' > "$state/scout-a.status"
 
-  run_ready_signal_cycle "$dir" malformed
+  run_ready_signal_cycle "$dir" no-pr
   for id in task-a scout-a; do
     [ ! -e "$state/$id.check.sh" ] && [ ! -e "$state/$id.pr-poll" ] \
       || fail "$id: a non-ready line armed a merge poll"
     ! grep -q '^pr=' "$state/$id.meta" || fail "$id: a non-ready line recorded pr="
   done
   ! grep -F 'merge poll not armed' "$state/.wake-queue" >/dev/null 2>&1 \
-    || fail "a non-ready line queued an arming failure"
-  pass "malformed, non-PR, non-done, and scout ready lines arm nothing"
+    || fail "a done line with no PR mention queued a notice"
+  pass "a done line with no PR mention, a non-done line, and a scout arm and queue nothing"
 }
 
 test_refused_ready_line_arm_is_queued() {
@@ -3007,7 +3036,9 @@ test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
 test_merged_poll_row_names_no_authority_when_no_record_grants_one
 test_ready_line_arms_merge_poll_once_and_rearms_on_change
-test_non_ready_lines_arm_nothing
+test_ready_line_with_trailing_prose_arms
+test_unparseable_pr_mention_queues_notice
+test_done_line_without_pr_mention_arms_nothing
 test_refused_ready_line_arm_is_queued
 test_yolo_poll_merges_a_green_pr
 test_yolo_poll_reports_only_for_non_yolo_and_red

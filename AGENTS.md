@@ -389,7 +389,7 @@ The worker reports the PR when CI first becomes green rather than waiting for me
 ### PR ready, landing, and teardown
 
 For PR-based ship tasks, the ready signal depends on mode: `no-mistakes` reports `done: PR <url> checks green` after CI is green, while `direct-PR` reports `done: PR <url>` after opening the PR.
-When the watcher sees that ready line it runs `bin/fm-pr-check.sh <id> <PR url>` itself - recording `pr=` and the forge's `pr_head=` when available and arming the merge poll - before the line wakes you; a `merge poll not armed` check wake means that arm was refused, so fix the cause and rerun `bin/fm-pr-check.sh` with the URL copied from the ready line.
+When the watcher sees that ready line it runs `bin/fm-pr-check.sh <id> <PR url>` itself - recording `pr=` and the forge's `pr_head=` when available and arming the merge poll - before the line wakes you; a `merge poll not armed` check wake means that arm was refused or the line named no URL it could parse, so fix the cause and rerun `bin/fm-pr-check.sh` with the PR's canonical URL.
 Tell the captain the PR's full `https://...` URL copied from the worker's ready line or the task's `pr=` metadata, a concise outcome summary, and the no-mistakes risk level when applicable.
 A captain instruction to merge is explicit authority; `yolo` is the only standing routine merge authority.
 A `green-unmergeable` check wake names a PR whose checks are all green but which has not been able to merge for 30 minutes, and the blocking reason; act on it in that turn: steer the worker to rebase or resolve a branch that is behind or conflicting, and bring a protection block (a missing review or another branch rule) to the captain, never bypassing it.

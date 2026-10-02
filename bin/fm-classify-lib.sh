@@ -388,19 +388,30 @@ status_line_note() {  # <status-line> -> text after the first colon, trimmed
   printf '%s' "$n"
 }
 # The PR URL a worker's ready signal names, printed unvalidated; returns 1 for
-# any other line. The ready signal is a whole `done: PR <url>` line (direct-PR)
-# or `done: PR <url> checks green` line (no-mistakes), whose worker-facing
-# wording bin/fm-dod-lib.sh owns. Callers validate the URL with
+# a line that is no ready signal. The ready signal is a `done: PR <url> ...`
+# line (bin/fm-dod-lib.sh owns its worker-facing wording): the URL is the first
+# whitespace-delimited token after `PR `, minus trailing `,;).`, so trailing
+# prose such as `checks green` is ignored. Any other `done:` line that mentions
+# `PR http` prints its whole note, which never parses as a URL, so the caller
+# reports it instead of dropping it. Callers validate the result with
 # bin/fm-pr-lib.sh's fm_pr_url_parse before acting on it.
 status_line_ready_pr_url() {  # <status-line> -> url
-  local url
+  local note url
   [ "$(status_line_verb "$1")" = "done" ] || return 1
-  url=$(status_line_note "$1")
-  url=${url%"${url##*[![:space:]]}"}
-  case "$url" in "PR "*) url=${url#PR } ;; *) return 1 ;; esac
-  url=${url% checks green}
-  case "$url" in ''|*[[:space:]]*) return 1 ;; esac
-  printf '%s' "$url"
+  note=$(status_line_note "$1")
+  case "$note" in
+    "PR "*)
+      url=${note#PR }
+      url=${url#"${url%%[![:space:]]*}"}
+      url=${url%%[[:space:]]*}
+      while :; do
+        case "$url" in *[,\;\).]) url=${url%?} ;; *) break ;; esac
+      done
+      printf '%s' "$url"
+      ;;
+    *"PR http"*) printf '%s' "$note" ;;
+    *) return 1 ;;
+  esac
 }
 _fm_decision_key() {  # <status-line> -> key slug, or "default" when no token
   local k
@@ -1832,14 +1843,14 @@ status_span_has_actionable() {  # <status-file> <start-offset>
 # Only newline-terminated lines count, so a line still being appended can never
 # yield a truncated URL that parses as a different PR.
 status_span_ready_pr_url() {  # <status-file> <start-offset> <end-offset>
-  local f=$1 start=$2 end=$3 line url found=''
+  local f=$1 start=$2 end=$3 line url found='' any=''
   case "$start$end" in ''|*[!0-9]*) return 1 ;; esac
   [ "$end" -gt "$start" ] || return 1
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   while IFS= read -r line; do
-    url=$(status_line_ready_pr_url "$line") && found=$url
+    url=$(status_line_ready_pr_url "$line") && { found=$url; any=1; }
   done < <(_fm_status_read_span "$f" "$start" "$((end - start))" 2>/dev/null)
-  [ -n "$found" ] || return 1
+  [ -n "$any" ] || return 1
   printf '%s' "$found"
 }
 
