@@ -83,8 +83,13 @@
 # significant on its own: a file over 64 KiB, or a new directory holding more
 # than 20 files. Gitignored build output and caches are scratch by definition
 # and never count toward (b), nor do common build and cache directories
-# (SCOUT_ARTIFACT_PRUNE_NAMES). When nothing refuses, teardown warns, listing
-# the largest untracked items, ignored ones included, before deleting them.
+# (SCOUT_ARTIFACT_PRUNE_NAMES), nor do omp's own runtime markers in a
+# worktree (scout_artifact_path_is_omp_marker: the state/.omp-*-extension-
+# loaded files and the state/extensions/ tree omp's .omp/extensions/*.ts
+# write into a worktree-local state/ when no FM_HOME-scoped state exists
+# there; they hold no work), which both (a) and (b) skip. When nothing
+# refuses, teardown warns, listing the largest untracked items, ignored ones
+# included, before deleting them.
 # Content with a byte-identical copy anywhere under data/<task-id>/ counts as
 # preserved, so the remedy is to copy it there, where it survives cleanup with
 # the home's private records, or to commit and push it. Like the landed-work
@@ -1771,6 +1776,7 @@ validate_worktree_teardown_safety() {
 SCOUT_ARTIFACT_MAX_KIB=64
 SCOUT_ARTIFACT_MAX_DIR_FILES=20
 SCOUT_ARTIFACT_PRUNE_NAMES='.git .claude node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox .eggs target dist build .next .nuxt .svelte-kit .turbo .parcel-cache .gradle .terraform coverage .cache .yarn .pnpm-store .direnv vendor'
+SCOUT_ARTIFACT_OMP_MARKER_GLOBS='state/.omp-*-extension-loaded'
 SCOUT_ARTIFACT_GIT=0
 SCOUT_ARTIFACT_ROOT=
 SCOUT_ARTIFACT_NEW=
@@ -1792,6 +1798,24 @@ scout_artifact_path_pruned() {  # <relative-path>
     esac
     case " $SCOUT_ARTIFACT_PRUNE_NAMES " in *" $part "*) return 0 ;; esac
   done
+}
+
+# True when a worktree-relative path is one of omp's own runtime markers: a
+# state/.omp-*-extension-loaded file or anything at or below state/extensions/
+# (kept separate from SCOUT_ARTIFACT_PRUNE_NAMES because those match any path
+# component, while these are exact worktree-relative shapes).
+scout_artifact_path_is_omp_marker() {  # <relative-path>
+  local rel=$1 glob
+  case "/$rel/" in
+    /state/extensions/|/state/extensions/*/) return 0 ;;
+  esac
+  for glob in $SCOUT_ARTIFACT_OMP_MARKER_GLOBS; do
+    # shellcheck disable=SC2254  # the unquoted expansion is the glob being matched
+    case "$rel" in
+      $glob) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 # Regular files below <dir>, never descending into a pruned name.
@@ -1939,6 +1963,7 @@ validate_scout_worktree_artifacts() {  # <report>
       *) rel=$tok ;;
     esac
     case "/$rel/" in *//*|*/../*|*/./*|*/.git/*) continue ;; esac
+    scout_artifact_path_is_omp_marker "$rel" && continue
     [ ! -L "$SCOUT_ARTIFACT_ROOT/$rel" ] && [ -e "$SCOUT_ARTIFACT_ROOT/$rel" ] || continue
     files=$(scout_artifact_risk_files "$rel") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }
     unsaved=$(scout_artifact_unsaved "$files") || { scout_artifact_uninspectable "the cited path $rel"; return 1; }
@@ -1972,6 +1997,7 @@ EOF
     rel=${entry%/}
     [ -n "$rel" ] || continue
     if scout_artifact_path_pruned "$rel/"; then continue; fi
+    scout_artifact_path_is_omp_marker "$rel" && continue
     if printf '%s' "$cited_rels" | grep -Fxq -- "$rel"; then continue; fi
     entry="$SCOUT_ARTIFACT_ROOT/$rel"
     [ ! -L "$entry" ] || continue
@@ -2012,6 +2038,7 @@ EOF
     largest=$(while IFS= read -r entry; do
       entry=${entry%/}
       [ -n "$entry" ] || continue
+      scout_artifact_path_is_omp_marker "$entry" && continue
       size=$(du -sk "$SCOUT_ARTIFACT_ROOT/$entry" 2>/dev/null) || continue
       printf '%s\t%s\n' "${size%%[!0-9]*}" "$entry"
     done <<EOF | sort -rn | head -n 5

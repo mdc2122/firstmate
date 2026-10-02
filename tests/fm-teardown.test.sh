@@ -1915,6 +1915,64 @@ Model B wins; see the summary table above."
   pass "an uncited embedded repository holding worktree-only files refuses scout teardown"
 }
 
+# omp auto-loads .omp/extensions/*.ts in a worktree and writes its runtime
+# markers into a worktree-local state/ when no FM_HOME-scoped state exists
+# there; those markers hold no work and must never keep a scout alive.
+write_omp_runtime_markers() {  # <case-dir>
+  local case_dir=$1
+  mkdir -p "$case_dir/wt/state/extensions/omp-primary-watch"
+  printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-turnend-extension-loaded"
+  printf 'sha256:deadbeef\n4242\n' > "$case_dir/wt/state/.omp-watch-extension-loaded"
+  printf 'gen owner=start\n' > "$case_dir/wt/state/extensions/omp-primary-watch/session-generations.log"
+}
+
+test_scout_omp_runtime_markers_alone_tear_down() {
+  local case_dir rc
+  case_dir=$(make_case scout-omp-markers)
+  write_omp_runtime_markers "$case_dir"
+  write_scout_task "$case_dir" "# Loose ends
+
+Swept state/.omp-turnend-extension-loaded, state/.omp-watch-extension-loaded, and state/extensions/ during the pass; none of it is work."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "scout-omp-markers: omp runtime markers alone must not refuse teardown: $(cat "$case_dir/stderr")"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "scout-omp-markers: teardown printed a REFUSED line"
+  assert_absent "$case_dir/state/task-x1.meta" "scout-omp-markers: the completed teardown left the task record"
+  pass "a scout worktree whose state/ holds only omp runtime markers tears down cleanly"
+}
+
+test_scout_omp_markers_do_not_mask_cited_work() {
+  local case_dir rc answers
+  case_dir=$(make_case scout-omp-markers-cited)
+  answers="$case_dir/wt/findings/answers.jsonl"
+  mkdir -p "$case_dir/wt/findings"
+  printf '{"task":1,"answer":"42"}\n' > "$answers"
+  write_omp_runtime_markers "$case_dir"
+  write_scout_task "$case_dir" "# Sweep
+
+Kept graded answers in \`$answers:1\`; the state/ markers are runtime noise."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-omp-markers-cited: a report-cited untracked file must still refuse teardown beside omp markers"
+  assert_grep "findings/answers.jsonl" "$case_dir/stderr" \
+    "scout-omp-markers-cited: the refusal did not name the cited worktree-only file"
+  ! grep -q "extension-loaded" "$case_dir/stderr" || \
+    fail "scout-omp-markers-cited: the refusal named an omp runtime marker as work"
+  ! grep -q "state/extensions" "$case_dir/stderr" || \
+    fail "scout-omp-markers-cited: the refusal named the omp extensions marker tree as work"
+  assert_present "$answers" "scout-omp-markers-cited: the refusal deleted the cited file"
+  assert_present "$case_dir/wt/state/.omp-turnend-extension-loaded" \
+    "scout-omp-markers-cited: the refusal deleted an omp runtime marker"
+  assert_present "$case_dir/state/task-x1.meta" "scout-omp-markers-cited: the refusal erased the task record"
+  pass "omp runtime markers do not mask a report-cited worktree-only file: teardown still refuses"
+}
+
 test_scout_report_citing_locally_moved_file_refuses() {
   local case_dir rc
   case_dir=$(make_case scout-moved-artifact)
@@ -3832,6 +3890,8 @@ test_scout_report_only_teardown_succeeds
 test_scout_large_uncited_artifact_dir_refuses
 test_scout_report_citing_locally_moved_file_refuses
 test_scout_uncited_embedded_repo_refuses
+test_scout_omp_runtime_markers_alone_tear_down
+test_scout_omp_markers_do_not_mask_cited_work
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
