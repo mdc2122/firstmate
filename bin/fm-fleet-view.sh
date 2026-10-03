@@ -92,5 +92,8 @@ printf '%s\n' "$SNAPSHOT" | jq -r '
    end),
   "",
   "## Secondmates",
-  .secondmate_guidance.note
+  .secondmate_guidance.note,
+  "",
+  "## Attention",
+  (.attention_check // "No daily attention line recorded yet.")
 '

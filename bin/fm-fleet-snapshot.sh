@@ -104,6 +104,8 @@
 #     with the bearings projection so one Recently Landed section has one owner.
 #   contributions: cached owned-contribution coverage; fm-contributions.sh owns it.
 #   secondmate_guidance: return-channel action note for renderers and bearings.
+#   attention_check: the latest daily line bin/fm-attention-check.sh recorded
+#     in state/.attention-check, or null when none is recorded.
 #
 # --contribution-input prints only the canonical backlog/tasks ownership pair,
 # without worker observations or cross-home collection, for the home-local poll.
@@ -2020,9 +2022,15 @@ secondmate_current_json "$TASKS_JSON_FILE" "$SECONDMATE_CURRENT_JSON_FILE" \
 secondmate_landed_from_current_json "$SECONDMATE_CURRENT_JSON_FILE" "$SECONDMATE_LANDED_JSON_FILE" \
   || { echo "fm-fleet-snapshot: secondmate landed projection failed" >&2; exit 1; }
 
+ATTENTION_LINE=
+if [ -f "$STATE/.attention-check" ] && [ "$(head -n 1 "$STATE/.attention-check")" = fm-attention-check-v1 ]; then
+  ATTENTION_LINE=$(sed -n 's/^line=//p' "$STATE/.attention-check" | head -n 1)
+fi
+
 jq -n \
   --arg generated "$SNAPSHOT_NOW" \
   --arg fm_home "$FM_HOME" \
+  --arg attention_line "$ATTENTION_LINE" \
   --arg fm_root "$FM_ROOT" \
   --arg state "$STATE" \
   --arg data "$DATA" \
@@ -2058,5 +2066,6 @@ jq -n \
      secondmate_landed:$secondmate_landed,
      secondmate_guidance:{
        note:"For kind=secondmate, bearings selects validated structured state from that registered home; parent events and bounded terminal evidence are fallback-only supplements and never current-state authority."
-     }
+     },
+     attention_check:(if $attention_line == "" then null else $attention_line end)
    }'
