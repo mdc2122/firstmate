@@ -1,0 +1,9 @@
+helper: 86990 /Users/studio2/.bun/bin/bun /tmp/fmlock.95xl/h/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_daemon_broker
+session: 86992 /Users/studio2/.bun/bin/bun /tmp/fmlock.95xl/h/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume abc
+lock=86990 -> lock: stale (pid 86990 dead or not a harness)
+lock=86992 -> lock: held by live harness pid 86992
+=== rival vs live session 86992
+self pid=88911 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume other
+fm-lock.sh -> exit=1 error: another live firstmate session holds the lock (pid 86992); operate read-only until resolved
+fm-lock.sh status -> exit=0 lock: held by live harness pid 86992
+state/.lock = 86992

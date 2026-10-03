@@ -1,0 +1,31 @@
+=== base-resume (base-bin): bun /tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume 01a0f503-29e4-7000-9038-96fc2712ffb0
+self pid=64791 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume 01a0f503-29e4-7000-9038-96fc2712ffb0
+fm-lock.sh -> exit=1 error: cannot locate harness process in ancestry
+fm-lock.sh status -> exit=0 lock: free
+state/.lock = (absent)
+=== target-resume (target-bin): bun /tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume 01a0f503-29e4-7000-9038-96fc2712ffb0
+self pid=65093 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume 01a0f503-29e4-7000-9038-96fc2712ffb0
+fm-lock.sh -> exit=0 lock acquired: harness pid 65093
+fm-lock.sh status -> exit=0 lock: held by live harness pid 65093
+state/.lock = 65093
+=== target-bare (target-bin): bun /tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js 
+self pid=65502 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js
+fm-lock.sh -> exit=0 lock acquired: harness pid 65502
+fm-lock.sh status -> exit=0 lock: held by live harness pid 65502
+state/.lock = 65502
+=== target-broker (target-bin): bun /tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_daemon_broker
+self pid=65922 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_daemon_broker
+fm-lock.sh -> exit=1 error: cannot locate harness process in ancestry
+fm-lock.sh status -> exit=0 lock: free
+state/.lock = (absent)
+=== target-predict (target-bin): bun /tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_text_predict
+self pid=66222 argv=/private/tmp/fmlock.95xl/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_text_predict
+fm-lock.sh -> exit=1 error: cannot locate harness process in ancestry
+fm-lock.sh status -> exit=0 lock: free
+state/.lock = (absent)
+=== target-otherpkg (target-bin): bun /tmp/fmlock.95xl/node_modules/other-pkg/dist/cli.js --resume x
+self pid=66498 argv=/private/tmp/fmlock.95xl/node_modules/other-pkg/dist/cli.js --resume x
+fm-lock.sh -> exit=1 error: cannot locate harness process in ancestry
+fm-lock.sh status -> exit=0 lock: free
+state/.lock = (absent)
+head: illegal line count -- 0
