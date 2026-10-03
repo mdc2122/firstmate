@@ -5010,6 +5010,38 @@ test_queue_zero_tick_wakes_with_ready_rows_once() {
   pass "the watcher wakes once with the ready rows on the queue-zero cadence, not again for the same episode"
 }
 
+# --- daily attention check: the watcher runs it on its own cadence -----------
+
+test_attention_check_tick_wakes_on_a_red_day() {
+  local dir state fakebin out pid now day repo
+  dir=$(make_case attention); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  day=$(date -u +%Y-%m-%d)
+  now=$(jq -nr --arg t "${day}T23:59:00Z" '$t | fromdateiso8601')
+  # Two red signals that raise no status signal of their own - a green PR
+  # blocked over 30 min and a main commit unreleased over 4 h - on a clock
+  # pinned after 13:00Z make the daily line RED.
+  printf 'https://github.com/o/r/pull/1 abc %s 0\n' $((now - 3600)) > "$state/t.pr-green-blocked"
+  repo="$dir/projects/app"
+  fm_git_init_commit "$repo" >/dev/null
+  GIT_COMMITTER_DATE="@$((now - 6 * 3600)) +0000" \
+    git -C "$repo" -c user.name=t -c user.email=t@example.invalid tag -a prod-1 -m prod-1
+  printf 'x\n' >> "$repo/README.md"
+  git -C "$repo" add README.md
+  GIT_COMMITTER_DATE="@$((now - 5 * 3600)) +0000" \
+    git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -qm unreleased
+  git -C "$repo" update-ref refs/remotes/origin/main HEAD
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$dir/data" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_QUEUE_ZERO_INTERVAL=999999 \
+    FM_ATTENTION_CHECK_INTERVAL=1 FM_ATTENTION_NOW="${day}T23:59:00Z" "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "the watcher did not wake for a RED attention line"
+  grep -F 'check: attention: attention ' "$out" | grep -F ' RED (S3,S4):' >/dev/null \
+    || fail "the attention wake did not carry the RED line: $(cat "$out")"
+  grep -F $'\tcheck\tattention\t' "$state/.wake-queue" >/dev/null \
+    || fail "the attention wake was not durably queued"
+  pass "the watcher runs the attention check on its own cadence and wakes on a RED day"
+}
+
 # --- beacon stays fresh while absorbing -------------------------------------
 
 test_beacon_stays_fresh_while_absorbing() {
@@ -5461,6 +5493,7 @@ test_heartbeat_no_change_absorbed
 test_heartbeat_backstop_surfaces_unsurfaced_status
 test_heartbeat_backstop_surfaces_a_masked_status
 test_queue_zero_tick_wakes_with_ready_rows_once
+test_attention_check_tick_wakes_on_a_red_day
 test_beacon_stays_fresh_while_absorbing
 test_afk_signal_records_heartbeat_endpoint
 test_afk_present_reverts_watcher_to_one_shot

@@ -259,6 +259,8 @@ case "$WATCHER_STALE_GRACE" in
 esac
 QUEUE_ZERO_INTERVAL=${FM_QUEUE_ZERO_INTERVAL:-900}  # seconds between queue inbox-zero checks (bin/fm-queue-zero.sh)
 case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
+ATTENTION_CHECK_INTERVAL=${FM_ATTENTION_CHECK_INTERVAL:-600}  # seconds between daily attention-check samples (bin/fm-attention-check.sh)
+case "$ATTENTION_CHECK_INTERVAL" in ''|*[!0-9]*|0) ATTENTION_CHECK_INTERVAL=600 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
@@ -2257,6 +2259,7 @@ reconcile_requests_detached() {
 
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
 [ -e "$STATE/.last-queue-zero" ] || touch "$STATE/.last-queue-zero"
+[ -e "$STATE/.last-attention-check" ] || touch "$STATE/.last-attention-check"
 
 # A merged poll may have queued its terminal wake and then lost the process
 # between receipt publication and fixed-path removal.
@@ -2984,6 +2987,19 @@ EOF
   if [ "$(age_of "$STATE/.last-queue-zero")" -ge "$QUEUE_ZERO_INTERVAL" ]; then
     touch "$STATE/.last-queue-zero"
     FM_HOME="$FM_HOME" run_check_capture "$SCRIPT_DIR/fm-queue-zero.sh" check || exit 1
+    if [ -n "$FM_CHECK_RESULT" ]; then
+      wake "$FM_CHECK_RESULT"
+    fi
+  fi
+
+  # Daily attention check (bin/fm-attention-check.sh owns the signals, the
+  # thresholds, the 13:00Z once-a-day rule, and the durable RED wake). Every
+  # run also samples the open decision set so decision ages exist; its own
+  # .last-attention-check cadence keeps sampling steady while the heartbeat
+  # backs off. A failed or timed-out run prints nothing and is retried.
+  if [ "$(age_of "$STATE/.last-attention-check")" -ge "$ATTENTION_CHECK_INTERVAL" ]; then
+    touch "$STATE/.last-attention-check"
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" run_check_capture "$SCRIPT_DIR/fm-attention-check.sh" check || exit 1
     if [ -n "$FM_CHECK_RESULT" ]; then
       wake "$FM_CHECK_RESULT"
     fi
