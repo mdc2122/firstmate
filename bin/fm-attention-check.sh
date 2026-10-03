@@ -133,10 +133,6 @@ WIN0_ISO=$(iso_of "$WIN0")
 WIN_PREV_ISO=$(iso_of $((WIN0 - 86400)))
 NOW_ISO=$(iso_of "$NOW_EPOCH")
 
-mtime_of() {
-  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
-}
-
 age_text() {  # <seconds>
   if [ "$1" -ge 7200 ]; then
     printf '%sh' $(($1 / 3600))
@@ -171,7 +167,7 @@ current_open() {
     case "$(status_line_verb "$last")" in
       needs-decision|blocked) last_key=$(_fm_decision_key "$last") || last_key= ;;
     esac
-    mtime=$(mtime_of "$f") || mtime=$NOW_EPOCH
+    mtime=$(_fm_status_file_mtime "$f") || mtime=$NOW_EPOCH
     while IFS=$'\t' read -r key _; do
       [ -n "$key" ] || continue
       est=$NOW_EPOCH
@@ -417,7 +413,7 @@ signal_ownerless() {
       continue
     fi
     gone=$((gone + 1))
-    age=$((NOW_EPOCH - $(mtime_of "$marker")))
+    age=$((NOW_EPOCH - $(_fm_status_file_mtime "$marker")))
     if [ "$age" -gt 43200 ]; then
       over=$((over + 1))
       listed="$listed$task_id $(age_text "$age")"$'\n'
