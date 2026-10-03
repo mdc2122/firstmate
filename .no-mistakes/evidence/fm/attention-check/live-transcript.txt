@@ -1,0 +1,78 @@
+
+### S-A on-demand scan, empty home, real clock (no FM_ATTENTION_NOW)
+attention 10-03 21:11Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 21:11Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+rc=0
+files unchanged by scan: yes
+Usage:
+  fm-attention-check.sh [scan]   print the attention line now (writes nothing)
+  fm-attention-check.sh check    watcher hook: sample decisions; at the first run
+
+### S-B report-style RED day: decisions sampled by check through the day, ownerless row, low constraint share
+check: attention: attention 10-03 13:00Z RED (S1,S2,S8,S11): S1 decisions>30m 4 (8.0 wh, max 2h; sampled since 07:50Z) [red] | S2 >=3 open 110m [red] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (grokbot-if-lane-build 37h) [red] | S11 constraint steers 30% (4/13; prior 24h 0%) [red] | release-seq steers 3 (info) [amber]
+-- first-seen record after sampling (state/.attention-first-seen):
+fm-attention-first-seen-v1
+since=1791013800
+w2	q2	1791014400	1791021000
+w1	q1	1791014400	1791021000
+w3	q3	1791014400	1791021000
+w4	q4	1791021600	1791030600
+-- scan at 14:00Z:
+attention 10-03 14:00Z RED (S1,S2,S8,S11): S1 decisions>30m 4 (8.0 wh, max 2h; sampled since 07:50Z) [red] | S2 >=3 open 110m [red] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (grokbot-if-lane-build 38h) [red] | S11 constraint steers 30% (4/13; prior 24h 0%) [red] | release-seq steers 3 (info) [amber]
+
+### S-J check before 13:00Z only samples (no daily record)
+.attention-check
+.attention-first-seen
+daily record exists: YES (bad)
+
+### S-B2 first check after 13:00Z wakes once on RED; a later check the same day stays quiet
+-- check at 13:05Z:
+rc=0
+-- durable wake queue:
+1791061904	1	check	attention	check: attention: attention 10-03 13:00Z RED (S1,S2,S8,S11): S1 decisions>30m 4 (8.0 wh, max 2h; sampled since 07:50Z) [red] | S2 >=3 open 110m [red] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (grokbot-if-lane-build 37h) [red] | S11 constraint steers 30% (4/13; prior 24h 0%) [red] | release-seq steers 3 (info) [amber]
+-- daily record:
+fm-attention-check-v1
+reported=2026-10-03
+line=attention 10-03 13:00Z RED (S1,S2,S8,S11): S1 decisions>30m 4 (8.0 wh, max 2h; sampled since 07:50Z) [red] | S2 >=3 open 110m [red] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (grokbot-if-lane-build 37h) [red] | S11 constraint steers 30% (4/13; prior 24h 0%) [red] | release-seq steers 3 (info) [amber]
+-- check at 16:00Z (same day):
+output=''
+-- wake queue attention entries: 1
+
+### S-C merged-but-not-live: viral-moment with a main commit unreleased for 5 h
+-- all merged & tagged (prod tag = origin/main):
+attention 10-03 14:00Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased viral-moment 0 (prod-15 = main; 0/15 >2h) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+-- after a 5h-old unreleased merge:
+attention 10-03 14:00Z AMBER (S4): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased viral-moment oldest 5h, 1 >2h (1/16 >2h) [red] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+-- git cat-file -t prod-15: tag
+
+### S-F adversarial: a lightweight prod tag on the unreleased commit must not hide it
+attention 10-03 14:00Z AMBER (S4): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased viral-moment oldest 5h, 1 >2h (1/16 >2h; 1 lightweight prod tag(s) ignored, no release time) [red] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+
+### S-D AMBER day: daily line recorded without a wake and shown in the fleet view
+-- fleet view before any daily line (Attention section):
+## Attention
+No daily attention line recorded yet.
+check output='' rc=0
+-- daily record:
+fm-attention-check-v1
+reported=2026-10-03
+line=attention 10-03 13:05Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 13:05Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [amber] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+wake queue: none (no wake)
+-- fleet view after (Attention section):
+## Attention
+attention 10-03 13:05Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 13:05Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [amber] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+-- snapshot JSON .attention_check:
+attention 10-03 13:05Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 13:05Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [amber] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+
+### S-E adversarial: backlog exists but is unreadable -> S8/S11 unknown, verdict unmoved
+-- readable backlog:
+attention 10-03 14:00Z RED (S3,S8,S11): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 60m) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (lost 40h) [red] | S11 constraint steers 0% (0/1; prior 24h 0%) [red] | release-seq steers 0 (info) [green]
+-- unreadable backlog:
+attention 10-03 14:00Z AMBER (S3): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 60m) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight unknown (backlog unreadable) [unknown] | S11 constraint steers unknown (backlog unreadable) [unknown] | release-seq steers 0 (info) [green]
+-- backlog absent (empty fallback):
+attention 10-03 14:00Z RED (S3,S11): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 60m) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers 0% (0/1; prior 24h 0%) [red] | release-seq steers 0 (info) [green]
+
+### S-G adversarial: dated waits are not ownerless
+attention 10-03 14:00Z AMBER (S8): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 1 (orphan 13h) [red] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+
+### S-H br blind spot: absent br -> no note
+attention 10-03 14:00Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]

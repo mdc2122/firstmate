@@ -1,0 +1,15 @@
+### S-J checks at 09:00Z and 12:59Z only sample
+check 2026-10-03T09:00:00Z rc=0 output=''
+check 2026-10-03T12:59:00Z rc=0 output=''
+.attention-first-seen
+daily record: none yet
+
+### S-D AMBER day (green PR blocked 60 min): first check after 13:00Z at 14:00Z
+check rc=0 output=''
+fm-attention-check-v1
+reported=2026-10-03
+line=attention 10-03 14:00Z AMBER (S3): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 09:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 60m) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+wake queue: absent (no wake)
+-- fleet view, Attention section:
+## Attention
+attention 10-03 14:00Z AMBER (S3): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 09:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 60m) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]

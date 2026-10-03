@@ -1,0 +1,1 @@
+ok - the watcher runs the attention check on its own cadence and wakes on a RED day
