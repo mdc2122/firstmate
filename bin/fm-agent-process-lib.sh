@@ -83,7 +83,7 @@ fm_agent_process_classify_name() {  # <path> [argv0] -> agent|shell|other
 #            path, whichever the launcher used (empty when unknown).
 #   <args>   the flattened command line, read only for the harnesses whose
 #            identity sits in argv[1]: gemini's node bundle
-#            (bin/fm-gemini-lib.sh) and omp's bun launcher
+#            (bin/fm-gemini-lib.sh) and omp's bun launcher or package entry
 #            (fm_omp_args_are_omp in bin/fm-session-lock-lib.sh).
 #   [pid]    when given, lets the Gemini rule read argv boundaries from the
 #            live process instead of the flattened line.

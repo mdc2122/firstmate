@@ -113,7 +113,7 @@ test_ready_and_undated_rows_are_named_and_dated_holds_are_not() {
   axi "$home" add waits-on "waits on an open blocker"
   axi "$home" block waits-on --by blocker-open
   axi "$home" add watch-only "Watch Paperclip FIR-9 to merge"
-  axi "$home" hold watch-only --reason "FIR-9 owned by the viral-moment engineer" --until 2026-10-03
+  axi "$home" hold watch-only --reason "FIR-9 owned by the viral-moment engineer" --until 2099-12-31
   axi "$home" add past-date "held until a date that passed"
   axi "$home" hold past-date --reason "waiting on x" --until 2026-09-30
   axi "$home" add captain-call "a captain decision"
@@ -193,7 +193,7 @@ test_row_that_leaves_and_returns_is_a_new_episode() {
   axi "$home" add flappy "row that gets held then due again"
   out=$(qz "$home" check) || fail "first check failed"
   assert_contains "$out" "flappy" "first sighting did not wake"
-  axi "$home" hold flappy --reason "named blocker" --until 2026-10-05
+  axi "$home" hold flappy --reason "named blocker" --until 2099-12-31
   out=$(qz "$home" check) || fail "check while held failed"
   [ -z "$out" ] || fail "a dated hold still woke: $out"
   axi "$home" unhold flappy

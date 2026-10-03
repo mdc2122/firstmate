@@ -13,10 +13,12 @@
 # catches vendor drift against a real omp. Neither replaces the other.
 #
 # The load-bearing contracts:
-#   1. omp's identity is the anchored name `omp` in either vendor shape - the
-#      natively-named process (a Bun-compiled binary, 18.1.11) or bun running
-#      the launcher script (comm bun, argv `bun .../bin/omp`, 18.1.22) - plus
-#      the OMPCODE=1 marker omp sets for its children; ompd/comp never identify.
+#   1. omp's identity is anchored in every vendor shape - the natively-named
+#      process `omp` (a Bun-compiled binary, 18.1.11), bun running the launcher
+#      script (comm bun, argv `bun .../bin/omp`, 18.1.22), or bun running its
+#      `@oh-my-pi/pi-coding-agent/dist/cli.js` package entry (18.4.4, after
+#      /restart) but never an `__omp_worker_*` helper - plus the OMPCODE=1
+#      marker omp sets for its children; ompd/comp never identify.
 #   2. FM_OMP_HARNESS=omp is a precedence override that needs a real omp
 #      ancestor: it beats an inherited CLAUDECODE under omp and is inert when it
 #      leaks into a worker whose ancestry holds no omp.
@@ -113,6 +115,12 @@ test_lock_identity_and_liveness_classification() {
   ! fm_harness_process_matches bun 'bun /x/ompd' || fail "session-lock identity must not accept bun running ompd"
   ! fm_harness_process_matches bun 'bun /x/comp' || fail "session-lock identity must not accept bun running comp"
   ! fm_harness_process_matches bun 'bun server.js --config /x/omp' || fail "session-lock identity must not accept an omp mention in a later flag value"
+  local entry=/Users/x/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js
+  fm_harness_process_matches bun "/Users/x/.bun/bin/bun $entry --resume 01a0" || fail "session-lock identity must accept bun running the omp package entry (resumed session)"
+  fm_harness_process_matches bun "bun $entry" || fail "session-lock identity must accept the bare omp package entry"
+  ! fm_harness_process_matches bun "bun $entry __omp_worker_daemon_broker" || fail "session-lock identity must not accept omp's daemon-broker helper"
+  ! fm_harness_process_matches bun "bun $entry __omp_worker_text_predict" || fail "session-lock identity must not accept omp's text-predict helper"
+  ! fm_harness_process_matches bun 'bun /x/other-pkg/dist/cli.js' || fail "session-lock identity must not accept an unrelated package cli.js"
   # shellcheck source=bin/fm-backend.sh
   . "$ROOT/bin/fm-backend.sh"
   fm_backend_source tmux || fail "fm_backend_source tmux failed"
@@ -125,7 +133,12 @@ test_lock_identity_and_liveness_classification() {
   [ "$(fm_agent_process_classify bun bun 'bun /Users/x/.bun/bin/omp')" = agent ] || fail "liveness must classify bun running the omp launcher as an agent"
   [ "$(fm_agent_process_classify bun bun 'bun run build')" = other ] || fail "liveness must not classify a bare bun as an agent"
   [ "$(fm_agent_process_classify bun bun 'bun /x/ompd')" = other ] || fail "liveness must not classify bun running ompd as an agent"
-  pass "session lock and shared liveness: omp is anchored in both shapes, decoys stay out"
+  [ "$(fm_agent_process_classify bun bun "bun $entry --resume 01a0")" = agent ] || fail "liveness must classify bun running the omp package entry as an agent"
+  [ "$(fm_agent_process_classify bun bun "bun $entry")" = agent ] || fail "liveness must classify the bare omp package entry as an agent"
+  [ "$(fm_agent_process_classify bun bun "bun $entry __omp_worker_daemon_broker")" = other ] || fail "liveness must not classify omp's daemon-broker helper as an agent"
+  [ "$(fm_agent_process_classify bun bun "bun $entry __omp_worker_text_predict")" = other ] || fail "liveness must not classify omp's text-predict helper as an agent"
+  [ "$(fm_agent_process_classify bun bun 'bun /x/other-pkg/dist/cli.js')" = other ] || fail "liveness must not classify an unrelated package cli.js as an agent"
+  pass "session lock and shared liveness: omp is anchored in the binary, launcher, and package-entry shapes, decoys and helpers stay out"
 }
 
 # A bun launcher running a script: a `bun` symlink to the system shell plus a
@@ -188,13 +201,21 @@ bun_shape_verdict() {  # <fakebin> -> the ancestry verdict for pid 100
 }
 
 test_detection_bun_launcher_ancestry_shapes() {
-  local fakebin out decoy
+  local fakebin out decoy entry=/Users/x/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js
   fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-omp" bun "bun /Users/x/.bun/bin/omp")
   out=$(bun_shape_verdict "$fakebin")
   [ "$out" = "args omp" ] || fail "bun+omp argv must read 'args omp', got '$out'"
   fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-flags" bun "bun /x/omp --config y --cwd /z")
   out=$(bun_shape_verdict "$fakebin")
   [ "$out" = "args omp" ] || fail "trailing launcher arguments must keep 'args omp', got '$out'"
+  fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-entry" bun "/Users/x/.bun/bin/bun $entry --resume 01a0")
+  out=$(bun_shape_verdict "$fakebin")
+  [ "$out" = "args omp" ] || fail "bun running the omp package entry must read 'args omp', got '$out'"
+  for decoy in __omp_worker_daemon_broker __omp_worker_text_predict; do
+    fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-$decoy" bun "/Users/x/.bun/bin/bun $entry $decoy")
+    out=$(bun_shape_verdict "$fakebin")
+    [ -z "$out" ] || fail "omp's $decoy helper must read no verdict, got '$out'"
+  done
   for decoy in ompd comp; do
     fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-$decoy" bun "bun /x/$decoy")
     out=$(bun_shape_verdict "$fakebin")
@@ -206,7 +227,7 @@ test_detection_bun_launcher_ancestry_shapes() {
   fakebin=$(bun_shape_bin "$TMP_ROOT/ps-bun-flagmention" bun "bun server.js --config /x/omp")
   out=$(bun_shape_verdict "$fakebin")
   [ -z "$out" ] || fail "an omp mention in a later flag value must read no verdict, got '$out'"
-  pass "fm-harness ancestry: the bun-launcher argv rule accepts the launcher and rejects decoys, bare runs, and flag mentions"
+  pass "fm-harness ancestry: the bun argv rule accepts the launcher and package entry and rejects helpers, decoys, bare runs, and flag mentions"
 }
 
 test_detection_ompcode_marker() {
