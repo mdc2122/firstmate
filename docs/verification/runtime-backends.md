@@ -2005,6 +2005,18 @@ $ printf 'CLAUDECODE=%s OMPCODE=%s\n' "$CLAUDECODE" "$OMPCODE"
 CLAUDECODE=1 OMPCODE=1
 ```
 
+On 2026-10-02 against omp 18.4.4 on macOS 26 arm64 a second bun shape appeared on a live lock holder: omp's `/restart` calls its native `execReplace` (execvp, same pid) with `process.execPath`, the symlink-resolved `Bun.main`, the retained launch flags, and `--resume <id>`.
+`~/.bun/bin/omp` is a symlink to the package entry, so after a restart the same pid reads `bun .../@oh-my-pi/pi-coding-agent/dist/cli.js --resume <id>`.
+omp's own helpers run that entry too, with an `__omp_worker_` first argument (text predictor, daemon broker), as children of a session.
+Identity therefore also accepts bun running a script ending in `@oh-my-pi/pi-coding-agent/dist/cli.js` unless its first argument starts with `__omp_worker_`; `tests/fm-omp-harness.test.sh` pins the resumed and bare entry, both helpers, and an unrelated `dist/cli.js` through the lock matcher, the liveness classifier, and the `bin/fm-harness.sh` ancestry verdict.
+
+```text
+$ ps -o pid=,ppid=,comm=,args= -p 7874,30720,22735
+ 7874  5371 bun /Users/studio2/.bun/bin/bun /Users/studio2/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --resume 01a0f503-29e4-7000-9038-96fc2712ffb0
+30720  7874 bun /Users/studio2/.bun/bin/bun /Users/studio2/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_daemon_broker
+22735 30720 bun /Users/studio2/.bun/bin/bun /Users/studio2/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js __omp_worker_text_predict
+```
+
 ### Composer
 
 Under the captain's `unicode` symbol preset the idle screen through Herdr was a bare `❯` (U+276F) row followed directly by the status row:

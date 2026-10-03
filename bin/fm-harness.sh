@@ -226,7 +226,8 @@ harness_process_verdict() {  # <pid>
     # and similar unrelated commands are not misread as this harness: the
     # natively-named `omp` process (a Bun-compiled single binary, verified
     # omp 18.1.11), and since 18.1.22 a bun script (comm bun, argv
-    # `bun .../.bun/bin/omp`), matched by the bun arm below. This arm sits
+    # `bun .../.bun/bin/omp` or its package entry, owned by fm_omp_args_are_omp),
+    # matched by the bun arm below. This arm sits
     # above the interpreter fallbacks deliberately: the optional
     # claude-bridge extension runs a nested executable literally named
     # `claude` with its own node child, and that fallback's *claude* args

@@ -19,8 +19,8 @@
 # Known harness command names; extend when a new adapter is verified. omp is
 # anchored exactly like pi: the bare word `omp` (a Bun-compiled binary,
 # verified omp 18.1.11), and since 18.1.22 a bun script whose argv runs the
-# launcher path (`bun .../.bun/bin/omp`, matched by fm_omp_args_are_omp
-# below). A substring match would claim ompd or comp.
+# launcher path or its package entry (matched by fm_omp_args_are_omp below).
+# A substring match would claim ompd or comp.
 FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$|^omp$'
 
 # The same harnesses as exact executable names. Keep in sync with
@@ -49,18 +49,26 @@ fm_harness_path_name() {  # <path>
   return 1
 }
 
-# True when the whitespace-separated command line $1 runs the omp launcher
-# under bun: argv[0] names bun and the argument after it is a path whose final
-# component is exactly `omp` (verified, omp 18.1.22:
+# True when the whitespace-separated command line $1 runs omp under bun:
+# argv[0] names bun and the argument after it is either the launcher path whose
+# final component is exactly `omp` (verified, omp 18.1.22:
 # `bun /Users/.../.bun/bin/omp`, a #!/usr/bin/env bun script, which passes no
-# interpreter flags).
+# interpreter flags), or the package entry that launcher symlinks to,
+# `.../@oh-my-pi/pi-coding-agent/dist/cli.js` (verified, omp 18.4.4: `/restart`
+# execs in place, keeping the pid, with argv `<bun execPath> <resolved Bun.main>
+# <flags> --resume <id>`, so a lock-holding session changes shape mid-life).
 #
-# Only argv[0] and the script argument are ever consulted, so a bare `bun run`
-# and any command that merely mentions omp in a later flag value never match.
+# omp's own helper processes run that same entry with an `__omp_worker_*`
+# subcommand (text predictor, daemon broker); they are children of a session,
+# never a session, so the argument after the entry rejects them.
+#
+# Only argv[0], the script argument, and the entry's first argument are ever
+# consulted, so a bare `bun run` and any command that merely mentions omp in a
+# later flag value never match.
 # The single owner of the bun-launcher rule, shared by the ancestry matcher
 # below, the fm-harness.sh verdict, and the backend liveness classifier.
 fm_omp_args_are_omp() {  # <args>
-  local args=$1 argv0 rest token
+  local args=$1 argv0 rest token next
   [ -n "$args" ] || return 1
   args=${args#"${args%%[![:space:]]*}"}
   argv0=${args%%[[:space:]]*}
@@ -73,6 +81,15 @@ fm_omp_args_are_omp() {  # <args>
   token=${rest%%[[:space:]]*}
   case "$token" in
     */omp) return 0 ;;
+    */@oh-my-pi/pi-coding-agent/dist/cli.js)
+      rest=${rest#"$token"}
+      rest=${rest#"${rest%%[![:space:]]*}"}
+      next=${rest%%[[:space:]]*}
+      case "$next" in
+        __omp_worker_*) return 1 ;;
+      esac
+      return 0
+      ;;
   esac
   return 1
 }
