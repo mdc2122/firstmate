@@ -749,6 +749,13 @@ test_view_renders_snapshot() {
     "view should show secondmate endpoint agent liveness"
   assert_not_contains "$view" "fm-peek.sh fm-secondmate-task" \
     "view must not tell firstmate to routinely peek secondmates"
+  assert_contains "$view" "No daily attention line recorded yet." \
+    "view should say when no attention line is recorded"
+  printf '%s\n' fm-attention-check-v1 reported=2026-10-03 'line=attention 10-03 13:05Z AMBER (S1): S1 decisions>30m 1' \
+    > "$home/state/.attention-check"
+  view=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$VIEW")
+  assert_contains "$view" "attention 10-03 13:05Z AMBER (S1): S1 decisions>30m 1" \
+    "view should show the latest recorded attention line"
   pass "fleet view renders the snapshot without secondmate peek guidance"
 }
 

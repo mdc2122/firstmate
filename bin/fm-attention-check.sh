@@ -27,17 +27,23 @@
 #       first-parent merges took over 2 h to reach their first prod-* tag (or
 #       are still not live). Red when the oldest unreleased commit is over 4 h
 #       old or over a quarter of the window's merges took over 2 h. It reads
-#       the local clone as the last fleet sync left it and never fetches.
+#       the local clone as the last fleet sync left it and never fetches. A
+#       prod-* tag's release time is its tagger date, so a lightweight prod-*
+#       tag has no known release time: it is never a release or the newest tag,
+#       and the line names how many were ignored.
 #   S8  ownerless in-flight work: In-flight backlog rows whose task's recorded
 #       endpoint has a state/.endpoint-gone-* marker older than 12 h, excluding
 #       a task whose latest status is a `paused: ... until <time>` wait that is
-#       still in the future. Red when any.
+#       still in the future and a row whose backlog `hold-until` date is still
+#       ahead (an owned, dated wait). Red when any.
 #   S11 attention on the constraint: the share of steering-inbox messages
 #       (state/*.inbox, by their at= stamp) sent to constraint tasks, meaning
 #       backlog rows whose `verify:` line names the ballot, review, repair, or
 #       finishing. Red when under 40% in this window and in the 24 h before it;
 #       amber when only this window is under 40%. Messages to tasks already
 #       torn down left with their inbox and are not counted.
+#       When data/backlog.md exists but cannot be read, S8 and S11 are rated
+#       unknown, say so, and never count toward the verdict.
 #   release-seq  inbox messages in the window that sequence a release by hand
 #       ("next in line", "queued behind", "after ... deploys"). Informational:
 #       amber when any, never part of the verdict.
@@ -46,9 +52,11 @@
 # more of S1, S2, S3, S4, S8, S11 are red, AMBER when one is, GREEN otherwise.
 #
 # Blind spots are named on the line rather than guessed: when the home keeps a
-# beads (br) crew queue at data/beads/.beads/beads.db, the line reports its open
-# and in-progress unit counts as not seen, because S8 and S11 read only backlog
-# rows, task records, and steering inboxes, and br crews have none of those.
+# beads (br) crew queue at data/beads/.beads/beads.db and br is installed, the
+# line reports its open and in-progress unit counts as not seen (one read-only
+# br call bounded to FM_ATTENTION_BR_TIMEOUT seconds, default 5), because S8
+# and S11 read only backlog rows, task records, and steering inboxes, and br
+# crews have none of those.
 #
 # Status lines carry no timestamps, so decision ages come from sampling.
 # `check` folds the open decision set on every run and keeps one record,
@@ -65,7 +73,8 @@
 # after 13:00Z each UTC day it computes the line and records it in
 # state/.attention-check (reported=<date>, line=<line>). When the verdict is
 # RED it first appends one durable `check` wake (key attention) and prints that
-# wake reason; otherwise it prints nothing and the line waits in the record.
+# wake reason; otherwise it prints nothing and the line waits in the record,
+# which the fleet snapshot and bin/fm-fleet-view.sh show without a wake.
 # A failed wake append is retried on the next run instead of being recorded.
 # Those two records and that wake are the only writes.
 #
@@ -86,6 +95,8 @@ RECORD_SCHEMA=fm-attention-check-v1
 DAILY_HOUR=13
 CONSTRAINT_RE='(^|[^a-z])(ballot|review|repair|finish)'
 RELEASE_RE='next in line|queued behind|after [^.]{1,80} deploys'
+BR_TIMEOUT=${FM_ATTENTION_BR_TIMEOUT:-5}
+case "$BR_TIMEOUT" in ''|*[!0-9]*|0) BR_TIMEOUT=5 ;; esac
 
 usage() {
   cat <<'EOF'
@@ -111,6 +122,8 @@ command -v jq >/dev/null 2>&1 || die "jq not found"
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-timeout-lib.sh
+. "$SCRIPT_DIR/fm-timeout-lib.sh"
 
 NOW=${FM_ATTENTION_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 NOW_EPOCH=$(fm_utc_iso_to_epoch "$NOW") || die "invalid FM_ATTENTION_NOW: $NOW" 2
@@ -231,15 +244,17 @@ decision_metrics() {  # <record-text>
 
 # --- backlog view -------------------------------------------------------------
 
+# Empty when data/backlog.md exists but could not be read.
 BACKLOG_JSON=
 load_backlog() {
-  if [ ! -f "$DATA/backlog.md" ]; then
+  if [ ! -e "$DATA/backlog.md" ]; then
     BACKLOG_JSON='{"backlog":{"records":[]},"tasks":[]}'
     return 0
   fi
   BACKLOG_JSON=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
     "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) \
-    || BACKLOG_JSON='{"backlog":{"records":[]},"tasks":[]}'
+    && printf '%s' "$BACKLOG_JSON" | jq -e '.backlog.records | type == "array"' >/dev/null 2>&1 \
+    || BACKLOG_JSON=
 }
 
 # --- line assembly ------------------------------------------------------------
@@ -293,19 +308,25 @@ signal_green_blocked() {
   add_segment S3 "$rating" "green>30m $over${listed:+ ($(names_capped "$listed"))}"
 }
 
-# One "<project> <oldest-unreleased-seconds> <unreleased-over-2h> <merges> <merges-over-2h> <newest-tag>"
-# line per prod-tagged project.
+# One "<project> <oldest-unreleased-seconds> <unreleased-over-2h> <merges> <merges-over-2h> <newest-tag> <lightweight-tags>"
+# line per prod-tagged project; the five measures are "-" when no prod-* tag
+# has a tagger date.
 merged_not_live_rows() {
-  local repo name main newest tags sha ct oldest unrel_over merges slow lag t tt
+  local repo name main newest refs tags light sha ct oldest unrel_over merges slow lag t tt
   for repo in "$PROJECTS"/*/; do
     repo=${repo%/}
     git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
-    # Only tags that existed at NOW count, so a pinned clock replays that moment.
-    tags=$(git -C "$repo" for-each-ref --sort=creatordate \
-      --format='%(refname:short) %(creatordate:unix)' 'refs/tags/prod-*' 2>/dev/null \
-      | awk -v now="$NOW_EPOCH" '$2 + 0 <= now')
-    [ -n "$tags" ] || continue
+    refs=$(git -C "$repo" for-each-ref --sort=taggerdate \
+      --format='%(refname:short) %(taggerdate:unix)' 'refs/tags/prod-*' 2>/dev/null)
+    [ -n "$refs" ] || continue
     name=${repo##*/}
+    light=$(printf '%s\n' "$refs" | awk 'NF == 1 { n++ } END { print n + 0 }')
+    # Only tags that existed at NOW count, so a pinned clock replays that moment.
+    tags=$(printf '%s\n' "$refs" | awk -v now="$NOW_EPOCH" 'NF >= 2 && $2 + 0 <= now')
+    if [ -z "$tags" ]; then
+      [ "$light" -eq 0 ] || printf '%s - - - - - %s\n' "$name" "$light"
+      continue
+    fi
     main=$(git -C "$repo" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null) || main=origin/main
     git -C "$repo" rev-parse -q --verify "$main^{commit}" >/dev/null 2>&1 || continue
     newest=$(printf '%s\n' "$tags" | tail -n 1 | cut -d' ' -f1)
@@ -339,27 +360,33 @@ TAGS
     done <<EOF
 $(git -C "$repo" log --first-parent --format='%H %ct' --since="$WIN0_ISO" "$main" 2>/dev/null)
 EOF
-    printf '%s %s %s %s %s %s\n' "$name" "$oldest" "$unrel_over" "$merges" "$slow" "$newest"
+    printf '%s %s %s %s %s %s %s\n' "$name" "$oldest" "$unrel_over" "$merges" "$slow" "$newest" "$light"
   done
 }
 
 signal_merged_not_live() {
-  local rows='' rating=green parts='' name oldest unrel_over merges slow newest r
+  local rows='' rating=unknown parts='' name oldest unrel_over merges slow newest light r ignored
   command -v git >/dev/null 2>&1 && rows=$(merged_not_live_rows)
   if [ -z "$rows" ]; then
     add_segment S4 green "unreleased n/a (no prod-tagged project)"
     return 0
   fi
-  while read -r name oldest unrel_over merges slow newest; do
+  while read -r name oldest unrel_over merges slow newest light; do
     [ -n "$name" ] || continue
+    ignored=
+    [ "$light" -eq 0 ] || ignored="; $light lightweight prod tag(s) ignored, no release time"
+    if [ "$oldest" = - ]; then
+      parts="$parts${parts:+; }$name unknown (only lightweight prod tags, no release time)"
+      continue
+    fi
     r=green
     if [ "$unrel_over" -gt 0 ] || [ "$slow" -gt 0 ]; then r=amber; fi
     if [ "$oldest" -gt 14400 ] || [ $((slow * 4)) -gt "$merges" ]; then r=red; fi
-    case "$r:$rating" in red:*|amber:green) rating=$r ;; esac
+    case "$r:$rating" in red:*|amber:green|amber:unknown|green:unknown) rating=$r ;; esac
     if [ "$oldest" -eq 0 ]; then
-      parts="$parts${parts:+; }$name 0 ($newest = main; $slow/$merges >2h)"
+      parts="$parts${parts:+; }$name 0 ($newest = main; $slow/$merges >2h$ignored)"
     else
-      parts="$parts${parts:+; }$name oldest $(age_text "$oldest"), $unrel_over >2h ($slow/$merges >2h)"
+      parts="$parts${parts:+; }$name oldest $(age_text "$oldest"), $unrel_over >2h ($slow/$merges >2h$ignored)"
     fi
   done <<EOF
 $rows
@@ -371,9 +398,12 @@ signal_ownerless() {
   local ids task_id meta target marker age last wait_until over=0 gone=0 listed='' rating
   # A row held with a hold-until date still ahead is a dated wait, like a
   # future `paused: ... until` status, and is not ownerless.
-  ids=$(printf '%s' "$BACKLOG_JSON" | jq -r --arg today "${NOW_ISO%%T*}" '
+  if [ -z "$BACKLOG_JSON" ] || ! ids=$(printf '%s' "$BACKLOG_JSON" | jq -r --arg today "${NOW_ISO%%T*}" '
     .backlog.records[] | select(.structured == true and .state == "in_flight")
-    | select((.hold_until // "") <= $today) | .id' 2>/dev/null)
+    | select((.hold_until // "") <= $today) | .id' 2>/dev/null); then
+    add_segment S8 unknown "ownerless in-flight unknown (backlog unreadable)"
+    return 0
+  fi
   while IFS= read -r task_id; do
     [ -n "$task_id" ] || continue
     meta="$STATE/$task_id.meta"
@@ -415,12 +445,21 @@ inbox_messages() {
 }
 
 signal_steering() {
-  local msgs constraint share prev rating detail on n pon pn release=0 at path
+  local msgs constraint
   msgs=$(inbox_messages)
-  constraint=$(printf '%s' "$BACKLOG_JSON" | jq -r --arg re "$CONSTRAINT_RE" '
+  if [ -z "$BACKLOG_JSON" ] || ! constraint=$(printf '%s' "$BACKLOG_JSON" | jq -r --arg re "$CONSTRAINT_RE" '
     .backlog.records[] | select(.structured == true)
     | select((.body_lines // []) | map(select(startswith("verify:"))) | (.[0] // "") | ascii_downcase | test($re))
-    | .id' 2>/dev/null)
+    | .id' 2>/dev/null); then
+    add_segment S11 unknown "constraint steers unknown (backlog unreadable)"
+  else
+    steering_share "$msgs" "$constraint"
+  fi
+  release_steers "$msgs"
+}
+
+steering_share() {  # <msgs> <constraint-ids>
+  local msgs=$1 constraint=$2 share prev rating detail on n pon pn
   read -r on n pon pn <<EOF
 $(printf '%s\n' "$msgs" | awk -F '\t' -v w0="$WIN0_ISO" '
     FILENAME == ARGV[1] { if ($0 != "") c[$0] = 1; next }
@@ -443,6 +482,10 @@ EOF
     detail="$detail)"
   fi
   add_segment S11 "$rating" "constraint steers $detail"
+}
+
+release_steers() {  # <msgs>
+  local msgs=$1 release=0 at path rating
   while IFS=$'\t' read -r _ at path; do
     [ -n "$path" ] && [[ "$at" > "$WIN0_ISO" ]] || continue
     if sed '1,/^--$/d' "$path" | grep -qiE "$RELEASE_RE"; then
@@ -459,13 +502,10 @@ EOF
 blind_spots() {
   local db counts
   db="$DATA/beads/.beads/beads.db"
-  [ -f "$db" ] || return 0
-  if ! command -v br >/dev/null 2>&1; then
-    printf 'not seen: br crew queue (br not installed)'
-    return 0
-  fi
-  counts=$(br --db "$db" --no-auto-import --no-auto-flush count --by-status --json 2>/dev/null \
-    | jq -r '[.groups[] | select(.group == "open" or .group == "in_progress") | "\(.count) \(.group)"] | join(", ")' 2>/dev/null) \
+  [ -f "$db" ] && command -v br >/dev/null 2>&1 || return 0
+  counts=$(fm_run_timed "$BR_TIMEOUT" br --db "$db" --no-auto-import --no-auto-flush count --by-status --json 2>/dev/null) \
+    && counts=$(printf '%s' "$counts" \
+      | jq -er '[.groups[] | select(.group == "open" or .group == "in_progress") | "\(.count) \(.group)"] | join(", ")' 2>/dev/null) \
     || counts=unreadable
   printf 'not seen: br crew queue %s units (S8/S11 read no br crews)' "${counts:-0 open}"
 }

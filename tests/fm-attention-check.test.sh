@@ -221,6 +221,28 @@ test_merged_not_live_slow_share_threshold() {
   pass "S4 turns red when over a quarter of the window's merges took over 2 h to go live"
 }
 
+test_lightweight_prod_tag_has_no_release_time() {
+  local home repo out
+  home=$(make_home s4-lightweight)
+  prod_repo "$home" 241
+  repo="$home/projects/app"
+  git -C "$repo" tag prod-5
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_rating "$out" S4 red "a lightweight tag on the unreleased commit counted as its release"
+  assert_contains "$out" "1 lightweight prod tag(s) ignored" "the ignored lightweight tag was not named"
+
+  home=$(make_home s4-only-lightweight)
+  repo="$home/projects/app"
+  fm_git_init_commit "$repo" >/dev/null
+  commit_at "$repo" $((NOW_EPOCH - 600 * 60)) old
+  git -C "$repo" tag prod-1
+  git -C "$repo" update-ref refs/remotes/origin/main HEAD
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_rating "$out" S4 unknown "a project whose only prod tag is lightweight"
+  assert_contains "$out" "app unknown (only lightweight prod tags" "the unknown release time was not named"
+  pass "S4 never treats a lightweight prod tag as a release and says so on the line"
+}
+
 # --- S8 -----------------------------------------------------------------------
 
 gone_task() {  # <home> <id> <marker-minutes-ago>
@@ -259,6 +281,25 @@ test_ownerless_inflight_threshold_and_dated_waits() {
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_rating "$out" S8 green "a gone endpoint with no In-flight row"
   pass "S8 names In-flight rows gone over 12 h and skips dated waits"
+}
+
+test_unreadable_backlog_rates_s8_and_s11_unknown() {
+  local home out
+  home=$(make_home unreadable)
+  inflight_row "$home" lost
+  gone_task "$home" lost 2000
+  steer "$home" other 2026-10-03T09:00:00Z
+  steer "$home" other 2026-10-02T09:00:00Z
+  printf 'https://github.com/o/r/pull/7 abc %s 0\n' $((NOW_EPOCH - 3600)) > "$home/state/t1.pr-green-blocked"
+  printf '%s\n' '## In flight' '- [ ] broken (' > "$home/data/backlog.md"
+  chmod 000 "$home/data/backlog.md"
+  out=$(ac "$home" scan) || { chmod 644 "$home/data/backlog.md"; fail "scan failed: $out"; }
+  chmod 644 "$home/data/backlog.md"
+  assert_rating "$out" S8 unknown "an unreadable backlog"
+  assert_rating "$out" S11 unknown "an unreadable backlog"
+  assert_contains "$out" "backlog unreadable" "the unreadable backlog was not named"
+  assert_contains "$out" "AMBER (S3):" "an unreadable backlog moved the verdict"
+  pass "an unreadable backlog rates S8 and S11 unknown and keeps them out of the verdict"
 }
 
 # --- S11 and release sequencing ----------------------------------------------
@@ -375,6 +416,12 @@ SH
   chmod +x "$home/fakebin/br"
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_contains "$out" "not seen: br crew queue 7 open, 2 in_progress units" "the br crew queue was not named as a blind spot"
+  cat > "$home/fakebin/br" <<'SH'
+#!/usr/bin/env bash
+sleep 30
+SH
+  out=$(FM_ATTENTION_BR_TIMEOUT=1 ac "$home" scan) || fail "scan failed: $out"
+  assert_contains "$out" "not seen: br crew queue unreadable units" "a hung br call was not bounded"
   home=$(make_home no-beads)
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_not_contains "$out" "not seen" "a home without a br queue named a blind spot"
@@ -387,7 +434,9 @@ test_sampled_decision_keeps_its_wait_after_it_closes
 test_green_blocked_pr_age_threshold
 test_merged_not_live_oldest_unreleased_threshold
 test_merged_not_live_slow_share_threshold
+test_lightweight_prod_tag_has_no_release_time
 test_ownerless_inflight_threshold_and_dated_waits
+test_unreadable_backlog_rates_s8_and_s11_unknown
 test_constraint_share_threshold_and_two_day_rule
 test_release_sequencing_steers_are_informational
 test_verdict_counts_red_signals

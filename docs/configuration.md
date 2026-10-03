@@ -1027,6 +1027,7 @@ FM_GUARD_CONTINUE_LINE='This is a supervision warning only; the guarded operatio
 FM_POLL=15              # seconds between watcher poll cycles
 FM_QUEUE_ZERO_INTERVAL=900   # seconds between the watcher's queue inbox-zero checks, independent of heartbeat backoff; bin/fm-queue-zero.sh owns the rule, row classes, and its other knobs
 FM_ATTENTION_CHECK_INTERVAL=600   # seconds between the watcher's daily attention-check runs, which sample open decisions and record the one-line rating at the first run after 13:00Z; invalid or zero values use 600; bin/fm-attention-check.sh owns the signals, thresholds, and RED wake
+FM_ATTENTION_BR_TIMEOUT=5   # seconds bounding the attention check's read-only br crew-queue count when data/beads/.beads/beads.db exists; invalid or zero values use 5
 FM_HOME_SUMMARY_INTERVAL=300   # seconds before a live watcher refreshes this home's state/home-summary.json even without a status signal; invalid or zero values use 300
 FM_HOME_SUMMARY_TIMEOUT=60     # seconds bounding the complete best-effort home-summary refresh, including lock acquisition, validation, atomic publication, and worker-side failure logging; invalid or zero values use 60
 FM_HOME_SUMMARY_ERROR_LOG_MAX_BYTES=65536   # approximate size cap for state/.home-summary-refresh.log before it is trimmed to the newest 200 lines; invalid or zero values use 65536
