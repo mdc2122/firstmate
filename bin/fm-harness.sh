@@ -150,10 +150,11 @@ harness_marker() {
   return 0
 }
 
-# True when an exact `omp` process - or bun running the omp launcher script -
-# sits within eight parents of this one. The same anchored match as the
-# ancestry walk below, kept separate so the marker precedence above can demand
-# real process evidence before trusting FM_OMP_HARNESS.
+# True when an exact `omp` process - or bun running omp, per
+# fm_omp_args_are_omp - sits within eight parents of this one. The same
+# anchored match as the ancestry walk below, kept separate so the marker
+# precedence above can demand real process evidence before trusting
+# FM_OMP_HARNESS.
 ancestry_names_omp() {
   local pid=$$ comm args
   for _ in 1 2 3 4 5 6 7 8; do
