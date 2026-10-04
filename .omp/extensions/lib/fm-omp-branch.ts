@@ -42,23 +42,26 @@ export type OmpBranchShadowWake = {
 // proves read-only; everything else is refused before a shell starts and the
 // refusal is recorded as an action the branch would have taken.
 //
-// The rule is an allowlist over a deliberately small grammar: one line of
-// plain words, paired quotes, pipes, and the sequencing operators. Anything that
-// can hide a second command or write a file - a backslash, unpaired quote, or
-// `#` comment that would make bash split words differently, a newline,
-// command or process substitution, a redirection other than to /dev/null or
-// between descriptors, a background operator, a leading environment
-// assignment (PATH or BASH_ENV could swap the program), or an unlisted
-// program - refuses. A program that can write a file or run another program through an
-// option or script (sed, sort, rg, find, xargs, awk) is unlisted rather than
-// parsed. Like the lease guards, this is
-// confused-agent-grade containment (bin/fm-lease-lib.sh).
+// The rule is an allowlist at every level rather than a list of bash constructs
+// to refuse, because bash has too many expansion contexts to enumerate. After
+// the exact /dev/null and descriptor redirections are stripped, a command may
+// contain only ASCII letters and digits, space, tab, and _ - . / : , = @ % + *
+// ? ' " | ; & - so `$`, backtick, parentheses, braces, brackets, backslash,
+// `#`, `!`, `~`, `<`, `>`, and newlines never reach bash, which rules out every
+// parameter, arithmetic, command, process, and brace expansion, comment,
+// subshell, escape, and file redirection in one check. Quotes must pair, a
+// lone `&` (background) refuses, a leading environment assignment refuses
+// (PATH or BASH_ENV could swap the program), and every pipeline or sequence
+// segment must start with a listed program. A program that can write a file,
+// set a variable, or run another program through an option or script (sed,
+// sort, rg, printf, find, xargs, awk) is unlisted rather than parsed. Like the
+// lease guards, this is confused-agent-grade containment (bin/fm-lease-lib.sh).
 // `cd` only moves the branch's own one-shot subshell (each command runs in a
 // fresh `bash -c`), so it changes nothing outside the command it prefixes.
 const READ_ONLY_PROGRAMS: Record<string, true> = {
   cat: true, head: true, tail: true, grep: true, egrep: true, ls: true, wc: true,
-  jq: true, date: true, echo: true, printf: true, stat: true, basename: true, dirname: true,
-  cut: true, tr: true, true: true, false: true, test: true, "[": true,
+  jq: true, date: true, echo: true, stat: true, basename: true, dirname: true,
+  cut: true, tr: true, true: true, false: true, test: true,
   pwd: true, realpath: true, readlink: true, column: true, nl: true, comm: true, diff: true,
   cd: true,
 };
@@ -75,19 +78,18 @@ const READ_ONLY_FIRSTMATE: Record<string, true | readonly string[]> = {
   "fm-tasks-axi.sh": ["list", "show", "ready"],
 };
 
+const SAFE_REDIRECTION = /(?:2>\/dev\/null|>\/dev\/null|2>&1|<\/dev\/null)(?=[\s;|&]|$)/g;
+const OUTSIDE_GRAMMAR = /[^A-Za-z0-9 \t_\-./:,=@%+*?'"|;&]/;
+const QUOTED = /'[^']*'|"[^"]*"/g;
+
 export function readOnlyCommandRefusal(command: string): string {
-  if (command.includes("\\")) return "backslash escape";
-  if (/[\n\r]/.test(command)) return "multi-line command";
-  if (command.includes("#")) return "comment";
-  if (/['"]/.test(command.replace(/'[^']*'|"[^"]*"/g, ""))) return "unpaired quote";
-  if (/[`]|\$\(|<\(|>\(/.test(command)) return "command or process substitution";
-  // Drop the redirections that cannot write a file before looking for any
-  // other redirection.
-  const stripped = command.replace(/[0-9]?>>?\s*\/dev\/null|[0-9]?>&[0-9]|<\s*\/dev\/null/g, " ");
-  if (/[<>]/.test(stripped.replace(/'[^']*'|"[^"]*"/g, ""))) return "file redirection";
-  if (/(^|[^&])&($|[^&])/.test(stripped.replace(/'[^']*'|"[^"]*"/g, ""))) return "background operator";
-  const segments = stripped
-    .replace(/'[^']*'|"[^"]*"/g, (quoted) => quoted.replace(/[|;&]/g, " "))
+  const stripped = command.replace(SAFE_REDIRECTION, " ");
+  const outside = stripped.match(OUTSIDE_GRAMMAR);
+  if (outside) return `character ${JSON.stringify(outside[0])} is outside the read-only grammar`;
+  if (/['"]/.test(stripped.replace(QUOTED, ""))) return "unpaired quote";
+  const masked = stripped.replace(QUOTED, (quoted) => quoted.replace(/[|;&]/g, " "));
+  if (/(^|[^&])&($|[^&])/.test(masked)) return "background operator";
+  const segments = masked
     .split(/\|\||&&|[|;]/)
     .map((segment) => segment.trim())
     .filter(Boolean);

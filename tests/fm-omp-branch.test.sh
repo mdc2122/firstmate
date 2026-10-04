@@ -601,11 +601,24 @@ const refused = [
   "bin/fm-lease.sh claim=x check",
   "PATH=. cat f",
   "BASH_ENV=x.sh bin/fm-peek.sh t1",
+  "echo ${C:=a[${D:=$}(touch /tmp/pwned)]} $[C]",
+  "echo $[1]",
+  "echo ${HOME}",
+  "echo $HOME",
+  "printf -v PATH %s . ; cat f",
+  "echo {a,b}",
+  "(bin/fm-send.sh task-1 hi)",
+  "cat ~/f",
+  "cat f >/dev/nullx",
+  "cat f 2>&1x",
+  "cat f >> /dev/null",
+  "[ -e f ]",
 ];
 const allowed = [
   "echo actor-ok", "grep 'a;b' f | wc -l", `echo "it's" 'say "hi"'`, "bin/fm-lease.sh check task-1",
   "bin/fm-crew-state.sh t1", "tail -5 state/t.status", "cd /x && cat f", "grep -n x f 2>/dev/null",
   "grep -n a=b f", "head -3 f | cut -d= -f2",
+  "bin/fm-tasks-axi.sh show t1", "ls state/*.status", "cat f 2>&1 | wc -l", "cat f </dev/null >/dev/null",
 ];
 for (const command of refused) if (!readOnlyCommandRefusal(command)) console.log(`allowed a bypass: ${command}`);
 for (const command of allowed) if (readOnlyCommandRefusal(command)) console.log(`refused a read-only command: ${command}`);
@@ -613,7 +626,7 @@ console.log("checked");
 EOF
 )
   [ "$out" = "checked" ] || fail "the report-only classifier misjudged a command: $out"
-  pass "report-only refuses backslash, quote, comment, multi-line, redirection, background, assignment, and unlisted-program bypasses while allowing read-only commands"
+  pass "report-only refuses every character outside its grammar, unpaired quotes, background, assignment, and unlisted-program bypasses while allowing read-only commands"
 }
 
 test_config_absent_and_off_are_inert
