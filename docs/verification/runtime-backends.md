@@ -2054,3 +2054,18 @@ A throwaway scout was spawned through `bin/fm-spawn.sh --scout --harness omp --m
 6. `bin/fm-control.sh <id> exit` stopped the agent and `bin/fm-teardown.sh` returned the worktree and closed the item.
 
 `FM_OMP_LIVE_E2E=1 tests/fm-omp-primary-live-e2e.test.sh` refreshes the primary evidence; the worker path above is refreshed by repeating the scout dispatch after any omp upgrade.
+
+### Supervision branch
+
+Verified 2026-10-03 against omp 18.4.4 on macOS arm64, in a scratch clone acting as its own FM_HOME with a real TUI omp in a dedicated tmux session; main ran `claude-opus55-cliproxy/claude-opus-5-5[1m]`.
+
+| Mode / guard | Observed |
+| --- | --- |
+| One watcher (F5) | `ps` showed exactly one `fm-watch-arm.sh --restart` and its `fm-watch.sh` parented by the lock-holding omp pid in every mode, before and after `/restart` |
+| report-only | a `blocked:` and later a `done:` status line each woke main (`FIRSTMATE WATCHER WAKE: signal:` in main's pane); the branch wrote only `state/omp-branch-shadow.jsonl` (a `WOULD:` report and, before `cd` joined the allowlist, one `refused` row for `cd ...`); `branch-outcomes.jsonl` stayed unchanged |
+| on | a `done:` status line produced zero main follow-ups; the branch ran `bin/fm-wake-drain.sh`, `bin/fm-lease.sh claim`, `bin/fm-crew-state.sh`, `fm_branch_report` (store seq 1, `[captain]`), the printed `--ack-through`, and `bin/fm-lease.sh release`; main received the processing request and called `fm_branch_processed` through 1 |
+| F3 | with the branch holding `.lease-lab-task` under the live lock pid, main's own omp bash ran `bin/fm-lease.sh claim lab-task` and got `claim refused - task 'lab-task' is leased to the branch supervision actor`, `rc=6`, and the lease stayed `live` |
+| F4 `/restart` | with an unread routine row, an unread captain row, and a dead `.lease-dead-task`, `/restart` re-executed the same pid as `bun .../dist/cli.js ... --resume <id>`; the routine row rendered as a sailboat note, the captain row persisted as `fm-branch-visible-outcome` seq 3, main acknowledged `fm_branch_processed` through 3, cursor and processed marker both read 3, and the dead lease was gone |
+
+The lab also caught one omp-specific contract: a tool object passed in `customTools` is treated as omp's `CustomTool`, whose `execute` receives the abort signal fifth (`id, params, onUpdate, ctx, signal`), so the branch's bash reads the signal there and accepts only a real `AbortSignal`; `tests/fm-omp-branch.test.sh` calls it in that order.
+`FM_OMP_BRANCH_LIVE_E2E=1 tests/fm-omp-branch-live-e2e.test.sh` refreshes the rpc-mode share of this evidence after an omp upgrade.

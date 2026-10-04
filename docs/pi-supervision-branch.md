@@ -12,12 +12,12 @@ An unresolvable row makes the scan unsafe and returns the whole wake to main, an
 Captain-relevant branch outcomes persist as exact, sequence-keyed visible transcript entries and then open one sequence-keyed processing turn on main, which stays open until main acknowledges that sequence.
 The design source is the captain-approved forked-supervision architecture board, a captain-private fleet record (a self-contained HTML explainer with the measured cache and judgment evidence); this document records the shape it landed as, and the delivering PR cites the board artifact itself.
 
-The supervision branch itself is Pi-only by construction:
+The supervision branch was built for Pi and stays Pi-native there:
 
-- The branch lives in `.pi/extensions/fm-branch-supervision.ts`, which only a Pi primary ever loads; no other harness gains branch supervision behavior.
+- The Pi branch lives in `.pi/extensions/fm-branch-supervision.ts`, which only a Pi primary ever loads.
 - The bash-side additions (leases, the outcome store, session-start recovery) are inert in a home with no branch state: no lease files exist, no actor variable is set, every guard passes silently, and no new state appears (`tests/fm-branch-supervision.test.sh` holds this).
   A home on any harness that already has an outcome store still receives the shared drain compatibility recovery described in [Lost-wake outcome backstop](#lost-wake-outcome-backstop).
-- It does not change which harness is primary and never moves a home to Pi.
+- The omp primary ports this architecture behind `config/omp-supervision-branch` ([docs/supervision-protocols/omp.md](supervision-protocols/omp.md)): OFF unless that file names `on` or `report-only`; `.omp/extensions/fm-omp-branch-supervision.ts` owns the omp differences the report evidence demanded (actor by command prefix, outcome card by appendEntry plus widget, no ModelRuntime picker), and this document's store, lease, eligibility, and processing contracts apply there unchanged.
 
 ## Components and their owners
 

@@ -122,6 +122,7 @@ state/               runtime records and signals; gitignored
   .pr-sweep .last-pr-sweep  forge-side PR sweep's once-per-PR report record and cadence marker; bin/fm-pr-sweep.sh owns the record's format
   branch-outcomes.jsonl .branch-outcomes-cursor .branch-outcomes-processed .<task>.branch-outcome-index .branch-outcome-index-ready  Pi supervision-branch durable outcome store, its read cursor, main's processed marker, bounded latest per-task status-coverage caches, and their recovery marker; bin/fm-branch-outcome.sh owns the formats
   branch-session/ .branch-session .branch-mirror-cursor  the branch's per-main-session conversations, the pointer to the current one, and the dialog-mirror cursor; extension-owned (docs/pi-supervision-branch.md)
+  omp-branch-shadow.jsonl .omp-branch-extension-loaded  the omp report-only shadow log (what the branch would have done) and its loaded-build marker; extension-owned (docs/supervision-protocols/omp.md)
   .branch-eligible-rows .branch-eligible-owner .main-eligible-rows  per-actor wake-row claims and branch-owner evidence; docs/watcher-continuity.md owns the acknowledgement contract
   .lease-<task>        per-task supervision lease naming which actor (main or branch) may change that task; bin/fm-lease-lib.sh owns the contract the guarded scripts enforce
   x-watch.check.sh   generated Relay poll shim; present only when opted in (section 14)

@@ -23,7 +23,10 @@ When this session owns supervision and away mode is not active:
 The turn-end guard on omp is structural, not advisory: `__FM_OMP_TURNEND_EXT__` answers omp's blocking `session_stop` hook, and when `bin/fm-turnend-guard.sh` returns 2 it forces one continuation carrying the guard text, bounded to one per turn by the `stop_hook_active` flag omp sets on the continuation's own stop.
 An interrupted turn never raises `session_stop`, so a supervisor-initiated interrupt is not guarded; `bin/fm-control.sh` owns that postcondition.
 
-The Pi supervision branch (`docs/pi-supervision-branch.md`) is out of scope for the omp primary: every actionable wake is delivered to this conversation, exactly as on Claude, and the lease, outcome-store, and `fm_branch_processed` contracts do not apply here.
+The supervision branch is OFF unless this home's `config/omp-supervision-branch` names `on` or `report-only` ([docs/configuration.md](../configuration.md#omp-supervision-branch-configomp-supervision-branch)); [docs/pi-supervision-branch.md](../pi-supervision-branch.md) owns the branch contract it shares with Pi.
+With the file absent this path stays unchanged: every actionable wake is delivered to this conversation exactly as on Claude, and the lease, outcome-store, and `fm_branch_processed` contracts do not apply.
+`on` hands each eligible task-local wake to the in-process supervision branch first; a wake the branch cannot handle, every decision-owned and check-class row, and every watcher-failure alarm stay on this path, and an outcome main must act on arrives as one hidden processing request that only `fm_branch_processed` acknowledges.
+`report-only` delivers every wake to this conversation unchanged and lets the branch shadow it read-only while it records what it would do in `state/omp-branch-shadow.jsonl`, so it is the proof stage, never a working configuration.
 
 The turn-end guard extension lives at `__FM_OMP_TURNEND_EXT__`.
 The watcher extension lives at `__FM_OMP_EXT__`.
