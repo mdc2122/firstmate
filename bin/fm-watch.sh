@@ -2679,11 +2679,11 @@ EOF
     # keep the ordinary payload). The wake reason line itself, and every
     # harness-arm consumer that pattern-matches it, stays byte-identical -
     # only the per-row payload changes. Two readers branch on that payload:
-    # docs/pi-supervision-branch.md's Pi-only branch dispatcher, to keep a
+    # docs/pi-supervision-branch.md's branch dispatcher, to keep a
     # decision-owned row off the supervision branch (fm-branch-dispatch.ts,
-    # fm-primary-pi-watch.ts), and the away daemon, whose handle_durable_wakes
-    # passes it to handle_wake (see the comment above handle_wake in
-    # bin/fm-supervise-daemon.sh).
+    # shared by fm-primary-pi-watch.ts and the opt-in omp watcher), and the
+    # away daemon, whose handle_durable_wakes passes it to handle_wake (see the
+    # comment above handle_wake in bin/fm-supervise-daemon.sh).
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then

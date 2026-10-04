@@ -5,6 +5,12 @@
 # PID of any one tool call, which is dead moments after it is written.
 # Usage: fm-lock.sh           acquire; exit 1 unless ownership is verified
 #        fm-lock.sh status    print holder and liveness; always exits 0
+#        fm-lock.sh owned     exit 0 only when the lock names a live harness pid
+#                             in this caller's own harness ancestry; never
+#                             writes. The omp supervision branch runs this
+#                             before enabling and before every side effect, so
+#                             the same identity rule that decides acquisition
+#                             (fm-session-lock-lib.sh) decides branch ownership.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,6 +36,18 @@ if [ "${1:-}" = "status" ]; then
     exit 0
   }
   if fm_harness_pid_alive "$old"; then echo "lock: held by live harness pid $old"; else echo "lock: stale (pid $old dead or not a harness)"; fi
+  exit 0
+fi
+
+if [ "${1:-}" = "owned" ]; then
+  if [ ! -f "$LOCK" ] || [ -L "$LOCK" ]; then echo "lock: not owned (no session lock)"; exit 1; fi
+  old=$(head -n 1 "$LOCK" 2>/dev/null || true)
+  case "$old" in
+    ''|0|1|*[!0-9]*) echo "lock: not owned (malformed lock)"; exit 1 ;;
+  esac
+  if ! fm_harness_pid_alive "$old"; then echo "lock: not owned (holder pid $old is not a live harness)"; exit 1; fi
+  if ! fm_session_lock_owned_by_self "$STATE"; then echo "lock: not owned (held by harness pid $old outside this session)"; exit 1; fi
+  echo "lock: owned by this session (harness pid $old)"
   exit 0
 fi
 

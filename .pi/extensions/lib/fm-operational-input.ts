@@ -116,6 +116,18 @@ export function classifyFirstmateOperationalText(content: string): string | unde
   return runOperationalInputCommand("classify", content);
 }
 
+// The awaited form of classifyFirstmateOperationalText, for a caller on the
+// omp supervision branch's delivery path that must not stop the TUI for a
+// child process (see encodeFirstmateOperationalInputWith above).
+export async function classifyFirstmateOperationalTextWith(
+  run: OperationalInputRunner,
+  content: string,
+): Promise<string | undefined> {
+  const invocation = firstmateShellInvocation(operationalInputScript, operationalInputArgs("classify"));
+  const result = await run(invocation.command, invocation.args, { input: content });
+  return operationalInputAnswer("classify", result.status, result.stdout);
+}
+
 export function classifyFirstmateCurrentOperationalText(
   content: string,
 ): string | undefined {

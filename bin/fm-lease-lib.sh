@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # fm-lease-lib.sh - the per-task supervision lease contract (one owner).
 #
-# WHY. On the Pi supervision branch (docs/pi-supervision-branch.md), two LLM
-# actors share one firstmate home inside one pi process: MAIN (the captain's
-# chat) and BRANCH (the persistent supervision conversation). Most records have
-# exactly one natural owner, but the overlap set - steering or stopping a
-# worker, post-landing cleanup, backlog status for a task, stuck-worker
-# recovery - could otherwise be mutated by both actors at once. The lease is
-# the merge-conflict analog: a small per-task file saying which actor is
-# changing that task right now, and the mutating entrypoints refuse the other
-# actor while it exists.
+# WHY. On the supervision branch (docs/pi-supervision-branch.md; Pi, or omp
+# when opted in), two LLM actors share one firstmate home inside one harness
+# process: MAIN (the captain's chat) and BRANCH (the persistent supervision
+# conversation). Most records have exactly one natural owner, but the overlap
+# set - steering or stopping a worker, post-landing cleanup, backlog status for
+# a task, stuck-worker recovery - could otherwise be mutated by both actors at
+# once. The lease is the merge-conflict analog: a small per-task file saying
+# which actor is changing that task right now, and the mutating entrypoints
+# refuse the other actor while it exists.
 #
 # CONTRACT.
 #   - Lease file: $STATE/.lease-<task>, one line "<actor>\t<pid>\t<epoch>".
@@ -23,14 +23,20 @@
 #     loudly - an unknown actor is a wiring bug, not a third role.
 #   - Staleness: the recorded pid is the long-lived supervising process (the
 #     session-lock holder, or FM_LEASE_HOLDER_PID - see bin/fm-lease.sh), and
-#     both actors live inside that one pi process, so a dead recorded pid
+#     both actors live inside that one harness process, so a dead recorded pid
 #     means the process died; the lease is cleared at the next claim, guard,
-#     or sweep. Liveness requires a Pi calling context plus state/.lock, and
-#     the recorded pid must BE its current holder, so a lease left by an exited
-#     Pi session goes stale even if its pid was recycled by an unrelated
-#     process, and a non-Pi home never honors a leftover Pi lease. A lease held by the
+#     or sweep. Liveness requires a supervision-branch calling context (see
+#     fm_lease_context_active) plus state/.lock, and the recorded pid must BE
+#     its current holder, so a lease left by an exited session goes stale even
+#     if its pid was recycled by an unrelated process, and a home without a
+#     branch never honors a leftover lease. A lease held by the
 #     live current session but an abandoned branch conversation is recovered
 #     by the branch extension's generation-activation cleanup.
+#   - Calling context: Pi marks every tool shell PI_CODING_AGENT=true. omp marks
+#     its tool shells OMPCODE=1 but runs the branch only when this home's
+#     config/omp-supervision-branch says `on`, so an omp shell is a supervision
+#     context only then. Without this, main's omp shell (no actor variable)
+#     would read the branch's live lease as stale and delete it.
 #
 # THREAT MODEL (deliberate, captain-decided): these guards are
 # CONFUSED-AGENT-GRADE, the same grade bin/fm-gate-refuse-lib.sh documents
@@ -48,8 +54,8 @@
 #     refuses with exit FM_LEASE_REFUSE_EXIT. In a Pi supervision context the
 #     guard retains the lease-command lock until fm_lease_guard_release, so the
 #     other actor cannot claim between the check and the guarded mutation. A
-#     home without the current Pi session lock cannot have a live lease, so
-#     the guard is a no-op there - non-Pi behavior is unchanged by construction.
+#     home without a branch-capable session lock cannot have a live lease, so
+#     the guard is a no-op there - non-branch behavior is unchanged by construction.
 #   - Role partition (fm_lease_forbid_branch): actions MAIN alone owns -
 #     merging a PR, landing local-only work, spawning workers - refuse the
 #     branch actor outright, lease or no lease.
@@ -106,6 +112,32 @@ fm_lease_path() {
   printf '%s/.lease-%s\n' "$STATE" "$1"
 }
 
+# fm_omp_branch_mode [<config-dir>]: print the omp supervision branch mode this
+# home's config selects - `on`, `report-only`, or `off`. The first word of
+# config/omp-supervision-branch decides; an absent, unreadable, symlinked, or
+# unknown value is `off`. docs/configuration.md "omp supervision branch" owns
+# the file format; readOmpBranchMode in .omp/extensions/lib/fm-omp-branch.ts
+# is its TypeScript reader.
+fm_omp_branch_mode() {
+  local dir=${1:-${FM_CONFIG_OVERRIDE:-${FM_HOME:-${STATE%/*}}/config}} mode=''
+  if [ -f "$dir/omp-supervision-branch" ] && [ ! -L "$dir/omp-supervision-branch" ]; then
+    read -r mode _ < "$dir/omp-supervision-branch" 2>/dev/null || true
+  fi
+  case "$mode" in
+    on|report-only) printf '%s\n' "$mode" ;;
+    *) printf 'off\n' ;;
+  esac
+}
+
+# fm_lease_context_active: 0 when this shell is a supervision-branch calling
+# context in which leases bind (see "Calling context" above).
+fm_lease_context_active() {
+  case "${PI_CODING_AGENT:-}:${FM_SUPERVISION_ACTOR:-}" in
+    true:*|*:main|*:branch) return 0 ;;
+  esac
+  [ "${OMPCODE:-}" = 1 ] && [ "$(fm_omp_branch_mode)" = on ]
+}
+
 # fm_lease_read <task>: read the lease into FM_LEASE_ACTOR/FM_LEASE_PID/
 # FM_LEASE_EPOCH. Returns 1 when no lease file exists. A malformed lease
 # (unreadable actor or pid) reads as actor "" so callers treat it as stale
@@ -132,15 +164,12 @@ fm_lease_read() {
   return 0
 }
 
-# fm_lease_live <task>: 0 iff a well-formed lease exists in a Pi context, its
-# recorded pid is alive, and that pid IS the current session-lock holder (see
-# the staleness contract above).
+# fm_lease_live <task>: 0 iff a well-formed lease exists in a supervision
+# context, its recorded pid is alive, and that pid IS the current session-lock
+# holder (see the staleness contract above).
 fm_lease_live() {
   local lock_pid
-  case "${PI_CODING_AGENT:-}:${FM_SUPERVISION_ACTOR:-}" in
-    true:*|*:main|*:branch) ;;
-    *) return 1 ;;
-  esac
+  fm_lease_context_active || return 1
   fm_lease_read "$1" || return 1
   [ -n "$FM_LEASE_ACTOR" ] || return 1
   [ -n "$FM_LEASE_PID" ] || return 1
@@ -170,9 +199,7 @@ fm_lease_guard() {
   local task=$1 action=$2 actor lock lease_actor active=0
   fm_lease_valid_id "$task" || return 0
   actor=$(fm_lease_actor) || exit "$FM_LEASE_REFUSE_EXIT"
-  case "${PI_CODING_AGENT:-}:${FM_SUPERVISION_ACTOR:-}" in
-    true:*|*:main|*:branch) active=1 ;;
-  esac
+  if fm_lease_context_active; then active=1; fi
   [ "$active" = 1 ] || [ -e "$(fm_lease_path "$task")" ] || return 0
   fm_lease_lock_helpers
   lock="$STATE/.fm-lease-command.lock"

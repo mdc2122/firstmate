@@ -21,9 +21,14 @@
 //     generation is shared by every row of an episode, so it never keeps a
 //     record alive on its own. A record with no readable binding is always
 //     replayed, so an unacknowledged close is never lost across /new or a restart.
-//   - The Pi supervision branch is out of scope for omp: every actionable wake
-//     is delivered to main, so no branch offer is made and no calm presentation
-//     hooks exist.
+//   - The supervision branch is OFF unless config/omp-supervision-branch turns
+//     it on (docs/configuration.md "omp supervision branch"); the mode is read
+//     once at load. Off, every actionable wake is delivered to main exactly as
+//     before. `on` offers each eligible wake to .omp/extensions/
+//     fm-omp-branch-supervision.ts first over pi.events, exactly as the Pi
+//     watcher does, and a rejected or declined offer falls back to main.
+//     `report-only` always delivers to main and then hands a shadow copy to the
+//     branch without waiting on it. No calm presentation hooks exist.
 //   - The arming tool is fm_watch_arm_omp and its human fallback
 //     /fm-watch-arm-omp; the loaded-build marker is state/.omp-watch-extension-loaded.
 //
@@ -57,7 +62,7 @@
 // replacement handoff.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
@@ -66,7 +71,11 @@ import { Type } from "typebox";
 // The operational-input encoder is shared with the omp extensions; its owner
 // resolves bin/fm-operational-input.sh relative to its own location, which is
 // the same repository root this file lives in.
-import { encodeFirstmateOperationalInput } from "../../.pi/extensions/lib/fm-operational-input.ts";
+import {
+  encodeFirstmateOperationalInput,
+  encodeFirstmateOperationalInputWith,
+} from "../../.pi/extensions/lib/fm-operational-input.ts";
+import type { OmpBranchShadowWake } from "./lib/fm-omp-branch.ts";
 
 // The omp extension API surface this file uses. omp is a Pi fork and ships no
 // separately installable type package, so the contract is declared locally
@@ -76,6 +85,7 @@ type ExtensionAPI = {
   sendUserMessage: (content: string, options?: { deliverAs?: string }) => unknown;
   registerCommand?: (name: string, command: { description: string; handler: (args: string, ctx: any) => Promise<void> | void }) => void;
   registerTool?: (tool: Record<string, unknown>) => void;
+  events?: { emit(channel: string, data: unknown): void };
 };
 
 type ArmResult = {
@@ -142,6 +152,29 @@ const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
 const fmRoot = process.env.FM_ROOT_OVERRIDE || root;
 const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const config = process.env.FM_CONFIG_OVERRIDE || `${fmHome}/config`;
+// The supervision branch's support is loaded only when this home has a
+// config/omp-supervision-branch file. The imports are dynamic on purpose: an
+// omp home without that file must import nothing beyond what this watcher
+// always needed, so a branch dependency can never change its behavior.
+// lib/fm-omp-branch.ts owns the file's format; the mode is read once per load
+// and a change takes effect at the next restart, the boundary the branch
+// extension uses too.
+const branchSupport = await (async () => {
+  if (!existsSync(`${config}/omp-supervision-branch`)) return null;
+  const { readOmpBranchMode, FM_OMP_BRANCH_SHADOW_EVENT } = await import("./lib/fm-omp-branch.ts");
+  const mode = readOmpBranchMode(config);
+  if (mode === "off") return null;
+  const dispatch = await import("../../.pi/extensions/lib/fm-branch-dispatch.ts");
+  const { runCommandAsync } = await import("../../.pi/extensions/lib/fm-async-exec.ts");
+  return {
+    mode,
+    runCommandAsync,
+    FM_OMP_BRANCH_SHADOW_EVENT,
+    classifyWakeForBranch: dispatch.classifyWakeForBranch,
+    createBranchDispatchOffer: dispatch.createBranchDispatchOffer,
+    FM_BRANCH_DISPATCH_EVENT: dispatch.FM_BRANCH_DISPATCH_EVENT,
+  };
+})();
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
 const handoffDir = `${state}/extensions/omp-primary-watch`;
@@ -593,10 +626,11 @@ export default function (pi: ExtensionAPI) {
     pending?: PendingActionableClose,
   ): Promise<boolean> {
     if (!generationIsLive(owner)) return false;
-    const content = encodeFirstmateOperationalInput(
-      "watcher",
-      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
-    );
+    const body = `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`;
+    const content = branchSupport
+      ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
+      : encodeFirstmateOperationalInput("watcher", body);
+    if (!generationIsLive(owner)) return false;
     if (pending) owner.unconsumedWakes.set(pending.token, { content, pending });
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
@@ -628,26 +662,35 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  function confirmHandlingDelivery(recovery: { generation: string; watcherPid: string }): {
+  function confirmationResult(
+    recovery: { generation: string; watcherPid: string },
+    status: number | null,
+    stderrText: string,
+  ): { ok: boolean; detail: string } {
+    if (status === 0) return { ok: true, detail: "" };
+    const stderr = stderrText.trim();
+    return {
+      ok: false,
+      detail: `watcher: FAILED - handling delivery confirmation was rejected (status=${status ?? "none"} generation=${recovery.generation} watcherPid=${recovery.watcherPid})${stderr ? `\n${stderr}` : ""}`,
+    };
+  }
+
+  // With the supervision branch configured the confirmation is awaited (F6 in
+  // .omp/extensions/fm-omp-branch-supervision.ts); with it off this is the
+  // unchanged synchronous call.
+  async function confirmHandlingDelivery(recovery: { generation: string; watcherPid: string }): Promise<{
     ok: boolean;
     detail: string;
-  } {
+  }> {
+    const args = [armScript, "--handling-delivered", recovery.generation, "--watcher-pid", recovery.watcherPid];
+    const env = { ...process.env, FM_HOME: fmHome, FM_STATE_OVERRIDE: state, FM_ROOT_OVERRIDE: fmRoot };
+    if (branchSupport) {
+      const result = await branchSupport.runCommandAsync("bash", args, { cwd: fmRoot, env });
+      return confirmationResult(recovery, result.status, result.stderr || "");
+    }
     try {
-      const result = spawnSync(
-        "bash",
-        [armScript, "--handling-delivered", recovery.generation, "--watcher-pid", recovery.watcherPid],
-        {
-          cwd: fmRoot,
-          encoding: "utf8",
-          env: { ...process.env, FM_HOME: fmHome, FM_STATE_OVERRIDE: state, FM_ROOT_OVERRIDE: fmRoot },
-        },
-      );
-      if (result.status === 0) return { ok: true, detail: "" };
-      const stderr = (result.stderr || "").trim();
-      return {
-        ok: false,
-        detail: `watcher: FAILED - handling delivery confirmation was rejected (status=${result.status ?? "none"} generation=${recovery.generation} watcherPid=${recovery.watcherPid})${stderr ? `\n${stderr}` : ""}`,
-      };
+      const result = spawnSync("bash", args, { cwd: fmRoot, encoding: "utf8", env });
+      return confirmationResult(recovery, result.status, result.stderr || "");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -657,28 +700,63 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  function confirmHandlingDeliveryWithRetry(
+  async function confirmHandlingDeliveryWithRetry(
     owner: SessionGeneration,
     recovery: { generation: string; watcherPid: string },
-  ): { ok: boolean; detail: string } {
+  ): Promise<{ ok: boolean; detail: string }> {
     const snapshot = (): { generation: string; watcherPid: string } => {
       const current = owner.child ? armRecovery.get(owner.child) : undefined;
       return current ?? recovery;
     };
-    const first = confirmHandlingDelivery(snapshot());
+    const first = await confirmHandlingDelivery(snapshot());
     if (first.ok) return first;
     return confirmHandlingDelivery(snapshot());
+  }
+
+  // `on`: offer the wake to the supervision branch first, exactly as the Pi
+  // watcher does; classifyWakeForBranch owns eligibility. An accepted offer
+  // whose settlement rejects falls through to main (F7), and so does an offer
+  // nobody accepts.
+  async function offerWakeToBranch(message: string): Promise<boolean> {
+    if (branchSupport?.mode !== "on") return false;
+    const { scope, heartbeat, eligible } = branchSupport.classifyWakeForBranch(state, message);
+    const offer = branchSupport.createBranchDispatchOffer(message, scope.projects, heartbeat, eligible);
+    pi.events?.emit(branchSupport.FM_BRANCH_DISPATCH_EVENT, offer);
+    if (!offer.accepted) return false;
+    try {
+      await offer.settlement;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // `report-only`: the rows the branch would have been granted, captured before
+  // main can drain them, so the shadow reasons over the same queue state.
+  function shadowWakeFor(message: string): OmpBranchShadowWake | null {
+    if (branchSupport?.mode !== "report-only") return null;
+    const { scope, heartbeat, eligible } = branchSupport.classifyWakeForBranch(state, message);
+    if (!eligible) return null;
+    const seqs = new Set(scope.eligibleSeqs);
+    let rows: string[] = [];
+    try {
+      rows = readOptional(wakeQueue).split("\n").filter((row) => seqs.has(row.split("\t")[1] ?? ""));
+    } catch {
+      return null;
+    }
+    return { message, heartbeat, rows, tasks: [...scope.eligibleTasks] };
   }
 
   async function deliverActionableWake(
     owner: SessionGeneration,
     message: string,
+    repairFailed: boolean,
     pending: PendingActionableClose,
     recovery?: { generation: string; watcherPid: string },
   ): Promise<boolean> {
     if (!generationIsLive(owner)) return false;
     if (recovery) {
-      const confirmed = confirmHandlingDeliveryWithRetry(owner, recovery);
+      const confirmed = await confirmHandlingDeliveryWithRetry(owner, recovery);
       if (!confirmed.ok) {
         const watcherPid = recovery.watcherPid;
         if (!pidAlive(watcherPid)) {
@@ -687,8 +765,12 @@ export default function (pi: ExtensionAPI) {
         return await sendWake(owner, `${message}\n\n${confirmed.detail}`, pending);
       }
     }
-    // No supervision branch on omp: every actionable wake goes to main.
-    return await sendWake(owner, message, pending);
+    // A watcher-repair failure is main's alone: only main can repair the cycle.
+    if (!repairFailed && await offerWakeToBranch(message)) return generationIsLive(owner);
+    const shadow = repairFailed ? null : shadowWakeFor(message);
+    const delivered = await sendWake(owner, message, pending);
+    if (delivered && shadow && branchSupport) pi.events?.emit(branchSupport.FM_OMP_BRANCH_SHADOW_EVENT, shadow);
+    return delivered;
   }
 
   function surfaceFailure(owner: SessionGeneration, message: string): void {
@@ -803,7 +885,7 @@ export default function (pi: ExtensionAPI) {
             return;
           }
           const message = restoration.failure ? `${pending.message}\n\n${restoration.failure}` : pending.message;
-          const delivered = await deliverActionableWake(owner, message, pending, restoration.recovery);
+          const delivered = await deliverActionableWake(owner, message, Boolean(restoration.failure), pending, restoration.recovery);
           if (!delivered) {
             settleClaim("failed");
             releaseClaim();

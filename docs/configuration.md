@@ -51,6 +51,14 @@ The branch prompt's "Verdict: routine or captain" section owns the distinction b
 The generated [Pi supervision protocol](supervision-protocols/pi.md) owns main's event ownership, acknowledgement duty, and conversational treatment for merged outcomes, while the persisted entry itself owns captain visibility.
 A no-change heartbeat outcome explicitly reported with `task=fleet` and `silent=true` is delivered silently with no rendered note, while every other routine outcome still appends a rendered, sailboat-prefixed note.
 
+## omp supervision branch (config/omp-supervision-branch)
+
+The omp supervision branch ports the Pi branch ([docs/pi-supervision-branch.md](pi-supervision-branch.md) owns the shared contract) and is OFF by default: a home behaves exactly as before this feature unless the local, gitignored `config/omp-supervision-branch` exists.
+The file's first whitespace-separated word selects the mode - `on` runs the branch so eligible wakes reach it before main, `report-only` runs it as a read-only shadow, and an absent, unreadable, symlinked, or unknown value is `off`; both `.omp/extensions` and `bin/fm-lease-lib.sh` read that word.
+`report-only` is the proof stage for the rollout plan: the branch sees every wake it would be offered but every mutating command is refused before a shell starts, and it records its intended verdict, summary, and refused commands in `state/omp-branch-shadow.jsonl` for comparison against main's own handling.
+The file is home-local and never inherited by a secondmate; the extensions read it once at load, so a change takes effect at the next omp restart, while a running branch whose mode no longer matches the file stops acting at its next ownership check and `bin/fm-lease-lib.sh` follows the file immediately.
+The branch still owns nothing captain-facing that Pi's does not: it cannot merge, land, or spawn, decision-owned rows and watcher-failure alarms stay on main, and `config/supervision-branch-model` and `config/supervision-branch-effort` select its model and effort exactly as on Pi, resolved through omp's own model catalog.
+
 ## Pi supervision branch model and effort (config/supervision-branch-model, config/supervision-branch-effort)
 
 Supervision is an easier job than the captain's own conversation, so the branch can run on a cheaper model than main.

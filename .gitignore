@@ -13,3 +13,4 @@ __pycache__/
 config/
 
 .tools/
+.omp-branch-live-e2e.*/

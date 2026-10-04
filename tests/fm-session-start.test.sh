@@ -1463,6 +1463,41 @@ EOF
   pass "non-Pi session start neither sweeps nor replays Pi branch state"
 }
 
+test_omp_branch_outcome_replay_and_lease_sweep() {
+  local rec root home fakebin out
+  rec=$(new_world omp-branch-recovery)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" omp
+
+  # The omp branch is OFF by default: even with stored branch state present,
+  # a mode-absent omp home runs neither the lease sweep nor the outcome replay.
+  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
+    --task task-a --verdict routine --summary 'worker recovered automatically' >/dev/null \
+    || fail "could not seed the unread routine branch outcome"
+  printf 'branch\t999999\t123\n' > "$home/state/.lease-task-dead"
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  case "$out" in
+    *"BRANCH OUTCOMES"*|*"worker recovered automatically"*) fail "mode-absent omp start replayed branch outcomes" ;;
+  esac
+  [ -e "$home/state/.lease-task-dead" ] || fail "mode-absent omp start swept a branch lease"
+
+  # With config/omp-supervision-branch on, the locked omp start replays the
+  # leading routine outcome and sweeps dead leases exactly as on Pi; the
+  # main-actor env is set inside fm-session-start because an extension-run
+  # digest shell carries no omp marker of its own.
+  printf 'on\n' > "$home/config/omp-supervision-branch"
+  printf 'branch\t999999\t123\n' > "$home/state/.lease-task-dead"
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "BRANCH OUTCOMES (handled by the supervision branch, not yet seen by this session):" \
+    "locked omp start did not replay the leading routine branch outcome"
+  assert_contains "$out" "worker recovered automatically" "omp replay lost the routine outcome text"
+  [ ! -e "$home/state/.lease-task-dead" ] || fail "locked omp start kept a dead branch lease"
+  pass "locked omp session start replays branch outcomes and sweeps dead leases only while the branch mode is not off"
+}
+
 # --- deferred network stage -------------------------------------------------
 
 # install_slow_gh <fakebin> <seconds>: one external-network call the digest used
@@ -2697,6 +2732,7 @@ test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
 test_branch_outcome_replay_respects_captain_barrier_and_lease_sweep
 test_non_pi_session_start_leaves_branch_state_untouched
+test_omp_branch_outcome_replay_and_lease_sweep
 test_backlog_compact_tasks_axi_omits_bodies_and_keeps_metadata
 test_backlog_queued_bound_discloses_its_remainder
 test_backlog_compact_manual_backend_skips_indented_bodies

@@ -343,6 +343,8 @@ PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-line-cap-lib.sh
 . "$SCRIPT_DIR/fm-line-cap-lib.sh"
+# shellcheck source=bin/fm-lease-lib.sh
+. "$SCRIPT_DIR/fm-lease-lib.sh"
 
 # One tasks-axi compatibility verdict per session start. The probe costs three
 # tasks-axi subprocesses and this digest needs the same answer twice - here for
@@ -724,13 +726,27 @@ if [ "$READ_ONLY" -eq 1 ]; then
   GUARD_OUT=$(FM_GUARD_READ_ONLY=1 "$SCRIPT_DIR/fm-guard.sh" 2>&1)
   [ -n "$GUARD_OUT" ] && printf '%s\n' "$GUARD_OUT"
 else
-  # Pi supervision-branch recovery, locked path only: clear leases whose
+  # Supervision-branch recovery, locked path only: clear leases whose
   # supervising session died, and surface outcomes the branch stored durably
   # that never reached main (docs/pi-supervision-branch.md). Gated to the
-  # pi/pi-signed primary so a non-Pi home runs neither step - homes on any
-  # other harness stay entirely untouched (captain-decided criterion).
+  # pi/pi-signed primary, and to an omp primary only when this home's
+  # config/omp-supervision-branch turns the omp branch on (or report-only), so
+  # every other home runs neither step and stays entirely untouched
+  # (captain-decided criterion). The omp sweep runs as the main actor because
+  # an extension-run digest shell carries no omp marker of its own.
+  BRANCH_RECOVERY_ENV=
   if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ]; then
-    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-lease.sh" sweep 2>/dev/null || true
+    BRANCH_RECOVERY_ENV=pi
+  elif [ "$PRIMARY_HARNESS" = omp ] && [ "$(fm_omp_branch_mode "$CONFIG")" != off ]; then
+    BRANCH_RECOVERY_ENV=omp
+  fi
+  if [ -n "$BRANCH_RECOVERY_ENV" ]; then
+    if [ "$BRANCH_RECOVERY_ENV" = omp ]; then
+      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" FM_SUPERVISION_ACTOR=main \
+        "$SCRIPT_DIR/fm-lease.sh" sweep 2>/dev/null || true
+    else
+      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-lease.sh" sweep 2>/dev/null || true
+    fi
     BRANCH_REPLAY_OUT=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
       "$SCRIPT_DIR/fm-branch-outcome.sh" startup-replay 2>&1) || BRANCH_REPLAY_OUT=
     if [ -n "$BRANCH_REPLAY_OUT" ]; then

@@ -409,6 +409,51 @@ export async function deactivateEligibleRowsOwner(
   return (await runGrantScript(state, grantScript, ["deactivate", String(ownerPid), generation])) === 0;
 }
 
+export interface BranchWakeClassification {
+  scope: UnreadWakeScope;
+  heartbeat: boolean;
+  /** True only when this wake may be offered to a supervision branch at all. */
+  eligible: boolean;
+}
+
+// The single owner of which watcher wakes a supervision branch may be offered,
+// shared by the Pi and omp watcher extensions.
+//
+// A check-kind close (merge-confirmation polls, Relay mentions,
+// credential/auth failures, and every other legitimately main-only class -
+// docs/pi-supervision-branch.md) is never routed to the branch even when other
+// currently-unread rows are individually eligible: this watcher cycle's own
+// triggering event stays on main, exactly as before scopeForUnreadWake stopped
+// letting a co-present check row veto the whole scan. That relaxation is what
+// lets an UNRELATED eligible signal/stale row still reach the branch on this
+// cycle; it must never also let a check-kind trigger itself slip past main's
+// delivery.
+//
+// A signal close containing a needs-decision status file, or a stale close for
+// a captain-held task, gets the identical main-only treatment as a check-kind
+// trigger. The cross-reference deliberately includes every unread decision
+// row: until that row is read, a later signal or stale trigger for the same
+// task stays on main. Other tasks and heartbeat handling remain independent.
+export function classifyWakeForBranch(state: string, message: string): BranchWakeClassification {
+  const heartbeat = /^heartbeat($|:)/.test(message);
+  const isCheckTrigger = /^check:/.test(message);
+  const scope = scopeForUnreadWake(state, heartbeat);
+  const triggerKeys = /^signal:/.test(message)
+    ? message
+      .slice("signal:".length)
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((path) => path.split("/").pop() ?? path)
+    : /^stale:/.test(message)
+      ? [message.slice("stale:".length).trim().split(/\s+/, 1)[0]].filter(Boolean)
+      : [];
+  const taskIdentity = (key: string): string =>
+    scope.taskByWakeKey[key] ?? scope.taskByWakeKey[key.replace(/^fm-/, "")] ?? key;
+  const needsDecisionTasks = new Set(scope.needsDecisionKeys.map(taskIdentity));
+  const isNeedsDecisionTrigger = triggerKeys.some((key) => needsDecisionTasks.has(taskIdentity(key)));
+  return { scope, heartbeat, eligible: !isCheckTrigger && !isNeedsDecisionTrigger && scope.eligible };
+}
+
 export interface BranchDispatchOffer {
   /** The watcher's actionable close message (the wake reason line(s)). */
   message: string;
