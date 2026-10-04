@@ -388,7 +388,12 @@ while IFS= read -r command; do
   esac
   note "refused before a shell: $command -> $reason"
 done < "$STATE/e2e-probe/mutating.txt"
-leftover=$(cd "$STATE/e2e-probe" && ls | grep -v '\.txt$')
+leftover=
+for path in "$STATE/e2e-probe"/*; do
+  [ -e "$path" ] || continue
+  case "$path" in *.txt) continue ;; esac
+  leftover="$leftover ${path##*/}"
+done
 [ -z "$leftover" ] || fail "report-only probe: a refused command changed disk: $leftover"
 [ "$(git -C "$PROJECT" status --porcelain --untracked-files=no)" = "$tracked_before" ] || fail "report-only probe: a tracked file changed"
 [ ! -e "$STATE/.lease-e2e-task" ] || fail "report-only probe: a lease was claimed"
