@@ -47,28 +47,20 @@ export type OmpBranchShadowWake = {
 // can hide a second command or write a file - a backslash, unpaired quote, or
 // `#` comment that would make bash split words differently, a newline,
 // command or process substitution, a redirection other than to /dev/null or
-// between descriptors, a background operator, an option that writes a file or
-// runs a program (WRITING_OPTION, sed's e and w script commands), or an
-// unlisted program - refuses. Like the lease guards, this is
+// between descriptors, a background operator, a leading environment
+// assignment (PATH or BASH_ENV could swap the program), or an unlisted
+// program - refuses. A program that can write a file or run another program through an
+// option or script (sed, sort, rg, find, xargs, awk) is unlisted rather than
+// parsed. Like the lease guards, this is
 // confused-agent-grade containment (bin/fm-lease-lib.sh).
 // `cd` only moves the branch's own one-shot subshell (each command runs in a
 // fresh `bash -c`), so it changes nothing outside the command it prefixes.
 const READ_ONLY_PROGRAMS: Record<string, true> = {
-  cat: true, head: true, tail: true, grep: true, egrep: true, rg: true, ls: true, wc: true,
+  cat: true, head: true, tail: true, grep: true, egrep: true, ls: true, wc: true,
   jq: true, date: true, echo: true, printf: true, stat: true, basename: true, dirname: true,
-  sort: true, cut: true, tr: true, true: true, false: true, test: true, "[": true,
+  cut: true, tr: true, true: true, false: true, test: true, "[": true,
   pwd: true, realpath: true, readlink: true, column: true, nl: true, comm: true, diff: true,
   cd: true,
-};
-
-// Option words that write a file or run a program. sort and sed accept
-// abbreviated long options, so any long option refuses there; sed's short
-// options are limited to the printing-filter flags, with -e taking its script
-// as the next word.
-const WRITING_OPTION: Record<string, RegExp> = {
-  sort: /^--|^-[a-zA-Z]*o/,
-  sed: /^--|^-(?![nrEsuz]*e?$)/,
-  rg: /^--(pre|hostname-bin)(=|$)/,
 };
 
 // Firstmate commands whose whole surface reads state, and the read verbs of
@@ -100,20 +92,11 @@ export function readOnlyCommandRefusal(command: string): string {
     .map((segment) => segment.trim())
     .filter(Boolean);
   for (const segment of segments) {
-    const words = segment.split(/\s+/).filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+    const words = segment.split(/\s+/);
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0] ?? "")) return "environment assignment";
     const program = (words[0] ?? "").replace(/^['"]|['"]$/g, "");
     if (!program) continue;
     const base = program.split("/").pop() ?? program;
-    const writing = WRITING_OPTION[base] && words.slice(1).find((word) => WRITING_OPTION[base].test(word.replace(/['"]/g, "")));
-    if (writing) return `${base} ${writing} can write a file or run a program`;
-    // sed is read-only only as a printing filter: no script that could write
-    // a file or run a command.
-    if (base === "sed") {
-      if (words.slice(1).some((word) => !word.startsWith("-") && /[ewW]/.test(word.replace(/^['"]|['"]$/g, "").replace(/\/[^/]*\//g, "")))) {
-        return "sed script that can write or execute";
-      }
-      if (program === base) continue;
-    }
     if (READ_ONLY_PROGRAMS[base] === true && program === base) continue;
     const firstmate = /(^|\/)bin\/fm-[a-z-]+\.sh$/.test(program) ? READ_ONLY_FIRSTMATE[base] : undefined;
     if (firstmate === true) continue;

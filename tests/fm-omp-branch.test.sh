@@ -591,11 +591,21 @@ const refused = [
   "sed -n 1wout f",
   "sed -n 1e/bin/date f",
   "rg --hostname-bin=./run.sh x",
+  "sed s/a/b/w/tmp/x f",
+  "sed -n s/a/b/w/tmp/x f",
+  "sed s=a=b=w/tmp/out f",
+  "sed -n s=a=date=e f",
+  "sed -n 1,5p f",
+  "sort -u f",
+  "rg x .",
+  "bin/fm-lease.sh claim=x check",
+  "PATH=. cat f",
+  "BASH_ENV=x.sh bin/fm-peek.sh t1",
 ];
 const allowed = [
   "echo actor-ok", "grep 'a;b' f | wc -l", `echo "it's" 'say "hi"'`, "bin/fm-lease.sh check task-1",
   "bin/fm-crew-state.sh t1", "tail -5 state/t.status", "cd /x && cat f", "grep -n x f 2>/dev/null",
-  "sort -u f", "sed -n 1,5p f", "sed -n -e 1p f", "rg --files-with-matches x .",
+  "grep -n a=b f", "head -3 f | cut -d= -f2",
 ];
 for (const command of refused) if (!readOnlyCommandRefusal(command)) console.log(`allowed a bypass: ${command}`);
 for (const command of allowed) if (readOnlyCommandRefusal(command)) console.log(`refused a read-only command: ${command}`);
@@ -603,7 +613,7 @@ console.log("checked");
 EOF
 )
   [ "$out" = "checked" ] || fail "the report-only classifier misjudged a command: $out"
-  pass "report-only refuses backslash, quote, comment, multi-line, redirection, background, and writing-option bypasses while allowing read-only commands"
+  pass "report-only refuses backslash, quote, comment, multi-line, redirection, background, assignment, and unlisted-program bypasses while allowing read-only commands"
 }
 
 test_config_absent_and_off_are_inert
