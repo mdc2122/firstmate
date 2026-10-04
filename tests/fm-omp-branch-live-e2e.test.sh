@@ -406,19 +406,30 @@ pass "omp $OMP_VERSION: report-only's branch bash refuses every mutating class b
 stop_omp
 
 # --- 2. mode on: the branch takes the wake, main is not woken -----------------
+# A fresh task and no probe lists: the report-only stage's E2E-PROBE line
+# stays in e2e-task's status log and must not reach the mode-on branch.
+rm -rf "$STATE/e2e-probe"
 start_omp on
-seed_task e2e-task
+seed_task on-task
 first_turn_then_arm "mode-on"
-fire_status e2e-task 'done: e2e mode-on fire E2E-ACTOR-CHECK'
+fire_status on-task 'done: e2e mode-on fire E2E-ACTOR-CHECK'
 # The branch is active (its marker exists), so the status wake must reach the
 # branch and never main; a fallback here is a failed proof, not a pass.
 wait_until 480 file_nonempty "$STATE/branch-outcomes.jsonl" || fail "mode-on: the branch wrote no durable outcome for the status wake"
-grep -q '"task":"e2e-task"' "$STATE/branch-outcomes.jsonl" || fail "mode-on: the branch outcome names the wrong task"
+grep -q '"task":"on-task"' "$STATE/branch-outcomes.jsonl" || fail "mode-on: the branch outcome names the wrong task"
 ! grep -Fq "FIRSTMATE WATCHER WAKE: signal:" "$RPC_LOG" || fail "mode-on: a watcher wake reached main as well as the branch"
 pass "omp $OMP_VERSION: mode on hands the wake to the branch, which drains it and stores a durable outcome, and main is not woken"
 
-actor=$(branch_bash_result 'echo FM_SUPERVISION_ACTOR=$FM_SUPERVISION_ACTOR')
-[ "$(printf '%s' "$actor" | head -1)" = "FM_SUPERVISION_ACTOR=branch" ] || fail "F2: the branch's bash printed: $actor"
+# The branch may chain the echo after another command, so match the echo
+# inside any branch bash call and read the actor line from its result.
+actor=$(cat "$STATE"/branch-session/*.jsonl 2>/dev/null | jq -rs '
+  [ .[] | select(.type == "message") | .message ] as $m
+  | ([ $m[] | select(.role == "toolResult") | {key: .toolCallId, value: ([.content[]? | .text // ""] | join("\n"))} ] | from_entries) as $res
+  | [ $m[] | select(.role == "assistant") | .content[]?
+      | select(.type == "toolCall" and .name == "bash" and ((.arguments.command // "") | contains("echo FM_SUPERVISION_ACTOR=$FM_SUPERVISION_ACTOR")))
+      | ($res[.id] // "NO-RESULT") ]
+  | if length == 0 then "NO-CALL" else .[0] end' | grep -E '^FM_SUPERVISION_ACTOR=|^NO-' | head -1)
+[ "$actor" = "FM_SUPERVISION_ACTOR=branch" ] || fail "F2: the branch's bash printed: $actor"
 pass "omp $OMP_VERSION: F2 the branch's own bash prints FM_SUPERVISION_ACTOR=branch"
 
 # F3: a real branch-actor claim under the live lock holder, then main's own
