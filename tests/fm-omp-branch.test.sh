@@ -572,15 +572,38 @@ const refused = [
   "rg --pre ./run.sh pattern .",
   "rg --pre=./run.sh pattern .",
   "sort --compress-program=./run.sh f",
+  "echo #'\ntouch /tmp/x\n#'",
+  "echo ok # trailing",
+  "cat f\nbin/fm-send.sh task-1 hi",
+  "cat f\rbin/fm-send.sh task-1 hi",
+  "sort -o out f",
+  "sort -no out f",
+  "sort --output=out f",
+  "sort --o=out f",
+  "sort --comp=./run.sh f",
+  `sort -"o"out f`,
+  "sed -i s/a/b/ f",
+  "sed --in s/a/b/ f",
+  "sed --in-place s/a/b/ f",
+  "sed -e1wout f",
+  "sed --expression=1wout f",
+  "sed -f script.sed f",
+  "sed -n 1wout f",
+  "sed -n 1e/bin/date f",
+  "rg --hostname-bin=./run.sh x",
 ];
-const allowed = ["echo actor-ok", "grep 'a;b' f | wc -l", `echo "it's" 'say "hi"'`, "bin/fm-lease.sh check task-1"];
+const allowed = [
+  "echo actor-ok", "grep 'a;b' f | wc -l", `echo "it's" 'say "hi"'`, "bin/fm-lease.sh check task-1",
+  "bin/fm-crew-state.sh t1", "tail -5 state/t.status", "cd /x && cat f", "grep -n x f 2>/dev/null",
+  "sort -u f", "sed -n 1,5p f", "sed -n -e 1p f", "rg --files-with-matches x .",
+];
 for (const command of refused) if (!readOnlyCommandRefusal(command)) console.log(`allowed a bypass: ${command}`);
 for (const command of allowed) if (readOnlyCommandRefusal(command)) console.log(`refused a read-only command: ${command}`);
 console.log("checked");
 EOF
 )
   [ "$out" = "checked" ] || fail "the report-only classifier misjudged a command: $out"
-  pass "report-only refuses backslash, unpaired-quote, redirection, background, rg --pre, and sort --compress-program bypasses"
+  pass "report-only refuses backslash, quote, comment, multi-line, redirection, background, and writing-option bypasses while allowing read-only commands"
 }
 
 test_config_absent_and_off_are_inert
