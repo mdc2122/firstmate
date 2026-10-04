@@ -43,11 +43,13 @@ export type OmpBranchShadowWake = {
 // refusal is recorded as an action the branch would have taken.
 //
 // The rule is an allowlist over a deliberately small grammar: plain words,
-// quoting, pipes, and the sequencing operators. Anything that can hide a
-// second command or write a file - command or process substitution, a
+// paired quotes, pipes, and the sequencing operators. Anything that can hide a
+// second command or write a file - a backslash or unpaired quote that would
+// make bash split words differently, command or process substitution, a
 // redirection other than to /dev/null or between descriptors, a background
 // operator, a program that can run another program (find -exec, xargs, sed's
-// e and w commands, awk's system), or an unlisted program - refuses. Like the
+// e and w commands, awk's system, rg --pre, sort --compress-program), or an
+// unlisted program - refuses. Like the
 // lease guards, this is confused-agent-grade containment (bin/fm-lease-lib.sh).
 // `cd` only moves the branch's own one-shot subshell (each command runs in a
 // fresh `bash -c`), so it changes nothing outside the command it prefixes.
@@ -72,6 +74,8 @@ const READ_ONLY_FIRSTMATE: Record<string, true | readonly string[]> = {
 };
 
 export function readOnlyCommandRefusal(command: string): string {
+  if (command.includes("\\")) return "backslash escape";
+  if (/['"]/.test(command.replace(/'[^']*'|"[^"]*"/g, ""))) return "unpaired quote";
   if (/[`]|\$\(|<\(|>\(/.test(command)) return "command or process substitution";
   // Drop the redirections that cannot write a file before looking for any
   // other redirection.
@@ -98,6 +102,8 @@ export function readOnlyCommandRefusal(command: string): string {
       if (program === base) continue;
     }
     if (base === "sort" && words.some((word) => /^-[a-zA-Z]*o/.test(word) || word.startsWith("--output"))) return "sort writing a file";
+    if (base === "sort" && words.some((word) => word.startsWith("--compress-program"))) return "sort running a compress program";
+    if (base === "rg" && words.some((word) => word === "--pre" || word.startsWith("--pre="))) return "rg running a preprocessor";
     if (READ_ONLY_PROGRAMS[base] === true && program === base) continue;
     const firstmate = /(^|\/)bin\/fm-[a-z-]+\.sh$/.test(program) ? READ_ONLY_FIRSTMATE[base] : undefined;
     if (firstmate === true) continue;

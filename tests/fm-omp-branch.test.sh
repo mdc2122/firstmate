@@ -414,24 +414,25 @@ test_f7_failed_branch_wake_returns_to_main() {
   printf 'on\n' > "$home/config/omp-supervision-branch"
   printf '%s\n' "$$" > "$home/state/.lock"
   make_omp_ancestry_ps "$TMP_ROOT/f7-ps" "$$"
+  seed_branch_eligible_wake "$home" task-1 7
   # The branch prompt settles WITHOUT a durable report: the offer's settlement
   # must reject so the watcher delivers the wake to main (F7).
   out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
     FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/f7-ps:$PATH" SETTLE_MS=2000 \
     DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
-await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, ctx }; })()`);
-const { dispatch, fire, settled, sentToMain, ctx } = globalThis.__t;
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, ctx, branchPrompts }; })()`);
+const { dispatch, fire, settled, sentToMain, ctx, branchPrompts } = globalThis.__t;
 await fire("session_start", {}, ctx);
 await settled();
 const offer = dispatch("signal: task-1 done");
 if (!offer.accepted) { console.log("declined"); process.exit(1); }
 try { await offer.settlement; console.log(`settled sent=${sentToMain.length}`); }
-catch (error) { console.log(`rejected: ${error instanceof Error ? error.message : error}`); }
+catch (error) { console.log(`rejected prompts=${branchPrompts.length}: ${error instanceof Error ? error.message : error}`); }
 EOF
 )
   case "$out" in
-    rejected:*) ;;
-    *) fail "a branch prompt with no durable report did not reject to main: $out" ;;
+    "rejected prompts=1: "*"produced no durable outcome"*) ;;
+    *) fail "a branch prompt with no durable report did not reject to main after exactly one prompt: $out" ;;
   esac
   pass "F7: a wake the branch cannot durably report hands its settlement back to the watcher for main delivery"
 }
@@ -450,24 +451,21 @@ test_f7_handled_wake_writes_outcome_and_never_reaches_main() {
   out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
     FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/f7b-ps:$PATH" PROMPT_BEHAVIOR=report-routine SETTLE_MS=2000 \
     DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
-await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, ctx, home }; })()`);
-const { dispatch, fire, settled, sentToMain, ctx, home, createdSessions } = globalThis.__t;
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, ctx }; })()`);
+const { dispatch, fire, settled, sentToMain, ctx } = globalThis.__t;
 await fire("session_start", {}, ctx);
 await settled();
 const offer = dispatch("signal: task-1 done");
 if (!offer.accepted) { console.log("declined"); process.exit(1); }
-try { await offer.settlement; console.log(`settled mainUserMessages=${sentToMain.length}`); }
+try { await offer.settlement; console.log(`settled rawWakeOnMain=${sentToMain.filter((m) => String(m.content).includes("signal: task-1 done")).length}`); }
 catch (error) { console.log(`rejected: ${error instanceof Error ? error.message : error}`); }
 EOF
 )
-  case "$out" in
-    settled*) ;;
-    *) fail "a handled wake did not settle on the branch path: $out" ;;
-  esac
+  [ "$out" = "settled rawWakeOnMain=0" ] || fail "a handled wake did not settle on the branch path without reaching main: $out"
   [ -e "$home/state/branch-outcomes.jsonl" ] || fail "the handled wake wrote no durable outcome: $out"
-  ! grep -q 'task-1' "$home/state/branch-outcomes.jsonl" 2>/dev/null || true
-  [ -s "$home/state/branch-outcomes.jsonl" ] || fail "the outcome store is empty after a handled wake"
-  pass "F7's inverse: a wake the branch reports stays off main entirely and lands in the durable store"
+  jq -e -s 'length > 0 and all(.task == "task-1" and .verdict == "routine")' "$home/state/branch-outcomes.jsonl" >/dev/null \
+    || fail "the outcome store does not hold the handled task-1 report: $(cat "$home/state/branch-outcomes.jsonl")"
+  pass "F7's inverse: a wake the branch reports never reaches main as a wake and lands in the durable store"
 }
 
 # --- report-only mode -----------------------------------------------------------
@@ -557,6 +555,34 @@ EOF
   pass "report-only records the would-do report in the shadow log and writes no real outcome"
 }
 
+# Each refused command is one bash splits differently from the classifier's
+# quote masking, or one that runs a second program through an allowlisted one.
+test_report_only_classifier_refuses_bash_quoting_bypasses() {
+  local out
+  out=$(LIB="$ROOT/.omp/extensions/lib/fm-omp-branch.ts" node --input-type=module 2>&1 <<'EOF'
+const { pathToFileURL } = await import("node:url");
+const { readOnlyCommandRefusal } = await import(pathToFileURL(process.env.LIB).href);
+const refused = [
+  String.raw`echo \'; bin/fm-send.sh task-1 hi; echo \'`,
+  String.raw`grep "a\"b" f; bin/fm-lease.sh claim t; echo "c"`,
+  String.raw`echo \' > x \'`,
+  String.raw`echo \' & bin/fm-send.sh task-1 hi \'`,
+  `echo 'unpaired; bin/fm-send.sh task-1 hi`,
+  `echo "unpaired; bin/fm-send.sh task-1 hi`,
+  "rg --pre ./run.sh pattern .",
+  "rg --pre=./run.sh pattern .",
+  "sort --compress-program=./run.sh f",
+];
+const allowed = ["echo actor-ok", "grep 'a;b' f | wc -l", `echo "it's" 'say "hi"'`, "bin/fm-lease.sh check task-1"];
+for (const command of refused) if (!readOnlyCommandRefusal(command)) console.log(`allowed a bypass: ${command}`);
+for (const command of allowed) if (readOnlyCommandRefusal(command)) console.log(`refused a read-only command: ${command}`);
+console.log("checked");
+EOF
+)
+  [ "$out" = "checked" ] || fail "the report-only classifier misjudged a command: $out"
+  pass "report-only refuses backslash, unpaired-quote, redirection, background, rg --pre, and sort --compress-program bypasses"
+}
+
 test_config_absent_and_off_are_inert
 test_f1_walk_owned_but_fm_lock_refuses
 test_f1_ownership_rechecked_before_side_effects
@@ -567,6 +593,7 @@ test_f7_failed_branch_wake_returns_to_main
 test_f7_handled_wake_writes_outcome_and_never_reaches_main
 test_report_only_refuses_mutating_commands_and_writes_shadow_log
 test_report_only_shadow_records_intended_verdict
+test_report_only_classifier_refuses_bash_quoting_bypasses
 
 # --- the omp watcher's branch offer, driven through the real watch extension --
 

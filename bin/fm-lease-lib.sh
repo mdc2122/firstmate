@@ -116,8 +116,8 @@ fm_lease_path() {
 # home's config selects - `on`, `report-only`, or `off`. The first word of
 # config/omp-supervision-branch decides; an absent, unreadable, symlinked, or
 # unknown value is `off`. docs/configuration.md "omp supervision branch" owns
-# the file format; .omp/extensions/lib/fm-omp-branch-mode.ts is its TypeScript
-# reader.
+# the file format; readOmpBranchMode in .omp/extensions/lib/fm-omp-branch.ts
+# is its TypeScript reader.
 fm_omp_branch_mode() {
   local dir=${1:-${FM_CONFIG_OVERRIDE:-${FM_HOME:-${STATE%/*}}/config}} mode=''
   if [ -f "$dir/omp-supervision-branch" ] && [ ! -L "$dir/omp-supervision-branch" ]; then
