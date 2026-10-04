@@ -786,6 +786,8 @@ tests/fm-live-gate.test.sh 6000
 tests/fm-muse-harness.test.sh 55572
 tests/fm-muse-signals-live-e2e.test.sh 23
 tests/fm-no-mistakes-required.test.sh 370
+tests/fm-omp-branch-live-e2e.test.sh 91
+tests/fm-omp-branch.test.sh 45072
 tests/fm-omp-harness.test.sh 59969
 tests/fm-on.test.sh 34087
 tests/fm-opencode-primary-live-e2e.test.sh 21
