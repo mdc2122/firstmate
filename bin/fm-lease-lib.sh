@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # fm-lease-lib.sh - the per-task supervision lease contract (one owner).
 #
-# WHY. On the Pi supervision branch (docs/pi-supervision-branch.md), two LLM
-# actors share one firstmate home inside one pi process: MAIN (the captain's
-# chat) and BRANCH (the persistent supervision conversation). Most records have
-# exactly one natural owner, but the overlap set - steering or stopping a
-# worker, post-landing cleanup, backlog status for a task, stuck-worker
-# recovery - could otherwise be mutated by both actors at once. The lease is
-# the merge-conflict analog: a small per-task file saying which actor is
-# changing that task right now, and the mutating entrypoints refuse the other
-# actor while it exists.
+# WHY. On the supervision branch (docs/pi-supervision-branch.md; Pi, or omp
+# when opted in), two LLM actors share one firstmate home inside one harness
+# process: MAIN (the captain's chat) and BRANCH (the persistent supervision
+# conversation). Most records have exactly one natural owner, but the overlap
+# set - steering or stopping a worker, post-landing cleanup, backlog status for
+# a task, stuck-worker recovery - could otherwise be mutated by both actors at
+# once. The lease is the merge-conflict analog: a small per-task file saying
+# which actor is changing that task right now, and the mutating entrypoints
+# refuse the other actor while it exists.
 #
 # CONTRACT.
 #   - Lease file: $STATE/.lease-<task>, one line "<actor>\t<pid>\t<epoch>".
