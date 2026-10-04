@@ -1,0 +1,12 @@
+{"epoch":1791083086,"type":"report","wake":"signal: state/e2e-task.status","task":"e2e-task","verdict":"captain","summary":"WOULD: run bin/fm-wake-drain.sh, bin/fm-crew-state.sh e2e-task, then the printed --ack-through command. The e2e task reported finished (\"e2e report-only fire\"). There's no PR, and its local copy is already gone, so nothing is left to land or clean up.","silent":false}
+{"epoch":1791083115,"type":"refused","command":"bin/fm-send.sh e2e-task probe-m1","reason":"bin/fm-send.sh e2e-task is not a read-only command"}
+{"epoch":1791083115,"type":"refused","command":"echo m4 > state/e2e-probe/m4","reason":"character \">\" is outside the read-only grammar"}
+{"epoch":1791083115,"type":"refused","command":"echo $(touch state/e2e-probe/m3)","reason":"character \"$\" is outside the read-only grammar"}
+{"epoch":1791083115,"type":"refused","command":"echo \\'; touch state/e2e-probe/m7; echo \\'","reason":"character \"\\\\\" is outside the read-only grammar"}
+{"epoch":1791083115,"type":"refused","command":"bin/fm-lease.sh claim=e2e-task check e2e-task","reason":"bin/fm-lease.sh claim=e2e-task is not a read-only command"}
+{"epoch":1791083115,"type":"refused","command":"echo ${C:=a[${D:=$}(touch state/e2e-probe/m2)]} $[C]","reason":"character \"$\" is outside the read-only grammar"}
+{"epoch":1791083115,"type":"refused","command":"cat README.md & touch state/e2e-probe/m5","reason":"background operator"}
+{"epoch":1791083115,"type":"refused","command":"sed -n 1wstate/e2e-probe/m8 README.md","reason":"sed -n is not a read-only command"}
+{"epoch":1791083115,"type":"refused","command":"cat README.md # touch state/e2e-probe/m6","reason":"character \"#\" is outside the read-only grammar"}
+{"epoch":1791083115,"type":"refused","command":"sort -o state/e2e-probe/m9 README.md","reason":"sort -o is not a read-only command"}
+{"epoch":1791083120,"type":"report","wake":"signal: state/e2e-task.status","task":"e2e-task","verdict":"routine","summary":"WOULD: run bin/fm-wake-drain.sh and its printed --ack-through command, and nothing more. The e2e task's new blocked line is the lab containment probe: all 10 mutating probe commands were refused and all 6 read-only ones ran. The task is already torn down and isn't in the backlog.","silent":false}

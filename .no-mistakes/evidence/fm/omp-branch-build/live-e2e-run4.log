@@ -1,0 +1,38 @@
+Note: switching to '0896e73febab055f88b406f72509406b3a95d92c'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - omp omp/18.4.4: config absent keeps every wake on main and writes no branch state
+# report-only: one fm-watch-arm.sh (pid 37711) under lock holder 20139: bun /Users/studio2/.bun/bin/omp --mode rpc --no-session --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.3998/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.3998/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low
+ok - omp omp/18.4.4: report-only keeps the wake on main and records the intended action in the shadow log
+# refused before a shell: bin/fm-send.sh e2e-task probe-m1 -> bin/fm-send.sh e2e-task is not a read-only command
+# refused before a shell: echo ${C:=a[${D:=$}(touch state/e2e-probe/m2)]} $[C] -> character "$" is outside the read-only grammar
+# refused before a shell: echo $(touch state/e2e-probe/m3) -> character "$" is outside the read-only grammar
+# refused before a shell: echo m4 > state/e2e-probe/m4 -> character ">" is outside the read-only grammar
+# refused before a shell: cat README.md & touch state/e2e-probe/m5 -> background operator
+# refused before a shell: cat README.md # touch state/e2e-probe/m6 -> character "#" is outside the read-only grammar
+# refused before a shell: echo \'; touch state/e2e-probe/m7; echo \' -> character "\\" is outside the read-only grammar
+# refused before a shell: sed -n 1wstate/e2e-probe/m8 README.md -> sed -n is not a read-only command
+# refused before a shell: sort -o state/e2e-probe/m9 README.md -> sort -o is not a read-only command
+# refused before a shell: bin/fm-lease.sh claim=e2e-task check e2e-task -> bin/fm-lease.sh claim=e2e-task is not a read-only command
+# ran: bin/fm-crew-state.sh e2e-task -> state: unknown · source: none · worktree gone (torn down?)
+# ran: tail -5 state/e2e-task.status -> done: e2e report-only fire
+# ran: cd state && cat e2e-task.meta -> project=x
+# ran: grep -n project state/e2e-task.meta 2>/dev/null -> 1:project=x
+# ran: bin/fm-tasks-axi.sh show e2e-task -> error: "Task \"e2e-task\" not found in this backlog"
+# ran: ls state/*.status -> state/e2e-task.status
+ok - omp omp/18.4.4: report-only's branch bash refuses every mutating class before a shell starts, changes nothing on disk, and runs the read-only list
+# lab kept at /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.3998

@@ -1,0 +1,12 @@
+ok - config absent, off, and unknown leave the omp branch extension entirely inert
+ok - F1: the branch declines a wake when the pid walk says owned but fm-lock.sh refuses
+ok - F1: fm-lock.sh is re-checked before every branch side effect
+ok - F2: FM_SUPERVISION_ACTOR=branch reaches the branch's bash through the readonly command prefix
+ok - F3: main's omp shell is refused by a live branch lease under mode on and ignores it under mode off
+ok - F5: the branch session disables extension discovery and runs exactly read,bash,fm_branch_report
+ok - F7: a wake the branch cannot durably report hands its settlement back to the watcher for main delivery
+ok - F7's inverse: a wake the branch reports never reaches main as a wake and lands in the durable store
+ok - report-only refuses mutating commands, allows read-only ones, writes the shadow log, and registers no main-facing tools
+ok - report-only records the would-do report in the shadow log and writes no real outcome
+ok - report-only refuses every character outside its grammar, unpaired quotes, background, assignment, and unlisted-program bypasses while allowing read-only commands
+ok - the omp watcher offers wakes to the branch first under on, falls back to main on rejection or decline, and shadows after main under report-only

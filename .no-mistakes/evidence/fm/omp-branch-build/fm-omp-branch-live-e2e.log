@@ -1,0 +1,53 @@
+Note: switching to '7830d64aa773a5a42fc73f1081d09ac2389d0543'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - omp omp/18.4.4: config absent keeps every wake on main and writes no branch state
+# report-only: one fm-watch-arm.sh (pid 59878) under lock holder 49933: bun /Users/studio2/.bun/bin/omp --mode rpc --no-session --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low
+ok - omp omp/18.4.4: report-only keeps the wake on main and records the intended action in the shadow log
+# refused before a shell: bin/fm-send.sh e2e-task probe-m1 -> bin/fm-send.sh e2e-task is not a read-only command
+# refused before a shell: echo ${C:=a[${D:=$}(touch state/e2e-probe/m2)]} $[C] -> character "$" is outside the read-only grammar
+# refused before a shell: echo $(touch state/e2e-probe/m3) -> character "$" is outside the read-only grammar
+# refused before a shell: echo m4 > state/e2e-probe/m4 -> character ">" is outside the read-only grammar
+# refused before a shell: cat README.md & touch state/e2e-probe/m5 -> background operator
+# refused before a shell: cat README.md # touch state/e2e-probe/m6 -> character "#" is outside the read-only grammar
+# refused before a shell: echo \'; touch state/e2e-probe/m7; echo \' -> character "\\" is outside the read-only grammar
+# refused before a shell: sed -n 1wstate/e2e-probe/m8 README.md -> sed -n is not a read-only command
+# refused before a shell: sort -o state/e2e-probe/m9 README.md -> sort -o is not a read-only command
+# refused before a shell: bin/fm-lease.sh claim=e2e-task check e2e-task -> bin/fm-lease.sh claim=e2e-task is not a read-only command
+# ran: bin/fm-crew-state.sh e2e-task -> state: unknown · source: none · worktree gone (torn down?)
+# ran: tail -5 state/e2e-task.status -> done: e2e report-only fire
+# ran: cd state && cat e2e-task.meta -> project=x
+# ran: grep -n project state/e2e-task.meta 2>/dev/null -> 1:project=x
+# ran: bin/fm-tasks-axi.sh show e2e-task -> error: "Task \"e2e-task\" not found in this backlog"
+# ran: ls state/*.status -> state/e2e-task.status
+ok - omp omp/18.4.4: report-only's branch bash refuses every mutating class before a shell starts, changes nothing on disk, and runs the read-only list
+# mode-on: one fm-watch-arm.sh (pid 25024) under lock holder 15153: bun /Users/studio2/.bun/bin/omp --mode rpc --no-session --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low
+ok - omp omp/18.4.4: mode on hands the wake to the branch, which drains it and stores a durable outcome, and main is not woken
+ok - omp omp/18.4.4: F2 the branch's own bash prints FM_SUPERVISION_ACTOR=branch
+ok - omp omp/18.4.4: F3 main's own omp bash is refused (exit 6) while the branch holds a lease, and the lease stays live
+ok - omp omp/18.4.4: stored branch outcomes replay across an rpc session stop/start and dead leases are swept
+# F7: one fm-watch-arm.sh (pid 36050) under lock holder 21808: bun /Users/studio2/.bun/bin/omp --mode rpc --no-session --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low
+# F7 branch failure: 2 branch session file(s); pin openai-codex/gpt-6-astra
+ok - omp omp/18.4.4: F7 a branch wake that settles without a durable report falls back to main
+ok - omp omp/18.4.4: F1 a lock fm-lock.sh refuses keeps the branch off (no marker) and the wake goes to main
+# TUI lock holder before /restart: pid 91574: bun /Users/studio2/.bun/bin/omp --session-dir /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/sessions --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low
+# TUI lock holder after /restart: pid 91574: /Users/studio2/.bun/bin/bun /Users/studio2/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js --session-dir /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/sessions --cwd /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project --config /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999/project/.omp/fm-worker-overlay.yml --auto-approve --model claude-opus55-cliproxy/claude-opus-5-5[1m] --thinking low --resume 01a104e3-3718-7000-a309-6f1452143dc4
+# after /restart: cursor 3 of 3 outcomes; .lease-e2e-dead-tui swept
+ok - omp omp/18.4.4: a real /restart re-execs the lock holder in place with --resume, stored outcomes replay, and the dead lease is swept
+# omp omp/18.4.4 model=claude-opus55-cliproxy/claude-opus-5-5[1m]: every live omp branch assertion passed
+# lab kept at /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.31999
+EXIT 0

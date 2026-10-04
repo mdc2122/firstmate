@@ -1,0 +1,37 @@
+ok   want=refuse got=refuse "cat f |& bin/fm-send.sh t hi"  -> background operator
+ok   want=refuse got=refuse "cat f >/dev/null/../../tmp/x"  -> character ">" is outside the read-only grammar
+ok   want=refuse got=refuse "'x\"' ; bin/fm-send.sh t hi ; '\"y'"  -> x" is not a read-only command
+ok   want=refuse got=refuse "cd bin && ./fm-send.sh t hi"  -> ./fm-send.sh t is not a read-only command
+ok   want=refuse got=refuse "cat f && bin/fm-lease.sh claim t"  -> bin/fm-lease.sh claim is not a read-only command
+ok   want=refuse got=refuse "bin/fm-tasks-axi.sh done t1"  -> bin/fm-tasks-axi.sh done is not a read-only command
+ok   want=refuse got=refuse "cat f | tee out"  -> tee out is not a read-only command
+ok   want=refuse got=refuse "cat f; touch x"  -> touch x is not a read-only command
+ok   want=refuse got=refuse "env touch x"  -> env touch is not a read-only command
+ok   want=refuse got=refuse "command touch x"  -> command touch is not a read-only command
+ok   want=refuse got=refuse "exec bin/fm-send.sh t hi"  -> exec bin/fm-send.sh is not a read-only command
+ok   want=refuse got=refuse "git commit -am x"  -> git commit is not a read-only command
+ok   want=refuse got=refuse "find . -delete"  -> find . is not a read-only command
+ok   want=refuse got=refuse "xargs rm < f"  -> character "<" is outside the read-only grammar
+ok   want=refuse got=refuse "awk 'BEGIN{system(\"x\")}'"  -> character "{" is outside the read-only grammar
+ok   want=refuse got=refuse "cat f | bash"  -> bash is not a read-only command
+ok   want=refuse got=refuse "PATH=/tmp cat f"  -> environment assignment
+ok   want=refuse got=refuse "BASH_ENV=/tmp/x cat f"  -> environment assignment
+ok   want=refuse got=refuse "ec?o hi"  -> ec?o hi is not a read-only command
+ok   want=refuse got=refuse "bin/fm-*.sh x"  -> bin/fm-*.sh x is not a read-only command
+ok   want=refuse got=refuse "cat f &"  -> background operator
+ok   want=refuse got=refuse "echo $HOME"  -> character "$" is outside the read-only grammar
+ok   want=refuse got=refuse "echo ~"  -> character "~" is outside the read-only grammar
+ok   want=refuse got=refuse "sed -n 1p f"  -> sed -n is not a read-only command
+ok   want=refuse got=refuse "sort f"  -> sort f is not a read-only command
+ok   want=refuse got=refuse "printf %s x"  -> printf %s is not a read-only command
+ok   want=allow got=allow "cat f x=y"
+ok   want=allow got=allow "bin/fm-crew-state.sh t1"
+ok   want=allow got=allow "tail -5 state/t.status"
+ok   want=allow got=allow "cd /x && cat f"
+ok   want=allow got=allow "grep -n x f 2>/dev/null"
+ok   want=allow got=allow "bin/fm-tasks-axi.sh show t1"
+ok   want=allow got=allow "ls state/*.status"
+ok   want=allow got=allow "bin/fm-lease.sh check t1 || true"
+ok   want=allow got=allow "echo 'a;b|c&d'"
+ok   want=allow got=allow "jq -r .task state/branch-outcomes.jsonl | head -3"
+mismatches=0

@@ -1,0 +1,24 @@
+Note: switching to '7830d64aa773a5a42fc73f1081d09ac2389d0543'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+ok - omp omp/18.4.4: config absent keeps every wake on main and writes no branch state
+ok - omp omp/18.4.4: report-only keeps the wake on main and records the intended action in the shadow log
+ok - omp omp/18.4.4: mode on hands the wake to the branch, which drains it and stores a durable outcome, and main is not woken
+ok - omp omp/18.4.4: stored branch outcomes replay across a session restart and dead leases are swept
+# omp omp/18.4.4 model=claude-opus55-cliproxy/claude-opus-5-5[1m]: every live omp branch assertion passed
+# lab kept at /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M42A9ATTD2JTY3B8J4BNEYZH/.omp-branch-live-e2e.55357
+EXIT 0
