@@ -1,0 +1,52 @@
+== harness detected under omp: omp
+
+== S1: /quiet on omp, FM_AFK_MODE=quiet exported before propose (skill step 1)
+$ [under omp] FM_AFK_MODE=quiet fm-afk-launch.sh propose
+fm-afk-launch: quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)
+[rc=1]
+  state files: 
+$ [under omp] FM_AFK_MODE=quiet fm-afk-launch.sh confirm
+fm-afk-launch: quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)
+[rc=1]
+  state files: 
+$ [under omp] FM_AFK_MODE=quiet fm-afk-launch.sh start
+fm-afk-launch: quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)
+[rc=1]
+  state files: 
+$ [under omp] FM_AFK_MODE=quiet fm-afk-launch.sh start-native
+fm-afk-launch: quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)
+[rc=1]
+  state files: 
+
+== S2: adversarial - quiet confirm on omp with a proposal already pending (from a propose run without quiet)
+  state files: .afk-contract.proposed 
+$ [under omp] FM_AFK_MODE=quiet fm-afk-launch.sh confirm
+fm-afk-launch: quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)
+[rc=1]
+  state files: .afk-contract.proposed 
+
+== S3: /afk (away) on omp records the posture; start/start-native refuse to launch a daemon; stop archives
+$ [under omp]  fm-afk-launch.sh confirm
+Away posture confirmed at 2026-10-05T15:41:35Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. No mandate clauses recorded. Forbidden, destructive, irreversible, and security-sensitive actions are never pre-authorizable regardless of clause text, and no recorded clause is authority by itself. Expected return: not given. Spend cap: 4 concurrent workers.
+[rc=0]
+$ [under omp]  fm-afk-launch.sh start
+fm-afk-launch: the away daemon is not launched on omp; the away-posture record is the posture there and the ordinary supervision session keeps running (run bin/fm-afk-launch.sh confirm and stop)
+[rc=1]
+$ [under omp]  fm-afk-launch.sh start-native
+fm-afk-launch: the away daemon is not launched on omp; the away-posture record is the posture there and the ordinary supervision session keeps running (run bin/fm-afk-launch.sh confirm and stop)
+[rc=1]
+  state files: .afk-contract 
+$ [under omp]  fm-afk-launch.sh stop
+fm-afk-launch: away-posture record archived at /tmp/fmq.NAN4/state/afk-contracts/1791214895.afk-contract
+fm-afk-launch: away mode stopped; daemon terminal torn down, .afk cleared, and the posture record archived
+[rc=0]
+  state files: afk-contracts 
+
+== S4: regression - /quiet on claude still enters quiet mode via start-native
+  .afk first line: quiet
+  state files: .afk .afk-contract .afk-daemon-terminal 
+$ env CLAUDECODE=1 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46BCD2K0H5GHSZVEH9K1FG3/bin/fm-afk-launch.sh stop
+fm-afk-launch: away-posture record archived at /tmp/fmq.H9jx/state/afk-contracts/1791214897.afk-contract
+fm-afk-launch: away mode stopped; daemon terminal torn down, .afk cleared, and the posture record archived
+[rc=0]
+  state files: afk-contracts 
