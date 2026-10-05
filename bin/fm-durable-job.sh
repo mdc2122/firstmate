@@ -23,15 +23,15 @@
 #   removes the .partial. Exit code 128+N means the job was stopped by signal N.
 #   Only SIGKILL of the wrapper itself can skip the verdict, which the due-check
 #   below still catches.
-# - The launcher waits up to FM_DURABLE_JOB_START_TIMEOUT seconds (default 10)
-#   for the .partial or the verdict to appear, then prints exactly one stdout
-#   line for the supervisor:
+# - The launcher waits up to 10 seconds for the .partial or the verdict to
+#   appear, then prints exactly one stdout line for the supervisor:
 #     due-check: <name> verdict=<result-file> session=<session> ...
 #   Watch the verdict file, not a pid: the job is done when <result-file>
 #   exists, and failed when the tmux session is gone and <result-file> is absent.
 #
-# <name> is [A-Za-z0-9._-]+. <result-file> may be relative to the current
-# directory, is reported as an absolute path, and its directory must exist.
+# <name> is [A-Za-z0-9_-]+, so the session name is always a valid tmux target.
+# <result-file> may be relative to the current directory, is reported as an
+# absolute path, and its directory must exist.
 # Refuses (exit 2) when <result-file> or its .partial already exists, so a stale
 # verdict is never mistaken for this run's. Exit 1 means the job did not start.
 # Requires tmux 3.0 or newer (new-session -e).
@@ -135,7 +135,7 @@ RESULT_ARG=$2
 shift 3
 
 case "$NAME" in
-  ''|*[!A-Za-z0-9._-]*) die "invalid name '$NAME' (allowed: A-Z a-z 0-9 . _ -)" 2 ;;
+  ''|*[!A-Za-z0-9_-]*) die "invalid name '$NAME' (allowed: A-Z a-z 0-9 _ -)" 2 ;;
 esac
 case "$RESULT_ARG" in
   ''|*/) die "invalid result file '$RESULT_ARG'" 2 ;;
@@ -160,14 +160,10 @@ done
 tmux new-session -d -s "$SESSION" -c "$PWD" -e "PATH=$PATH" "$JOB_CMD" \
   || die "tmux new-session failed for $SESSION"
 
-TIMEOUT=${FM_DURABLE_JOB_START_TIMEOUT:-10}
-case "$TIMEOUT" in
-  ''|*[!0-9]*) TIMEOUT=10 ;;
-esac
 waited=0
 while [ ! -e "$RESULT.partial" ] && [ ! -e "$RESULT" ]; do
-  [ "$waited" -lt $((TIMEOUT * 10)) ] \
-    || die "job did not record a start within ${TIMEOUT}s (session $SESSION, expected $RESULT.partial)"
+  [ "$waited" -lt 100 ] \
+    || die "job did not record a start within 10s (session $SESSION, expected $RESULT.partial)"
   sleep 0.1
   waited=$((waited + 1))
 done
