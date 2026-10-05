@@ -1902,10 +1902,16 @@ test_orca_relaunch_with_no_replacement_agent_restores_the_gone_terminal_record()
     || fail "the rollback should restore the prior instructions byte-exact"
   [ "$(journal_field "$dir" rl55 rollback)" = new-terminal-closed-prior-record-restored ] \
     || fail "the journal should record the restoring rollback"
+  [ ! -e "$dir/wt/.claude/settings.local.json" ] \
+    || fail "the rollback should remove the failed replacement's harness wiring"
+  [ ! -e "$dir/home/state/rl55.busy-gen" ] \
+    || fail "the rollback should retire the failed replacement's busy generation"
   out=$(run_orca "$dir" control rl55 relaunch --note "second attempt"); rc=$?
   expect_code 0 "$rc" "retrying the relaunch after the rollback should succeed"$'\n'"$out"
   [ "$(meta_field "$dir" rl55 terminal)" = term-new ] \
     || fail "the retry should record its replacement terminal"
+  [ -e "$dir/wt/.claude/settings.local.json" ] && [ -e "$dir/home/state/rl55.busy-gen" ] \
+    || fail "the retry should arm its own wiring and busy generation"
   [ "$(cat "$dir/wt/wip.txt")" = "uncommitted work" ] || fail "uncommitted work must survive both attempts"
   assert_no_grep "first attempt" "$dir/home/data/rl55/brief.md" \
     "the rolled-back note should not linger in the instructions"

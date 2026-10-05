@@ -1097,7 +1097,7 @@ spawn_abort_cleanup() {
   fi
   if [ "$RELAUNCH_REPLACEMENT_PENDING" = 1 ]; then
     RELAUNCH_REPLACEMENT_PENDING=0
-    if ! clear_relaunch_harness_wiring \
+    if ! fm_control_clear_harness_wiring \
       "$RELAUNCH_REPLACEMENT_HARNESS" \
       "$RELAUNCH_REPLACEMENT_WT" \
       "$RELAUNCH_REPLACEMENT_STATE" \
@@ -1244,33 +1244,6 @@ spawn_herdr_presentation_order_lock_acquire() {
     attempt=$((attempt + 1))
   done
   return 1
-}
-
-clear_relaunch_harness_wiring() {
-  local harness=$1 wt=$2 state=$3 id=$4 token_path token auth_path path
-  # The wiring arms above match on harness PREFIXES, because a task launched
-  # from a raw command records that command's basename rather than the exact
-  # adapter name. The retirement tables are keyed by the exact adapter, so the
-  # recorded value is resolved to its adapter first; otherwise a task recorded
-  # as, say, `grok-2` would have wiring armed and never retired. An
-  # unrecognized value resolves to no adapter, which is also the case in which
-  # no wiring was armed to begin with.
-  harness=$(fm_control_harness_family "$harness") || harness=
-  token_path=$(fm_control_harness_turnend_token_path "$harness" "$state" "$id") || return 1
-  token=
-  if [ -n "$token_path" ] && [ -f "$token_path" ]; then
-    IFS= read -r token <"$token_path" || [ -n "$token" ] || return 1
-  fi
-  auth_path=$(fm_control_harness_turnend_auth_path "$harness" "$token") || return 1
-  if [ -n "$auth_path" ]; then
-    rm -f -- "$auth_path" || return 1
-  fi
-  while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    rm -f -- "$path" || return 1
-  done <<EOF
-$(fm_control_harness_wiring_paths "$harness" "$wt" "$state" "$id")
-EOF
 }
 
 spawn_herdr_presentation_order_lock_release() {
@@ -3666,7 +3639,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   # files and turn-end token registry entries behind, and even a same-harness
   # relaunch would orphan the retired busy generation's token
   # (bin/fm-control-lib.sh owns where those artifacts live).
-  clear_relaunch_harness_wiring "$RELAUNCH_PRIOR_HARNESS" "$WT" "$STATE_REAL" "$ID" || {
+  fm_control_clear_harness_wiring "$RELAUNCH_PRIOR_HARNESS" "$WT" "$STATE_REAL" "$ID" || {
     echo "error: could not retire $RELAUNCH_PRIOR_HARNESS wiring for task $ID; refusing to arm the replacement" >&2
     exit 1
   }

@@ -296,3 +296,32 @@ fm_control_harness_turnend_auth_path() {  # <harness> <token>
     *) return 0 ;;
   esac
 }
+
+# Remove one incarnation's per-task wiring: every path
+# fm_control_harness_wiring_paths names plus its turn-end registry entry.
+fm_control_clear_harness_wiring() {  # <recorded-harness> <worktree> <state-dir> <id>
+  local harness=$1 wt=$2 state=$3 id=$4 token_path token auth_path path
+  # bin/fm-spawn.sh's wiring arms match on harness PREFIXES, because a task launched
+  # from a raw command records that command's basename rather than the exact
+  # adapter name. The retirement tables are keyed by the exact adapter, so the
+  # recorded value is resolved to its adapter first; otherwise a task recorded
+  # as, say, `grok-2` would have wiring armed and never retired. An
+  # unrecognized value resolves to no adapter, which is also the case in which
+  # no wiring was armed to begin with.
+  harness=$(fm_control_harness_family "$harness") || harness=
+  token_path=$(fm_control_harness_turnend_token_path "$harness" "$state" "$id") || return 1
+  token=
+  if [ -n "$token_path" ] && [ -f "$token_path" ]; then
+    IFS= read -r token <"$token_path" || [ -n "$token" ] || return 1
+  fi
+  auth_path=$(fm_control_harness_turnend_auth_path "$harness" "$token") || return 1
+  if [ -n "$auth_path" ]; then
+    rm -f -- "$auth_path" || return 1
+  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rm -f -- "$path" || return 1
+  done <<EOF
+$(fm_control_harness_wiring_paths "$harness" "$wt" "$state" "$id")
+EOF
+}

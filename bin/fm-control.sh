@@ -607,10 +607,10 @@ journal_write() {  # <phase> [extra-line]...
 # gone_relaunch_restore: undo a gone-terminal Orca relaunch whose replacement
 # never verified. Under the meta lock, and only when the published record is
 # this transaction's and names a terminal other than the vanished one, close
-# that new terminal, prove it absent, and restore the prior record and
-# instructions, so the task is again in the recoverable gone-terminal state.
+# that new terminal, prove it absent, retire the failed incarnation's wiring
+# and busy generation, and restore the prior record and instructions, so the task is again in the recoverable gone-terminal state.
 gone_relaunch_restore() {
-  local lock new_t prior_t rc=1
+  local lock new_t new_gen prior_t rc=1
   [ "$GONE_RELAUNCH" = 1 ] && [ -n "$RELAUNCH_TX" ] && [ -f "$META_PRIOR" ] || return 1
   lock=$(fm_meta_lock_path "$META") || return 1
   fm_lock_acquire_wait "$lock"
@@ -619,10 +619,18 @@ gone_relaunch_restore() {
   if [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ] \
      && [ -n "$new_t" ] && [ "$new_t" != "$prior_t" ] \
      && fm_backend_kill orca "$new_t" 2>/dev/null \
-     && [ "$(fm_backend_orca_terminal_listed "$new_t" 2>/dev/null)" = absent ] \
-     && cp -p "$META_PRIOR" "$META.restore.$$" \
-     && mv -f "$META.restore.$$" "$META"; then
-    rc=0
+     && [ "$(fm_backend_orca_terminal_listed "$new_t" 2>/dev/null)" = absent ]; then
+    new_gen=$(fm_meta_get "$META" busy_gen)
+    fm_control_clear_harness_wiring "$(fm_meta_get "$META" harness)" "$WT" "$STATE" "$ID" \
+      || echo "warning: could not remove the failed replacement's wiring for $ID" >&2
+    if [ -n "$new_gen" ] \
+       && ! "$SCRIPT_DIR/fm-busy-event.sh" retire "$STATE" "$ID" --gen "$new_gen" >/dev/null 2>&1; then
+      echo "warning: could not retire the failed replacement's busy generation for $ID" >&2
+    fi
+    if cp -p "$META_PRIOR" "$META.restore.$$" \
+       && mv -f "$META.restore.$$" "$META"; then
+      rc=0
+    fi
   fi
   rm -f "$META.restore.$$"
   fm_lock_release "$lock" || true
