@@ -2078,30 +2078,6 @@ state/ is the harness's own runtime, not a deliverable."
   pass "a firstmate-repo worktree's whole state/ tree is runtime, so no extension marker name can refuse scout cleanup"
 }
 
-# The tree is exempt because it is the harness's own runtime, never because it
-# is this repo's state/: a project worktree's state/ is the project's work, and
-# a report citing one of its files must still refuse.
-test_scout_project_worktree_state_tree_still_refuses() {
-  local case_dir rc
-  case_dir=$(make_case scout-project-state-tree)
-  mkdir -p "$case_dir/wt/state/extensions"
-  printf 'export const plugin = 1;\n' > "$case_dir/wt/state/extensions/foo.ts"
-  printf 'notes\n' > "$case_dir/wt/state/notes.md"
-  write_scout_task "$case_dir" "# Plugin
-
-Wrote the plugin to state/extensions/foo.ts."
-
-  set +e
-  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
-  rc=$?
-  set -e
-  expect_code 1 "$rc" "scout-project-state-tree: a project scout citing state/extensions/foo.ts must refuse teardown"
-  assert_grep "state/extensions/foo.ts" "$case_dir/stderr" \
-    "scout-project-state-tree: the refusal did not name the cited file"
-  assert_present "$case_dir/wt/state/extensions/foo.ts" "scout-project-state-tree: the refusal deleted the cited file"
-  pass "a project scout citing its own worktree's state/extensions/ file still refuses teardown"
-}
-
 test_scout_omp_markers_do_not_mask_cited_work() {
   local case_dir rc answers
   case_dir=$(make_case scout-omp-markers-cited)
@@ -4056,7 +4032,6 @@ test_scout_omp_marker_cited_by_its_own_path_refuses
 test_scout_project_state_extensions_cited_refuses
 test_scout_omp_markers_do_not_mask_cited_work
 test_scout_firstmate_worktree_state_tree_is_runtime
-test_scout_project_worktree_state_tree_still_refuses
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
