@@ -426,6 +426,7 @@ Relay may require that same live cycle with no fleet work.
 Do not substitute another harness's wait shape, use shell `&`, or create a second cycle when a healthy one already exists.
 For every actionable wake, follow the ordinary-wake continuation in the emitted protocol; use its repair action only when the live cycle is missing or failed.
 No turn ends blind while work is under way, including turns described as holding or waiting.
+Any check longer than a few minutes, run by firstmate or a worker, goes through `bin/fm-durable-job.sh` so its verdict reaches a file after the launching tool call ends, never `nohup ... &` from a tool call or `launchctl submit`; never stop or restart a running check on an unverified premise, so confirm it is dead (pid gone, no progress in its `.partial`) first (the helper's header owns the contract and the macOS removable-volume caveat).
 
 At the start of every wake-handling turn, drain the durable wake queue before peeking, reading beyond the reason line, steering, or starting work.
 Session start is the only exception because its one-shot digest already presented the queue while locked or deliberately left it untouched in lock-refused read-only mode.

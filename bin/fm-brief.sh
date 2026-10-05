@@ -430,6 +430,7 @@ Teardown refuses while the report cites a worktree-only file or the worktree hol
    going. A drive-call error, timeout, slow read, or generic unreachability is NOT a daemon error:
    the daemon accepts \`respond\` immediately and runs the round in the background, so a killed or
    timed-out call was only waiting for a read while the run kept working.
+8. Run any check longer than a few minutes through \`$FM_ROOT/bin/fm-durable-job.sh <name> <result-file> -- <cmd...>\` with its result file under \`$DATA/$ID/\`, never as \`nohup ... &\` from a tool call; watch the verdict file its due-check line names, not a pid; never stop or restart a running check on an unverified premise, so confirm it is dead (pid gone, no progress in its \`.partial\`) first.
 
 $INBOX_SECTION
 
@@ -521,6 +522,7 @@ $ASK_USER_BLOCK
    going. A drive-call error, timeout, slow read, or generic unreachability is NOT a daemon error:
    the daemon accepts \`respond\` immediately and runs the round in the background, so a killed or
    timed-out call was only waiting for a read while the run kept working.
+8. Run any check longer than a few minutes through \`$FM_ROOT/bin/fm-durable-job.sh <name> <result-file> -- <cmd...>\`, never as \`nohup ... &\` from a tool call; watch the verdict file its due-check line names, not a pid; never stop or restart a running check on an unverified premise, so confirm it is dead (pid gone, no progress in its \`.partial\`) first.
 
 $INBOX_SECTION
 
