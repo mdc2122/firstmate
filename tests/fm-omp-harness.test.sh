@@ -915,6 +915,9 @@ SH
     printf "%s\n" "$$" > "$FM_HOME/state/.lock"
     node --input-type=module -e "
       const { pathToFileURL } = await import(\"node:url\");
+      const { readFileSync } = await import(\"node:fs\");
+      const lockPid = readFileSync(process.env.FM_HOME + \"/state/.lock\", \"utf8\").trim();
+      if (lockPid === String(process.pid)) { console.log(\"not nested: node holds the lock pid \" + lockPid); process.exit(1); }
       const handlers = new Map(); let tool = null;
       const pi = { on(e, h) { handlers.set(e, h); }, registerCommand() {}, registerTool(t) { tool = t; }, sendUserMessage() {} };
       (await import(pathToFileURL(process.env.EXT).href)).default(pi);
@@ -922,7 +925,8 @@ SH
       console.log((await tool.execute()).content[0].text);
       await handlers.get(\"session_shutdown\")({}, {});
       process.exit(0);
-    "
+    " || exit 1
+    exit 0
   ' 2>&1)
   [ "$out" = "watcher: read-only - session lock is held by another firstmate session" ] \
     || fail "a nested omp process under the lock owner must refuse to arm: $out"
