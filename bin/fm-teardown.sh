@@ -84,10 +84,10 @@
 # than 20 files. Gitignored build output and caches are scratch by definition
 # and never count toward (b), nor do common build and cache directories
 # (SCOUT_ARTIFACT_PRUNE_NAMES). In a worktree of the firstmate repo itself,
-# neither (a) nor (b) counts that worktree's whole state/ tree, which an omp
-# session run there without FM_HOME fills with its own extension runtime
+# neither (a) nor (b) counts the omp extension runtime an omp session run
+# there without FM_HOME writes into its worktree-local state/
 # (scout_artifact_path_is_omp_marker; it holds no work), unless the report
-# cites a file in it by its own path. When nothing refuses, teardown warns,
+# cites one of those files by its own path. When nothing refuses, teardown warns,
 # listing the largest untracked items, ignored ones included, before deleting
 # them.
 # Content with a byte-identical copy anywhere under data/<task-id>/ counts as
@@ -1801,19 +1801,20 @@ scout_artifact_path_pruned() {  # <relative-path>
 }
 
 # True when the worktree is a firstmate-repo worktree and a worktree-relative
-# path is under its state/ tree. A firstmate-repo worktree has no home state
-# of its own, so an omp session run there without FM_HOME writes its extension
-# runtime into worktree-local state/: loaded-build markers, the extension
-# host's tree, and whatever a supervision branch keeps. Those files are the
-# harness's own scratch and hold no work, and the repo gitignores the tree, so
-# the whole tree is exempt by shape rather than by a list of file names that
-# goes stale as soon as an extension is added or renamed. A report that cites
-# one of those files by its own path is still checked, because only a cited
-# directory drops what is below it.
+# path has the shape of the omp extension runtime. A firstmate-repo worktree
+# has no home state of its own, so an omp session run there without FM_HOME
+# writes its extension runtime into worktree-local state/: loaded-build
+# markers (.omp-*), omp-* logs, and the extension host's extensions/ and
+# extension-invocations/ trees. Those files are the harness's own scratch and
+# hold no work, so they are exempt by shape rather than by a list of file
+# names that goes stale as soon as an extension is added or renamed; anything
+# else under state/ is still checked. A report that cites one of those files
+# by its own path is still checked, because only a cited directory drops what
+# is below it.
 scout_artifact_path_is_omp_marker() {  # <relative-path>
   [ "$SCOUT_ARTIFACT_OMP" = 1 ] || return 1
   case "$1" in
-    state|state/*) return 0 ;;
+    state/.omp-*|state/omp-*|state/extensions/*|state/extension-invocations/*) return 0 ;;
   esac
   return 1
 }

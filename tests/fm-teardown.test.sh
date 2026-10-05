@@ -2058,11 +2058,11 @@ test_scout_firstmate_worktree_state_tree_is_runtime() {
   local case_dir rc
   case_dir=$(make_case scout-omp-unnamed-markers)
   mark_firstmate_repo_worktree "$case_dir"
-  mkdir -p "$case_dir/wt/state/some-extension-nobody-enumerated" "$case_dir/wt/state/extension-invocations"
+  mkdir -p "$case_dir/wt/state/extensions/some-extension-nobody-enumerated" "$case_dir/wt/state/extension-invocations"
   printf 'report-only\n4242\n' > "$case_dir/wt/state/.omp-branch-extension-loaded"
   printf '{"epoch":1,"type":"report"}\n' > "$case_dir/wt/state/omp-branch-shadow.jsonl"
   printf '[]\n' > "$case_dir/wt/state/extension-invocations/omp-primary-watch.jsonl"
-  printf 'any future extension runtime\n' > "$case_dir/wt/state/some-extension-nobody-enumerated/runtime.bin"
+  printf 'any future extension runtime\n' > "$case_dir/wt/state/extensions/some-extension-nobody-enumerated/runtime.bin"
   write_scout_task "$case_dir" "# Sweep
 
 Home citations were state/.watch-triage.log and state/*.status; the worktree's
@@ -2075,7 +2075,29 @@ state/ is the harness's own runtime, not a deliverable."
   expect_code 0 "$rc" "scout-omp-unnamed-markers: an unenumerated extension runtime file must not refuse teardown: $(cat "$case_dir/stderr")"
   ! grep -q REFUSED "$case_dir/stderr" || fail "scout-omp-unnamed-markers: teardown printed a REFUSED line"
   assert_absent "$case_dir/state/task-x1.meta" "scout-omp-unnamed-markers: the completed teardown left the task record"
-  pass "a firstmate-repo worktree's whole state/ tree is runtime, so no extension marker name can refuse scout cleanup"
+  pass "a firstmate-repo worktree's omp extension runtime is exempt by shape, so no extension marker name can refuse scout cleanup"
+}
+
+test_scout_firstmate_worktree_state_work_still_refuses() {
+  local case_dir rc
+  case_dir=$(make_case scout-omp-state-work)
+  mark_firstmate_repo_worktree "$case_dir"
+  write_omp_runtime_markers "$case_dir"
+  mkdir -p "$case_dir/wt/state/notes"
+  printf 'the findings\n' > "$case_dir/wt/state/notes/findings.md"
+  write_scout_task "$case_dir" "# Sweep
+
+Results are in state/."
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "scout-omp-state-work: a non-runtime file under a cited state/ must refuse teardown"
+  assert_grep "state/ (1 files not preserved)" "$case_dir/stderr" \
+    "scout-omp-state-work: the refusal did not count only the non-runtime file"
+  assert_present "$case_dir/wt/state/notes/findings.md" "scout-omp-state-work: the refusal deleted the file"
+  pass "the omp runtime exemption does not mask other work under a firstmate-repo worktree's state/"
 }
 
 test_scout_omp_markers_do_not_mask_cited_work() {
@@ -4032,6 +4054,7 @@ test_scout_omp_marker_cited_by_its_own_path_refuses
 test_scout_project_state_extensions_cited_refuses
 test_scout_omp_markers_do_not_mask_cited_work
 test_scout_firstmate_worktree_state_tree_is_runtime
+test_scout_firstmate_worktree_state_work_still_refuses
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
