@@ -777,8 +777,9 @@ export default function (pi: ExtensionAPI) {
       const confirmed = await confirmHandlingDeliveryWithRetry(owner, recovery);
       if (!confirmed.ok) {
         const watcherPid = recovery.watcherPid;
-        if (!pidAlive(watcherPid)) {
-          await retireArm(owner.child);
+        const confirmedChild = owner.child;
+        if (!pidAlive(watcherPid) && confirmedChild && armRecovery.get(confirmedChild)?.watcherPid === watcherPid) {
+          await retireArm(confirmedChild);
         }
         return await sendWake(owner, `${message}\n\n${confirmed.detail}`, pending);
       }
