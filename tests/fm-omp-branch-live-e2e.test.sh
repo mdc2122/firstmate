@@ -110,7 +110,7 @@ mv "$PROJECT/bin/fm-branch-prompt.sh" "$PROJECT/bin/fm-branch-prompt.real.sh"
 cat > "$PROJECT/bin/fm-branch-prompt.sh" <<'WRAP'
 #!/usr/bin/env bash
 set -eu
-"$(dirname "$0")/fm-branch-prompt.real.sh"
+"$(dirname "$0")/fm-branch-prompt.real.sh" "$@"
 cat <<'LAB'
 
 # Lab operator checks (this disposable verification home only)

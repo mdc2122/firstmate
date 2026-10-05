@@ -396,6 +396,9 @@ test_return_brief_composes_from_record_store_and_held_set() {
   outcome_in "$dir" append --task other --verdict routine \
     --summary 'resent the steer; worker resumed' --wake 'stale: synthetic:fm-other' >/dev/null \
     || fail "could not seed the routine outcome row"
+  outcome_in "$dir" append --task other --verdict routine --silent true \
+    --summary 'No change: the steer is still being worked on' --wake 'turn_end: other' >/dev/null \
+    || fail "could not seed the silent routine outcome row"
   touch "$dir/home/state/.last-watcher-beat"
   : > "$dir/home/state/.fake-drain"
 
@@ -430,6 +433,7 @@ test_return_brief_composes_from_record_store_and_held_set() {
   assert_contains "$out" 'dead: failed: the reproduction never compiled' "the failed task was not listed"
   assert_contains "$out" '1 routine outcome(s) recorded' "the routine outcome count was not reported"
   assert_contains "$out" 'other: resent the steer; worker resumed' "the routine outcome was not listed"
+  assert_not_contains "$out" 'No change: the steer is still being worked on' "a silent routine outcome reached the brief"
   assert_contains "$out" 'Cost: 2 supervision outcome(s) recorded (1 routine, 1 captain); 3 task(s) live at return.' "the cost line is wrong"
   assert_contains "$out" 'firstmate-actionable blocker: other [key=dep]' "the unreached blocker did not gate"
   assert_contains "$out" 'firstmate-actionable blocker: fix-windows [key=token]' "a captain outcome incorrectly exempted an open blocker"

@@ -466,7 +466,9 @@ function parseOutcomeRow(value: unknown): OutcomeRow | null {
   if (typeof row.summary !== "string" || !row.summary) return null;
   if (row.silent !== undefined && typeof row.silent !== "boolean") return null;
   const silent = row.silent === true;
-  if (silent && (row.task !== "fleet" || row.verdict !== "routine")) return null;
+  // The store accepts any silent routine row (an omp branch writes per-task
+  // ones); this branch still writes and hides only the fleet heartbeat kind.
+  if (silent && row.verdict !== "routine") return null;
   return { seq: row.seq, task: row.task, verdict: row.verdict, summary: row.summary, silent };
 }
 

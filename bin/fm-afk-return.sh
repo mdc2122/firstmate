@@ -159,7 +159,7 @@ store_rows_load() {  # <since-epoch>
   raw=$("$SCRIPT_DIR/fm-branch-outcome.sh" list --recent 1000000 2>/dev/null) \
     || return 1
   STORE_ROWS=$(printf '%s\n' "$raw" | jq -r --argjson since "$since" \
-    'select(.epoch >= $since) | [.seq, .task, .verdict, (.statusEndpoint // 0), (.summary // "")] | @tsv' 2>/dev/null) \
+    'select(.epoch >= $since and .silent != true) | [.seq, .task, .verdict, (.statusEndpoint // 0), (.summary // "")] | @tsv' 2>/dev/null) \
     || { STORE_ROWS=; return 1; }
 }
 

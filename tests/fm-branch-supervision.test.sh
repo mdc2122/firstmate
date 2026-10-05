@@ -17,7 +17,7 @@ fm_git_identity fmtest fmtest@example.invalid
 # --- byte-stable branch prompt ------------------------------------------------
 
 test_branch_prompt_is_byte_stable_and_above_cache_floor() {
-  local home_a home_b out_a out_b out_c size
+  local home_a home_b out_a out_b out_c omp_a omp_b size
   home_a="$TMP_ROOT/prompt-home-a"
   home_b="$TMP_ROOT/prompt-home-b"
   mkdir -p "$home_a/state" "$home_b/state"
@@ -57,6 +57,13 @@ test_branch_prompt_is_byte_stable_and_above_cache_floor() {
     *"# PR identity: copy or abstain"*"copied verbatim from the task's \`done: PR <url>\` status line or its \`pr=\` metadata field"*"Never assemble an owner, repository, host, or number"*"report the identifier you do have"*) ;;
     *) fail "branch prompt lost the copy-or-abstain PR identity rule" ;;
   esac
+  omp_a=$(cd "$TMP_ROOT" && FM_HOME="$home_a" TZ=UTC "$ROOT/bin/fm-branch-prompt.sh" --harness omp) \
+    || fail "omp branch prompt generator failed for home A"
+  omp_b=$(cd / && FM_HOME="$home_b" TZ=Australia/Eucla "$ROOT/bin/fm-branch-prompt.sh" --harness omp) \
+    || fail "omp branch prompt generator failed for home B"
+  [ "$omp_a" = "$omp_b" ] || fail "omp branch prompt differs across homes/cwd/timezone: prefix stability broken"
+  [ "$omp_a" != "$out_a" ] || fail "the omp prompt variant is identical to the Pi prompt"
+  "$ROOT/bin/fm-branch-prompt.sh" --harness bogus >/dev/null 2>&1 && fail "the prompt generator accepted an unknown harness"
   pass "branch prompt is byte-stable across homes, cwd, timezone, and time, above the cache floor"
 }
 
@@ -137,40 +144,41 @@ test_outcome_startup_replay_preserves_silence() {
     --task task-a --verdict captain --summary 'blocked' --silent true 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "append accepted a silent captain outcome"
-  assert_contains "$out" "silent outcomes must be routine fleet outcomes" "silent captain refusal lost its diagnostic"
-  out=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
-    --task task-a --verdict routine --summary 'healthy' --silent true 2>&1)
-  status=$?
-  [ "$status" -ne 0 ] || fail "append accepted a silent task-scoped outcome"
-  assert_contains "$out" "silent outcomes must be routine fleet outcomes" "silent task refusal lost its diagnostic"
-  [ ! -e "$store" ] || fail "refused silent outcomes changed the durable store"
+  assert_contains "$out" "silent outcomes must be routine outcomes" "silent captain refusal lost its diagnostic"
+  [ ! -e "$store" ] || fail "a refused silent captain outcome changed the durable store"
 
   FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
     --task fleet --verdict routine --summary 'fleet reviewed, nothing changed' --silent true >/dev/null \
-    || fail "silent outcome append failed"
+    || fail "silent fleet outcome append failed"
+  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
+    --task task-a --verdict routine --summary 'task-a still working, nothing new' --silent true >/dev/null \
+    || fail "silent task-scoped routine outcome append failed"
   FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
     --task task-1 --verdict routine --summary 'worker recovered automatically' >/dev/null \
     || fail "visible outcome append failed"
 
   replay=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" startup-replay) || fail "mixed startup replay failed"
-  assert_not_contains "$replay" "fleet reviewed, nothing changed" "startup replay printed a silent outcome"
+  assert_not_contains "$replay" "fleet reviewed, nothing changed" "startup replay printed a silent fleet outcome"
+  assert_not_contains "$replay" "task-a still working" "startup replay printed a silent task outcome"
   assert_contains "$replay" "worker recovered automatically" "startup replay lost a visible routine outcome"
   [ -z "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" unread)" ] \
     || fail "startup replay did not mark the silent and visible rows read"
+  assert_contains "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" list)" "task-a still working" \
+    "a silent task outcome is missing from the durable store listing"
 
-  printf '%s\n' '{"seq":3,"epoch":1,"task":"task-legacy","wake":"","verdict":"routine","summary":"legacy visible outcome"}' \
+  printf '%s\n' '{"seq":4,"epoch":1,"task":"task-legacy","wake":"","verdict":"routine","summary":"legacy visible outcome"}' \
     >> "$home/state/branch-outcomes.jsonl"
   replay=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" startup-replay) || fail "legacy startup replay failed"
   assert_contains "$replay" "legacy visible outcome" "startup replay hid a legacy row with no silent field"
   [ -z "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" unread)" ] \
     || fail "startup replay did not mark the legacy row read"
 
-  printf '%s\n' '{"seq":4,"epoch":1,"task":"task-bad","wake":"","verdict":"captain","summary":"poisoned","silent":true}' >> "$store"
+  printf '%s\n' '{"seq":5,"epoch":1,"task":"task-bad","wake":"","verdict":"captain","summary":"poisoned","silent":true}' >> "$store"
   out=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" unread 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "unread accepted a stored silent captain outcome"
   assert_contains "$out" "malformed or non-sequential" "stored silent captain refusal lost its diagnostic"
-  pass "only routine fleet outcomes can be silent"
+  pass "only routine outcomes can be silent, and silent rows stay stored but unreplayed"
 }
 
 test_outcome_startup_replay_stops_at_captain_barrier() {
