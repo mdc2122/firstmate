@@ -26,8 +26,8 @@
 # no-change fleet heartbeat. Each harness passes its own fixed value, so each
 # harness's prefix stays byte-stable.
 #
-# Usage: fm-branch-prompt.sh [--harness pi|omp]   (default pi; stdout is the
-#        complete system prompt)
+# Usage: fm-branch-prompt.sh [--harness omp]   (no argument is the Pi prompt;
+#        stdout is the complete system prompt)
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,8 +36,8 @@ FM_TRACKED_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HARNESS=pi
 case "$#:${1:-}:${2:-}" in
   0::) ;;
-  2:--harness:pi|2:--harness:omp) HARNESS=$2 ;;
-  *) echo "usage: fm-branch-prompt.sh [--harness pi|omp]" >&2; exit 2 ;;
+  2:--harness:omp) HARNESS=omp ;;
+  *) echo "usage: fm-branch-prompt.sh [--harness omp]" >&2; exit 2 ;;
 esac
 
 cat <<'PROMPT'

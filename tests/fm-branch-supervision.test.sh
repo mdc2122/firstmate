@@ -62,7 +62,6 @@ test_branch_prompt_is_byte_stable_and_above_cache_floor() {
   omp_b=$(cd / && FM_HOME="$home_b" TZ=Australia/Eucla "$ROOT/bin/fm-branch-prompt.sh" --harness omp) \
     || fail "omp branch prompt generator failed for home B"
   [ "$omp_a" = "$omp_b" ] || fail "omp branch prompt differs across homes/cwd/timezone: prefix stability broken"
-  [ "$("$ROOT/bin/fm-branch-prompt.sh" --harness pi)" = "$out_a" ] || fail "--harness pi changed the default Pi prompt"
   [ "$omp_a" != "$out_a" ] || fail "the omp prompt variant is identical to the Pi prompt"
   "$ROOT/bin/fm-branch-prompt.sh" --harness bogus >/dev/null 2>&1 && fail "the prompt generator accepted an unknown harness"
   pass "branch prompt is byte-stable across homes, cwd, timezone, and time, above the cache floor"
