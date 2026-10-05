@@ -1,0 +1,70 @@
+
+### S1 long job (50s) launched from a tool-call-shaped parent whose process group is SIGKILLed after it returns
+parent group 20003 killed
+due-check: long50 verdict=/private/tmp/fmdj.GpIEiU/long.txt partial=/private/tmp/fmdj.GpIEiU/long.txt.partial session=fm-job-long50-1791234670-20011; done when the verdict file exists, failed when tmux session fm-job-long50-1791234670-20011 is gone and the verdict file is absent
+--- .partial while running:
+start=2026-10-05T21:11:10Z wrapper_pid=20067 pid=20079 session=fm-job-long50-1791234670-20011 name=long50
+command=/bin/sh -c sleep\ 50\;\ echo\ hash=abc123
+has-session on due-check session name: rc=0 (valid target)
+after 45s: verdict exists? no
+--- verdict:
+result=ok exit=0 start=2026-10-05T21:11:10Z end=2026-10-05T21:12:00Z name=long50 session=fm-job-long50-1791234670-20011
+command=/bin/sh -c sleep\ 50\;\ echo\ hash=abc123
+stdout=/private/tmp/fmdj.GpIEiU/long.txt.stdout
+stderr=/private/tmp/fmdj.GpIEiU/long.txt.stderr
+--- stderr tail ---
+partial left? no
+
+### S2 failing job writes result=error with exit and stderr tail
+due-check: fail1 verdict=/private/tmp/fmdj.GpIEiU/fail.txt partial=/private/tmp/fmdj.GpIEiU/fail.txt.partial session=fm-job-fail1-1791234720-70249; done when the verdict file exists, failed when tmux session fm-job-fail1-1791234720-70249 is gone and the verdict file is absent
+result=error exit=3 start=2026-10-05T21:12:00Z end=2026-10-05T21:12:00Z name=fail1 session=fm-job-fail1-1791234720-70249
+command=/bin/sh -c echo\ \"cannot\ read\ /Volumes/FLEET-8TB:\ Operation\ not\ permitted\"\ \>\&2\;\ exit\ 3
+stdout=/private/tmp/fmdj.GpIEiU/fail.txt.stdout
+stderr=/private/tmp/fmdj.GpIEiU/fail.txt.stderr
+--- stderr tail ---
+cannot read /Volumes/FLEET-8TB: Operation not permitted
+
+### S3 job whose binary does not exist still yields an error verdict
+due-check: nobin verdict=/private/tmp/fmdj.GpIEiU/nobin.txt partial=/private/tmp/fmdj.GpIEiU/nobin.txt.partial session=fm-job-nobin-1791234721-70624; done when the verdict file exists, failed when tmux session fm-job-nobin-1791234721-70624 is gone and the verdict file is absent
+result=error exit=127 start=2026-10-05T21:12:01Z end=2026-10-05T21:12:01Z name=nobin session=fm-job-nobin-1791234721-70624
+command=/no/such/binary --x
+stdout=/private/tmp/fmdj.GpIEiU/nobin.txt.stdout
+stderr=/private/tmp/fmdj.GpIEiU/nobin.txt.stderr
+--- stderr tail ---
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46XKZ3TWPHN5GZ2YYPJQQM2/bin/fm-durable-job.sh: line 112: /no/such/binary: No such file or directory
+
+### S4 args with spaces and quotes are passed verbatim
+fm-durable-job: job did not record a start within 10s (session fm-job-quoting-1791234721-70909, expected /private/tmp/fmdj.GpIEiU/q.txt.partial)
+cat: q.txt.stdout: No such file or directory
+stdout: 
+head: q.txt: No such file or directory
+
+### S5 name with a dot is refused (exit 2) and no session created
+fm-durable-job: invalid name 'fleet.sha256' (allowed: A-Z a-z 0-9 _ -)
+rc=2
+0
+
+### S5b name with slash / space refused
+fm-durable-job: invalid name 'a/b' (allowed: A-Z a-z 0-9 _ -)
+rc=2
+fm-durable-job: invalid name 'a b' (allowed: A-Z a-z 0-9 _ -)
+rc=2
+
+### S6 existing verdict / partial refused (exit 2)
+fm-durable-job: result file already exists: /private/tmp/fmdj.GpIEiU/long.txt
+rc=2
+fm-durable-job: partial file already exists: /private/tmp/fmdj.GpIEiU/p.txt.partial
+rc=2
+
+### S7 missing result dir refused (exit 2); missing -- gives usage exit 2
+fm-durable-job: result directory does not exist: nodir
+rc=2
+usage rc=2
+
+### S8 FM_DURABLE_JOB_START_TIMEOUT knob is gone: setting it to garbage changes nothing
+due-check: knob verdict=/private/tmp/fmdj.GpIEiU/knob.txt partial=/private/tmp/fmdj.GpIEiU/knob.txt.partial session=fm-job-knob-1791234750-31634; done when the verdict file exists, failed when tmux session fm-job-knob-1791234750-31634 is gone and the verdict file is absent
+rc=0
+
+### S9 relative result in subdir reported as absolute path; cmd runs in caller cwd
+due-check: cwd verdict=/private/tmp/fmdj.GpIEiU/sub/r.txt partial=/private/tmp/fmdj.GpIEiU/sub/r.txt.partial session=fm-job-cwd-1791234751-32228; done when the verdict file exists, failed when tmux session fm-job-cwd-1791234751-32228 is gone and the verdict file is absent
+job pwd: /private/tmp/fmdj.GpIEiU

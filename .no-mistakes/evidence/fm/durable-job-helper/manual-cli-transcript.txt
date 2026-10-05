@@ -1,0 +1,47 @@
+## 1. dotted name is rejected (session must be a valid tmux target)
+fm-durable-job: invalid name 'fleet.sha256' (allowed: A-Z a-z 0-9 _ -)
+exit=2
+ls: r1.txt*: No such file or directory
+
+## 2. dash/underscore name: due-check session is a valid has-session target while running
+exit=0
+due-check: fleet_sha-256 verdict=/private/tmp/fmdj-manual/r2.txt partial=/private/tmp/fmdj-manual/r2.txt.partial session=fm-job-fleet_sha-256-1791235025-57041; done when the verdict file exists, failed when tmux session fm-job-fleet_sha-256-1791235025-57041 is gone and the verdict file is absent
+has-session rc=0 (0 = alive)
+--- .partial while running:
+start=2026-10-05T21:17:05Z wrapper_pid=57116 pid=57132 session=fm-job-fleet_sha-256-1791235025-57041 name=fleet_sha-256
+command=/bin/sh -c sleep\ 3\;\ echo\ done-hash
+--- verdict:
+result=ok exit=0 start=2026-10-05T21:17:05Z end=2026-10-05T21:17:08Z name=fleet_sha-256 session=fm-job-fleet_sha-256-1791235025-57041
+command=/bin/sh -c sleep\ 3\;\ echo\ done-hash
+stdout=/private/tmp/fmdj-manual/r2.txt.stdout
+stderr=/private/tmp/fmdj-manual/r2.txt.stderr
+--- stderr tail ---
+has-session after done rc=1
+ls: r2.txt.partial: No such file or directory
+
+## 3. FM_DURABLE_JOB_START_TIMEOUT env knob is gone (fixed 10s; bogus value has no effect)
+due-check: knob verdict=/private/tmp/fmdj-manual/r3.txt partial=/private/tmp/fmdj-manual/r3.txt.partial session=fm-job-knob-1791235029-64636; done when the verdict file exists, failed when tmux session fm-job-knob-1791235029-64636 is gone and the verdict file is absent
+exit=0
+result=ok exit=0 start=2026-10-05T21:17:09Z end=2026-10-05T21:17:09Z name=knob session=fm-job-knob-1791235029-64636
+
+## 4. missing result directory refused
+fm-durable-job: result directory does not exist: nope
+exit=2
+
+## 5. existing .partial refused
+fm-durable-job: partial file already exists: /private/tmp/fmdj-manual/r5.txt.partial
+exit=2
+
+## 6. command not found -> error verdict, not silence
+exit=0
+result=error exit=127 start=2026-10-05T21:17:11Z end=2026-10-05T21:17:11Z name=nocmd session=fm-job-nocmd-1791235031-66349
+command=/no/such/binary
+stdout=/private/tmp/fmdj-manual/r6.txt.stdout
+stderr=/private/tmp/fmdj-manual/r6.txt.stderr
+--- stderr tail ---
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46XKZ3TWPHN5GZ2YYPJQQM2/bin/fm-durable-job.sh: line 113: /no/such/binary: No such file or directory
+
+## 7. bad usage
+them. Prefer /usr/bin tools or a granted python3 started from a herdr-launched
+session, and probe with a 1 MiB read of the target before a multi-hour run.
+exit=2

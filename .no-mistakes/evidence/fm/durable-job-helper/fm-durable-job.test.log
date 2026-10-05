@@ -1,0 +1,6 @@
+ok - control: nohup bash -c shape loses its verdict when the tool-call group is killed
+ok - helper verdict survives the dropped tool call that kills the nohup shape
+ok - failing job verdict records exit code and stderr tail
+ok - killing the job's tmux session still writes an error verdict
+ok - refuses to reuse an existing verdict file
+ok - arguments and paths with quotes, $ and ; reach the job verbatim
