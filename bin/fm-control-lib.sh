@@ -32,7 +32,9 @@
 #      and whether the backend has a recovery-grade agent-state classifier
 #      (bin/fm-backend.sh's fm_backend_agent_state) able to PROVE that an agent
 #      stopped. A verb whose postcondition cannot be proven on the recorded
-#      backend is refused rather than performed blind.
+#      backend is refused rather than performed blind; the one exception is a
+#      backend that can prove its endpoint is already gone, which may relaunch
+#      that vanished endpoint (fm_control_backend_gone_recoverable).
 #
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex and grok resume only from a session id printed at
@@ -215,6 +217,19 @@ fm_control_backend_supports_key() {  # <backend> <key>
 fm_control_backend_state_verified() {  # <backend>
   case "${1-}" in
     tmux|herdr) return 0 ;;
+  esac
+  return 1
+}
+
+# Whether <backend>, lacking a recovery-grade classifier, can still prove that
+# a task's terminal and agent are GONE - the one state in which a replacement
+# may be launched without stopping anything. Only Orca has that narrow proof
+# (bin/backends/orca.sh's fm_backend_orca_terminal_gone). It authorizes
+# `relaunch` of an already-vanished endpoint, never `exit`, and never a
+# relaunch over a terminal that still exists.
+fm_control_backend_gone_recoverable() {  # <backend>
+  case "${1-}" in
+    orca) return 0 ;;
   esac
   return 1
 }

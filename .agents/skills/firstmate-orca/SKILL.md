@@ -73,6 +73,7 @@ For a messy Orca-backed task:
 4. Prefer firstmate helpers for peek, send, state, and teardown.
 5. Avoid raw deletion of Orca worktrees or manual branch cleanup.
 6. Stop and inspect if the recorded worktree path, Orca worktree id, or project checkout no longer matches expectations.
+7. If the task's terminal window has vanished, recover it with `FM_HOME=<home> bin/fm-control.sh <id> relaunch --note '<progress so far>'`; it gives the replacement a new terminal in the same recorded worktree and refuses while the terminal still exists or any process still works in that worktree.
 
 Teardown remains governed by the normal firstmate landing rules.
 Scout work can be torn down after the report exists, the `captain-hold-lifecycle` completion gate passes, and its worktree holds no cited or significant output that exists nowhere else.

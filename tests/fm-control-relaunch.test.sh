@@ -1681,6 +1681,203 @@ test_relaunch_moves_a_drifted_item_back_in_flight() {
   pass "relaunch heals an item that drifted out of In flight while the task stayed live"
 }
 
+# --- 7. Orca: relaunch of a vanished terminal --------------------------------
+#
+# Orca has no recovery-grade classifier, so the only relaunch it allows is of a
+# terminal proven gone: a complete `orca terminal list` omits the recorded
+# handle AND no process at all works inside the recorded worktree. The fake
+# Orca CLI below is stateful: `terminal create` adds a live handle, and a
+# launch-brief literal starts a REAL process named `claude` whose cwd is the
+# worktree, so the cwd scan and the harness classifier run unstubbed.
+
+ORCA_AGENT_PIDS="$TMP_ROOT/orca-agent-pids"
+: > "$ORCA_AGENT_PIDS"
+REAL_SLEEP=$(command -v sleep)
+orca_relaunch_cleanup() {
+  local pid
+  while IFS= read -r pid; do
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  done < "$ORCA_AGENT_PIDS"
+  relaunch_cleanup
+}
+trap orca_relaunch_cleanup EXIT
+
+make_orca_stub() {  # <case-dir>
+  local dir=$1
+  mkdir -p "$dir/fake/agentbin"
+  # A process whose name is a verified harness, with no harness behind it.
+  ln -sf "$REAL_SLEEP" "$dir/fake/agentbin/claude"
+  ln -sf "$REAL_SLEEP" "$dir/fake/agentbin/node"
+  : > "$dir/fake/orca-terminals"
+  : > "$dir/fake/orca-log"
+  cat > "$dir/fakebin/orca" <<'SH'
+#!/usr/bin/env bash
+set -u
+D=$FM_FAKE_DIR
+printf '%s\n' "$*" >> "$D/orca-log"
+case "${1:-} ${2:-}" in
+  'status '*)
+    printf '{"ok":true,"result":{"runtime":{"reachable":true,"state":"ready"}}}\n' ;;
+  'terminal list')
+    if [ -n "${FM_FAKE_ORCA_LIST_TRUNCATED:-}" ]; then
+      printf '{"ok":true,"result":{"terminals":[],"hostScope":{"omittedHostIds":[]},"totalCount":4,"truncated":true}}\n'
+      exit 0
+    fi
+    rows= n=0
+    while IFS= read -r h; do
+      [ -n "$h" ] || continue
+      rows="$rows${rows:+,}{\"handle\":\"$h\"}"
+      n=$((n + 1))
+    done < "$D/orca-terminals"
+    printf '{"ok":true,"result":{"terminals":[%s],"hostScope":{"hostIds":["local"],"omittedHostIds":[]},"totalCount":%s,"truncated":false}}\n' "$rows" "$n" ;;
+  'terminal create')
+    printf 'term-new\n' >> "$D/orca-terminals"
+    printf '{"ok":true,"result":{"terminal":{"handle":"term-new"}}}\n' ;;
+  'terminal send')
+    for a in "$@"; do
+      case "$a" in
+        *'encode launch-brief'*)
+          (cd "$FM_FAKE_ORCA_WT" && exec "$D/agentbin/claude" 60) </dev/null >/dev/null 2>&1 &
+          printf '%s\n' "$!" >> "$FM_FAKE_ORCA_PIDS"
+          ;;
+      esac
+    done
+    printf '{"ok":true}\n' ;;
+  'terminal read')
+    printf '{"ok":true,"result":{"terminal":{"status":"running","tail":[""]}}}\n' ;;
+  *) printf '{"ok":true}\n' ;;
+esac
+SH
+  chmod +x "$dir/fakebin/orca"
+}
+
+# add_orca_ship_task <case-dir> <id> <live|gone>: an Orca ship task whose
+# recorded terminal term-old is still listed (live) or has vanished (gone).
+add_orca_ship_task() {
+  local dir=$1 id=$2 terminal_state=$3
+  add_ship_task "$dir" "$id" claude
+  make_orca_stub "$dir"
+  {
+    echo "window=fm-$id"
+    echo "endpoint_task_id=$id"
+    echo "worktree=$dir/wt"
+    echo "project=$dir/proj"
+    echo "harness=claude"
+    echo "kind=ship"
+    echo "mode=no-mistakes"
+    echo "yolo=off"
+    echo "tasktmp=/tmp/fm-$id"
+    echo "model=default"
+    echo "effort=default"
+    echo "backend=orca"
+    echo "orca_worktree_id=22ec401f-7dac-404b-b795-9594ac95aba0::$dir/wt"
+    echo "terminal=term-old"
+  } > "$dir/home/state/$id.meta"
+  [ "$terminal_state" != live ] || printf 'term-old\n' > "$dir/fake/orca-terminals"
+}
+
+run_orca() {  # <case-dir> <control|spawn> <args...>
+  local dir=$1 which=$2 cmd
+  shift 2
+  cmd=$CONTROL
+  [ "$which" = control ] || cmd=$SPAWN
+  mkdir -p "$dir/user-home"
+  env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+    FM_FAKE_ORCA_WT="$dir/wt" FM_FAKE_ORCA_PIDS="$ORCA_AGENT_PIDS" \
+    FM_FAKE_ORCA_LIST_TRUNCATED="${FM_FAKE_ORCA_LIST_TRUNCATED:-}" \
+    HOME="$dir/user-home" CLAUDE_CONFIG_DIR='' FM_SPAWN_NO_GUARD=1 \
+    FM_CONTROL_POLL=0.05 FM_CONTROL_LAUNCH_WAIT=5 \
+    "$cmd" "$@" 2>&1
+}
+
+test_orca_relaunch_replaces_a_vanished_terminal_in_the_recorded_worktree() {
+  local dir out rc
+  dir=$(new_case orca-gone rl50)
+  add_orca_ship_task "$dir" rl50 gone
+  printf 'uncommitted work\n' > "$dir/wt/wip.txt"
+  out=$(run_orca "$dir" control rl50 relaunch --note "the Orca window vanished"); rc=$?
+  expect_code 0 "$rc" "relaunching an Orca task whose terminal vanished should succeed"$'\n'"$out"
+  assert_contains "$out" "relaunched rl50 harness=claude from=claude" "the outcome should name the relaunch"
+  assert_contains "$out" "endpoint=term-new" "the outcome should name the replacement terminal"
+  [ "$(meta_field "$dir" rl50 terminal)" = term-new ] \
+    || fail "the record should name the replacement terminal, got '$(meta_field "$dir" rl50 terminal)'"
+  [ "$(meta_field "$dir" rl50 worktree)" = "$dir/wt" ] \
+    || fail "the recorded worktree must be reused"
+  [ "$(meta_field "$dir" rl50 orca_worktree_id)" = "22ec401f-7dac-404b-b795-9594ac95aba0::$dir/wt" ] \
+    || fail "the recorded Orca worktree identity must be reused"
+  assert_grep "terminal create --worktree id:22ec401f-7dac-404b-b795-9594ac95aba0::$dir/wt" "$dir/fake/orca-log" \
+    "the replacement terminal should open in the recorded Orca worktree"
+  assert_no_grep "worktree create" "$dir/fake/orca-log" "a relaunch must never create a second worktree"
+  assert_no_grep "worktree rm" "$dir/fake/orca-log" "a relaunch must never remove the worktree"
+  assert_no_grep "terminal close" "$dir/fake/orca-log" "a successful relaunch closes nothing"
+  [ "$(cat "$dir/wt/wip.txt")" = "uncommitted work" ] || fail "uncommitted work must survive the relaunch"
+  [ "$(journal_field "$dir" rl50 phase)" = complete ] || fail "the transaction journal should end complete"
+  [ "$(journal_field "$dir" rl50 exit_result)" = already-gone ] \
+    || fail "the journal should record that nothing needed stopping"
+  assert_grep "the Orca window vanished" "$dir/home/data/rl50/brief.md" \
+    "the progress note should reach the replacement's instructions"
+  pass "fm-control relaunch: an Orca task whose terminal vanished gets a replacement agent in its recorded worktree"
+}
+
+test_orca_relaunch_refuses_a_terminal_that_still_exists() {
+  local dir out rc before
+  dir=$(new_case orca-live rl51)
+  add_orca_ship_task "$dir" rl51 live
+  before=$(cat "$dir/home/state/rl51.meta" "$dir/home/data/rl51/brief.md")
+  out=$(run_orca "$dir" control rl51 relaunch --note "should not run"); rc=$?
+  expect_code 1 "$rc" "an Orca relaunch over a listed terminal must refuse"
+  assert_contains "$out" "still exists" "the refusal should say the terminal is still there"
+  [ "$(cat "$dir/home/state/rl51.meta" "$dir/home/data/rl51/brief.md")" = "$before" ] \
+    || fail "a refused Orca relaunch must leave the record and instructions byte-identical"
+  assert_no_grep "terminal create" "$dir/fake/orca-log" "a refused relaunch must not open a terminal"
+  assert_no_grep "terminal send" "$dir/fake/orca-log" "a refused relaunch must not type into the old terminal"
+  out=$(run_orca "$dir" spawn rl51 --relaunch --harness claude); rc=$?
+  expect_code 1 "$rc" "fm-spawn --relaunch over a listed Orca terminal must refuse on its own"
+  assert_contains "$out" "reads 'present'" "fm-spawn should name the terminal it found"
+  pass "fm-control relaunch: an Orca terminal that still exists is never relaunched over"
+}
+
+test_orca_relaunch_refuses_when_a_process_still_works_in_the_worktree() {
+  local dir out rc pid
+  dir=$(new_case orca-occupied rl52)
+  add_orca_ship_task "$dir" rl52 gone
+  # Not a recognized harness name: zero processes, not zero agents, is the bar.
+  # The child records its own pid; exec keeps it for the occupant.
+  # shellcheck disable=SC2016  # $$/$1/$2/$3 belong to the child shell.
+  bash -c 'printf "%s\n" "$$" > "$3"; cd "$1" && exec "$2" 60' _ \
+    "$dir/wt" "$dir/fake/agentbin/node" "$dir/occupant.pid" </dev/null >/dev/null 2>&1 &
+  for _ in $(seq 1 50); do [ -s "$dir/occupant.pid" ] && break; sleep 0.1; done
+  pid=$(cat "$dir/occupant.pid")
+  printf '%s\n' "$pid" >> "$ORCA_AGENT_PIDS"
+  out=$(run_orca "$dir" control rl52 relaunch --note "should not run"); rc=$?
+  kill "$pid" 2>/dev/null
+  expect_code 1 "$rc" "an Orca relaunch with a process still in the worktree must refuse"
+  assert_contains "$out" "still working in its worktree" "the refusal should name the surviving process"
+  assert_no_grep "terminal create" "$dir/fake/orca-log" "a refused relaunch must not open a terminal"
+  pass "fm-control relaunch: a vanished Orca terminal with a surviving process in the worktree is refused"
+}
+
+test_orca_relaunch_refuses_an_incomplete_terminal_inventory() {
+  local dir out rc
+  dir=$(new_case orca-truncated rl53)
+  add_orca_ship_task "$dir" rl53 gone
+  out=$(FM_FAKE_ORCA_LIST_TRUNCATED=1 run_orca "$dir" control rl53 relaunch --note "should not run"); rc=$?
+  expect_code 1 "$rc" "an Orca relaunch on a truncated terminal list must refuse"
+  assert_contains "$out" "cannot be proven" "the refusal should say absence is unproven"
+  assert_no_grep "terminal create" "$dir/fake/orca-log" "a refused relaunch must not open a terminal"
+  pass "fm-control relaunch: an incomplete Orca terminal inventory never proves a terminal gone"
+}
+
+test_orca_exit_still_refuses_without_a_classifier() {
+  local dir out rc
+  dir=$(new_case orca-exit rl54)
+  add_orca_ship_task "$dir" rl54 gone
+  out=$(run_orca "$dir" control rl54 exit); rc=$?
+  expect_code 1 "$rc" "exit on Orca must still refuse"
+  assert_contains "$out" "no recovery-grade agent-state classifier" "exit should keep its classifier refusal"
+  pass "fm-control exit: Orca still refuses a stop it cannot prove"
+}
+
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
 test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
@@ -1737,3 +1934,8 @@ test_spawn_relaunch_refuses_an_unrecorded_task
 test_spawn_relaunch_refuses_a_pane_outside_the_worktree
 test_relaunch_reverifies_an_already_in_flight_item_instead_of_rewriting_it
 test_relaunch_moves_a_drifted_item_back_in_flight
+test_orca_relaunch_replaces_a_vanished_terminal_in_the_recorded_worktree
+test_orca_relaunch_refuses_a_terminal_that_still_exists
+test_orca_relaunch_refuses_when_a_process_still_works_in_the_worktree
+test_orca_relaunch_refuses_an_incomplete_terminal_inventory
+test_orca_exit_still_refuses_without_a_classifier

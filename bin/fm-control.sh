@@ -81,7 +81,10 @@
 #   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
 #     classifier (tmux, herdr), because without one the "the agent stopped"
 #     postcondition cannot be proven. zellij, orca, and cmux are refused rather
-#     than reported as successful blind.
+#     than reported as successful blind - except `relaunch` of an Orca task
+#     whose terminal is proven gone (fm_backend_orca_terminal_gone: a complete
+#     terminal list omits it and no process works in the recorded worktree),
+#     which stops nothing and opens one new terminal in that same worktree.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
 #   - A composer that visibly holds pending text refuses before an exit command
@@ -832,11 +835,57 @@ record_note() {
   esac
 }
 
+# relaunch_preflight_gone: on a backend that cannot classify agent state but
+# can prove its endpoint is already gone (Orca), relaunch is allowed only for
+# that vanished endpoint. Sets GONE_RELAUNCH=1 on proof; refuses on any doubt,
+# before anything durable is touched. fm-spawn --relaunch repeats the proof
+# under the task's meta lock immediately before opening the replacement.
+GONE_RELAUNCH=0
+relaunch_preflight_gone() {
+  local verdict
+  fm_control_backend_gone_recoverable "$BACKEND" || return 0
+  [ -n "$WT" ] && [ -d "$WT" ] \
+    || die "task $ID's recorded worktree ${WT:-none} is missing; refusing to relaunch and lose track of its work"
+  fm_backend_source "$BACKEND" || die "the $BACKEND backend adapter could not be loaded; refusing to relaunch"
+  verdict=$(fm_backend_orca_terminal_gone "$T" "$WT")
+  case "$verdict" in
+    gone) GONE_RELAUNCH=1 ;;
+    present) die "task $ID's Orca terminal $T still exists, and the $BACKEND backend has no recovery-grade agent-state classifier to prove its agent stopped; refusing to relaunch over it. Only a terminal that has vanished can be relaunched on $BACKEND" ;;
+    occupied) die "task $ID's Orca terminal $T is gone, but a process is still working in its worktree $WT; refusing to relaunch while a surviving agent could own that copy" ;;
+    *) die "task $ID's Orca terminal state reads '$verdict', so its absence cannot be proven; refusing to relaunch" ;;
+  esac
+}
+
+# wait_replacement_alive: the post-launch postcondition. A state-verified
+# backend reads the reused endpoint; a gone-recovered Orca relaunch reads the
+# NEW terminal fm-spawn published (already in $T) and requires a verified
+# harness process working in the recorded worktree. Prints the last observed
+# state.
+wait_replacement_alive() {
+  local elapsed=0
+  if [ "$GONE_RELAUNCH" != 1 ]; then
+    wait_agent_state "$LAUNCH_WAIT" alive
+    return $?
+  fi
+  while :; do
+    if [ -n "$T" ] && fm_backend_orca_agent_running "$T" "$WT"; then
+      printf 'alive'
+      return 0
+    fi
+    awk -v e="$elapsed" -v t="$LAUNCH_WAIT" 'BEGIN{exit !(e < t)}' || break
+    sleep "$POLL"
+    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
+  done
+  printf 'no-verified-agent'
+  return 1
+}
+
 do_relaunch() {
   local exit_result state note_line
   local -a spawn_args
 
-  require_state_verified_backend relaunch
+  fm_control_backend_gone_recoverable "$BACKEND" || require_state_verified_backend relaunch
+  relaunch_preflight_gone
   resolve_relaunch_profile
 
   case "$KIND" in
@@ -870,8 +919,14 @@ do_relaunch() {
   record_note
   journal_write noted "${CHECKPOINT_LINES[@]}" "$note_line"
 
-  journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
-  exit_result=$(do_exit)
+  if [ "$GONE_RELAUNCH" = 1 ]; then
+    # Nothing to stop: the preflight proved the terminal gone and the copy
+    # unoccupied. Stopping is skipped rather than reported as a success.
+    exit_result=already-gone
+  else
+    journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
+    exit_result=$(do_exit)
+  fi
   journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
@@ -890,7 +945,10 @@ do_relaunch() {
     die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
   fi
 
-  state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
+  # A gone-recovered relaunch publishes a NEW terminal; read it here so the
+  # postcondition and the outcome line both name the endpoint now running.
+  [ "$GONE_RELAUNCH" != 1 ] || T=$(fm_meta_get "$META" terminal)
+  state=$(wait_replacement_alive) || {
     die "the replacement agent for $ID did not come up within ${LAUNCH_WAIT}s (endpoint reads '$state')"
   }
   RELAUNCH_AGENT_CONFIRMED=1

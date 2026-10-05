@@ -68,6 +68,9 @@ It never raw-deletes an Orca worktree.
 A close the CLI never attempted, because `orca` is not on the path, stops cleanup with the metadata intact even under `--force`: removing those records would leave nothing on disk naming a terminal that may still be live.
 Reinstall the CLI and rerun; [`verification/runtime-backends.md`](verification/runtime-backends.md) "Endpoint close" owns what this arm can and cannot prove about its own close.
 
+Orca has no recovery-grade agent-state classifier, so `bin/fm-control.sh <id> exit` refuses, and `relaunch` acts only on a task whose terminal has already vanished.
+[`agent-control.md`](agent-control.md#fail-closed-boundaries) owns that proof and its refusals; a successful recovery keeps the recorded worktree and work and records the new terminal.
+
 ## Active limits
 
 - Orca is macOS-only and explicit-only.
