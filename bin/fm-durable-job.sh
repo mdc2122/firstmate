@@ -56,7 +56,8 @@ usage() {
 
 # Single-quote one word for a POSIX shell command string.
 sq() {
-  printf "'%s'" "${1//\'/\'\\\'\'}"
+  local q="'\\''" s=$1
+  printf "'%s'" "${s//\'/$q}"
 }
 
 utc_now() {

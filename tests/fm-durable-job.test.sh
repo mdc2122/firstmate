@@ -111,8 +111,23 @@ test_refuses_existing_result() {
   pass "refuses to reuse an existing verdict file"
 }
 
+test_quoted_args_reach_job_verbatim() {
+  local dir="$TMP_ROOT/Captain's dir" verdict
+  mkdir -p "$dir"
+  verdict="$dir/verdict.txt"
+  # shellcheck disable=SC2016 # The arguments must reach the job unexpanded.
+  (cd "$dir" && "$HELPER" quoted verdict.txt -- printf '%s\n' "it's" 'a $b; c' >/dev/null) \
+    || fail "launcher failed for arguments and a cwd containing a single quote"
+  wait_for "$verdict" 100 || fail "no verdict written for the quoted-argument job"
+  grep -q '^result=ok exit=0 ' "$verdict" || fail "quoted-argument job did not succeed: $(cat "$verdict")"
+  printf '%s\n' "it's" 'a $b; c' | cmp -s - "$verdict.stdout" \
+    || fail "job did not receive its arguments verbatim: $(cat "$verdict.stdout")"
+  pass "arguments and paths with quotes, \$ and ; reach the job verbatim"
+}
+
 test_vulnerable_shape_loses_verdict
 test_helper_verdict_survives_dropped_tool_call
 test_failure_records_exit_and_stderr_tail
 test_killed_session_still_writes_verdict
 test_refuses_existing_result
+test_quoted_args_reach_job_verbatim
