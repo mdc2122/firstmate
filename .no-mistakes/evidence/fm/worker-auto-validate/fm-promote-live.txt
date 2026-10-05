@@ -1,0 +1,34 @@
+### Scenario 4: promoted scout -> no-mistakes worker (default)
+$ fm-promote.sh prom-a1 --mode no-mistakes --yolo off
+rc=0
+--- delivered message, Definition of done head:
+# Definition of done
+Delivery contract: mode=no-mistakes
+The task is complete only when committed on your branch.
+When you believe it is complete, append `working: committed {short sha}; starting validation` to the status file and immediately run /no-mistakes yourself to validate and ship a PR; do not stop or wait for firstmate in between.
+
+You drive no-mistakes by responding to its gates, not by implementing fixes.
+
+### Scenario 5: promoted with --pause-before-validate
+$ fm-promote.sh prom-a2 --mode no-mistakes --yolo off --pause-before-validate
+rc=0
+--- delivered message, Definition of done head:
+# Definition of done
+Delivery contract: mode=no-mistakes
+The task is complete only when committed on your branch.
+When you believe it is complete, append `done: {summary}` to the status file and stop.
+This task pauses before validating: firstmate reviews the commit first and will then instruct you to run /no-mistakes to validate and ship a PR.
+
+
+### Scenario 6: --pause-before-validate on a direct-PR promotion is refused
+$ fm-promote.sh prom-b1 --mode direct-PR --yolo off --pause-before-validate
+rc=1
+error: --pause-before-validate applies only to --mode no-mistakes
+meta unchanged (no mode recorded):
+window=fm-prom-b1
+kind=scout
+worktree=/tmp/wt
+
+### Parity: promoted DoD == brief DoD for both variants
+prom-a1 default: identical
+prom-a2 --pause-before-validate: identical

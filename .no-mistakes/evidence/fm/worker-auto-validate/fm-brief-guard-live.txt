@@ -1,0 +1,20 @@
+### Scenario 3: adversarial misuse of --pause-before-validate (bash word-split)
+$ fm-brief.sh live-b1 some-proj --mode direct-PR --pause-before-validate
+error: --pause-before-validate applies only to ship briefs with --mode no-mistakes
+rc=1
+$ fm-brief.sh live-b2 some-proj --mode local-only --pause-before-validate
+error: --pause-before-validate applies only to ship briefs with --mode no-mistakes
+rc=1
+$ fm-brief.sh live-b3 some-proj --scout --pause-before-validate
+error: --pause-before-validate applies only to ship briefs with --mode no-mistakes
+rc=1
+$ fm-brief.sh live-b4 --secondmate --no-projects --pause-before-validate
+error: --pause-before-validate applies only to ship briefs with --mode no-mistakes
+rc=1
+$ fm-brief.sh live-b5 some-proj --pause-before-validate --mode no-mistakes
+scaffolded: /tmp/fmlive.CVM5/data/live-b5/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+rc=0
+created dirs for refused ids:
+(none)
+flag-order-independent b5 DoD:
+81:When you believe it is complete, append `done: {summary}` to the status file and stop.

@@ -1,0 +1,63 @@
+### Scenario 7: base (523f6b5) vs target (08b2883) default no-mistakes brief — full diff
+--- <home>/data/cmp-1/brief.md	2026-10-05 11:31:32
++++ <home>/data/cmp-1/brief.md	2026-10-05 11:31:32
+@@ -27,7 +27,7 @@
+ 2. Stay inside this worktree; modify nothing outside it.
+ 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
+ 4. Report status by appending one line:
+-   `echo "{state}: {one short line}" >> '<home>/state/cmp-1.status'`
++   `echo "{state}: {one short line}" >> '<home>/state/cmp-1.status'`
+    States: working, needs-decision, blocked, paused, done, failed.
+    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
+    would act on (setup done, bug reproduced, fix implemented, validation passed) and the
+@@ -45,8 +45,8 @@
+ 5. If you hit the same obstacle twice, append `blocked: {why}` and stop; firstmate will help.
+ 6. If a decision belongs above the implementation worker (product choices, destructive actions),
+    append `needs-decision: {summary of options}` and stop. Firstmate will reply with the decision.
+-   For a no-mistakes ask-user gate specifically, escalate all ask-user findings as one event plus one snapshot file, using that same shape even when the gate holds only a single ask-user finding: write only the ask-user findings, verbatim and unparaphrased (id, severity, file, line, description, authority), to `<home>/data/cmp-1/nm-<run>-findings.txt`, then report the gate with
+-   `needs-decision [key=nm-<run>-<step>]: ask-user findings=<id1>,<id2>,... file=<home>/data/cmp-1/nm-<run>-findings.txt`
++   For a no-mistakes ask-user gate specifically, escalate all ask-user findings as one event plus one snapshot file, using that same shape even when the gate holds only a single ask-user finding: write only the ask-user findings, verbatim and unparaphrased (id, severity, file, line, description, authority), to `<home>/data/cmp-1/nm-<run>-findings.txt`, then report the gate with
++   `needs-decision [key=nm-<run>-<step>]: ask-user findings=<id1>,<id2>,... file=<home>/data/cmp-1/nm-<run>-findings.txt`
+    naming every ask-user finding id from that gate. The status line only points at the file; it never restates or summarizes a finding's content.
+    A decision or blocker you opened stays open until a `resolved` line carrying its exact key lands; a later `done:` or `working:` line never closes it, even when the answer is what started that work.
+    Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append `resolved: {how it cleared}` yourself (same `[key=<slug>]` if you opened it with one) as you resume.
+@@ -64,22 +64,21 @@
+    timed-out call was only waiting for a read while the run kept working.
+ 
+ # Firstmate instruction inbox
+-Firstmate steers you through durable message files in '<home>/state/cmp-1.inbox'.
+-When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list '<home>/state/cmp-1.inbox'/*.msg, read and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '<home>/state/cmp-1.inbox'/NNN.msg '<home>/state/cmp-1.inbox'/handled/`.
++Firstmate steers you through durable message files in '<home>/state/cmp-1.inbox'.
++When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list '<home>/state/cmp-1.inbox'/*.msg, read and act on each message in numeric order, then acknowledge each handled message by moving it: `mv '<home>/state/cmp-1.inbox'/NNN.msg '<home>/state/cmp-1.inbox'/handled/`.
+ The move IS the acknowledgement: without it firstmate rings again and eventually treats you as stuck. An empty or absent inbox needs no action.
+ 
+ # Project memory
+-If `AGENTS.md` or `CLAUDE.md` already exists, or if this task produced durable project-intrinsic knowledge, run `/tmp/fmbase.MvHj/bin/fm-ensure-agents-md.sh .` in the worktree.
++If `AGENTS.md` or `CLAUDE.md` already exists, or if this task produced durable project-intrinsic knowledge, run `/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46ECVFJGM6PE5JGNVGXN3H9/bin/fm-ensure-agents-md.sh .` in the worktree.
+ Record only project knowledge useful to almost every future session.
+ For anything the codebase already shows, prefer a pointer to the authoritative file, command, or doc over copying the detail.
+-If you touch a project `AGENTS.md`, follow `/tmp/fmbase.MvHj/bin/fm-ensure-agents-md.sh`'s self-governance contract in the same pass.
++If you touch a project `AGENTS.md`, follow `/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46ECVFJGM6PE5JGNVGXN3H9/bin/fm-ensure-agents-md.sh`'s self-governance contract in the same pass.
+ Keep it proportionate: skip `AGENTS.md` edits for trivial tasks that produced no durable project knowledge.
+ 
+ # Definition of done
+ Delivery contract: mode=no-mistakes
+ The task is complete only when committed on your branch.
+-When you believe it is complete, append `done: {summary}` to the status file and stop.
+-Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
++When you believe it is complete, append `working: committed {short sha}; starting validation` to the status file and immediately run /no-mistakes yourself to validate and ship a PR; do not stop or wait for firstmate in between.
+ 
+ You drive no-mistakes by responding to its gates, not by implementing fixes.
+ Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and `no-mistakes axi run --help` plus the `help` lines in each `axi` response are authoritative and version-matched to the installed binary.
+diff exit=0
+
+Retained guard lines in target brief:
+48:   For a no-mistakes ask-user gate specifically, escalate all ask-user findings as one event plus one snapshot file, using that same shape even when the gate holds only a single ask-user finding: write only the ask-user findings, verbatim and unparaphrased (id, severity, file, line, description, authority), to `/tmp/fmcmp.oB0K/t/data/cmp-1/nm-<run>-findings.txt`, then report the gate with
+49:   `needs-decision [key=nm-<run>-<step>]: ask-user findings=<id1>,<id2>,... file=/tmp/fmcmp.oB0K/t/data/cmp-1/nm-<run>-findings.txt`
+50:   naming every ask-user finding id from that gate. The status line only points at the file; it never restates or summarizes a finding's content.
+102:- ask-user findings are never yours to answer: escalate to firstmate using rule 6's ask-user format and stop.
+103:  Firstmate applies `ask-user-authority` and obtains any required captain decision.
+104:  When the decision comes back, feed it to the gate with `no-mistakes axi respond` and let the pipeline apply it - do not route the question to "the user" or implement the fix yourself.
+105:- NEVER pass `--yes` (or `-y`) to `no-mistakes axi run` or `no-mistakes axi respond`. It is banned fleet-wide.
+106:  It auto-resolves every gate including ask-user findings with no escalation, and answering your own ask-user finding is a hard rule violation.
+108:After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append `done: PR {url} checks green` and stop. You are finished.
