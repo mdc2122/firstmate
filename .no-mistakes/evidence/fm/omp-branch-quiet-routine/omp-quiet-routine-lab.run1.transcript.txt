@@ -1,0 +1,20 @@
+
+
+
+
+
+
+
+# lab at commit c38d712, omp omp/18.4.4, model claude-opus55-cliproxy/claude-opus-5-5[1m]
+# branch active, watcher armed
+# wake A outcome: {"seq":1,"epoch":1791215967,"task":"qwen-fix","wake":"signal: qwen-fix.status","verdict":"routine","summary":"The Qwen dead-frames fix is still in progress; nothing new.","silent":true,"statusEndpoint":126,"statusIdent":"strong:16777235:690840094:1791215938.467677911"}
+# wake A: fm-branch-merge frames in main rpc log so far: 0
+# wake B outcome: {"seq":2,"epoch":1791215983,"task":"qwen-fix","wake":"signal: qwen-fix.status","verdict":"captain","summary":"The Qwen dead-frames fix last said it was still working, but its worker can't be found and its working copy is gone, so I can't confirm whether that work still exists. I haven't relaunched it or changed anything. Monitoring is also reported down, so it needs re-arming.","silent":false,"statusEndpoint":225,"statusIdent":"strong:16777235:690840094:1791215938.467677911"}
+# main rpc fm-branch-merge note contents:
+# watcher wakes reaching main: 0
+# cursor=2 rows=2
+# DONE
+/Users/studio2/.no-mistakes/evidence/01M46BG3FAJESMTDNNPJ82WGSB/omp-quiet-routine-lab.sh: line 19: 65925 Terminated: 15          ( cd "$PROJECT" && env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u FM_HOME -u FM_ROOT_OVERRIDE -u FM_STATE_OVERRIDE -u FM_CONFIG_OVERRIDE -u FM_DATA_OVERRIDE -u NO_MISTAKES_GATE FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 omp --mode rpc --no-session --cwd "$PROJECT" --config "$PROJECT/.omp/fm-worker-overlay.yml" --auto-approve --model "$MODEL" --thinking low < "$RPC_IN" > "$RPC_LOG" 2> "$RPC_ERR" )
+rm: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//omp-quiet-lab.UxhTxc/project/state: Directory not empty
+rm: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//omp-quiet-lab.UxhTxc/project: Directory not empty
+rm: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//omp-quiet-lab.UxhTxc: Directory not empty

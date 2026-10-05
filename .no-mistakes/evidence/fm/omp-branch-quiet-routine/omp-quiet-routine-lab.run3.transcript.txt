@@ -1,0 +1,13 @@
+# lab at commit c38d712, omp omp/18.4.4, model claude-opus55-cliproxy/claude-opus-5-5[1m]
+# crew state before wakes: state: unknown · source: none · no current-state source available
+# branch active, watcher armed
+# wake A outcome: {"seq":1,"epoch":1791216357,"task":"qwen-fix","wake":"signal: qwen-fix.status","verdict":"routine","summary":"The Qwen dead-frames fix worker is reproducing the bug; nothing new yet.","silent":true,"statusEndpoint":126,"statusIdent":"strong:16777235:691136473:1791216316.665824793"}
+# wake A: fm-branch-merge frames in main rpc log so far: 0
+# wake B outcomes:
+{"seq":2,"verdict":"routine","silent":true,"summary":"The Qwen dead-frames fix worker is still fixing the bug; nothing new."}
+{"seq":3,"verdict":"routine","silent":false,"summary":"The Qwen dead-frames fix worker is active again and opened PR https://github.com/example/qwen/pull/12 with the fix; CI is running, not yet ready for review."}
+# main rpc fm-branch-merge note contents:
+{"content":"⛵ qwen-fix: The Qwen dead-frames fix worker is active again and opened PR https://github.com/example/qwen/pull/12 with the fix; CI is running, not yet ready for review.","display":true}
+# watcher wakes reaching main: 1
+# cursor=3 rows=3
+# DONE

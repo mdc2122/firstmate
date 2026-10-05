@@ -1,0 +1,11 @@
+# lab at commit c38d712, omp omp/18.4.4, model claude-opus55-cliproxy/claude-opus-5-5[1m]
+# branch active, watcher armed
+# wake A outcome: {"seq":1,"epoch":1791216092,"task":"qwen-fix","wake":"signal: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/omp-quiet-lab.ziMTkH/project/state/qwen-fix.status","verdict":"routine","summary":"The Qwen dead-frames fix worker is still reproducing and fixing the bug; nothing new.","silent":true,"statusEndpoint":126,"statusIdent":"strong:16777235:690864234:1791216066.349597222"}
+# wake A: fm-branch-merge frames in main rpc log so far: 0
+# wake B outcomes:
+{"seq":2,"verdict":"captain","silent":false,"summary":"The Qwen dead-frames fix worker's last note says it's still fixing, but I can't confirm it is alive: there's no record of where it runs and its working copy is missing, so I didn't relaunch it. Background monitoring also reported itself down during this check."}
+{"seq":3,"verdict":"captain","silent":false,"summary":"The Qwen dead-frames worker is alive after all: it opened PR https://github.com/example/qwen/pull/12 with the fix, and CI is running. That overrides the earlier restart recommendation, but I still can't see where the worker runs, and background monitoring still reports itself down."}
+# main rpc fm-branch-merge note contents:
+# watcher wakes reaching main: 0
+# cursor=3 rows=3
+# DONE

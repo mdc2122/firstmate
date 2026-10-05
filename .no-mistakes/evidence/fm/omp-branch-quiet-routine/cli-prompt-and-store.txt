@@ -1,0 +1,35 @@
+$ fm-branch-prompt.sh --harness omp | grep -A1 "^4. Report"
+4. Report: call the fm_branch_report tool exactly once per handled event, with the task id, the verdict, and a one-or-two-sentence summary; set silent true on a routine report whose handling found no state change - a task whose worker is working or still working with nothing new, or a fleet-wide heartbeat review that found literally nothing worth reporting.
+   A silent report is still stored durably and readable by MAIN, but it never reaches the captain's screen; omit silent whenever something changed - a PR opened or merged, a blocker, a decision resolved, a new finding or artifact, or any action you took.
+
+$ fm-branch-prompt.sh | grep "^4. Report"   (Pi default)
+4. Report: call the fm_branch_report tool exactly once per handled event, with the task id, the verdict, and a one-or-two-sentence summary; set silent true only for a fleet-wide heartbeat review that found literally nothing worth reporting.
+
+$ fm-branch-prompt.sh --harness pi
+usage: fm-branch-prompt.sh [--harness omp]
+exit=2
+$ fm-branch-prompt.sh --harness bogus
+usage: fm-branch-prompt.sh [--harness omp]
+exit=2
+$ fm-branch-prompt.sh --harness omp extra
+usage: fm-branch-prompt.sh [--harness omp]
+exit=2
+
+$ fm-branch-outcome.sh append --task task-1 --verdict routine --silent true --summary "No change: the Qwen dead-frames fix is still being worked on"
+1
+exit=0
+$ fm-branch-outcome.sh append --task task-1 --verdict captain --silent true --summary "needs decision"
+error: silent outcomes must be routine outcomes
+exit=2
+$ fm-branch-outcome.sh append --task task-1 --verdict routine --summary "task-1 opened PR, CI running"
+2
+exit=0
+
+$ fm-branch-outcome.sh startup-replay
+BRANCH OUTCOMES (handled by the supervision branch, not yet seen by this session):
+{"seq":2,"epoch":1791215456,"task":"task-1","wake":"","verdict":"routine","summary":"task-1 opened PR, CI running","silent":false,"statusEndpoint":0,"statusIdent":"-"}
+exit=0
+
+$ cat state/branch-outcomes.jsonl
+{"seq":1,"epoch":1791215456,"task":"task-1","wake":"turn_end: task-1","verdict":"routine","summary":"No change: the Qwen dead-frames fix is still being worked on","silent":true,"statusEndpoint":0,"statusIdent":"-"}
+{"seq":2,"epoch":1791215456,"task":"task-1","wake":"","verdict":"routine","summary":"task-1 opened PR, CI running","silent":false,"statusEndpoint":0,"statusIdent":"-"}
