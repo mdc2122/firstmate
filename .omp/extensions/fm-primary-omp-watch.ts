@@ -254,12 +254,6 @@ function positiveInteger(name: string, fallback: number): number {
   return Math.floor(value);
 }
 
-function parentPid(pid: string): string {
-  const result = spawnSync("ps", ["-o", "ppid=", "-p", pid], { encoding: "utf8" });
-  if (result.status !== 0) return "";
-  return result.stdout.trim();
-}
-
 function pidAlive(pid: string): boolean {
   try {
     process.kill(Number(pid), 0);
@@ -277,25 +271,18 @@ function lockOwnership(): LockOwnership {
     return "missing";
   }
   if (!/^[0-9]+$/.test(lockPid) || lockPid === "1") return "other";
-  let pid = String(process.pid);
-  for (let i = 0; i < 8; i += 1) {
-    if (pid === lockPid) return "owned";
-    pid = parentPid(pid);
-    if (!pid || pid === "1") break;
-  }
+  if (lockPid === String(process.pid)) return "owned";
   return pidAlive(lockPid) ? "other" : "missing";
 }
 
-// The ownership proof (bin/fm-wake-lib.sh fm_omp_extension_owns_supervision)
-// binds this marker's pid to the pid in state/.lock, so only that session
-// process, or one about to claim an unheld lock, may record it. A nested omp
-// the session runs from this home (fm-spawn's `omp models --json` probe, an
-// ad-hoc `omp -p`) auto-discovers this file and its ancestor walk also reaches
-// the lock owner, but its write could only replace the session's valid record.
+// Only the process named in state/.lock owns this session: the ownership proof
+// (bin/fm-wake-lib.sh fm_omp_extension_owns_supervision) binds this marker's
+// pid to the lock's pid. A nested omp the session runs from this home
+// (fm-spawn's `omp models --json` probe, an ad-hoc `omp -p`) auto-discovers
+// this file but is not the lock holder, so it neither records the marker nor
+// activates the watch.
 function markLoaded(): void {
-  const ownership = lockOwnership();
-  if (ownership === "other") return;
-  if (ownership === "owned" && readOptional(`${state}/.lock`).trim() !== String(process.pid)) return;
+  if (lockOwnership() === "other") return;
   mkdirSync(state, { recursive: true });
   writeFileSync(marker, `${extensionVersion}\n${process.pid}\n`);
 }
