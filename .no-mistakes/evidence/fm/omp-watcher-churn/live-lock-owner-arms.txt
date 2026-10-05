@@ -1,0 +1,8 @@
+=== HEAD: real omp is itself the state/.lock holder
+lock pid=95972 (omp will exec into this pid)
+omp rc=0
+arm launched by lock owner: ppid=95972 args=--restart
+2026-10-05T21:30:51.323Z pid=95972 instance=1/1 gen=1 load owner
+2026-10-05T21:30:51.704Z pid=95972 instance=1/1 gen=1 session_start owner
+2026-10-05T21:30:55.161Z pid=95972 instance=1/1 gen=1 session_shutdown owner
+markers: watch=95972 turnend=95972 lock=95972

@@ -1,0 +1,14 @@
+=== efea371
+session pid (state/.lock)=7143
+before probe: ownership proof HOLDS
+nested 'omp models --json' rc=0 (stdout bytes 47682)
+marker pids after probe: watch=7232 turnend=7232
+after probe: ownership proof BROKEN
+no arm-child state written by the nested omp
+=== HEAD
+session pid (state/.lock)=7131
+before probe: ownership proof HOLDS
+nested 'omp models --json' rc=0 (stdout bytes 47682)
+marker pids after probe: watch=7131 turnend=7131
+after probe: ownership proof HOLDS
+no arm-child state written by the nested omp
