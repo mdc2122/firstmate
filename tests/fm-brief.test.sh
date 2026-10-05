@@ -260,8 +260,21 @@ test_ship_mode_is_explicit_not_registry() {
   brief="$home/data/brief-explicit-a5/brief.md"
   grep -qx "Delivery contract: mode=no-mistakes" "$brief" \
     || fail "registered direct-PR posture overrode the explicit --mode"
-  assert_grep "Firstmate will then instruct you to run /no-mistakes" "$brief" \
-    "explicit no-mistakes brief did not render the pipeline definition of done"
+  assert_grep "starting validation\` to the status file and immediately run /no-mistakes yourself" "$brief" \
+    "explicit no-mistakes brief did not render the self-starting pipeline definition of done"
+  assert_no_grep "will then instruct you to run /no-mistakes" "$brief" \
+    "default no-mistakes brief still waits for firstmate to trigger validation"
+
+  # The opt-in pause restores the stop after the commit, for work firstmate wants to look at first.
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-explicit-a7 direct-proj --mode no-mistakes --pause-before-validate >/dev/null 2>&1 \
+    || fail "--pause-before-validate no-mistakes brief should scaffold"
+  brief="$home/data/brief-explicit-a7/brief.md"
+  assert_grep "append \`done: {summary}\` to the status file and stop" "$brief" \
+    "--pause-before-validate brief did not stop after the commit"
+  assert_grep "will then instruct you to run /no-mistakes" "$brief" \
+    "--pause-before-validate brief did not wait for firstmate to trigger validation"
+  assert_no_grep "immediately run /no-mistakes yourself" "$brief" \
+    "--pause-before-validate brief still starts validation on its own"
 
   # An unregistered project is not a blocker either, because nothing is looked up.
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-explicit-a6 never-registered --mode local-only >/dev/null 2>&1 \
@@ -290,6 +303,8 @@ yolo on a ship brief|brief-refused-b1 some-proj --mode direct-PR --yolo on|--yol
 yolo=value form on a ship brief|brief-refused-b2 some-proj --mode direct-PR --yolo=off|--yolo is not a brief input
 mode on a scout brief|brief-refused-b3 some-proj --scout --mode direct-PR|--mode applies only to ship briefs
 mode on a secondmate charter|brief-refused-b4 --secondmate --no-projects --mode no-mistakes|--mode applies only to ship briefs
+pause on a direct-PR brief|brief-refused-b5 some-proj --mode direct-PR --pause-before-validate|--pause-before-validate applies only to ship briefs with --mode no-mistakes
+pause on a scout brief|brief-refused-b6 some-proj --scout --pause-before-validate|--pause-before-validate applies only to ship briefs with --mode no-mistakes
 ROWS
   pass "fm-brief.sh: --yolo and scout/secondmate --mode are refused, never silently dropped"
 }

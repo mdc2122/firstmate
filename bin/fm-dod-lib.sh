@@ -5,9 +5,14 @@
 # receives. Both paths must hand the worker the same contract: a promoted
 # no-mistakes worker that never received the ask-user escalation rule or the
 # `--yes` ban is the exact delivery hole this single owner exists to close.
-# fm_dod_block <no-mistakes|direct-PR|local-only> <task-id> prints the block on
-# stdout with no trailing blank line. The caller validates the mode; an unknown
-# mode is refused rather than silently rendered as the pipeline contract.
+# fm_dod_block <no-mistakes|direct-PR|local-only> <task-id> [pause-before-validate]
+# prints the block on stdout with no trailing blank line. The caller validates the
+# mode; an unknown mode is refused rather than silently rendered as the pipeline
+# contract. By default a no-mistakes worker reports its implementation commit with
+# a non-terminal `working:` line and starts /no-mistakes itself; the optional
+# `pause-before-validate` argument (no-mistakes only) instead has it report
+# `done:` and wait for firstmate to trigger validation, for tasks where firstmate
+# deliberately wants to look first.
 # The block opens with the fixed machine-readable "Delivery contract: mode=<mode>"
 # line that bin/fm-spawn.sh checks a ship brief against.
 # This file is the one owner of the no-mistakes `--intent` contract: only the
@@ -232,8 +237,17 @@ fm_ask_user_escalation_block() {  # <data-dir> <task-id>
 EOF
 }
 
-fm_dod_block() {  # <mode> <task-id>
-  local mode=$1 id=$2
+fm_dod_block() {  # <mode> <task-id> [pause-before-validate]
+  local mode=$1 id=$2 pause=${3:-} start_validation
+  case "$pause" in
+    '') ;;
+    pause-before-validate)
+      [ "$mode" = no-mistakes ] || {
+        echo "error: fm_dod_block: pause-before-validate applies only to mode=no-mistakes" >&2
+        return 1
+      } ;;
+    *) echo "error: fm_dod_block: unknown option '$pause'" >&2; return 1 ;;
+  esac
   case "$mode" in
     direct-PR)
       cat <<EOF
@@ -257,12 +271,17 @@ The configured merge authority approves the ready branch, then firstmate merges 
 EOF
       ;;
     no-mistakes)
+      if [ -n "$pause" ]; then
+        start_validation="When you believe it is complete, append \`done: {summary}\` to the status file and stop.
+This task pauses before validating: firstmate reviews the commit first and will then instruct you to run /no-mistakes to validate and ship a PR."
+      else
+        start_validation="When you believe it is complete, append \`working: committed {short sha}; starting validation\` to the status file and immediately run /no-mistakes yourself to validate and ship a PR; do not stop or wait for firstmate in between."
+      fi
       cat <<EOF
 # Definition of done
 Delivery contract: mode=no-mistakes
 The task is complete only when committed on your branch.
-When you believe it is complete, append \`done: {summary}\` to the status file and stop.
-Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
+$start_validation
 
 You drive no-mistakes by responding to its gates, not by implementing fixes.
 Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.

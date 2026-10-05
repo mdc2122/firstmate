@@ -364,7 +364,8 @@ After an autonomous merge, give the captain a one-line full-URL or local-main ou
 
 ### Validate
 
-For a no-mistakes ship, trigger validation on the same worker after its implementation commit, using the harness invocation owned by `harness-adapters`.
+For a no-mistakes ship, the worker starts validation itself right after its implementation commit, reporting a non-terminal `working:` line rather than waiting for firstmate.
+Only a task given `--pause-before-validate` by `bin/fm-brief.sh` or `bin/fm-promote.sh`, an explicit choice for work such as security-sensitive changes or a risky design, stops with `done:` after the commit; firstmate then triggers validation on the same worker using the harness invocation owned by `harness-adapters`.
 The task worker that starts a no-mistakes run drives the pipeline and owns every `no-mistakes axi run` and `no-mistakes axi respond` call through the next gate or outcome.
 Firstmate never invokes `no-mistakes axi respond` for a crew-owned run.
 When the captain adds or changes an ask mid-task, append the captain's words without added speaker labels or direct address to that brief's `## Captain's intent` and relay those words to the worker; Firstmate build constraints stay in `## Firstmate spec` or the steer.
