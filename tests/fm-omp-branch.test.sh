@@ -133,6 +133,13 @@ const pi = {
             await reportTool.execute("c1", { task: "task-1", verdict: "routine", summary: "handled event" });
           } else if (process.env.PROMPT_BEHAVIOR === "report-captain") {
             await reportTool.execute("c1", { task: "task-1", verdict: "captain", summary: "PR https://example.com/pr/1 is green" });
+          } else if (process.env.PROMPT_BEHAVIOR === "report-quiet-mix") {
+            const results = [];
+            results.push(await reportTool.execute("c1", { task: "task-1", verdict: "routine", summary: "No change: the task-1 fix is still being worked on.", silent: true }));
+            results.push(await reportTool.execute("c2", { task: "task-1", verdict: "routine", summary: "The task-1 worker opened its PR and CI is running." }));
+            results.push(await reportTool.execute("c3", { task: "task-1", verdict: "captain", summary: "The task-1 worker needs a decision.", silent: true }));
+            results.push(await reportTool.execute("c4", { task: "task-1", verdict: "captain", summary: "PR https://example.com/pr/1 is green" }));
+            globalThis.__reportResults = results.map((r) => `${r.isError ? "error" : "ok"}:${r.content[0].text}`);
           } else if (process.env.PROMPT_BEHAVIOR === "provider-error") {
             sessionEntries.push({ type: "message", message: { role: "assistant", content: "x", stopReason: "error", errorMessage: "quota" } });
           } else {
@@ -468,6 +475,56 @@ EOF
   pass "F7's inverse: a wake the branch reports never reaches main as a wake and lands in the durable store"
 }
 
+# --- routine visibility: a no-change task outcome is stored but never shown ---
+
+test_silent_routine_task_outcome_is_stored_not_shown() {
+  local repo home out store
+  repo="$TMP_ROOT/quiet-repo"
+  home="$TMP_ROOT/quiet-home"
+  store="$home/state/branch-outcomes.jsonl"
+  install_omp_branch_fixture "$repo"
+  mkdir -p "$home/state" "$home/config"
+  printf 'on\n' > "$home/config/omp-supervision-branch"
+  printf '%s\n' "$$" > "$home/state/.lock"
+  make_omp_ancestry_ps "$TMP_ROOT/quiet-ps" "$$"
+  seed_branch_eligible_wake "$home" task-1 7
+  out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+    FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/quiet-ps:$PATH" PROMPT_BEHAVIOR=report-quiet-mix SETTLE_MS=2000 \
+    DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, mainEntries, ctx }; })()`);
+const { dispatch, fire, settled, sentToMain, mainEntries, ctx } = globalThis.__t;
+await fire("session_start", {}, ctx);
+await settled();
+const offer = dispatch("signal: task-1 done");
+if (!offer.accepted) { console.log("declined"); process.exit(1); }
+await offer.settlement;
+const notes = sentToMain.filter((m) => m.customType === "fm-branch-merge");
+const processing = sentToMain.filter((m) => m.customType === "fm-branch-process");
+const visible = mainEntries.filter((e) => e.customType === "fm-branch-visible-outcome");
+console.log(`results=${JSON.stringify(globalThis.__reportResults)}`);
+console.log(`notes=${JSON.stringify(notes.map((m) => ({ content: m.content, display: m.display })))}`);
+console.log(`processing=${processing.length} trigger=${processing.every((m) => m.triggerTurn === true)} lists=${processing.some((m) => String(m.content).includes("PR https://example.com/pr/1 is green"))}`);
+console.log(`visible=${JSON.stringify(visible.map((e) => e.data.summary))}`);
+EOF
+)
+  case "$out" in
+    *'results=["ok:recorded seq 1 '*'"ok:recorded seq 2 '*'"error:invalid report: a captain outcome cannot be silent"'*'"ok:recorded seq 3 '*) ;;
+    *) fail "the report tool did not accept silent routine, visible routine, and captain reports while refusing a silent captain one: $out" ;;
+  esac
+  assert_not_contains "$out" "still being worked on" "a silent no-change task outcome reached the captain conversation"
+  assert_contains "$out" 'notes=[{"content":"⛵ task-1: The task-1 worker opened its PR and CI is running.","display":true}]' \
+    "a routine outcome reporting a change was not shown exactly once as a displayed note"
+  assert_contains "$out" "processing=1 trigger=true lists=true" "a captain outcome did not open one processing turn on main"
+  assert_contains "$out" 'visible=["PR https://example.com/pr/1 is green"]' "a captain outcome lost its visible record"
+  jq -e -s 'length == 3
+    and .[0].task == "task-1" and .[0].verdict == "routine" and .[0].silent == true
+    and .[1].verdict == "routine" and .[1].silent == false
+    and .[2].verdict == "captain" and .[2].silent == false' "$store" >/dev/null \
+    || fail "the durable store does not hold the silent, visible, and captain outcomes in order: $(cat "$store")"
+  [ "$(cat "$home/state/.branch-outcomes-cursor")" = 3 ] || fail "the silent outcome was not marked read with the rest"
+  pass "a no-change routine task outcome is stored but not shown, a changed routine outcome is shown, and a captain outcome still opens a processing turn"
+}
+
 # --- report-only mode -----------------------------------------------------------
 
 test_report_only_refuses_mutating_commands_and_writes_shadow_log() {
@@ -637,6 +694,7 @@ test_f3_main_refused_while_branch_holds_lease
 test_f5_branch_never_loads_extensions
 test_f7_failed_branch_wake_returns_to_main
 test_f7_handled_wake_writes_outcome_and_never_reaches_main
+test_silent_routine_task_outcome_is_stored_not_shown
 test_report_only_refuses_mutating_commands_and_writes_shadow_log
 test_report_only_shadow_records_intended_verdict
 test_report_only_classifier_refuses_bash_quoting_bypasses

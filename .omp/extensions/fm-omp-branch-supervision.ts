@@ -50,7 +50,13 @@
 // sequence-keyed appendEntry record (durable, idempotent, out of context) and
 // show in a widget above the editor until main acknowledges them; main
 // processes them through the same typed processing request as on Pi. Routine
-// outcomes stay rendered sailboat notes (display:true custom messages).
+// outcomes stay rendered sailboat notes (display:true custom messages), except
+// a silent one: unlike Pi, where only a no-change fleet heartbeat may be
+// silent, the omp branch may mark any routine outcome that reports no state
+// change (a worker still working, nothing new) silent. A silent row is stored
+// and marked read like any other but sends nothing into main's conversation,
+// so it never reaches the captain's screen or main's context; main still reads
+// it on demand through fm_branch_outcomes.
 //
 // Model and effort: config/supervision-branch-model is resolved through omp's
 // own ctx.models; config/supervision-branch-effort is applied as the branch's
@@ -216,7 +222,7 @@ function parseOutcomeRow(value: unknown): OutcomeRow | null {
   if (typeof row.summary !== "string" || !row.summary) return null;
   if (row.silent !== undefined && typeof row.silent !== "boolean") return null;
   const silent = row.silent === true;
-  if (silent && (row.task !== "fleet" || row.verdict !== "routine")) return null;
+  if (silent && row.verdict !== "routine") return null;
   return { seq: row.seq, task: row.task, verdict: row.verdict, summary: row.summary, silent };
 }
 
@@ -435,8 +441,8 @@ export default function (pi: ExtensionAPI) {
     appendFileSync(shadowLog, `${JSON.stringify({ epoch: Math.floor(Date.now() / 1000), ...record })}\n`);
   }
 
-  function deliverNote(text: string, display = true): void {
-    const message = { customType: "fm-branch-merge", content: `${MERGE_NOTE_BOAT} ${text}`, display };
+  function deliverNote(text: string): void {
+    const message = { customType: "fm-branch-merge", content: `${MERGE_NOTE_BOAT} ${text}`, display: true };
     pi.sendMessage(message, mainStreaming ? { deliverAs: "nextTurn" } : {});
   }
 
@@ -559,8 +565,8 @@ export default function (pi: ExtensionAPI) {
       if (!(await generationOwnsLock(expectedGeneration))) return false;
       if (row.verdict === "captain") {
         if (!ensureVisibleCaptainOutcome(row)) return false;
-      } else {
-        deliverNote(`${row.task}: ${row.summary}`, !(row.task === "fleet" && row.silent));
+      } else if (!row.silent) {
+        deliverNote(`${row.task}: ${row.summary}`);
       }
       if (!(await runOutcomeScript(["mark-read", "--through", String(row.seq)])).ok) return false;
     }
@@ -581,13 +587,13 @@ export default function (pi: ExtensionAPI) {
       label: "Report supervision outcome",
       description: reportOnly
         ? "Record what you would do for one handled fleet event in the report-only shadow log. Nothing reaches the captain or main."
-        : "Record the outcome of one handled fleet event: write it durably to the outcome store, then merge it into the captain-facing main conversation. verdict captain records an exact outcome and opens one sequence-keyed processing turn on main that stays open until main acknowledges it; routine notes render unless silent marks a no-change heartbeat.",
+        : "Record the outcome of one handled fleet event: write it durably to the outcome store, then merge it into the captain-facing main conversation. verdict captain records an exact outcome and opens one sequence-keyed processing turn on main that stays open until main acknowledges it; a routine note renders unless silent marks it as reporting no state change, in which case it is stored but never shown.",
       parameters: Type.Object({
         task: Type.String({ description: "The task id the event belongs to (or 'fleet' for fleet-wide events)" }),
         verdict: Type.String({ description: "routine or captain, exactly as the \"Verdict: routine or captain\" section of your system prompt decides" }),
         summary: Type.String({ description: "One or two sentences in captain outcome language; include the full https:// PR URL when a PR is involved" }),
         wake: Type.Optional(Type.String({ description: "The wake reason line this outcome answers" })),
-        silent: Type.Optional(Type.Boolean({ description: "True only when a fleet-wide heartbeat review found literally nothing worth reporting" })),
+        silent: Type.Optional(Type.Boolean({ description: "Routine only: true when handling found no state change (the worker is working or still working with nothing new, or a heartbeat review found nothing); the outcome is stored but never shown to the captain. Omit whenever anything changed or any action was taken." })),
       }),
       execute: async (_toolCallId, params) => {
         const task = String(params.task ?? "").trim();
@@ -595,7 +601,8 @@ export default function (pi: ExtensionAPI) {
         const summary = String(params.summary ?? "").trim();
         const wake = String(params.wake ?? "").trim();
         const silent = params.silent === true;
-        if (!task || !summary || (verdict !== "routine" && verdict !== "captain") || (silent && (task !== "fleet" || verdict !== "routine"))) {
+        if (!task || !summary || (verdict !== "routine" && verdict !== "captain") || (silent && verdict !== "routine")) {
+          if (silent && verdict === "captain") return textResult("invalid report: a captain outcome cannot be silent", true);
           return textResult("invalid report: task, verdict (routine|captain), and summary are required", true);
         }
         const refusal = wakeScopeRefusal(task);
@@ -668,7 +675,7 @@ export default function (pi: ExtensionAPI) {
   async function createBranch(branchGeneration: number, shadowWake: string): Promise<BranchSession> {
     const sdk = pi.pi;
     if (!sdk) throw new Error("omp did not expose its SDK to the extension");
-    const prompt = await runCommandAsync("bash", [promptScript], { cwd: fmRoot, env: scriptEnv, maxBuffer: 4 * 1024 * 1024 });
+    const prompt = await runCommandAsync("bash", [promptScript, "--harness", "omp"], { cwd: fmRoot, env: scriptEnv, maxBuffer: 4 * 1024 * 1024 });
     if (prompt.status !== 0 || !prompt.stdout || prompt.stdout.length < 1024) {
       throw new Error(`fm-branch-prompt.sh did not produce a usable branch prompt (status=${prompt.status ?? "none"}): ${(prompt.stderr || "").trim()}`);
     }

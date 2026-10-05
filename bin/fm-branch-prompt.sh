@@ -19,11 +19,26 @@
 # version". tests/fm-branch-supervision.test.sh holds this to byte-identical
 # output across runs, environments, and fleet states.
 #
-# Usage: fm-branch-prompt.sh   (stdout is the complete system prompt)
+# One deliberate per-harness difference, still a pure function of tracked
+# files: `--harness omp` replaces the report step's silent rule, because the
+# omp branch (.omp/extensions/fm-omp-branch-supervision.ts) hides a routine
+# per-task no-change outcome while the Pi branch accepts silent only for a
+# no-change fleet heartbeat. Each harness passes its own fixed value, so each
+# harness's prefix stays byte-stable.
+#
+# Usage: fm-branch-prompt.sh [--harness pi|omp]   (default pi; stdout is the
+#        complete system prompt)
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_TRACKED_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+HARNESS=pi
+case "$#:${1:-}:${2:-}" in
+  0::) ;;
+  2:--harness:pi|2:--harness:omp) HARNESS=$2 ;;
+  *) echo "usage: fm-branch-prompt.sh [--harness pi|omp]" >&2; exit 2 ;;
+esac
 
 cat <<'PROMPT'
 You are the SUPERVISION BRANCH of firstmate: the persistent second conversation, beside the captain-facing MAIN conversation, inside one harness process.
@@ -48,7 +63,18 @@ Handle it start to finish in one turn sequence:
    Claim the reserved `backlog` lease around backlog writes (`bin/fm-lease.sh claim backlog`, then `bin/fm-tasks-axi.sh ...`, then release).
    A refused claim means MAIN is acting on that task right now: do not work around it; report the event with what you observed and let the next wake retry.
 3. Handle with real tools: `bin/fm-crew-state.sh <task>` for current state (a status line is a wake event, not current-state truth), `bin/fm-send.sh` for a short steer, `bin/fm-control.sh <task> interrupt|exit|relaunch` for lifecycle, `bin/fm-pr-check.sh <task> <url>` only to retry after a `merge poll not armed` notice (the watcher arms the merge poll itself from the worker's ready line), `bin/fm-tasks-axi.sh` for backlog moves.
+PROMPT
+if [ "$HARNESS" = omp ]; then
+  cat <<'PROMPT'
+4. Report: call the fm_branch_report tool exactly once per handled event, with the task id, the verdict, and a one-or-two-sentence summary; set silent true on a routine report whose handling found no state change - a task whose worker is working or still working with nothing new, or a fleet-wide heartbeat review that found literally nothing worth reporting.
+   A silent report is still stored durably and readable by MAIN, but it never reaches the captain's screen; omit silent whenever something changed - a PR opened or merged, a blocker, a decision resolved, a new finding or artifact, or any action you took.
+PROMPT
+else
+  cat <<'PROMPT'
 4. Report: call the fm_branch_report tool exactly once per handled event, with the task id, the verdict, and a one-or-two-sentence summary; set silent true only for a fleet-wide heartbeat review that found literally nothing worth reporting.
+PROMPT
+fi
+cat <<'PROMPT'
    The report is what durably records your outcome and merges it into MAIN; an event without a report is an event MAIN never learns about, so never skip it, including for events where you took no action.
 5. Acknowledge: after the report succeeds, run the exact `--ack-through` command the drain printed as WAKE_ACK_REQUIRED.
 6. Release every lease you claimed: `bin/fm-lease.sh release <task>`.
