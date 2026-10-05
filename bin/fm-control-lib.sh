@@ -32,7 +32,9 @@
 #      and whether the backend has a recovery-grade agent-state classifier
 #      (bin/fm-backend.sh's fm_backend_agent_state) able to PROVE that an agent
 #      stopped. A verb whose postcondition cannot be proven on the recorded
-#      backend is refused rather than performed blind.
+#      backend is refused rather than performed blind; the one exception is a
+#      backend that can prove its endpoint is already gone, which may relaunch
+#      that vanished endpoint (fm_control_backend_gone_recoverable).
 #
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex and grok resume only from a session id printed at
@@ -219,6 +221,19 @@ fm_control_backend_state_verified() {  # <backend>
   return 1
 }
 
+# Whether <backend>, lacking a recovery-grade classifier, can still prove that
+# a task's terminal and agent are GONE - the one state in which a replacement
+# may be launched without stopping anything. Only Orca has that narrow proof
+# (bin/backends/orca.sh's fm_backend_orca_terminal_gone). It authorizes
+# `relaunch` of an already-vanished endpoint, never `exit`, and never a
+# relaunch over a terminal that still exists.
+fm_control_backend_gone_recoverable() {  # <backend>
+  case "${1-}" in
+    orca) return 0 ;;
+  esac
+  return 1
+}
+
 # The per-task wiring artifacts a harness leaves behind, so a relaunch that
 # changes harness (or re-arms the same one with a fresh busy generation) can
 # clear the previous incarnation's wiring instead of leaving a stale hook
@@ -280,4 +295,33 @@ fm_control_harness_turnend_auth_path() {  # <harness> <token>
     kimi) printf '%s\n' "$HOME/.kimi-code/fm-turn-end.d/$token" ;;
     *) return 0 ;;
   esac
+}
+
+# Remove one incarnation's per-task wiring: every path
+# fm_control_harness_wiring_paths names plus its turn-end registry entry.
+fm_control_clear_harness_wiring() {  # <recorded-harness> <worktree> <state-dir> <id>
+  local harness=$1 wt=$2 state=$3 id=$4 token_path token auth_path path
+  # bin/fm-spawn.sh's wiring arms match on harness PREFIXES, because a task launched
+  # from a raw command records that command's basename rather than the exact
+  # adapter name. The retirement tables are keyed by the exact adapter, so the
+  # recorded value is resolved to its adapter first; otherwise a task recorded
+  # as, say, `grok-2` would have wiring armed and never retired. An
+  # unrecognized value resolves to no adapter, which is also the case in which
+  # no wiring was armed to begin with.
+  harness=$(fm_control_harness_family "$harness") || harness=
+  token_path=$(fm_control_harness_turnend_token_path "$harness" "$state" "$id") || return 1
+  token=
+  if [ -n "$token_path" ] && [ -f "$token_path" ]; then
+    IFS= read -r token <"$token_path" || [ -n "$token" ] || return 1
+  fi
+  auth_path=$(fm_control_harness_turnend_auth_path "$harness" "$token") || return 1
+  if [ -n "$auth_path" ]; then
+    rm -f -- "$auth_path" || return 1
+  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rm -f -- "$path" || return 1
+  done <<EOF
+$(fm_control_harness_wiring_paths "$harness" "$wt" "$state" "$id")
+EOF
 }

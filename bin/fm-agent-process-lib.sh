@@ -117,3 +117,61 @@ fm_agent_process_classify() {  # <name> <argv0> <args> [pid] -> agent|shell|othe
     printf 'other'
   fi
 }
+
+# fm_agent_process_pids_with_cwd_under: pids of every process whose CURRENT
+# WORKING DIRECTORY is exactly <dir> or under it, from one bounded system-wide
+# `lsof -a -d cwd` scan (never the recursive +D file-tree walk, which lsof
+# itself documents as slow). Never $$ (the calling script's own pid). Empty
+# output when nothing matches; a nonzero return - lsof missing, failing, or
+# printing a record this parser cannot attribute - means the scan could not
+# establish a safe result and proves nothing. A missing <dir> has no occupants.
+fm_agent_process_pids_with_cwd_under() {  # <dir>
+  local dir=$1 out pid path line
+  [ -n "$dir" ] && [ -d "$dir" ] || return 0
+  dir=$(cd "$dir" && pwd -P) || return 1
+  out=$(lsof -a -d cwd -Fpn 2>/dev/null) || return 1
+  [ -n "$out" ] || return 0
+  pid=
+  while IFS= read -r line; do
+    case "$line" in
+      p*)
+        pid=${line#p}
+        case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+        ;;
+      fcwd) [ -n "$pid" ] || return 1 ;;
+      n*)
+        [ -n "$pid" ] || return 1
+        path=${line#n}
+        case "$path" in
+          "$dir"|"$dir"/*)
+            [ -n "$pid" ] && [ "$pid" != "$$" ] && printf '%s\n' "$pid"
+            ;;
+        esac
+        ;;
+      '') ;;
+      *) return 1 ;;
+    esac
+  done <<EOF
+$out
+EOF
+}
+
+# fm_agent_process_cwd_has_agent: 0 only when a successful cwd scan finds a
+# process working inside <dir> that fm_agent_process_classify attributes to a
+# verified harness; 1 for no such process or a scan that could not run. This is
+# positive process-level evidence of a running agent for a backend that cannot
+# attribute its endpoint's processes itself.
+fm_agent_process_cwd_has_agent() {  # <dir>
+  local pids pid comm args
+  pids=$(fm_agent_process_pids_with_cwd_under "$1") || return 1
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    comm=$(LC_ALL=C ps -p "$pid" -o comm= 2>/dev/null) || continue
+    args=$(LC_ALL=C ps -p "$pid" -o args= 2>/dev/null) || continue
+    args=${args#"${args%%[![:space:]]*}"}
+    [ "$(fm_agent_process_classify "$comm" "${args%%[[:space:]]*}" "$args" "$pid")" != agent ] || return 0
+  done <<EOF
+$pids
+EOF
+  return 1
+}

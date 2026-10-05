@@ -1538,6 +1538,27 @@ list: ok=true truncated=false totalCount=20 rows=20 omittedHostIds=[] listed=fal
 A live terminal's read succeeds and the same list names it.
 `tests/fm-backend-orca.test.sh` covers exited reads, stale-handle omission, present handles, failed lists, truncated lists, omitted hosts, and other read errors; [`architecture.md`](../architecture.md#event-driven-supervision) owns the absence policy.
 
+### Gone-terminal relaunch proof
+
+Verified 2026-10-05 against `/Applications/Orca.app` bundle version 1.4.218 with `/opt/homebrew/bin/orca`, read-only, from a cwd outside every probed worktree.
+
+```sh
+. bin/fm-backend.sh; fm_backend_source orca
+fm_backend_orca_terminal_gone term_00000000-dead-beef-0000-000000000000 "$(mktemp -d)"
+fm_backend_orca_terminal_gone <first handle from orca terminal list --json> <its worktreePath>
+fm_backend_orca_terminal_gone term_00000000-dead-beef-0000-000000000000 <a worktree with a live worker>
+```
+
+Observed:
+
+```text
+gone
+present
+occupied
+```
+
+`tests/fm-control-relaunch.test.sh` covers the relaunch built on this proof against a stateful fake Orca CLI with real cwd processes; [`agent-control.md`](../agent-control.md#fail-closed-boundaries) owns the contract.
+
 ## cmux
 
 The current compatibility floor is cmux 0.64, and the active live evidence uses 0.64.17 build 97 on macOS aarch64.

@@ -81,7 +81,12 @@
 #   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
 #     classifier (tmux, herdr), because without one the "the agent stopped"
 #     postcondition cannot be proven. zellij, orca, and cmux are refused rather
-#     than reported as successful blind.
+#     than reported as successful blind - except `relaunch` of an Orca task
+#     whose terminal is proven gone (fm_backend_orca_terminal_gone: a complete
+#     terminal list omits it and no process works in the recorded worktree),
+#     which stops nothing and opens one new terminal in that same worktree.
+#     If no verified harness appears in it, that terminal is closed and the
+#     prior record restored so the relaunch can be retried.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
 #   - A composer that visibly holds pending text refuses before an exit command
@@ -599,6 +604,44 @@ journal_write() {  # <phase> [extra-line]...
   return 1
 }
 
+# gone_relaunch_restore: undo a gone-terminal Orca relaunch whose replacement
+# never verified. Under the meta lock, and only when the published record is
+# this transaction's and names a terminal other than the vanished one, close
+# that new terminal, prove it absent, retire the failed incarnation's wiring
+# and busy generation, and restore the prior record and instructions, so the task is again in the recoverable gone-terminal state.
+gone_relaunch_restore() {
+  local lock new_t new_gen prior_t rc=1
+  [ "$GONE_RELAUNCH" = 1 ] && [ -n "$RELAUNCH_TX" ] && [ -f "$META_PRIOR" ] || return 1
+  lock=$(fm_meta_lock_path "$META") || return 1
+  fm_lock_acquire_wait "$lock"
+  new_t=$(fm_meta_get "$META" terminal)
+  prior_t=$(fm_meta_get "$META_PRIOR" terminal)
+  if [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ] \
+     && [ -n "$new_t" ] && [ "$new_t" != "$prior_t" ] \
+     && fm_backend_kill orca "$new_t" 2>/dev/null \
+     && [ "$(fm_backend_orca_terminal_listed "$new_t" 2>/dev/null)" = absent ]; then
+    new_gen=$(fm_meta_get "$META" busy_gen)
+    fm_control_clear_harness_wiring "$(fm_meta_get "$META" harness)" "$WT" "$STATE" "$ID" \
+      || echo "warning: could not remove the failed replacement's wiring for $ID" >&2
+    if [ -n "$new_gen" ] \
+       && ! "$SCRIPT_DIR/fm-busy-event.sh" retire "$STATE" "$ID" --gen "$new_gen" >/dev/null 2>&1; then
+      echo "warning: could not retire the failed replacement's busy generation for $ID" >&2
+    fi
+    if cp -p "$META_PRIOR" "$META.restore.$$" \
+       && mv -f "$META.restore.$$" "$META"; then
+      rc=0
+    fi
+  fi
+  rm -f "$META.restore.$$"
+  fm_lock_release "$lock" || true
+  [ "$rc" = 0 ] || return 1
+  T=$prior_t
+  if [ -n "$RELAUNCH_BRIEF" ] && [ -f "$BRIEF_PRIOR" ]; then
+    cp -p "$BRIEF_PRIOR" "$RELAUNCH_BRIEF" 2>/dev/null || true
+  fi
+  return 0
+}
+
 relaunch_rollback() {
   local state
   [ "$RELAUNCH_ACTIVE" = 1 ] || return 0
@@ -638,6 +681,9 @@ relaunch_rollback() {
       if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
         echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
+      elif gone_relaunch_restore; then
+        journal_write "failed:$RELAUNCH_PHASE" "rollback=new-terminal-closed-prior-record-restored" || true
+        echo "error: no running agent could be confirmed for $ID on $TARGET_HARNESS, so the new Orca terminal was closed and the prior record and instructions restored; its work is preserved at $WT and the relaunch can be retried" >&2
       elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] \
          || { [ -n "$RELAUNCH_TX" ] \
               && [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
@@ -648,6 +694,8 @@ relaunch_rollback() {
         # worse inaccuracy.
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
         echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
+        [ "$GONE_RELAUNCH" != 1 ] \
+          || echo "error: the new Orca terminal $(fm_meta_get "$META" terminal) could not be closed and proven gone; close it in Orca, then retry the relaunch" >&2
       else
         journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
         echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2
@@ -832,11 +880,57 @@ record_note() {
   esac
 }
 
+# relaunch_preflight_gone: on a backend that cannot classify agent state but
+# can prove its endpoint is already gone (Orca), relaunch is allowed only for
+# that vanished endpoint. Sets GONE_RELAUNCH=1 on proof; refuses on any doubt,
+# before anything durable is touched. fm-spawn --relaunch repeats the proof
+# under the task's meta lock immediately before opening the replacement.
+GONE_RELAUNCH=0
+relaunch_preflight_gone() {
+  local verdict
+  fm_control_backend_gone_recoverable "$BACKEND" || return 0
+  [ -n "$WT" ] && [ -d "$WT" ] \
+    || die "task $ID's recorded worktree ${WT:-none} is missing; refusing to relaunch and lose track of its work"
+  fm_backend_source "$BACKEND" || die "the $BACKEND backend adapter could not be loaded; refusing to relaunch"
+  verdict=$(fm_backend_orca_terminal_gone "$T" "$WT")
+  case "$verdict" in
+    gone) GONE_RELAUNCH=1 ;;
+    present) die "task $ID's Orca terminal $T still exists, and the $BACKEND backend has no recovery-grade agent-state classifier to prove its agent stopped; refusing to relaunch over it. Only a terminal that has vanished can be relaunched on $BACKEND" ;;
+    occupied) die "task $ID's Orca terminal $T is gone, but a process is still working in its worktree $WT; refusing to relaunch while a surviving agent could own that copy" ;;
+    *) die "task $ID's Orca terminal state reads '$verdict', so its absence cannot be proven; refusing to relaunch" ;;
+  esac
+}
+
+# wait_replacement_alive: the post-launch postcondition. A state-verified
+# backend reads the reused endpoint; a gone-recovered Orca relaunch reads the
+# NEW terminal fm-spawn published (already in $T) and requires a verified
+# harness process working in the recorded worktree. Prints the last observed
+# state.
+wait_replacement_alive() {
+  local elapsed=0
+  if [ "$GONE_RELAUNCH" != 1 ]; then
+    wait_agent_state "$LAUNCH_WAIT" alive
+    return $?
+  fi
+  while :; do
+    if [ -n "$T" ] && fm_backend_orca_agent_running "$T" "$WT"; then
+      printf 'alive'
+      return 0
+    fi
+    awk -v e="$elapsed" -v t="$LAUNCH_WAIT" 'BEGIN{exit !(e < t)}' || break
+    sleep "$POLL"
+    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
+  done
+  printf 'no-verified-agent'
+  return 1
+}
+
 do_relaunch() {
   local exit_result state note_line
   local -a spawn_args
 
-  require_state_verified_backend relaunch
+  fm_control_backend_gone_recoverable "$BACKEND" || require_state_verified_backend relaunch
+  relaunch_preflight_gone
   resolve_relaunch_profile
 
   case "$KIND" in
@@ -870,8 +964,14 @@ do_relaunch() {
   record_note
   journal_write noted "${CHECKPOINT_LINES[@]}" "$note_line"
 
-  journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
-  exit_result=$(do_exit)
+  if [ "$GONE_RELAUNCH" = 1 ]; then
+    # Nothing to stop: the preflight proved the terminal gone and the copy
+    # unoccupied. Stopping is skipped rather than reported as a success.
+    exit_result=already-gone
+  else
+    journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
+    exit_result=$(do_exit)
+  fi
   journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
@@ -890,7 +990,10 @@ do_relaunch() {
     die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
   fi
 
-  state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
+  # A gone-recovered relaunch publishes a NEW terminal; read it here so the
+  # postcondition and the outcome line both name the endpoint now running.
+  [ "$GONE_RELAUNCH" != 1 ] || T=$(fm_meta_get "$META" terminal)
+  state=$(wait_replacement_alive) || {
     die "the replacement agent for $ID did not come up within ${LAUNCH_WAIT}s (endpoint reads '$state')"
   }
   RELAUNCH_AGENT_CONFIRMED=1

@@ -11,6 +11,10 @@
 # every backend so the decision cannot drift.
 # shellcheck source=bin/fm-composer-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/../fm-composer-lib.sh"
+# Shared harness-process identity and the cwd occupancy scan the gone-terminal
+# proof below relies on.
+# shellcheck source=bin/fm-agent-process-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/../fm-agent-process-lib.sh"
 
 fm_backend_orca_tool_check() {
   command -v orca >/dev/null 2>&1 || { echo "error: backend=orca selected but the 'orca' CLI is not installed" >&2; return 1; }
@@ -250,6 +254,40 @@ const omitted = r.hostScope && r.hostScope.omittedHostIds;
 if (!Array.isArray(omitted) || omitted.length !== 0) process.exit(1);
 process.stdout.write(rows.some((t) => t && t.handle === want) ? "present" : "absent");
 ' "$1"
+}
+
+# fm_backend_orca_terminal_gone: the narrow recovery proof Orca can give that a
+# task's agent no longer exists, standing in for the recovery-grade classifier
+# Orca lacks. Prints exactly one verdict:
+#   gone        - a successful, complete terminal inventory omits <terminal>
+#                 (fm_backend_orca_terminal_listed) AND a successful cwd scan
+#                 finds no process at all working inside <worktree>
+#                 (fm_agent_process_pids_with_cwd_under).
+#   present     - the inventory still lists the terminal.
+#   occupied    - the terminal is gone but some process still works inside the
+#                 worktree; it may be a surviving agent, so nothing may join it.
+#   unreadable  - the CLI, inventory, worktree, or process scan could not answer.
+# Only `gone` licenses launching a replacement; every other verdict is doubt.
+# Zero processes is deliberately stricter than "no harness process": a harness
+# wrapped in an unrecognized launcher must never be mistaken for an empty copy.
+fm_backend_orca_terminal_gone() {  # <terminal-id> <worktree>
+  local terminal=$1 worktree=$2 listed pids
+  [ -n "$terminal" ] && [ -n "$worktree" ] && [ -d "$worktree" ] || { printf 'unreadable'; return 0; }
+  fm_backend_orca_tool_check 2>/dev/null || { printf 'unreadable'; return 0; }
+  listed=$(fm_backend_orca_terminal_listed "$terminal" 2>/dev/null) || { printf 'unreadable'; return 0; }
+  [ "$listed" = absent ] || { printf 'present'; return 0; }
+  pids=$(fm_agent_process_pids_with_cwd_under "$worktree") || { printf 'unreadable'; return 0; }
+  [ -z "$pids" ] || { printf 'occupied'; return 0; }
+  printf 'gone'
+}
+
+# fm_backend_orca_agent_running: positive proof that a replacement launched on
+# <terminal> is up - a complete inventory lists the terminal and a process
+# working inside <worktree> classifies as a verified harness. Returns 0 only
+# then; every other reading, including an unreadable one, returns 1.
+fm_backend_orca_agent_running() {  # <terminal-id> <worktree>
+  [ "$(fm_backend_orca_terminal_listed "$1" 2>/dev/null)" = present ] || return 1
+  fm_agent_process_cwd_has_agent "$2"
 }
 
 fm_backend_orca_json_text() {  # <json> ; exit 2 = ok:false, 3 = terminal exited

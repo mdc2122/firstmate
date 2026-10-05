@@ -99,11 +99,14 @@ Switching harness is therefore one ordinary relaunch rather than a separate mech
   Orca's terminal API exposes only an interrupt and an Enter, so it cannot deliver Escape for harnesses that require it.
 - `exit` and `relaunch` require a backend with a recovery-grade agent-state classifier - tmux and herdr - because without one the "the agent stopped" postcondition cannot be proven.
   zellij, orca, and cmux are refused rather than reported as successful blind.
+  The one exception is relaunching an Orca task whose terminal has already vanished: the narrow proof is that a complete `orca terminal list` omits the recorded terminal and a successful cwd scan finds no process at all inside the recorded worktree (`bin/backends/orca.sh`'s `fm_backend_orca_terminal_gone`).
+  Then nothing is stopped, the replacement gets one new terminal in the same recorded Orca worktree, and the postcondition is a verified harness process working there; a terminal still listed, any process left in the worktree, or an unreadable inventory or scan refuses.
+  If no verified harness appears there after the record is published, the rollback closes only that new terminal, proves it gone, removes the failed replacement's harness wiring, retires its busy generation, and restores the prior record and instructions, so the same relaunch can be retried.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
 - `exit`'s composer-empty check, above, is itself a fail-closed boundary that `relaunch` inherits by stopping the old agent through `exit`.
-- `fm-spawn --relaunch` independently refuses unless the recorded endpoint is positively agent-free, so a replacement can never join a live agent.
-  It also requires the shell to be in the recorded worktree: tmux refuses immediately when it is not, while Herdr sends one `cd` to the recorded path and refuses unless a subsequent path read confirms the move.
+- `fm-spawn --relaunch` independently refuses unless the recorded endpoint is positively agent-free, or on Orca proven gone by the same check, so a replacement can never join a live agent.
+  It also requires the shell to be in the recorded worktree: tmux refuses immediately when it is not, while Herdr sends one `cd` to the recorded path and refuses unless a subsequent path read confirms the move; Orca creates the replacement terminal in the recorded worktree itself.
 
 ## Capability matrix
 
@@ -115,7 +118,7 @@ Backend capability comes from each adapter's real surface, not from a policy cho
 | herdr | yes | yes | yes | yes | yes |
 | zellij | yes | yes | yes | yes | no |
 | cmux | yes | yes | yes | yes | no |
-| orca | no | yes | yes | no | no |
+| orca | no | yes | yes | no | no (relaunch of a proven-gone terminal only) |
 
 Per-harness interrupt keys, repeat counts, composer clears, exit commands, and supported task kinds live in `bin/fm-control-lib.sh` and are exercised for every verified harness by `tests/fm-control.test.sh`, with adapters outside its lane pinning their control mechanics in their own harness suites.
 The empirical basis for each adapter's value is the `harness-adapters` skill's verification record for that adapter.
@@ -123,5 +126,5 @@ The empirical basis for each adapter's value is the `harness-adapters` skill's v
 ## Verification
 
 - `tests/fm-control.test.sh` - the adapter contract for its verified-harness lane (adapters outside the lane pin their control mechanics in their own harness suites), the backend capability matrix, exact-id scoping, the closed verb list, the busy, idle, dead, and idempotent lifecycle cases, and marker non-regression, all against a stubbed session provider.
-- `tests/fm-control-relaunch.test.sh` - the relaunch transaction: identity preservation, harness switching, the progress note, checkpoint refusals, and rollback after a failed launch.
+- `tests/fm-control-relaunch.test.sh` - the relaunch transaction: identity preservation, harness switching, the progress note, checkpoint refusals, rollback after a failed launch, and Orca recovery of a vanished terminal against a stateful fake Orca CLI.
 - `tests/fm-control-herdr-smoke.test.sh` - the second state-verified backend against the real herdr binary, on an isolated throwaway lab session.
