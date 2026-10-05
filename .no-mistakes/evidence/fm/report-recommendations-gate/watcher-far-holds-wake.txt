@@ -1,0 +1,4 @@
+$ fm-watch.sh (disposable home, ballot-fair-test held until 2026-10-16, today 2026-10-05)
+check: far-holds: 1 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16
+--- state/.wake-queue
+1791235508	1	check	far-holds	check: far-holds: 1 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16

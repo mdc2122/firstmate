@@ -1,0 +1,34 @@
+$ fm-followup-ledger.sh check ranking-constraint-review
+  the report has a recommendation section ("Recommendations, in order") but no "## Follow-up ledger" section
+  Report: /tmp/fmledger.OTU4/data/ranking-constraint-review/report.md
+exit=1
+$ fm-followup-ledger.sh check million-views-path
+  "Unstick review" is not filed: end its line with "-> <task-id>" or "-> declined: <reason>"
+  "Score each window on its own panel score" is not filed: end its line with "-> <task-id>" or "-> declined: <reason>"
+  "Re-point ranking on early velocity" is not filed: end its line with "-> <task-id>" or "-> declined: <reason>"
+  Report: /tmp/fmledger.OTU4/data/million-views-path/report.md
+exit=1
+$ (adversarial: reasonless decline, unknown id, invalid id) fm-followup-ledger.sh check million-views-path
+  "Unstick review" is declined without a reason
+  "Re-point ranking on early velocity" names made-up-task, which is not a task in this home's backlog
+  "Something" names not, which is not a task in this home's backlog
+  "Something" names a, which is not a task in this home's backlog
+  "Something" names "task!", which is not a task id
+  Report: /tmp/fmledger.OTU4/data/million-views-path/report.md
+exit=1
+$ (resolved ledger) fm-followup-ledger.sh check million-views-path
+exit=0
+$ (no recommendation section) check plain
+exit=0
+$ (empty ledger) check emptyledger
+  the report has a recommendation section ("Next steps") but its "## Follow-up ledger" is empty
+  Report: /tmp/fmledger.OTU4/data/emptyledger/report.md
+exit=1
+$ (heading only inside fenced code) check fenced
+exit=0
+$ (unreadable backlog) check million-views-path
+fm-followup-ledger: cannot read task ranking-shadow-v2 from this home's backlog: error: "EACCES: permission denied, open '/private/tmp/fmledger.OTU4/data/backlog.md'"
+exit=2
+$ check ../etc
+fm-followup-ledger: scout task id must be a slug: ../etc
+exit=2

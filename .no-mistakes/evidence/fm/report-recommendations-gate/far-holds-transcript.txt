@@ -1,0 +1,27 @@
+$ fm-captain-hold.sh hold captain-deferred --reason ... --until 2026-11-01 --captain-words-file words.txt
+captain-deferred
+exit=0
+--- captain-deferred body:
+  body: "Captain hold set: 2026-10-05T12:00:00Z\n\nCaptain deferral until 2026-11-01:\n> Hold this until Nov 1, I want to see the holiday data first."
+$ fm-far-holds.sh scan   (today 2026-10-05)
+ballot-fair-test until 2026-10-16 - First fair test of ballot-picked clips [wait for clips to mature]
+exit=0
+$ fm-far-holds.sh check  (first)
+check: far-holds: 1 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16
+exit=0
+$ fm-far-holds.sh check  (second, unchanged)
+exit=0
+--- durable wake queue:
+(eval):16: no matches found: /tmp/fmledger.OTU4/state/*wake*
+$ re-date captain-deferred to 2026-11-15 without new words (firstmate's deferral again)
+ballot-fair-test until 2026-10-16 - First fair test of ballot-picked clips [wait for clips to mature]
+captain-deferred until 2026-11-15 - Captain-chosen deferral [captain: wait for holiday data]
+$ check
+check: far-holds: 2 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16; captain-deferred until 2026-11-15
+exit=0
+$ --captain-words-file without --until
+fm-captain-hold: --captain-words-file records a deferral and requires --until
+exit=1
+--- state/.wake-queue (durable wakes queued by check)
+1791235465	1	check	far-holds	check: far-holds: 1 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16
+1791235465	2	check	far-holds	check: far-holds: 2 backlog item(s) held more than 2 day(s) out without the captain's own deferral (dispatch now, re-hold within 2 day(s) naming the blocker, or record the captain's words with bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): ballot-fair-test until 2026-10-16; captain-deferred until 2026-11-15

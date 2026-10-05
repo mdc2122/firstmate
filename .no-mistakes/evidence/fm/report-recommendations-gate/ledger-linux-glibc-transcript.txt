@@ -1,0 +1,9 @@
+GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+$ check s1
+exit=0
+$ check s2
+  "Score each window" is not filed: end its line with "-> <task-id>" or "-> declined: <reason>"
+  "Velocity" names nope-task, which is not a task in this home's backlog
+  "Hook" is declined without a reason
+  Report: /h/data/s2/report.md
+exit=1

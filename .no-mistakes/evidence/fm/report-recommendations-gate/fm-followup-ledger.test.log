@@ -1,0 +1,8 @@
+ok - a report with a recommendation section and no ledger is refused
+ok - a report with a recommendation section and an empty ledger is refused
+ok - every problem ledger line is named by its text with the reason
+ok - lines naming backlog tasks or declined with a reason pass, whatever the report's shape
+ok - a report with no recommendation heading needs no ledger
+ok - a backlog the gate cannot read is 'cannot tell', never 'filed'
+ok - scout cleanup refuses, naming each unfiled recommendation, and proceeds once every one is filed or declined
+ok - explicit discard authority skips the ledger with the other scout report checks

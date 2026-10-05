@@ -1,0 +1,5 @@
+ok - far holds without the captain's words are named; recorded captain deferrals, near, lapsed, and finished holds are not
+ok - the captain's words exempt only the date they were recorded for
+ok - captain words record a deferral and require --until
+ok - check wakes once per episode, queues durably, and treats a re-dated or returning item as new
+ok - a wake that could not be queued is retried on the next check
