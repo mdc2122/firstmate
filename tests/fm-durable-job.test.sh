@@ -120,6 +120,7 @@ test_quoted_args_reach_job_verbatim() {
     || fail "launcher failed for arguments and a cwd containing a single quote"
   wait_for "$verdict" 100 || fail "no verdict written for the quoted-argument job"
   grep -q '^result=ok exit=0 ' "$verdict" || fail "quoted-argument job did not succeed: $(cat "$verdict")"
+  # shellcheck disable=SC2016 # Literal fixture must stay unexpanded.
   printf '%s\n' "it's" 'a $b; c' | cmp -s - "$verdict.stdout" \
     || fail "job did not receive its arguments verbatim: $(cat "$verdict.stdout")"
   pass "arguments and paths with quotes, \$ and ; reach the job verbatim"
