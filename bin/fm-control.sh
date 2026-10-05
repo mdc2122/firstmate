@@ -85,6 +85,8 @@
 #     whose terminal is proven gone (fm_backend_orca_terminal_gone: a complete
 #     terminal list omits it and no process works in the recorded worktree),
 #     which stops nothing and opens one new terminal in that same worktree.
+#     If no verified harness appears in it, that terminal is closed and the
+#     prior record restored so the relaunch can be retried.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
 #   - A composer that visibly holds pending text refuses before an exit command
@@ -602,6 +604,36 @@ journal_write() {  # <phase> [extra-line]...
   return 1
 }
 
+# gone_relaunch_restore: undo a gone-terminal Orca relaunch whose replacement
+# never verified. Under the meta lock, and only when the published record is
+# this transaction's and names a terminal other than the vanished one, close
+# that new terminal, prove it absent, and restore the prior record and
+# instructions, so the task is again in the recoverable gone-terminal state.
+gone_relaunch_restore() {
+  local lock new_t prior_t rc=1
+  [ "$GONE_RELAUNCH" = 1 ] && [ -n "$RELAUNCH_TX" ] && [ -f "$META_PRIOR" ] || return 1
+  lock=$(fm_meta_lock_path "$META") || return 1
+  fm_lock_acquire_wait "$lock"
+  new_t=$(fm_meta_get "$META" terminal)
+  prior_t=$(fm_meta_get "$META_PRIOR" terminal)
+  if [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ] \
+     && [ -n "$new_t" ] && [ "$new_t" != "$prior_t" ] \
+     && fm_backend_kill orca "$new_t" 2>/dev/null \
+     && [ "$(fm_backend_orca_terminal_listed "$new_t" 2>/dev/null)" = absent ] \
+     && cp -p "$META_PRIOR" "$META.restore.$$" \
+     && mv -f "$META.restore.$$" "$META"; then
+    rc=0
+  fi
+  rm -f "$META.restore.$$"
+  fm_lock_release "$lock" || true
+  [ "$rc" = 0 ] || return 1
+  T=$prior_t
+  if [ -n "$RELAUNCH_BRIEF" ] && [ -f "$BRIEF_PRIOR" ]; then
+    cp -p "$BRIEF_PRIOR" "$RELAUNCH_BRIEF" 2>/dev/null || true
+  fi
+  return 0
+}
+
 relaunch_rollback() {
   local state
   [ "$RELAUNCH_ACTIVE" = 1 ] || return 0
@@ -641,6 +673,9 @@ relaunch_rollback() {
       if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
         echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
+      elif gone_relaunch_restore; then
+        journal_write "failed:$RELAUNCH_PHASE" "rollback=new-terminal-closed-prior-record-restored" || true
+        echo "error: no running agent could be confirmed for $ID on $TARGET_HARNESS, so the new Orca terminal was closed and the prior record and instructions restored; its work is preserved at $WT and the relaunch can be retried" >&2
       elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] \
          || { [ -n "$RELAUNCH_TX" ] \
               && [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
@@ -651,6 +686,8 @@ relaunch_rollback() {
         # worse inaccuracy.
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
         echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
+        [ "$GONE_RELAUNCH" != 1 ] \
+          || echo "error: the new Orca terminal $(fm_meta_get "$META" terminal) could not be closed and proven gone; close it in Orca, then retry the relaunch" >&2
       else
         journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
         echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2

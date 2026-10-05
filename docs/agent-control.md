@@ -101,6 +101,7 @@ Switching harness is therefore one ordinary relaunch rather than a separate mech
   zellij, orca, and cmux are refused rather than reported as successful blind.
   The one exception is relaunching an Orca task whose terminal has already vanished: the narrow proof is that a complete `orca terminal list` omits the recorded terminal and a successful cwd scan finds no process at all inside the recorded worktree (`bin/backends/orca.sh`'s `fm_backend_orca_terminal_gone`).
   Then nothing is stopped, the replacement gets one new terminal in the same recorded Orca worktree, and the postcondition is a verified harness process working there; a terminal still listed, any process left in the worktree, or an unreadable inventory or scan refuses.
+  If no verified harness appears there after the record is published, the rollback closes only that new terminal, proves it gone, and restores the prior record and instructions, so the same relaunch can be retried.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
 - `exit`'s composer-empty check, above, is itself a fail-closed boundary that `relaunch` inherits by stopping the old agent through `exit`.

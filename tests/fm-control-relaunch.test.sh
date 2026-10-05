@@ -1733,10 +1733,20 @@ case "${1:-} ${2:-}" in
   'terminal create')
     printf 'term-new\n' >> "$D/orca-terminals"
     printf '{"ok":true,"result":{"terminal":{"handle":"term-new"}}}\n' ;;
+  'terminal close')
+    t=
+    while [ $# -gt 0 ]; do
+      [ "$1" != --terminal ] || t=${2:-}
+      shift
+    done
+    grep -vxF "$t" "$D/orca-terminals" > "$D/orca-terminals.tmp"
+    mv -f "$D/orca-terminals.tmp" "$D/orca-terminals"
+    printf '{"ok":true}\n' ;;
   'terminal send')
     for a in "$@"; do
       case "$a" in
         *'encode launch-brief'*)
+          [ -z "${FM_FAKE_ORCA_NO_AGENT:-}" ] || continue
           (cd "$FM_FAKE_ORCA_WT" && exec "$D/agentbin/claude" 60) </dev/null >/dev/null 2>&1 &
           printf '%s\n' "$!" >> "$FM_FAKE_ORCA_PIDS"
           ;;
@@ -1785,8 +1795,9 @@ run_orca() {  # <case-dir> <control|spawn> <args...>
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
     FM_FAKE_ORCA_WT="$dir/wt" FM_FAKE_ORCA_PIDS="$ORCA_AGENT_PIDS" \
     FM_FAKE_ORCA_LIST_TRUNCATED="${FM_FAKE_ORCA_LIST_TRUNCATED:-}" \
+    FM_FAKE_ORCA_NO_AGENT="${FM_FAKE_ORCA_NO_AGENT:-}" \
     HOME="$dir/user-home" CLAUDE_CONFIG_DIR='' FM_SPAWN_NO_GUARD=1 \
-    FM_CONTROL_POLL=0.05 FM_CONTROL_LAUNCH_WAIT=5 \
+    FM_CONTROL_POLL=0.05 FM_CONTROL_LAUNCH_WAIT="${FM_CONTROL_LAUNCH_WAIT:-5}" \
     "$cmd" "$@" 2>&1
 }
 
@@ -1868,6 +1879,41 @@ test_orca_relaunch_refuses_an_incomplete_terminal_inventory() {
   pass "fm-control relaunch: an incomplete Orca terminal inventory never proves a terminal gone"
 }
 
+test_orca_relaunch_with_no_replacement_agent_restores_the_gone_terminal_record() {
+  local dir out rc before_meta before_brief
+  dir=$(new_case orca-no-agent rl55)
+  add_orca_ship_task "$dir" rl55 gone
+  printf 'uncommitted work\n' > "$dir/wt/wip.txt"
+  before_meta=$(cat "$dir/home/state/rl55.meta")
+  before_brief=$(cat "$dir/home/data/rl55/brief.md")
+  out=$(FM_FAKE_ORCA_NO_AGENT=1 FM_CONTROL_LAUNCH_WAIT=1 \
+    run_orca "$dir" control rl55 relaunch --note "first attempt"); rc=$?
+  expect_code 1 "$rc" "a relaunch whose replacement never comes up must fail"$'\n'"$out"
+  assert_contains "$out" "relaunch can be retried" "the failure should say the relaunch can be retried"
+  assert_grep "terminal create" "$dir/fake/orca-log" "the failed attempt should have opened a terminal"
+  assert_grep "terminal close --terminal term-new" "$dir/fake/orca-log" \
+    "the rollback should close the terminal the failed attempt opened"
+  assert_no_grep "terminal close --terminal term-old" "$dir/fake/orca-log" \
+    "the rollback must close only the new terminal"
+  [ ! -s "$dir/fake/orca-terminals" ] || fail "no terminal should remain open after the rollback"
+  [ "$(cat "$dir/home/state/rl55.meta")" = "$before_meta" ] \
+    || fail "the rollback should restore the prior record byte-exact"
+  [ "$(cat "$dir/home/data/rl55/brief.md")" = "$before_brief" ] \
+    || fail "the rollback should restore the prior instructions byte-exact"
+  [ "$(journal_field "$dir" rl55 rollback)" = new-terminal-closed-prior-record-restored ] \
+    || fail "the journal should record the restoring rollback"
+  out=$(run_orca "$dir" control rl55 relaunch --note "second attempt"); rc=$?
+  expect_code 0 "$rc" "retrying the relaunch after the rollback should succeed"$'\n'"$out"
+  [ "$(meta_field "$dir" rl55 terminal)" = term-new ] \
+    || fail "the retry should record its replacement terminal"
+  [ "$(cat "$dir/wt/wip.txt")" = "uncommitted work" ] || fail "uncommitted work must survive both attempts"
+  assert_no_grep "first attempt" "$dir/home/data/rl55/brief.md" \
+    "the rolled-back note should not linger in the instructions"
+  assert_grep "second attempt" "$dir/home/data/rl55/brief.md" \
+    "the retry's note should reach the replacement's instructions"
+  pass "fm-control relaunch: a gone-terminal Orca relaunch with no replacement agent closes its terminal, restores the record, and can be retried"
+}
+
 test_orca_exit_still_refuses_without_a_classifier() {
   local dir out rc
   dir=$(new_case orca-exit rl54)
@@ -1938,4 +1984,5 @@ test_orca_relaunch_replaces_a_vanished_terminal_in_the_recorded_worktree
 test_orca_relaunch_refuses_a_terminal_that_still_exists
 test_orca_relaunch_refuses_when_a_process_still_works_in_the_worktree
 test_orca_relaunch_refuses_an_incomplete_terminal_inventory
+test_orca_relaunch_with_no_replacement_agent_restores_the_gone_terminal_record
 test_orca_exit_still_refuses_without_a_classifier
