@@ -14,7 +14,7 @@
 # charters still use a single `{TASK}` charter fill. Firstmate may adjust other
 # sections when the task genuinely deviates (e.g. working an existing external
 # PR instead of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--pause-before-validate] [--herdr-lab]
 #        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
@@ -43,12 +43,17 @@
 # For ship tasks, --mode is REQUIRED and shapes the definition of done. Firstmate
 # resolves it per task at intake (AGENTS.md section 7); data/projects.md holds the
 # captain's standing posture as context, and this script never reads it:
-#   no-mistakes  implement -> /no-mistakes pipeline -> PR -> configured merge authority
+#   no-mistakes  implement -> commit -> worker starts /no-mistakes itself -> PR -> configured merge authority
 #   direct-PR    implement -> push + open PR via gh-axi (no pipeline) -> configured merge authority
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
 #                the configured merge authority approves, firstmate merges to local main
 # no-mistakes-prod-only is a registry policy, not a task mode; resolve it to one of
 # the three concrete modes at intake before calling this script.
+# --pause-before-validate (mode=no-mistakes only) keeps the worker from starting
+# validation on its own: it reports `done:` after committing and waits for
+# firstmate to trigger /no-mistakes. Use it only when firstmate deliberately
+# wants to look first, such as security-sensitive work or a risky design; the
+# default is that the worker validates immediately after its commit.
 # The generated ship brief records the chosen mode as a fixed machine-readable
 # "Delivery contract: mode=<mode>" line. bin/fm-spawn.sh reads that line and refuses
 # to launch a ship task whose explicit --mode disagrees, so an adjusted brief and the
@@ -126,6 +131,7 @@ fi
 KIND=ship
 HERDR_LAB=0
 NO_PROJECTS=0
+PAUSE_BEFORE_VALIDATE=0
 MODE=
 MODE_SET=0
 POS=()
@@ -147,6 +153,7 @@ for a in "$@"; do
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
+    --pause-before-validate) PAUSE_BEFORE_VALIDATE=1 ;;
     --mode) want_value=mode ;;
     --mode=*) MODE=${a#--mode=}; MODE_SET=1 ;;
     # yolo never reaches the worker: it is firstmate's merge authority, not a
@@ -174,6 +181,10 @@ if [ "$KIND" = ship ]; then
   esac
 elif [ "$MODE_SET" -eq 1 ]; then
   echo "error: --mode applies only to ship briefs; a scout delivers a report and a secondmate charter is not a delivery contract" >&2
+  exit 1
+fi
+if [ "$PAUSE_BEFORE_VALIDATE" -eq 1 ] && { [ "$KIND" != ship ] || [ "$MODE" != no-mistakes ]; }; then
+  echo "error: --pause-before-validate applies only to ship briefs with --mode no-mistakes" >&2
   exit 1
 fi
 ID=${POS[0]}
@@ -452,7 +463,9 @@ case "$MODE" in
     ;;
 esac
 RULE1=$(fm_ship_rule_one "$MODE" "$ID") || exit 1
-DOD=$(fm_dod_block "$MODE" "$ID") || exit 1
+DOD_PAUSE=
+[ "$PAUSE_BEFORE_VALIDATE" -eq 0 ] || DOD_PAUSE='pause-before-validate'
+DOD=$(fm_dod_block "$MODE" "$ID" "$DOD_PAUSE") || exit 1
 
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
