@@ -4,7 +4,7 @@
 # captain did not set, and wake firstmate once per episode with those items.
 #
 # Usage:
-#   fm-far-holds.sh scan [--json]
+#   fm-far-holds.sh scan
 #   fm-far-holds.sh check
 #   fm-far-holds.sh --help
 #
@@ -27,8 +27,7 @@
 # has passed is inactive and is bin/fm-queue-zero.sh's concern, not this one's.
 #
 # `scan` is read-only and prints one line per row,
-# "<id> until <date> - <title> [<hold reason>]", or nothing; --json prints
-# the row array.
+# "<id> until <date> - <title> [<hold reason>]", or nothing.
 #
 # `check` is the watcher's heartbeat hook (bin/fm-watch.sh far_holds tick,
 # every FM_FAR_HOLDS_INTERVAL seconds, default 900). When a row appears that
@@ -57,7 +56,7 @@ RECORD_SCHEMA=fm-far-holds-v1
 usage() {
   cat <<'EOF'
 Usage:
-  fm-far-holds.sh scan [--json]   list items held more than FM_FAR_HOLDS_DAYS out without the captain's words
+  fm-far-holds.sh scan            list items held more than FM_FAR_HOLDS_DAYS out without the captain's words
   fm-far-holds.sh check           heartbeat hook: one wake line per new episode
   fm-far-holds.sh --help          print this help
 
@@ -101,20 +100,8 @@ rows() {
 }
 
 action_scan() {
-  local json=0 out
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --json) json=1 ;;
-      *) die "unknown scan flag: $1" 2 ;;
-    esac
-    shift
-  done
-  out=$(rows)
-  if [ "$json" = 1 ]; then
-    printf '%s\n' "$out"
-  else
-    printf '%s\n' "$out" | jq -r '.[] | "\(.ref) until \(.until) - \(.title) [\(.reason)]"'
-  fi
+  [ "$#" -eq 0 ] || die "unknown scan flag: $1" 2
+  rows | jq -r '.[] | "\(.ref) until \(.until) - \(.title) [\(.reason)]"'
 }
 
 record_write() {  # <keys>

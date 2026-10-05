@@ -73,8 +73,8 @@
 # declared scratch and the report at data/<task-id>/report.md is the work
 # product. Teardown proceeds only once the report exists, the shared
 # unresolved-decision completion gate verifies its captain-held inventory and
-# finds every report recommendation filed as backlog work or declined with a
-# reason (bin/fm-followup-ledger.sh check, which names each unfiled item), and
+# finds every follow-up ledger line naming a backlog task or declined with a
+# reason (bin/fm-followup-ledger.sh check, which names each problem line), and
 # nothing worth keeping exists only in the worktree, because a long-running
 # investigation's harness and raw outputs are lost with it otherwise.
 # validate_scout_worktree_artifacts refuses, naming each path, when (a) a path
@@ -3498,9 +3498,8 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
     echo "Inventory its report and any visual review through bin/fm-captain-hold.sh before teardown." >&2
     exit 1
   fi
-  # The recommendation half of the same completion gate: every recommendation
-  # the report makes is filed as backlog work or explicitly declined in its
-  # follow-up ledger (bin/fm-followup-ledger.sh owns the format and the rules).
+  # The recommendation half of the same completion gate: every line of the
+  # report's follow-up ledger names a backlog task or is explicitly declined (bin/fm-followup-ledger.sh owns the format and the rules).
   LEDGER_STATUS=0
   LEDGER_OUT=$(FM_HOME="$FM_HOME" FM_DATA_OVERRIDE="$DATA" FM_CONFIG_OVERRIDE="$CONFIG" \
     "$SCRIPT_DIR/fm-followup-ledger.sh" check "$ID" 2>&1) || LEDGER_STATUS=$?
@@ -3511,7 +3510,7 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
       echo "REFUSED: cannot verify scout task $ID's follow-up ledger:" >&2
     fi
     printf '%s\n' "$LEDGER_OUT" >&2
-    echo "File each one as a backlog task (dispatched, or held with its named blocker) or decline it with a reason in the report's \"## Follow-up ledger\", then retry." >&2
+    echo "End each line of the report's \"## Follow-up ledger\" with \"-> <task-id>\" for a task in this home's backlog or \"-> declined: <reason>\", then retry." >&2
     exit 1
   fi
   if teardown_owns_worktree; then

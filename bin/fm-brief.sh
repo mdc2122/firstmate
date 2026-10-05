@@ -436,8 +436,8 @@ $INBOX_SECTION
 # Definition of done
 Write your findings to \`$DATA/$ID/report.md\`.
 The report must stand alone: what you did, what you found, the evidence (commands run, output, file:line references), and what you recommend.
-If the report recommends anything (a Recommendations, Next steps, or Promotion candidates section, or a ranked plan table), end it with a \`## Follow-up ledger\` section: one top-level \`- \` line per recommendation, each ending \` -> open\`, and at least as many lines as your longest recommendation list or plan table has items.
-Firstmate files each line as a backlog task or declines it with a reason before cleanup; \`$FM_ROOT/bin/fm-followup-ledger.sh\` owns the format and refuses cleanup while a line is unfiled.
+If the report recommends anything (a Recommendations, Next steps, or Promotion candidates section, a ranked plan, or any other proposed work), end it with a \`## Follow-up ledger\` section: one \`- \` line per recommendation and nothing else, each ending \` -> open\`.
+Firstmate replaces each \` -> open\` with \` -> <task-id>\` for a backlog task or \` -> declined: <reason>\` before cleanup; \`$FM_ROOT/bin/fm-followup-ledger.sh\` owns the format and refuses cleanup while a line is unfiled.
 $LAVISH_LINE
 Before reporting done, read and follow \`$FM_ROOT/.agents/skills/captain-hold-lifecycle/SKILL.md\` and pass its shared completion gate for the report and any visual review.
 When the report is complete, append \`done: {one-line conclusion}\` to the status file and stop.

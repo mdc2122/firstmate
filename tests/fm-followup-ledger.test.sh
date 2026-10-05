@@ -7,8 +7,8 @@
 # ranked-plan sections, the scouts were cleaned up, and neither recommendation
 # ever became a backlog item, so nothing surfaced them again. Each case below
 # drives a report shape through the public command, or through teardown
-# itself, and asserts that an unfiled recommendation is refused by name while a
-# filed or declined one passes.
+# itself, and asserts that a missing ledger or an unresolved, reasonless, or
+# unknown-task line is refused by name while a resolved ledger passes.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -52,36 +52,25 @@ write_report() {  # <home> <scout-id>
 ## Summary
 
 Some context.
-- a summary bullet that is not a recommendation
 
 ## 5. Recommendations, in order
 
-1. **Unstick review of draft-only top cards.**
-   - nested detail that is not its own item
-2. **Score each window on its own panel score.**
-3. Add three readout columns.
+### 1. Unstick review of draft-only top cards
+
+- evidence bullet
+
+### 2. Score each window on its own panel score
 
 ## A ranked plan
 
 | # | Step | Expected |
 |---|---|---|
 | 1 | Finish the top card | +100K |
-| 2 | Hit-reactive fast lane | +80K |
 | 3 | Re-point ranking on early velocity | +50K |
-| 4 | Stop mining dead veins | +20K |
-
-Commentary bullets beside the table are not plan rows:
-- steps 1-3 alone reach about 300K
 
 ## Promotion candidates
 
 - Hit-reactive lane
-- Source-depth cap
-
-```
-## Recommendations inside a fence are not a section
-- not counted
-```
 EOF
 }
 
@@ -97,111 +86,94 @@ test_report_with_recommendations_and_no_ledger_refuses() {
   home=$(make_home no-ledger)
   write_report "$home" sample-scout
   if ledger "$home" sample-scout 2> "$home/err"; then
-    fail "a report with unfiled recommendations passed the gate"
+    fail "a report with recommendations and no ledger passed the gate"
   fi
   err=$(cat "$home/err")
-  assert_contains "$err" 'no "## Follow-up ledger" section' "the refusal did not say the ledger is missing"
-  assert_contains "$err" '"A ranked plan", 4 item(s)' \
-    "the refusal did not name the largest recommendation section by its plan rows"
-  pass "a report with recommendation sections and no ledger is refused"
+  assert_contains "$err" '("5. Recommendations, in order") but no "## Follow-up ledger" section' \
+    "the refusal did not name the recommendation section and the missing ledger"
+  pass "a report with a recommendation section and no ledger is refused"
 }
 
-test_every_unfiled_item_is_named() {
+test_empty_ledger_refuses() {
+  local home err
+  home=$(make_home empty-ledger)
+  write_report "$home" sample-scout
+  append_ledger "$home" sample-scout
+  if ledger "$home" sample-scout 2> "$home/err"; then
+    fail "an empty ledger passed the gate"
+  fi
+  err=$(cat "$home/err")
+  assert_contains "$err" 'its "## Follow-up ledger" is empty' "an empty ledger was not named"
+  pass "a report with a recommendation section and an empty ledger is refused"
+}
+
+test_every_problem_line_is_named() {
   local home err
   home=$(make_home unfiled)
   write_report "$home" sample-scout
   axi "$home" add finish-top "finish the top card"
-  axi "$home" start finish-top
-  axi "$home" add idle-row "queued with nothing holding it"
   append_ledger "$home" sample-scout \
-    "- Finish the top card -> task: finish-top" \
+    "- Finish the top card -> finish-top" \
     "- Score each window on its own panel score -> open" \
     "- Re-point ranking on early velocity" \
-    "- Stop mining dead veins -> task: idle-row" \
-    "- Hit-reactive fast lane -> task: no-such-task" \
-    "- Third slot -> declined:   "
+    "- Hit-reactive fast lane -> no-such-task" \
+    "- Third slot -> declined:   " \
+    "  indented note with no disposition"
   if ledger "$home" sample-scout 2> "$home/err"; then
-    fail "a ledger with unfiled items passed the gate"
+    fail "a ledger with problem lines passed the gate"
   fi
   err=$(cat "$home/err")
-  assert_not_contains "$err" "Finish the top card" "a dispatched item was reported as unfiled"
+  assert_not_contains "$err" "Finish the top card" "a line naming a backlog task was reported"
   assert_contains "$err" '"Score each window on its own panel score" is not filed' \
-    "an open item was not named"
+    "an open line was not named"
   assert_contains "$err" '"Re-point ranking on early velocity" is not filed' \
-    "an item with no disposition was not named"
-  assert_contains "$err" '"Stop mining dead veins" names idle-row, which is queued with no active hold or blocker' \
-    "a queued row nobody holds was accepted as filed"
-  assert_contains "$err" '"Hit-reactive fast lane" names no-such-task, which is not a task' \
-    "an unknown task id was accepted as filed"
+    "a line with no disposition was not named"
+  assert_contains "$err" '"indented note with no disposition" is not filed' \
+    "an indented line with no disposition was not checked"
+  assert_contains "$err" "\"Hit-reactive fast lane\" names no-such-task, which is not a task in this home's backlog" \
+    "an unknown task id was accepted"
   assert_contains "$err" '"Third slot" is declined without a reason' \
     "a reasonless decline was accepted"
-  pass "every unfiled ledger item is named by its text with the reason it is not filed"
+  pass "every problem ledger line is named by its text with the reason"
 }
 
-test_filed_and_declined_ledger_passes() {
+test_task_and_declined_ledger_passes() {
   local home err
   home=$(make_home filed)
   write_report "$home" sample-scout
   axi "$home" add finish-top "finish the top card"
-  axi "$home" start finish-top
-  axi "$home" add held-row "held with a named blocker"
-  axi "$home" hold held-row --reason "waits on the slot owner"
-  axi "$home" add blocker "the blocker"
-  axi "$home" add blocked-row "blocked by another task"
-  axi "$home" block blocked-row --by blocker
-  axi "$home" add shipped "already done"
-  axi "$home" start shipped
-  axi "$home" "done" shipped
+  axi "$home" add hit-lane "hit-reactive lane"
+  axi "$home" add velocity "re-point on velocity"
   append_ledger "$home" sample-scout \
-    "- Finish the top card -> task: finish-top" \
-    "- Hit-reactive fast lane -> TASK: \`held-row\`, blocked-row" \
-    "- Re-point ranking on early velocity -> task: blocked-row" \
-    "- Unstick draft-only review -> task: shipped" \
-    "- Hook score -> Declined: inverse at the tail, nothing to build"
+    "- Finish the top card -> finish-top" \
+    "- Hit-reactive fast lane -> \`hit-lane\`, velocity" \
+    "- Re-point ranking A -> B on early velocity -> velocity" \
+    "* Hook score -> Declined: inverse at the tail, nothing to build" \
+    "" \
+    "1. Own scout -> sample-scout-missing -> declined: kept in the report"
   ledger "$home" sample-scout 2> "$home/err" \
-    || fail "a fully filed ledger was refused: $(cat "$home/err")"
+    || fail "a fully resolved ledger was refused: $(cat "$home/err")"
   err=$(cat "$home/err")
   [ -z "$err" ] || fail "a passing gate printed diagnostics: $err"
-  pass "dispatched, held, blocked, done, and declined-with-reason items all pass"
-}
-
-test_short_ledger_and_own_task_refuse() {
-  local home err
-  home=$(make_home short)
-  write_report "$home" sample-scout
-  axi "$home" add sample-scout "the scout itself" --kind scout
-  axi "$home" start sample-scout
-  append_ledger "$home" sample-scout \
-    "- Finish the top card -> task: sample-scout" \
-    "- Everything else -> declined: covered elsewhere"
-  if ledger "$home" sample-scout 2> "$home/err"; then
-    fail "a ledger shorter than the plan passed the gate"
-  fi
-  err=$(cat "$home/err")
-  assert_contains "$err" 'the ledger lists 2 item(s) but "A ranked plan" lists 4' \
-    "a ledger that covers only part of the plan was accepted"
-  assert_contains "$err" "names this scout's own task sample-scout, which cleanup closes" \
-    "the scout's own task was accepted although cleanup closes it"
-  pass "a ledger shorter than the largest recommendation section, or naming the closing scout, is refused"
+  pass "lines naming backlog tasks or declined with a reason pass, whatever the report's shape"
 }
 
 test_report_without_recommendations_passes() {
   local home
   home=$(make_home plain)
   mkdir -p "$home/data/sample-scout"
-  printf '# Findings\n\n## What I found\n\n- the cache is warm\n- nothing to build\n' \
+  printf '# Findings\n\n## Test plan\n\n- step one\n\n~~~\n## Recommendations in a fence\n~~~\n' \
     > "$home/data/sample-scout/report.md"
   ledger "$home" sample-scout 2> "$home/err" \
-    || fail "a report with no recommendation section was refused: $(cat "$home/err")"
-  pass "a report with no recommendation section needs no ledger"
+    || fail "a report with no recommendation heading was refused: $(cat "$home/err")"
+  pass "a report with no recommendation heading needs no ledger"
 }
 
 test_unreadable_backlog_is_not_filed() {
   local home rc=0
   home=$(make_home unreadable)
   write_report "$home" sample-scout
-  append_ledger "$home" sample-scout \
-    "- a -> task: one" "- b -> task: two" "- c -> task: three" "- d -> task: four"
+  append_ledger "$home" sample-scout "- a -> one"
   rm -f "$home/data/backlog.md"
   mkdir "$home/data/backlog.md"
   ledger "$home" sample-scout 2> "$home/err" || rc=$?
@@ -273,9 +245,9 @@ test_teardown_refuses_unfiled_recommendations_then_proceeds() {
   axi "$home" add ranking-shadow "per-window score and velocity shadow"
   axi "$home" hold ranking-shadow --reason "first readout needs the 10-07 matured clips"
   sed -i.bak \
-    -e 's/Unstick draft-only review -> open/Unstick draft-only review -> task: review-unstick/' \
-    -e 's/own panel score -> open/own panel score -> task: ranking-shadow/' \
-    -e 's/early velocity -> open/early velocity -> task: ranking-shadow/' \
+    -e 's/Unstick draft-only review -> open/Unstick draft-only review -> review-unstick/' \
+    -e 's/own panel score -> open/own panel score -> ranking-shadow/' \
+    -e 's/early velocity -> open/early velocity -> ranking-shadow/' \
     "$home/data/$id/report.md"
   rm -f "$home/data/$id/report.md.bak"
   run_teardown "$home" "$id" > "$home/out" 2> "$home/err" \
@@ -300,9 +272,9 @@ test_force_skips_the_ledger_like_the_other_scout_checks() {
 }
 
 test_report_with_recommendations_and_no_ledger_refuses
-test_every_unfiled_item_is_named
-test_filed_and_declined_ledger_passes
-test_short_ledger_and_own_task_refuse
+test_empty_ledger_refuses
+test_every_problem_line_is_named
+test_task_and_declined_ledger_passes
 test_report_without_recommendations_passes
 test_unreadable_backlog_is_not_filed
 test_teardown_refuses_unfiled_recommendations_then_proceeds
