@@ -1,6 +1,6 @@
 Mode: omp (Oh My Pi) extension background wake.
 
-When this session owns supervision and away mode is not active:
+When this session owns supervision and no legacy away daemon flag is active:
 1. Drain first with `bin/fm-wake-drain.sh`.
    After handling all emitted wakes and reconciling open decisions and unread status lines, run the exact `--ack-through` command printed as `WAKE_ACK_REQUIRED`; until then the work remains durable for idempotent re-handling after interruption.
 2. Confirm the omp primary auto-loaded both project extensions from `.omp/extensions/`; omp has no project-trust gate, so a plain `omp` started with this home as its working directory loads them with no dialog.
@@ -27,6 +27,7 @@ The supervision branch is OFF unless this home's `config/omp-supervision-branch`
 With the file absent this path stays unchanged: every actionable wake is delivered to this conversation exactly as on Claude, and the lease, outcome-store, and `fm_branch_processed` contracts do not apply.
 `on` hands each eligible task-local wake to the in-process supervision branch first; a wake the branch cannot handle, every decision-owned and check-class row, and every watcher-failure alarm stay on this path, and an outcome main must act on arrives as one hidden processing request that only `fm_branch_processed` acknowledges.
 `report-only` delivers every wake to this conversation unchanged and lets the branch shadow it read-only while it records what it would do in `state/omp-branch-shadow.jsonl`, so it is the proof stage, never a working configuration.
+The away daemon is never launched on omp: `/afk` writes only the away-posture record and this protocol keeps running under it, while `/quiet` refuses because the daemon cannot take monitoring over from this extension-owned watcher (`bin/fm-afk-launch.sh`).
 
 The turn-end guard extension lives at `__FM_OMP_TURNEND_EXT__`.
 The watcher extension lives at `__FM_OMP_EXT__`.

@@ -23,9 +23,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAUNCH="$ROOT/bin/fm-afk-launch.sh"
 START="$ROOT/bin/fm-afk-start.sh"
 CONTRACT="$ROOT/bin/fm-afk-contract.sh"
-# The daemon paths refuse on a Pi primary, so pin a daemon-running harness for
-# every unit below; the Pi refusal has its own units (unit_pi_never_launches_the_daemon).
-unset PI_CODING_AGENT FM_PI_HARNESS CURSOR_AGENT CURSOR_INVOKED_AS GEMINI_CLI ATLASSIAN_AGENT_TYPE ROVODEV_CLI
+# The daemon paths refuse on a Pi or omp primary, so pin a daemon-running harness
+# for every unit below; that refusal has its own units (unit_no_daemon_harness_never_launches_the_daemon).
+unset PI_CODING_AGENT FM_PI_HARNESS CURSOR_AGENT CURSOR_INVOKED_AS GEMINI_CLI ATLASSIAN_AGENT_TYPE ROVODEV_CLI OMPCODE FM_OMP_HARNESS
 export CLAUDECODE=1
 
 FAILED=0
@@ -89,18 +89,19 @@ unit_propose_confirm_records_the_posture_without_a_daemon() {
   rm -rf "$st"
 }
 
-unit_pi_never_launches_the_daemon() {
+unit_no_daemon_harness_never_launches_the_daemon() {
   local st harness out rc
-  for harness in pi pi-signed; do
-    st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-pi.XXXXXX")
+  for harness in pi pi-signed omp; do
+    st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-nodaemon.XXXXXX")
     mkdir -p "$st/state"
+    confirm_posture "$st" || fail "$harness: could not confirm the posture fixture"
     out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_TEST_HARNESS="$harness" \
       FM_SUPERVISOR_TARGET=unused FM_SUPERVISOR_BACKEND=tmux FM_AFK_LAUNCH_ENTRY="$SLEEPER" \
       bash -c '. "$1"; fm_afk_launch_primary_harness() { printf "%s" "$FM_TEST_HARNESS"; }; fm_afk_launch_main start' _ "$LAUNCH" 2>&1)
     rc=$?
-    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -F "the away daemon is no longer launched on $harness" >/dev/null \
-      && [ ! -e "$st/state/.afk" ] && [ ! -e "$st/state/.afk-daemon-terminal" ] && [ ! -e "$st/state/.afk-contract" ]; then
-      pass "$harness: start refuses to launch the daemon and writes no state"
+    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -F "the away daemon is not launched on $harness" >/dev/null \
+      && [ ! -e "$st/state/.afk" ] && [ ! -e "$st/state/.afk-daemon-terminal" ] && [ -f "$st/state/.afk-contract" ]; then
+      pass "$harness: start refuses to launch the daemon and leaves the confirmed posture standing"
     else
       fail "$harness: start did not refuse cleanly (rc=$rc): $out"
     fi
@@ -114,6 +115,60 @@ unit_pi_never_launches_the_daemon() {
     fi
     rm -rf "$st"
   done
+}
+
+# /quiet is the daemon run while the captain stays present, so on a harness
+# where the daemon never runs (the omp watch extension keeps owning the watcher,
+# so a daemon would never own triage) every quiet entry step refuses with the
+# reason and writes no record, flag, or terminal - no half-entered posture.
+unit_quiet_refuses_where_no_daemon_runs() {
+  local st harness sub out rc reason
+  for harness in omp pi pi-signed; do
+    case "$harness" in
+      omp) reason='quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension' ;;
+      *) reason="quiet mode is not available on $harness" ;;
+    esac
+    for sub in propose confirm start start-native; do
+      st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-quiet-refuse.XXXXXX")
+      mkdir -p "$st/state"
+      [ "$sub" = confirm ] && { FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$CONTRACT" propose >/dev/null 2>&1 || fail "could not seed a proposal"; }
+      out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_TEST_HARNESS="$harness" FM_AFK_MODE=quiet \
+        FM_SUPERVISOR_TARGET=unused FM_SUPERVISOR_BACKEND=tmux FM_AFK_LAUNCH_ENTRY="$SLEEPER" \
+        bash -c '. "$1"; fm_afk_launch_primary_harness() { printf "%s" "$FM_TEST_HARNESS"; }; fm_afk_launch_main "$2"' _ "$LAUNCH" "$sub" 2>&1)
+      rc=$?
+      if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -F "$reason" >/dev/null \
+        && [ ! -e "$st/state/.afk-contract" ] && [ ! -e "$st/state/.afk" ] && [ ! -e "$st/state/.afk-daemon-terminal" ] \
+        && { [ "$sub" = confirm ] || [ ! -e "$st/state/.afk-contract.proposed" ]; }; then
+        pass "$harness: quiet $sub refuses with its reason and writes no posture"
+      else
+        fail "$harness: quiet $sub did not refuse cleanly (rc=$rc): $out"
+      fi
+      rm -rf "$st"
+    done
+  done
+  # Away mode on omp still records its posture: only the quiet entry refuses.
+  st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-omp-away.XXXXXX")
+  mkdir -p "$st/state"
+  out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_TEST_HARNESS=omp \
+    bash -c '. "$1"; fm_afk_launch_primary_harness() { printf "%s" "$FM_TEST_HARNESS"; }; fm_afk_launch_main propose && fm_afk_launch_main confirm' _ "$LAUNCH" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] && [ -f "$st/state/.afk-contract" ] && [ ! -e "$st/state/.afk" ]; then
+    pass "omp: /afk still records the away posture without a daemon flag"
+  else
+    fail "omp: /afk posture entry failed (rc=$rc): $out"
+  fi
+  rm -rf "$st"
+  # A daemon-running harness still accepts a quiet entry.
+  st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-quiet-ok.XXXXXX")
+  mkdir -p "$st/state"
+  confirm_posture "$st" || fail "could not confirm the quiet fixture posture"
+  if FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_AFK_MODE=quiet "$LAUNCH" start-native >/dev/null 2>&1 \
+    && [ "$(head -n 1 "$st/state/.afk")" = quiet ]; then
+    pass "claude: quiet start-native still enters quiet mode"
+  else
+    fail "claude: quiet start-native no longer enters quiet mode"
+  fi
+  rm -rf "$st"
 }
 
 unit_daemon_entry_requires_confirmation() {
@@ -1187,7 +1242,8 @@ e2e_tmux() {
 
 unit_clear_stale
 unit_propose_confirm_records_the_posture_without_a_daemon
-unit_pi_never_launches_the_daemon
+unit_no_daemon_harness_never_launches_the_daemon
+unit_quiet_refuses_where_no_daemon_runs
 unit_daemon_entry_requires_confirmation
 unit_failed_daemon_launch_preserves_confirmed_record
 unit_stop_archives_the_record_last

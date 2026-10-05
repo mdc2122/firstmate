@@ -21,6 +21,12 @@ its classification policy, its reliability properties - is owned once by the
 The only things quiet mode changes are which mode the flag declares and what
 exits it.
 
+## Not on Pi or omp
+
+Quiet mode is the away daemon run while the captain stays present, and the daemon is never launched on Pi, pi-signed, or omp.
+On those primaries `bin/fm-afk-launch.sh` refuses every `FM_AFK_MODE=quiet` entry before writing anything and names the reason; relay that refusal in `AGENTS.md` section 9 language and stop.
+There the supervision branch already absorbs routine wakes while the captain stays present (on omp only when `config/omp-supervision-branch` says `on`, per `docs/configuration.md`).
+
 ## What it does
 
 1. **Enter the lifecycle through `bin/fm-afk-launch.sh`, exactly as `/afk`
