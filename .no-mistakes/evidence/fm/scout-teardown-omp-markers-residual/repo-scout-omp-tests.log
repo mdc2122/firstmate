@@ -1,0 +1,15 @@
+TEARDOWN=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46DKTRVN759THPC1CS4WV2M/bin/fm-teardown.sh
+===== test_scout_omp_runtime_markers_alone_tear_down
+ok - a scout worktree whose state/ holds only omp runtime markers tears down cleanly
+===== test_scout_omp_marker_exemption_ignores_cwd_markers
+ok - the omp marker exemption holds regardless of markers in the caller's working directory
+===== test_scout_omp_marker_cited_by_its_own_path_refuses
+ok - an omp marker the report cites by its own path still refuses scout teardown
+===== test_scout_project_state_extensions_cited_refuses
+ok - a project scout citing a file under its own state/extensions/ still refuses teardown
+===== test_scout_omp_markers_do_not_mask_cited_work
+ok - omp runtime markers do not mask a report-cited worktree-only file: teardown still refuses
+===== test_scout_firstmate_worktree_state_tree_is_runtime
+ok - a firstmate-repo worktree's omp extension runtime is exempt by shape, so no extension marker name can refuse scout cleanup
+===== test_scout_firstmate_worktree_state_work_still_refuses
+ok - the omp runtime exemption does not mask other work under a firstmate-repo worktree's state/

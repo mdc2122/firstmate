@@ -1,0 +1,7 @@
+TEARDOWN=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.3p8mjT7X2T/bin/fm-teardown.sh
+===== test_scout_firstmate_worktree_state_tree_is_runtime
+not ok - scout-omp-unnamed-markers: an unenumerated extension runtime file must not refuse teardown: REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.n7OcY3/scout-omp-unnamed-markers/wt holds work that exists nowhere else, and cleanup would delete it.
+Paths its report cites that exist only in the worktree:
+  state/ (4 files not preserved)
+Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.n7OcY3/scout-omp-unnamed-markers/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+Use --force only after the captain explicitly approves discarding them.: expected exit 0, got 1

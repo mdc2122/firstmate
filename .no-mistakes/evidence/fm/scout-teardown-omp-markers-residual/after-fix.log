@@ -1,0 +1,18 @@
+TEARDOWN=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M46DKTRVN759THPC1CS4WV2M/bin/fm-teardown.sh
+===== scenario_origin_home_state_citations
+--- origin scenario rc=0
+--- stdout:
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/origin-bottleneck-plan/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/origin-bottleneck-plan/data/backlog.md). Update /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/origin-bottleneck-plan/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+--- stderr:
+warning: cleaning up scout task task-x1 deletes these untracked or ignored items in its worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/origin-bottleneck-plan/wt (largest first, KiB):
+  12	state
+task record: REMOVED
+===== scenario_cited_marker_exact_path
+--- exact-path citation rc=1
+REFUSED: scout task task-x1's worktree /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/adv-cited-marker/wt holds work that exists nowhere else, and cleanup would delete it.
+Paths its report cites that exist only in the worktree:
+  state/extensions/omp-primary-branch/queue.json
+Preserve each one first: copy it into /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-teardown-tests.HU1Ovj/adv-cited-marker/data/task-x1/ (that survives cleanup along with this home's private records and any backup of them), or commit it and push it to a remote. Then re-run teardown.
+Use --force only after the captain explicitly approves discarding them.
+cited file: KEPT
