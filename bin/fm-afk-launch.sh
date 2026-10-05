@@ -12,11 +12,13 @@
 # clause fields, the never-set, the refusal wording, and the record schema); `confirm` promotes it
 # into state/.afk-contract and prints the entry announcement (hold-for-return
 # only: no phone channel exists). The record is the posture in every harness.
-# On Pi and pi-signed the entry ENDS there: the away daemon is no longer launched
-# on Pi, the ordinary supervision session keeps running in both postures, and
-# `start` refuses on those harnesses. Every other harness still runs the daemon
+# On Pi, pi-signed, and omp the entry ENDS there: the away daemon is not launched
+# on those harnesses, the ordinary supervision session keeps running in both
+# postures, and `start` refuses there. Every other harness still runs the daemon
 # for now, so `start` and `start-native` require the confirmed record before they
-# launch the daemon.
+# launch the daemon. Quiet mode (FM_AFK_MODE=quiet) exists only as that daemon,
+# so on Pi, pi-signed, and omp every subcommand that would enter it (propose,
+# confirm, start, start-native) refuses with the reason before writing anything.
 # `stop` (the return, driven by bin/fm-afk-return.sh) shuts the daemon down,
 # clears state/.afk last, and archives the record under state/afk-contracts/.
 #
@@ -49,7 +51,7 @@
 #                              Repeatable --grant records captain-named task
 #                              ids that may merge-when-green while away.
 #   fm-afk-launch.sh confirm   Promote the required proposal and print the entry
-#                              announcement. On Pi this is the whole entry.
+#                              announcement. On Pi and omp this is the whole entry.
 #   fm-afk-launch.sh start     Capture the captain pane, then (unless the daemon
 #                              is already running) launch the daemon in a fresh
 #                              non-visible terminal for the detected backend and
@@ -191,17 +193,42 @@ fm_afk_launch_primary_harness() {
   "$FM_AFK_LAUNCH_DIR/fm-harness.sh" 2>/dev/null || printf unknown
 }
 
-# The away daemon is no longer launched on Pi: the posture record is the whole
-# entry there and the ordinary supervision session runs in both postures.
+# The away daemon is not launched on Pi or omp: the posture record is the whole
+# entry there and the ordinary supervision session runs in both postures. On omp
+# that session is the extension-owned watcher (.omp/extensions/fm-primary-omp-watch.ts)
+# plus the supervision branch, which the daemon cannot take over: its watcher arm
+# finds the extension's watcher already running and never owns triage, and its
+# injection path has no verified omp composer support.
+fm_afk_launch_no_daemon_harness() {  # <harness>
+  case "$1" in
+    pi|pi-signed|omp) return 0 ;;
+  esac
+  return 1
+}
+
 fm_afk_launch_daemon_allowed() {
   local harness
   harness=$(fm_afk_launch_primary_harness)
-  case "$harness" in
-    pi|pi-signed)
-      fm_afk_launch_log "the away daemon is no longer launched on $harness; the away-posture record is the posture there (run bin/fm-afk-launch.sh confirm and stop)"
-      return 1 ;;
-  esac
+  if fm_afk_launch_no_daemon_harness "$harness"; then
+    fm_afk_launch_log "the away daemon is not launched on $harness; the away-posture record is the posture there and the ordinary supervision session keeps running (run bin/fm-afk-launch.sh confirm and stop)"
+    return 1
+  fi
   return 0
+}
+
+# Quiet mode is nothing but the daemon run while the captain stays present, so
+# it has no meaning where the daemon never runs. Refuse before any record is
+# written, so a refused /quiet never leaves an away posture behind.
+fm_afk_launch_quiet_allowed() {
+  local harness
+  [ "${FM_AFK_MODE:-}" = quiet ] || return 0
+  harness=$(fm_afk_launch_primary_harness)
+  fm_afk_launch_no_daemon_harness "$harness" || return 0
+  case "$harness" in
+    omp) fm_afk_launch_log "quiet mode is not available on omp: it needs the away daemon, which cannot take monitoring over from the omp watch extension; the omp supervision branch already absorbs routine wakes (turn it on with config/omp-supervision-branch set to on, see docs/configuration.md)" ;;
+    *) fm_afk_launch_log "quiet mode is not available on $harness: it needs the away daemon, which is not launched there; the Pi supervision branch already absorbs routine wakes (docs/pi-supervision-branch.md)" ;;
+  esac
+  return 1
 }
 
 fm_afk_launch_catchup_pending() {
@@ -227,11 +254,13 @@ fm_afk_launch_record_require() {
 
 fm_afk_launch_propose() {
   fm_afk_launch_catchup_pending && return 1
+  fm_afk_launch_quiet_allowed || return 1
   "$FM_AFK_CONTRACT_CMD" propose "$@"
 }
 
 fm_afk_launch_confirm() {
   fm_afk_launch_catchup_pending && return 1
+  fm_afk_launch_quiet_allowed || return 1
   "$FM_AFK_CONTRACT_CMD" confirm
 }
 
@@ -551,6 +580,7 @@ fm_afk_launch_create_tmux() {  # <captain-target> <captain-backend>
 fm_afk_launch_start() {
   local captain_target captain_backend backup artifact had_afk=0 result
   fm_afk_launch_catchup_pending && return 1
+  fm_afk_launch_quiet_allowed || return 1
   fm_afk_launch_daemon_allowed || return 1
   fm_afk_launch_record_require || return 1
   # Capture the captain pane FIRST, before creating anything.
@@ -622,6 +652,7 @@ fm_afk_launch_start_native() {
   local backup artifact had_afk=0 result=0
   mkdir -p "$FM_AFK_LAUNCH_STATE" || return 1
   fm_afk_launch_catchup_pending && return 1
+  fm_afk_launch_quiet_allowed || return 1
   fm_afk_launch_daemon_allowed || return 1
   fm_afk_launch_record_require || return 1
   if daemon_lock_held_by_live_daemon; then

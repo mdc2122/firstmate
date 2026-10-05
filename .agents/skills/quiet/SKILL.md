@@ -3,6 +3,7 @@ name: quiet
 description: >-
   Enter quiet supervision mode when the captain invokes /quiet or asks for quiet mode, quiet-while-present, or fewer routine wake turns while they stay in the session.
   It sets the same durable away/quiet-mode flag as /afk, in `quiet` mode, so the sub-supervisor daemon self-handles routine wakes and escalates captain-relevant events exactly as away mode does, but ordinary captain chat does NOT exit it - only an explicit `/quiet off` does.
+  It refuses on Pi, pi-signed, and omp primaries, where the daemon is never launched.
 user-invocable: true
 metadata:
   internal: true
@@ -21,6 +22,12 @@ its classification policy, its reliability properties - is owned once by the
 The only things quiet mode changes are which mode the flag declares and what
 exits it.
 
+## Not on Pi or omp
+
+Quiet mode is the away daemon run while the captain stays present, and the daemon is never launched on Pi, pi-signed, or omp.
+On those primaries `bin/fm-afk-launch.sh` refuses every `FM_AFK_MODE=quiet` entry before writing anything and names the reason; relay that refusal in `AGENTS.md` section 9 language and stop.
+There the supervision branch already absorbs routine wakes while the captain stays present (on omp only when `config/omp-supervision-branch` says `on`, per `docs/configuration.md`).
+
 ## What it does
 
 1. **Enter the lifecycle through `bin/fm-afk-launch.sh`, exactly as `/afk`
@@ -28,8 +35,10 @@ exits it.
    Follow the `afk` skill's "What it does" steps 1-3 verbatim (terminal-
    backed vs harness-native entry, daemon-already-running refresh, never
    arming a separate `fm-watch.sh`) with one addition: export
-   `FM_AFK_MODE=quiet` in the shell that invokes `bin/fm-afk-launch.sh start`
-   (or `start-native`), so `state/.afk`'s first line reads `quiet` instead of
+   `FM_AFK_MODE=quiet` before the first `bin/fm-afk-launch.sh propose` and
+   keep it set for the whole entry - `propose`, `confirm`, and `start` (or
+   `start-native`) - so an omp or Pi primary is refused before any posture
+   record is written, and `state/.afk`'s first line reads `quiet` instead of
    `away`.
    Leaving `FM_AFK_MODE` unset on a bare refresh of an already-running quiet
    daemon is also correct and does nothing wrong: `fm_afk_flag_write`
