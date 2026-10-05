@@ -34,8 +34,10 @@ There the supervision branch already absorbs routine wakes while the captain sta
    Follow the `afk` skill's "What it does" steps 1-3 verbatim (terminal-
    backed vs harness-native entry, daemon-already-running refresh, never
    arming a separate `fm-watch.sh`) with one addition: export
-   `FM_AFK_MODE=quiet` in the shell that invokes `bin/fm-afk-launch.sh start`
-   (or `start-native`), so `state/.afk`'s first line reads `quiet` instead of
+   `FM_AFK_MODE=quiet` before the first `bin/fm-afk-launch.sh propose` and
+   keep it set for the whole entry - `propose`, `confirm`, and `start` (or
+   `start-native`) - so an omp or Pi primary is refused before any posture
+   record is written, and `state/.afk`'s first line reads `quiet` instead of
    `away`.
    Leaving `FM_AFK_MODE` unset on a bare refresh of an already-running quiet
    daemon is also correct and does nothing wrong: `fm_afk_flag_write`
