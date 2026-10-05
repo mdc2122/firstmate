@@ -5010,6 +5010,42 @@ test_queue_zero_tick_wakes_with_ready_rows_once() {
   pass "the watcher wakes once with the ready rows on the queue-zero cadence, not again for the same episode"
 }
 
+# --- far-date holds: the watcher wakes with the items, once per episode ------
+
+test_far_holds_tick_wakes_with_far_items_once() {
+  local dir state fakebin out pid
+  command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found; far-holds watcher case not run"; return 0; }
+  dir=$(make_case far-holds); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
+  mkdir -p "$dir/data"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' > "$dir/data/backlog.md"
+  tasks-axi add parked-far "work parked weeks out" --file "$dir/data/backlog.md" >/dev/null
+  tasks-axi hold parked-far --reason "revisit later" --until 2099-01-01 --file "$dir/data/backlog.md" >/dev/null
+  # Heartbeat and queue inbox zero are pinned far away: the far-holds tick has its own cadence.
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$dir/data" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_QUEUE_ZERO_INTERVAL=999999 FM_FAR_HOLDS_INTERVAL=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 100 || fail "the watcher did not wake for a far-dated hold"
+  grep -F 'check: far-holds:' "$out" | grep -F 'parked-far until 2099-01-01' >/dev/null \
+    || fail "the far-holds wake did not name its item: $(cat "$out")"
+  grep -F $'\tcheck\tfar-holds\t' "$state/.wake-queue" >/dev/null \
+    || fail "the far-holds wake was not durably queued"
+
+  ack_stopped_cycle "$state" || fail "could not acknowledge the far-holds wake"
+  rm -f "$state/.last-far-holds"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$dir/data" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_QUEUE_ZERO_INTERVAL=999999 FM_FAR_HOLDS_INTERVAL=1 "$WATCH" > "$out.2" &
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    fail "the watcher exited again for the same unchanged far hold: $(cat "$out.2")"
+  fi
+  reap "$pid"
+  [ ! -s "$state/.wake-queue" ] || fail "the same far-holds episode was queued twice"
+  pass "the watcher wakes once with far-dated holds on their own cadence, not again for the same episode"
+}
+
 # --- daily attention check: the watcher runs it on its own cadence -----------
 
 test_attention_check_tick_wakes_on_a_red_day() {
@@ -5493,6 +5529,7 @@ test_heartbeat_no_change_absorbed
 test_heartbeat_backstop_surfaces_unsurfaced_status
 test_heartbeat_backstop_surfaces_a_masked_status
 test_queue_zero_tick_wakes_with_ready_rows_once
+test_far_holds_tick_wakes_with_far_items_once
 test_attention_check_tick_wakes_on_a_red_day
 test_beacon_stays_fresh_while_absorbing
 test_afk_signal_records_heartbeat_endpoint

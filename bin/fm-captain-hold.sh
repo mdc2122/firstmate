@@ -21,7 +21,8 @@
 #
 # Usage:
 #   fm-captain-hold.sh hold <task-id> --reason <reason> \
-#     [--title <title>] [--repo <repo>] [--origin <origin-id>] [--until YYYY-MM-DD]
+#     [--title <title>] [--repo <repo>] [--origin <origin-id>] \
+#     [--until YYYY-MM-DD [--captain-words-file <path>]]
 #   fm-captain-hold.sh answer <task-id> --decision-file <path> [--release]
 #   fm-captain-hold.sh answers [<legacy-origin> | --any-origin] --source <provenance>   (keyed answers on stdin)
 #   fm-captain-hold.sh reconcile-requests --source-id <source-id> --source <provenance>   (task ids on stdin)
@@ -45,7 +46,15 @@
 # existing timestamp, while re-holding released work starts a new lifecycle.
 # A task already closed is refused rather than reopened. `--until` records the
 # captain's own deferral date through `tasks-axi hold --until`, so a "revisit
-# later" answer is stored as a date instead of a live card.
+# later" answer is stored as a date instead of a live card. When the date is
+# the captain's, `--captain-words-file` (at most 8192 bytes, `--until`
+# required) records his exact words in the body as a
+# `Captain deferral until <date>:` line followed by `> `-quoted words, directly
+# beneath the hold-set stamp; an identical retry adds nothing. That record is
+# bound to its date: bin/fm-far-holds.sh treats a far `--until` as the
+# captain's only while a record for that same date exists, and names every
+# other far-dated hold so a deferral firstmate chose gets justified or
+# dispatched.
 #
 # `answer` records the captain's exact words and resolves the call in the same
 # act. It requires a non-empty captain decision file of at most 8192 bytes and
@@ -821,8 +830,46 @@ verify_entry_durable() {  # <origin-or-empty> <entry>; prints "<id> <how>"
   verify_hold_durable "${resolved%% *}"
 }
 
+# The durable proof that a --until date is the captain's: his words bound to
+# that exact date, placed directly beneath the hold-set stamp so the stamp
+# stays the body's first line. An identical record already present is kept.
+deferral_record() {  # <until>
+  printf 'Captain deferral until %s:\n' "$1"
+  printf '%s\n' "$DECISION_TEXT" | sed 's/^/> /'
+}
+
+write_deferral_record() {  # <task-id> <shown-body> <until>
+  local id=$1 body=$2 until=$3 record stamp new_body tmp
+  body=$(decode_shown_value "$body") \
+    || fail "could not decode the existing body for $id"
+  record=$(deferral_record "$until")
+  case "$body" in *"$record"*) return 0 ;; esac
+  stamp=$(body_hold_set_timestamp "$body")
+  [ -n "$stamp" ] || fail "task $id has no hold-set stamp to anchor its deferral record"
+  body=${body#"Captain hold set: $stamp"}
+  case "$body" in
+    $'\n\n'*) body=${body#$'\n\n'} ;;
+    $'\n'*) body=${body#$'\n'} ;;
+  esac
+  new_body=$(printf 'Captain hold set: %s\n\n%s' "$stamp" "$record")
+  if [ -n "$body" ]; then
+    new_body=$(printf '%s\n\n%s' "$new_body" "$body")
+  fi
+  tmp=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-captain-hold-deferral.XXXXXX") \
+    || fail "cannot stage the deferral record"
+  if ! printf '%s\n' "$new_body" > "$tmp"; then
+    rm -f -- "$tmp"
+    fail "cannot stage the deferral record for $id"
+  fi
+  if ! tasks_axi update "$id" --body-file "$tmp" >/dev/null; then
+    rm -f -- "$tmp"
+    fail "could not record the captain's deferral words on $id"
+  fi
+  rm -f -- "$tmp"
+}
+
 command_hold() {
-  local id=${1:-} title='' reason='' repo='' origin='' until='' show state existing_title body='' hold_kind hold_set occurrence
+  local id=${1:-} title='' reason='' repo='' origin='' until='' words_file='' show state existing_title body='' hold_kind hold_set occurrence
   local existing_hold_kind='' existing_held='' preserve_hold_set=0
   [ "$#" -ge 1 ] || { usage >&2; exit 2; }
   shift
@@ -833,6 +880,7 @@ command_hold() {
       --repo) shift; repo=${1:-} ;;
       --origin) shift; origin=${1:-} ;;
       --until) shift; until=${1:-} ;;
+      --captain-words-file) shift; words_file=${1:-} ;;
       *) usage >&2; exit 2 ;;
     esac
     shift
@@ -848,6 +896,10 @@ command_hold() {
       [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) : ;;
       *) fail "--until must be a YYYY-MM-DD date: $until" ;;
     esac
+  fi
+  if [ -n "$words_file" ]; then
+    [ -n "$until" ] || fail "--captain-words-file records a deferral and requires --until"
+    load_decision "$words_file"
   fi
   hold_set=${FM_CAPTAIN_HOLD_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   case "$hold_set" in
@@ -897,6 +949,9 @@ command_hold() {
   task_show_or_fail "$id" "task $id disappeared while recording its hold-set stamp"
   [ -n "$(body_hold_set_timestamp "$(show_field_value "$show" body)")" ] \
     || fail "task $id did not retain its hold-set stamp"
+  if [ -n "$words_file" ]; then
+    write_deferral_record "$id" "$(show_field "$show" body)" "$until"
+  fi
   if [ -n "$until" ]; then
     tasks_axi hold "$id" --reason "$reason" --kind captain --until "$until" >/dev/null \
       || fail "could not hold task $id for the captain"
