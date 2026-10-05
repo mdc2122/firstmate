@@ -526,6 +526,52 @@ test_interrupted_handling_is_redrained_on_rearm() {
   pass "watch-arm: interrupted handling leaves its wake durable for successor re-drain"
 }
 
+# The omp primary on 2026-10-05: main drained and acknowledged a recovery
+# episode's rows itself before the extension's handling confirmation for the
+# successor ran, and the confirmation of that same generation was rejected
+# (status=1), surfacing a spurious "watcher: FAILED" on an already-handled wake.
+test_handling_confirmation_after_main_ack_is_not_a_rejection() {
+  local dir home state fakebin generation watcher_pid rc first_arm
+  dir=$(make_case handling-after-main-ack)
+  home="$dir/home"
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  mkdir -p "$home/data"
+
+  start_rearm_arm "$home" "$state" "$fakebin" "$dir/first-arm.out"
+  is_live_non_zombie "$ARM_PID" || fail "handling-after-ack fixture watcher did not stay live"
+  printf 'done: wake main handles before the confirmation lands\n' > "$state/early.status"
+  wait_for_exit "$ARM_PID" 120 || fail "fixture watcher did not deliver its wake"
+  first_arm=$ARM_PID
+
+  start_rearm_arm "$home" "$state" "$fakebin" "$dir/successor-arm.out" "$first_arm"
+  is_live_non_zombie "$ARM_PID" || fail "handling successor did not stay live"
+  generation=$(sed -n 's/^watcher: started pid=[0-9][0-9]*.* recovery-generation=\(.*\)$/\1/p' "$dir/successor-arm.out")
+  watcher_pid=$(sed -n 's/^watcher: started pid=\([0-9][0-9]*\).* recovery-generation=.*$/\1/p' "$dir/successor-arm.out")
+  [ -n "$generation" ] && [ -n "$watcher_pid" ] \
+    || fail "handling successor did not report its recovery generation: $(cat "$dir/successor-arm.out")"
+
+  ack_wakes "$state" || fail "main could not drain and acknowledge the episode"
+  [ "$(cat "$state/.watcher-down")" = "acked:handling:$generation" ] \
+    || fail "main's acknowledgement did not retire the successor's generation: $(cat "$state/.watcher-down")"
+
+  rc=0
+  FM_HOME="$home" FM_STATE_OVERRIDE="$state" "$WATCH_ARM" --handling-delivered "$generation" \
+    --watcher-pid "$watcher_pid" || rc=$?
+  [ "$rc" -eq 0 ] || fail "a confirmation of an already-acknowledged generation was rejected (status=$rc)"
+  [ "$(cat "$state/.watcher-down")" = "acked:handling:$generation" ] \
+    || fail "the late confirmation reopened an acknowledged episode: $(cat "$state/.watcher-down")"
+
+  rc=0
+  FM_HOME="$home" FM_STATE_OVERRIDE="$state" "$WATCH_ARM" --handling-delivered "other-generation" \
+    --watcher-pid "$watcher_pid" || rc=$?
+  [ "$rc" -ne 0 ] || fail "a confirmation naming a different generation was accepted"
+
+  kill -TERM "$ARM_PID" 2>/dev/null || true
+  wait "$ARM_PID" 2>/dev/null || true
+  pass "watch-arm: a handling confirmation after main already acknowledged that generation is not a rejection"
+}
+
 test_malformed_marker_is_quarantined_once() {
   local dir home state fakebin invalid_count
   dir=$(make_case malformed-downtime-marker)
@@ -849,6 +895,7 @@ test_rearm_resurfaces_durable_queue_and_remote_open_decision
 test_marker_publish_failure_retains_recovery_evidence
 test_delivery_gap_wake_is_recovered_once
 test_interrupted_handling_is_redrained_on_rearm
+test_handling_confirmation_after_main_ack_is_not_a_rejection
 test_malformed_marker_is_quarantined_once
 test_recovery_consumption_serializes_queue_publication
 test_restart_preserves_recovery_across_reused_pid_lock

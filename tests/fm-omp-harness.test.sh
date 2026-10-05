@@ -855,6 +855,44 @@ EOF
   pass ".omp watch extension: an in-process helper session's start and shutdown leave the owner armed and are logged as inert; a genuine replacement still takes over"
 }
 
+# The omp primary on 2026-10-05: a nested omp the session ran from its own
+# home (fm-spawn's `omp models --json` probe at every omp dispatch) auto-loaded
+# both tracked extensions, walked up to the lock-owning session, and rewrote
+# both loaded-build markers with its own short-lived pid. That broke
+# fm_omp_extension_owns_supervision, so every ordinary watcher hand-off read
+# as "WATCHER DOWN". A descendant of the lock owner must leave the session's
+# markers alone, while the lock owner itself still records them.
+test_nested_omp_process_keeps_the_session_markers() {
+  local repo home out
+  repo="$TMP_ROOT/nested-markers/repo"; home="$TMP_ROOT/nested-markers/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  printf '#!/usr/bin/env bash\nsleep 30\n' > "$repo/bin/fm-watch-arm.sh"
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  # shellcheck disable=SC2016 # expanded by the inner bash, which stands in for the session
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" REPO="$repo" LIB="$ROOT/bin/fm-wake-lib.sh" bash -c '
+    . "$LIB"
+    state=$FM_HOME/state
+    printf "%s\n" "$$" > "$state/.lock"
+    for pair in fm-primary-omp-watch.ts:.omp-watch-extension-loaded fm-primary-turnend-guard.ts:.omp-turnend-extension-loaded; do
+      printf "%s\n%s\n" "$(fm_pi_extension_version "$REPO/.omp/extensions/${pair%%:*}")" "$$" > "$state/${pair#*:}"
+    done
+    fm_omp_extension_owns_supervision "$state" "$REPO" || { echo "fixture proof did not hold"; exit 1; }
+    # A nested process under the session loads both extensions, as omp does.
+    node --input-type=module -e "
+      const { pathToFileURL } = await import(\"node:url\");
+      const pi = { on() {}, registerCommand() {}, registerTool() {}, sendUserMessage() {} };
+      for (const f of [\"fm-primary-omp-watch.ts\", \"fm-primary-turnend-guard.ts\"]) {
+        (await import(pathToFileURL(process.env.REPO + \"/.omp/extensions/\" + f).href)).default(pi);
+      }
+      process.exit(0);
+    " || { echo "nested load failed"; exit 1; }
+    fm_omp_extension_owns_supervision "$state" "$REPO" && echo nested-kept || echo "nested-clobbered: $(sed -n 2p "$state/.omp-watch-extension-loaded") $(sed -n 2p "$state/.omp-turnend-extension-loaded") lock=$$"
+  ' 2>&1)
+  [ "$out" = nested-kept ] || fail "a nested omp process under the lock owner must not rewrite the session's markers: $out"
+  pass ".omp extensions: a nested omp process under the lock-owning session leaves its loaded-build markers and ownership proof intact"
+}
+
 # One restart round of the replacement-handoff replay contract against the real
 # extension: session 1 receives one actionable close per <wakes> entry, each
 # after its watcher queued the durable row under the shared pending recovery
@@ -989,6 +1027,7 @@ test_ownership_proof_is_omp_keyed
 test_turnend_guard_extension_compels_one_continuation
 test_watch_extension_arms_and_delivers
 test_watch_extension_helper_session_leaves_owner_live
+test_nested_omp_process_keeps_the_session_markers
 test_watch_extension_restart_skips_acknowledged_handoff
 test_watch_extension_restart_replays_unacknowledged_handoff_once
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation

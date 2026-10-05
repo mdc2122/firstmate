@@ -71,25 +71,33 @@ function pidAlive(pid: string): boolean {
   }
 }
 
-function lockOwnership(): LockOwnership {
+function lockOwnership(): { ownership: LockOwnership; lockPid: string } {
   let lockPid = "";
   try {
     lockPid = readFileSync(`${state}/.lock`, "utf8").trim();
   } catch {
-    return "missing";
+    return { ownership: "missing", lockPid };
   }
-  if (!/^[0-9]+$/.test(lockPid) || lockPid === "1") return "other";
+  if (!/^[0-9]+$/.test(lockPid) || lockPid === "1") return { ownership: "other", lockPid };
   let pid = String(process.pid);
   for (let i = 0; i < 8; i += 1) {
-    if (pid === lockPid) return "owned";
+    if (pid === lockPid) return { ownership: "owned", lockPid };
     pid = parentPid(pid);
     if (!pid || pid === "1") break;
   }
-  return pidAlive(lockPid) ? "other" : "missing";
+  return { ownership: pidAlive(lockPid) ? "other" : "missing", lockPid };
 }
 
+// Only the session process named in state/.lock (or one about to claim an
+// unheld lock) records this marker: the ownership proof binds the marker's pid
+// to the lock's pid, and a nested omp the session runs from this home would
+// otherwise overwrite the valid record with its own short-lived pid
+// (.omp/extensions/fm-primary-omp-watch.ts markLoaded states the same rule).
 function markLoaded(): void {
-  if (!existsSync(state) || lockOwnership() === "other") return;
+  if (!existsSync(state)) return;
+  const { ownership, lockPid } = lockOwnership();
+  if (ownership === "other") return;
+  if (ownership === "owned" && lockPid !== String(process.pid)) return;
   writeFileSync(marker, `${extensionVersion}\n${process.pid}\n`);
 }
 

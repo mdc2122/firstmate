@@ -100,6 +100,11 @@ type CloseClassification = {
   message: string;
 };
 
+type Restoration = {
+  failure: string;
+  recovery?: { generation: string; watcherPid: string };
+};
+
 type PendingActionableClose = {
   version: 1;
   token: string;
@@ -131,6 +136,10 @@ type SessionGeneration = {
   cleanupTimer: ReturnType<typeof setTimeout> | null;
   retryFailures: number;
   restoring: boolean;
+  // True only while restoreAfterActionableClose is starting and verifying a
+  // successor. The rest of a delivery (handling confirmation, a supervision
+  // branch turn, the main follow-up) runs with a live watcher already in place.
+  verifying: boolean;
   seq: number;
   pendingActionables: PendingActionableClose[];
   cleanupFailure: string;
@@ -140,8 +149,8 @@ type SessionGeneration = {
   // branch-handled one (finished).
   unconsumedWakes: Map<string, UnconsumedWake>;
   // A verified successor's failure close that arrived while the pipeline was
-  // still delivering the wake it was started for; its bounded retry runs once
-  // that delivery settles instead of being skipped by the single-flight guard.
+  // still verifying the successor for an earlier close; its bounded retry runs
+  // once that delivery settles instead of being skipped by the single-flight guard.
   deferredClose: { message: string; predecessorArmPid: string } | null;
 };
 
@@ -277,8 +286,16 @@ function lockOwnership(): LockOwnership {
   return pidAlive(lockPid) ? "other" : "missing";
 }
 
+// The ownership proof (bin/fm-wake-lib.sh fm_omp_extension_owns_supervision)
+// binds this marker's pid to the pid in state/.lock, so only that session
+// process, or one about to claim an unheld lock, may record it. A nested omp
+// the session runs from this home (fm-spawn's `omp models --json` probe, an
+// ad-hoc `omp -p`) auto-discovers this file and its ancestor walk also reaches
+// the lock owner, but its write could only replace the session's valid record.
 function markLoaded(): void {
-  if (lockOwnership() === "other") return;
+  const ownership = lockOwnership();
+  if (ownership === "other") return;
+  if (ownership === "owned" && readOptional(`${state}/.lock`).trim() !== String(process.pid)) return;
   mkdirSync(state, { recursive: true });
   writeFileSync(marker, `${extensionVersion}\n${process.pid}\n`);
 }
@@ -514,6 +531,7 @@ function createGeneration(): SessionGeneration {
     cleanupTimer: null,
     retryFailures: 0,
     restoring: false,
+    verifying: false,
     seq: 0,
     pendingActionables: [],
     cleanupFailure: "",
@@ -878,7 +896,13 @@ export default function (pi: ExtensionAPI) {
           // A new restoration supersedes whatever became of the previous
           // successor; only a failure during this delivery is retried after it.
           owner.deferredClose = null;
-          const restoration = await restoreAfterActionableClose(owner, pending.predecessorArmPid);
+          owner.verifying = true;
+          let restoration: Restoration;
+          try {
+            restoration = await restoreAfterActionableClose(owner, pending.predecessorArmPid);
+          } finally {
+            owner.verifying = false;
+          }
           if (!generationIsLive(owner)) {
             settleClaim("failed");
             releaseClaim();
@@ -987,10 +1011,7 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  async function restoreAfterActionableClose(owner: SessionGeneration, predecessorArmPid: string): Promise<{
-    failure: string;
-    recovery?: { generation: string; watcherPid: string };
-  }> {
+  async function restoreAfterActionableClose(owner: SessionGeneration, predecessorArmPid: string): Promise<Restoration> {
     let failure = "";
     for (let attempt = 0; attempt <= retryLimit; attempt += 1) {
       if (!generationIsLive(owner)) return { failure: "" };
@@ -1139,15 +1160,23 @@ export default function (pi: ExtensionAPI) {
         enqueuePendingActionable(owner, pending);
         if (!generationIsLive(owner)) return;
         owner.retryFailures = 0;
+        // A delivery past its successor check (handling confirmation, a
+        // supervision branch turn, the main follow-up) can run for minutes.
+        // Queueing this close behind it would leave the home with no watcher
+        // for that whole turn, so start its successor now; the pipeline's own
+        // restoration for this close then finds and verifies that child.
+        if (owner.restoring && !owner.verifying && !owner.child && !owner.retryTimer) {
+          startArm(owner, predecessor);
+        }
         void processPendingActionables(owner);
         return;
       }
       if (!generationIsLive(owner)) return;
-      if (owner.restoring) {
-        // The pipeline is still delivering the wake this successor was
-        // started for. A verified successor that failed on its own keeps its
-        // bounded retry for the end of that delivery; an unready child closing
-        // here was retired by the restoration itself.
+      if (owner.verifying) {
+        // The pipeline is still verifying the successor for its current close.
+        // A verified successor that failed on its own keeps its bounded retry
+        // for the end of that delivery; an unready child closing here was
+        // retired by the restoration itself.
         if (verified && !armRetired.has(armChild)) {
           owner.deferredClose = { message: classification.message, predecessorArmPid: predecessor };
         }
@@ -1162,7 +1191,7 @@ export default function (pi: ExtensionAPI) {
       settleReadiness(false);
       releaseChild();
       if (!generationIsLive(owner)) return;
-      if (owner.restoring) return;
+      if (owner.verifying) return;
       scheduleRetry(owner, `watcher: FAILED - omp extension arm child ${id} failed: ${error.message}`, String(armChild.pid ?? ""));
     });
     return {
