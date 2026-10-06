@@ -588,7 +588,9 @@ export default function (pi: ExtensionAPI) {
       source as SessionstartSource,
       sessionIdFromContext(ctx),
     );
-    // startup and new begin an empty context; resume and fork keep the old one.
+    // startup and new begin an empty context; resume and fork keep the old one,
+    // and its cycle only in-process: a process-level resume re-takes
+    // state/.lock, and fm-stow-trigger.sh starts a new cycle for a new holder.
     if (source === "startup" || source === "clear") reportStowTrigger("cycle");
   });
 

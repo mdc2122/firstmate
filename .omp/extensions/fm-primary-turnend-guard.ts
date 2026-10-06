@@ -573,8 +573,10 @@ export default function (pi: ExtensionAPI) {
     markLoaded();
     registerSessionstartExitListener();
     sessionstartGeneration = createSessionstartGeneration(source, sessionIdFromContext(ctx));
-    // A fresh process or an in-process /new starts an empty context; a resume
-    // keeps the old one, so it keeps the old cycle too.
+    // A fresh process or an in-process /new starts an empty context. A resume
+    // keeps the old one; only an in-process resume keeps the old cycle, since a
+    // process-level resume re-takes state/.lock and fm-stow-trigger.sh starts a
+    // new cycle for a new holder.
     if (source !== "resume") reportStowTrigger("cycle");
   });
 

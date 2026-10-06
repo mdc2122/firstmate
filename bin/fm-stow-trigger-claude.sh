@@ -5,7 +5,9 @@
 # gets only the pre-compaction trigger: the tracked .claude/settings.json runs
 #   PreCompact    -> fm-stow-trigger-claude.sh compacting
 #   SessionStart  -> fm-stow-trigger-claude.sh cycle   (startup, clear, compact;
-#                    a resumed session keeps its old context and its old cycle)
+#                    an in-process resume keeps its old cycle, while a
+#                    process-level resume re-takes state/.lock and so starts a
+#                    new cycle under fm-stow-trigger.sh's holder-change rule)
 # with the hook payload on stdin. Like the omp and Pi extensions, it reports only
 # from a genuine primary checkout whose fleet lock this session holds, and stands
 # down on a Cursor-delivered payload. It never blocks or delays compaction or a

@@ -36,8 +36,10 @@
 # A report naming a different holder (or a record with none) is a new session
 # whose startup `cycle` report can be dropped: a harness may run its session
 # start hook before the session takes state/.lock, while the lock still names
-# the previous session. That report then starts a new cycle itself, so the
-# previous session's latch and stow never suppress the new session's wake.
+# the previous session. That report then starts a new cycle itself, dated from
+# when the holder took state/.lock (its mtime; now if unreadable), so the
+# previous session's latch and stow never suppress the new session's wake while
+# a stow this session completed before its first report still counts.
 #   context:    wakes when <percent> >= threshold, nothing fired this cycle, and
 #               no stow completed since usage first reached the threshold. A
 #               stow below the threshold (the daily floor on a quiet morning)
@@ -148,6 +150,7 @@ decide() {  # <action> [<percent>]
     cycle=$REC_CYCLE above=$REC_ABOVE fired=$REC_FIRED
   else
     fresh=1
+    cycle=$(fm_path_mtime "$STATE/.lock" 2>/dev/null) || cycle=$now
   fi
 
   case "$action" in

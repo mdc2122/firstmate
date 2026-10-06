@@ -251,6 +251,34 @@ test_new_lock_holder_starts_a_new_cycle() {
   pass "fm-stow-trigger: a new fleet-lock holder starts a new cycle despite a dropped startup report"
 }
 
+# The new holder's cycle starts when it took the fleet lock, not at its first
+# report: with the startup report dropped, a /stow the session completed after
+# taking the lock still satisfies its first compaction.
+test_new_holder_cycle_starts_at_lock_acquisition() {
+  local stowed_home unstowed_home home now out
+  stowed_home=$(make_home lock-time-stowed)
+  unstowed_home=$(make_home lock-time-unstowed)
+  now=$(date +%s)
+  for home in "$stowed_home" "$unstowed_home"; do
+    printf '111\n' > "$home/state/.lock"
+    trig "$home" cycle
+    printf '222\n' > "$home/state/.lock"
+    fm_touch_epoch $((now - 3600)) "$home/state/.lock"
+  done
+  stow_at "$stowed_home" $((now - 60))
+  stow_at "$unstowed_home" $((now - 7200))
+
+  out=$(trig "$stowed_home" compacting)
+  [ -z "$out" ] || fail "a stow after the new holder took the lock did not satisfy its first compaction: $out"
+  assert_equals 0 "$(stow_rows "$stowed_home")" "a stowed session's first compaction queued a wake"
+  out=$(trig "$unstowed_home" compacting)
+  assert_contains "$out" "at compaction" "a session with no stow since taking the lock did not wake"
+  out=$(trig "$unstowed_home" compacting)
+  [ -z "$out" ] || fail "a session with no stow woke twice in one cycle: $out"
+  assert_equals 1 "$(stow_rows "$unstowed_home")" "a session with no stow did not queue exactly one wake"
+  pass "fm-stow-trigger: a new holder's cycle starts when it took the fleet lock"
+}
+
 # The tracked Claude Code hooks, run as Claude runs them: the command string
 # from .claude/settings.json under bash, with the JSON payload on stdin, as a
 # child of a long-lived claude-named session process. Only the fleet-lock holder
@@ -377,6 +405,7 @@ test_stow_at_high_usage_satisfies_the_cycle
 test_compaction_wakes_when_threshold_never_crossed
 test_configured_threshold_and_no_duplicate_rows
 test_new_lock_holder_starts_a_new_cycle
+test_new_holder_cycle_starts_at_lock_acquisition
 test_omp_guard_reports_context_usage
 test_pi_guard_reports_context_usage
 test_claude_precompact_hook_wakes_once_per_cycle
