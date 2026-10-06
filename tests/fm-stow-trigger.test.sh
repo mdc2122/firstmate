@@ -279,6 +279,48 @@ test_new_holder_cycle_starts_at_lock_acquisition() {
   pass "fm-stow-trigger: a new holder's cycle starts when it took the fleet lock"
 }
 
+# Seeds the documented state/.stow-trigger record (no holder, matching a home
+# without state/.lock) so a cycle can span hours.
+seed_record() {  # <home> <cycle> <above>
+  printf 'fm-stow-trigger-v1\ncycle=%s\nabove=%s\nfired=0\nholder=\n' "$2" "$3" > "$1/state/.stow-trigger"
+}
+
+# Compaction is suppressed only by a stow covering the busy part of the cycle:
+# one since usage crossed the threshold, or, with no usage signal, a recent one.
+test_compaction_needs_a_stow_covering_the_busy_part() {
+  local home out now
+  now=$(date +%s)
+
+  home=$(make_home busy-crossed-early-stow)
+  seed_record "$home" $((now - 7200)) $((now - 3600))
+  stow_at "$home" $((now - 5400))
+  out=$(trig "$home" compacting 95)
+  assert_contains "$out" "at compaction" "a stow before the threshold crossing covered the compaction"
+  out=$(trig "$home" compacting 95)
+  [ -z "$out" ] || fail "the compaction woke twice in one cycle: $out"
+  assert_equals 1 "$(stow_rows "$home")" "a crossed cycle with an early stow did not queue exactly one wake"
+
+  home=$(make_home busy-crossed-late-stow)
+  seed_record "$home" $((now - 7200)) $((now - 3600))
+  stow_at "$home" $((now - 1800))
+  out=$(trig "$home" compacting 95)
+  [ -z "$out" ] || fail "a stow after the threshold crossing did not cover the compaction: $out"
+
+  home=$(make_home busy-unknown-old-stow)
+  seed_record "$home" $((now - 14400)) 0
+  stow_at "$home" $((now - 7200))
+  out=$(trig "$home" compacting)
+  assert_contains "$out" "at compaction" "a stow two hours before an unknown-usage compaction covered it"
+  assert_equals 1 "$(stow_rows "$home")" "an unknown-usage compaction did not queue exactly one wake"
+
+  home=$(make_home busy-unknown-recent-stow)
+  seed_record "$home" $((now - 14400)) 0
+  stow_at "$home" $((now - 600))
+  out=$(trig "$home" compacting)
+  [ -z "$out" ] || fail "a stow ten minutes before an unknown-usage compaction did not cover it: $out"
+  pass "fm-stow-trigger: compaction needs a stow since the crossing, or a recent one without a usage signal"
+}
+
 # The tracked Claude Code hooks, run as Claude runs them: the command string
 # from .claude/settings.json under bash, with the JSON payload on stdin, as a
 # child of a long-lived claude-named session process. Only the fleet-lock holder
@@ -406,6 +448,7 @@ test_compaction_wakes_when_threshold_never_crossed
 test_configured_threshold_and_no_duplicate_rows
 test_new_lock_holder_starts_a_new_cycle
 test_new_holder_cycle_starts_at_lock_acquisition
+test_compaction_needs_a_stow_covering_the_busy_part
 test_omp_guard_reports_context_usage
 test_pi_guard_reports_context_usage
 test_claude_precompact_hook_wakes_once_per_cycle

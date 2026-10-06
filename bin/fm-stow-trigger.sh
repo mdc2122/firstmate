@@ -45,8 +45,14 @@
 #               stow below the threshold (the daily floor on a quiet morning)
 #               does not cover the later busy part of the cycle; a stow at or
 #               above it does, so usage that stays high never re-wakes.
-#   compacting: wakes when nothing fired this cycle and no stow completed since
-#               the cycle started, whatever the usage.
+#   compacting: wakes when nothing fired this cycle and no stow covers the busy
+#               part of it, whatever the usage. When usage reached the
+#               threshold this cycle, only a stow since it first did covers it
+#               (the context rule). Otherwise (no usage signal, as on Claude
+#               Code, or usage never reached the threshold) only a stow this
+#               cycle within the last FM_STOW_TRIGGER_RECENT_SECS seconds
+#               (whole seconds, default 1800; invalid means 1800) does, so an
+#               early light stow never covers a long cycle.
 # The wake row is appended before the record is written, so a failed append is
 # retried at the next report rather than suppressed; an identical stow-due row
 # still queued is not appended twice. Prints the wake reason when it wakes,
@@ -62,6 +68,7 @@ RECORD="$STATE/.stow-trigger"
 RECORD_SCHEMA=fm-stow-trigger-v1
 STOW_MARKER="$STATE/.last-stow"
 DEFAULT_THRESHOLD=70
+DEFAULT_RECENT_SECS=1800
 
 usage() {
   sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'
@@ -76,6 +83,13 @@ threshold() {
   case "$v" in ''|*[!0-9]*) printf '%s\n' "$DEFAULT_THRESHOLD"; return ;; esac
   v=$((10#$v))
   if [ "$v" -ge 1 ] && [ "$v" -le 100 ]; then printf '%s\n' "$v"; else printf '%s\n' "$DEFAULT_THRESHOLD"; fi
+}
+
+recent_secs() {
+  local v=${FM_STOW_TRIGGER_RECENT_SECS:-}
+  case "$v" in ''|*[!0-9]*) printf '%s\n' "$DEFAULT_RECENT_SECS"; return ;; esac
+  v=$((10#$v))
+  if [ "$v" -gt 0 ]; then printf '%s\n' "$v"; else printf '%s\n' "$DEFAULT_RECENT_SECS"; fi
 }
 
 whole_percent() {  # <raw> -> whole number, or fail
@@ -138,7 +152,7 @@ queue_wake() {  # <reason>
 
 # Runs under the trigger lock.
 decide() {  # <action> [<percent>]
-  local action=$1 raw=${2:-} percent='' limit now cycle above fired fresh=0 reason
+  local action=$1 raw=${2:-} percent='' limit now cycle above fired fresh=0 since reason
   limit=$(threshold)
   now=$(date +%s)
   if [ -n "$raw" ]; then
@@ -172,7 +186,13 @@ decide() {  # <action> [<percent>]
       reason="check: stow-due: context ${percent}% (threshold ${limit}%) - run the /stow pass before compaction condenses this session"
       ;;
     compacting)
-      if [ "$fired" -gt 0 ] || stowed_since "$cycle"; then
+      if [ "$above" -gt 0 ]; then
+        since=$above
+      else
+        since=$((now - $(recent_secs)))
+        [ "$since" -ge "$cycle" ] || since=$cycle
+      fi
+      if [ "$fired" -gt 0 ] || stowed_since "$since"; then
         [ "$fresh" -eq 0 ] || record_write "$cycle" "$above" "$fired" || true
         return 0
       fi
