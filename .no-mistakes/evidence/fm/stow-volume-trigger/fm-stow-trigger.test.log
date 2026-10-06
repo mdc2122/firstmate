@@ -1,0 +1,10 @@
+ok - fm-stow-trigger: one wake at the threshold per context cycle, re-armed by compaction
+ok - fm-stow-trigger: a stow at high usage satisfies the cycle; one before it does not
+ok - fm-stow-trigger: compaction queues the wake when the threshold was skipped
+ok - fm-stow-trigger: config/stow-context-threshold is honored, invalid values fall back, rows never duplicate
+ok - fm-stow-trigger: a new fleet-lock holder starts a new cycle despite a dropped startup report
+ok - fm-stow-trigger: a new holder's cycle starts when it took the fleet lock
+ok - fm-stow-trigger: compaction needs a stow since the crossing, or a recent one without a usage signal
+ok - omp guard: owner-only usage reports, one wake per cycle, before-compact never cancels, compaction re-arms
+ok - Pi guard: owner-only usage reports, one wake per cycle, before-compact never cancels, compaction re-arms
+ok - Claude PreCompact hook: owner-only, one stow-due wake per cycle, re-armed by SessionStart but not resume or a dropped startup, silent on stdout

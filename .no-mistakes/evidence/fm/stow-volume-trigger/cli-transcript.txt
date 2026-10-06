@@ -1,0 +1,79 @@
+== S1: user sets threshold 80% (intent example) ==
+$ fm-stow-trigger.sh threshold
+80
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh context 60
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh context 79.9
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh context 80
+check: stow-due: context 80% (threshold 80%) - run the /stow pass before compaction condenses this session
+  [exit=0 stow-due rows=1]
+-- queue row:
+1791308440	1	check	stow-due	check: stow-due: context 80% (threshold 80%) - run the /stow pass before compaction condenses this session
+== S2: latch - same cycle stays silent after firstmate drains the wake ==
+$ fm-stow-trigger.sh context 92
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh compacting 97
+  [exit=0 stow-due rows=0]
+== S3: compaction finished -> new cycle re-arms ==
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh context 85
+check: stow-due: context 85% (threshold 80%) - run the /stow pass before compaction condenses this session
+  [exit=0 stow-due rows=1]
+== S4: stow at high usage satisfies cycle ==
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+  [exit=0 stow-due rows=1]
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+(fresh cycle, usage 82 -> wake; drained; /stow runs now)
+$ fm-stow-trigger.sh context 90
+  [exit=0 stow-due rows=0]
+$ fm-stow-trigger.sh compacting 95
+  [exit=0 stow-due rows=0]
+== S5 adversarial: early light stow (2h ago) must not cover a Claude compaction with no usage signal ==
+$ fm-stow-trigger.sh compacting
+check: stow-due: context ?% at compaction - run the /stow pass; knowledge this session held only in conversation may already be condensed
+  [exit=0 stow-due rows=1]
+== S6: recent stow (10 min ago) covers compaction without usage signal ==
+$ fm-stow-trigger.sh compacting
+  [exit=0 stow-due rows=0]
+== S7 adversarial: new fleet-lock holder with stale latch (fired) and dropped startup report still wakes ==
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=0]
+  record:
+    fm-stow-trigger-v1
+    cycle=1791308444
+    above=1791308444
+    fired=1791308444
+    holder=7171
+$ fm-stow-trigger.sh compacting
+check: stow-due: context ?% at compaction - run the /stow pass; knowledge this session held only in conversation may already be condensed
+  [exit=0 stow-due rows=1]
+== S8 adversarial: invalid input / invalid config ==
+$ fm-stow-trigger.sh threshold
+70
+  [exit=0 stow-due rows=1]
+$ fm-stow-trigger.sh threshold
+70
+  [exit=0 stow-due rows=1]
+$ fm-stow-trigger.sh context abc
+fm-stow-trigger: invalid percent: abc
+  [exit=2 stow-due rows=1]
+nothing otherwise.
+  [exit=2 stow-due rows=1]
+== S9: identical stow-due row never duplicated ==
+$ fm-stow-trigger.sh context 75
+check: stow-due: context 75% (threshold 70%) - run the /stow pass before compaction condenses this session
+  [exit=0 stow-due rows=1]
+$ fm-stow-trigger.sh cycle
+  [exit=0 stow-due rows=1]
+$ fm-stow-trigger.sh context 76
+check: stow-due: context 76% (threshold 70%) - run the /stow pass before compaction condenses this session
+  [exit=0 stow-due rows=1]
