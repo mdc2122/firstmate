@@ -131,6 +131,11 @@
 #                          queue this turn, named by id; one wake per episode
 #                          (bin/fm-queue-zero.sh check, every
 #                          FM_QUEUE_ZERO_INTERVAL, default 900s)
+#   check: far-holds: ...  backlog items held with --until more than
+#                          FM_FAR_HOLDS_DAYS (default 2) days out without the
+#                          captain's own recorded deferral; one wake per episode
+#                          (bin/fm-far-holds.sh check, every
+#                          FM_FAR_HOLDS_INTERVAL, default 900s)
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -259,6 +264,8 @@ case "$WATCHER_STALE_GRACE" in
 esac
 QUEUE_ZERO_INTERVAL=${FM_QUEUE_ZERO_INTERVAL:-900}  # seconds between queue inbox-zero checks (bin/fm-queue-zero.sh)
 case "$QUEUE_ZERO_INTERVAL" in ''|*[!0-9]*|0) QUEUE_ZERO_INTERVAL=900 ;; esac
+FAR_HOLDS_INTERVAL=${FM_FAR_HOLDS_INTERVAL:-900}  # seconds between far-date hold checks (bin/fm-far-holds.sh)
+case "$FAR_HOLDS_INTERVAL" in ''|*[!0-9]*|0) FAR_HOLDS_INTERVAL=900 ;; esac
 ATTENTION_CHECK_INTERVAL=${FM_ATTENTION_CHECK_INTERVAL:-600}  # seconds between daily attention-check samples (bin/fm-attention-check.sh)
 case "$ATTENTION_CHECK_INTERVAL" in ''|*[!0-9]*|0) ATTENTION_CHECK_INTERVAL=600 ;; esac
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
@@ -2259,6 +2266,7 @@ reconcile_requests_detached() {
 
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
 [ -e "$STATE/.last-queue-zero" ] || touch "$STATE/.last-queue-zero"
+[ -e "$STATE/.last-far-holds" ] || touch "$STATE/.last-far-holds"
 [ -e "$STATE/.last-attention-check" ] || touch "$STATE/.last-attention-check"
 
 # A merged poll may have queued its terminal wake and then lost the process
@@ -2987,6 +2995,17 @@ EOF
   if [ "$(age_of "$STATE/.last-queue-zero")" -ge "$QUEUE_ZERO_INTERVAL" ]; then
     touch "$STATE/.last-queue-zero"
     FM_HOME="$FM_HOME" run_check_capture "$SCRIPT_DIR/fm-queue-zero.sh" check || exit 1
+    if [ -n "$FM_CHECK_RESULT" ]; then
+      wake "$FM_CHECK_RESULT"
+    fi
+  fi
+
+  # Far-date holds (bin/fm-far-holds.sh owns the rule, the captain-deferral
+  # exemption, the one-wake-per-episode record, and the durable append), on its
+  # own FM_FAR_HOLDS_INTERVAL cadence for the same reason as queue inbox zero.
+  if [ "$(age_of "$STATE/.last-far-holds")" -ge "$FAR_HOLDS_INTERVAL" ]; then
+    touch "$STATE/.last-far-holds"
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" run_check_capture "$SCRIPT_DIR/fm-far-holds.sh" check || exit 1
     if [ -n "$FM_CHECK_RESULT" ]; then
       wake "$FM_CHECK_RESULT"
     fi

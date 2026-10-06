@@ -72,7 +72,9 @@
 # Scout tasks (kind=scout in meta) carve out of that check: their worktree is
 # declared scratch and the report at data/<task-id>/report.md is the work
 # product. Teardown proceeds only once the report exists, the shared
-# unresolved-decision completion gate verifies its captain-held inventory, and
+# unresolved-decision completion gate verifies its captain-held inventory and
+# finds every follow-up ledger line naming a backlog task or declined with a
+# reason (bin/fm-followup-ledger.sh check, which names each problem line), and
 # nothing worth keeping exists only in the worktree, because a long-running
 # investigation's harness and raw outputs are lost with it otherwise.
 # validate_scout_worktree_artifacts refuses, naming each path, when (a) a path
@@ -180,8 +182,8 @@
 # never left leased forever. If the treehouse return fails, teardown leaves the
 # leased home and state in place instead of hiding a still-held lease.
 # Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
-#   --force skips ordinary-task dirty and landed-work checks, skips scout report
-#   and worktree-artifact checks, and discards secondmate child work for
+#   --force skips ordinary-task dirty and landed-work checks, skips scout report,
+#   follow-up ledger, and worktree-artifact checks, and discards secondmate child work for
 #   kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.
 #   --legacy-record accepts a task record that predates the spawn_gen field:
@@ -3494,6 +3496,21 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
       FM_CONFIG_OVERRIDE="$CONFIG" "$SCRIPT_DIR/fm-captain-hold.sh" verify "$ID" >/dev/null; then
     echo "REFUSED: scout task $ID has not passed the captain-call completion gate." >&2
     echo "Inventory its report and any visual review through bin/fm-captain-hold.sh before teardown." >&2
+    exit 1
+  fi
+  # The recommendation half of the same completion gate: every line of the
+  # report's follow-up ledger names a backlog task or is explicitly declined (bin/fm-followup-ledger.sh owns the format and the rules).
+  LEDGER_STATUS=0
+  LEDGER_OUT=$(FM_HOME="$FM_HOME" FM_DATA_OVERRIDE="$DATA" FM_CONFIG_OVERRIDE="$CONFIG" \
+    "$SCRIPT_DIR/fm-followup-ledger.sh" check "$ID" 2>&1) || LEDGER_STATUS=$?
+  if [ "$LEDGER_STATUS" -ne 0 ]; then
+    if [ "$LEDGER_STATUS" -eq 1 ]; then
+      echo "REFUSED: scout task $ID's report has recommendations that are not filed or declined:" >&2
+    else
+      echo "REFUSED: cannot verify scout task $ID's follow-up ledger:" >&2
+    fi
+    printf '%s\n' "$LEDGER_OUT" >&2
+    echo "End each line of the report's \"## Follow-up ledger\" with \"-> <task-id>\" for a task in this home's backlog or \"-> declined: <reason>\", then retry." >&2
     exit 1
   fi
   if teardown_owns_worktree; then
