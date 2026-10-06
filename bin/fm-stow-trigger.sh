@@ -25,12 +25,19 @@
 # gitignored); absent or invalid means 70. docs/configuration.md documents it.
 #
 # Latch, one wake per context cycle. A cycle starts at the first report after
-# install, at every `cycle`, and never otherwise. state/.stow-trigger records
+# install, at every `cycle`, at the first report from a new fleet-lock holder,
+# and never otherwise. state/.stow-trigger records
 #   cycle=<epoch>  when the current cycle started
 #   above=<epoch>  when usage was first seen at or above the threshold this cycle (0: not yet)
 #   fired=<epoch>  when this cycle's wake was queued (0: not yet)
+#   holder=<pid>   the state/.lock holder that reported this cycle
 # and the stow marker is state/.last-stow, which the /stow skill touches after
 # every completed pass.
+# A report naming a different holder (or a record with none) is a new session
+# whose startup `cycle` report can be dropped: a harness may run its session
+# start hook before the session takes state/.lock, while the lock still names
+# the previous session. That report then starts a new cycle itself, so the
+# previous session's latch and stow never suppress the new session's wake.
 #   context:    wakes when <percent> >= threshold, nothing fired this cycle, and
 #               no stow completed since usage first reached the threshold. A
 #               stow below the threshold (the daily floor on a quiet morning)
@@ -75,10 +82,10 @@ whole_percent() {  # <raw> -> whole number, or fail
   printf '%s\n' "$((10#$p))"
 }
 
-REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0
+REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0 REC_HOLDER=''
 record_read() {
   local line key value
-  REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0
+  REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0 REC_HOLDER=''
   [ -f "$RECORD" ] || return 1
   { read -r line && [ "$line" = "$RECORD_SCHEMA" ]; } < "$RECORD" || return 1
   while IFS='=' read -r key value; do
@@ -87,6 +94,7 @@ record_read() {
       cycle) REC_CYCLE=$value ;;
       above) REC_ABOVE=$value ;;
       fired) REC_FIRED=$value ;;
+      holder) REC_HOLDER=$value ;;
     esac
   done < "$RECORD"
   [ "$REC_CYCLE" -gt 0 ]
@@ -95,11 +103,18 @@ record_read() {
 record_write() {  # <cycle> <above> <fired>
   local tmp
   tmp=$(mktemp "$RECORD.XXXXXX" 2>/dev/null) || return 1
-  if ! printf '%s\ncycle=%s\nabove=%s\nfired=%s\n' "$RECORD_SCHEMA" "$1" "$2" "$3" > "$tmp" \
+  if ! printf '%s\ncycle=%s\nabove=%s\nfired=%s\nholder=%s\n' "$RECORD_SCHEMA" "$1" "$2" "$3" "$HOLDER" > "$tmp" \
     || ! mv -f -- "$tmp" "$RECORD"; then
     rm -f -- "$tmp"
     return 1
   fi
+}
+
+lock_holder() {  # the state/.lock pid, or nothing
+  local pid=''
+  [ -f "$STATE/.lock" ] && read -r pid < "$STATE/.lock" 2>/dev/null
+  case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+  printf '%s\n' "$pid"
 }
 
 stowed_since() {  # <epoch>: 0 when state/.last-stow is at or after <epoch>
@@ -121,14 +136,19 @@ queue_wake() {  # <reason>
 
 # Runs under the trigger lock.
 decide() {  # <action> [<percent>]
-  local action=$1 raw=${2:-} percent='' limit now cycle above fired reason
+  local action=$1 raw=${2:-} percent='' limit now cycle above fired fresh=0 reason
   limit=$(threshold)
   now=$(date +%s)
   if [ -n "$raw" ]; then
     percent=$(whole_percent "$raw") || die "invalid percent: $raw" 2
   fi
-  record_read || REC_CYCLE=$now
-  cycle=$REC_CYCLE above=$REC_ABOVE fired=$REC_FIRED
+  HOLDER=$(lock_holder)
+  cycle=$now above=0 fired=0
+  if record_read && [ "$REC_HOLDER" = "$HOLDER" ]; then
+    cycle=$REC_CYCLE above=$REC_ABOVE fired=$REC_FIRED
+  else
+    fresh=1
+  fi
 
   case "$action" in
     cycle)
@@ -138,7 +158,7 @@ decide() {  # <action> [<percent>]
     context)
       [ -n "$percent" ] || die "context needs a percent" 2
       if [ "$percent" -lt "$limit" ]; then
-        [ -f "$RECORD" ] || record_write "$cycle" "$above" "$fired" || true
+        [ "$fresh" -eq 0 ] || record_write "$cycle" "$above" "$fired" || true
         return 0
       fi
       [ "$above" -gt 0 ] || above=$now
@@ -150,7 +170,7 @@ decide() {  # <action> [<percent>]
       ;;
     compacting)
       if [ "$fired" -gt 0 ] || stowed_since "$cycle"; then
-        [ -f "$RECORD" ] || record_write "$cycle" "$above" "$fired" || true
+        [ "$fresh" -eq 0 ] || record_write "$cycle" "$above" "$fired" || true
         return 0
       fi
       reason="check: stow-due: context ${percent:-?}% at compaction - run the /stow pass; knowledge this session held only in conversation may already be condensed"
