@@ -386,6 +386,60 @@ EOF
   pass "declared external-wait pause rows do not feed secondmate wake-loop escalation"
 }
 
+# The 2026-10-06 omp stall: this home's own watcher kept queueing wakes for 2.5
+# hours while no conversation took them. A row nobody has taken up must alarm
+# once - a check wake plus the active alert channel - after the stall interval
+# measured from first sight (never on a row's age alone), and a row main's drain
+# has claimed is being handled and never alarms.
+test_own_queue_stall_alarms_once_and_never_for_claimed_rows() {
+  local dir state fakebin real_date alarm_log stall_rows
+  dir=$(make_case own-queue-stall)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  alarm_log="$dir/alarm.log"
+  real_date=$(command -v date)
+  cat > "$fakebin/date" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = +%s ]; then
+  cat "\${FM_FAKE_NOW_FILE:?}"
+else
+  exec "$real_date" "\$@"
+fi
+SH
+  chmod +x "$fakebin/date"
+  run_watch() {  # <now> <out>
+    printf '%s\n' "$1" > "$dir/now"
+    PATH="$fakebin:$PATH" FM_FAKE_NOW_FILE="$dir/now" FM_HOME="$dir" FM_ROOT_OVERRIDE="$ROOT" \
+      FM_STATE_OVERRIDE="$state" FM_WAKE_QUEUE_STALL_SECS=600 FM_POLL=1 FM_SIGNAL_GRACE=0 \
+      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_WEDGE_ALARM_CHANNEL=osascript FM_WEDGE_ALARM_LOG="$alarm_log" \
+      "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 4 > "$2" 2> "$2.err" || true
+  }
+  # A row already hours old when first seen starts an interval; it cannot alarm on sight.
+  printf '100\t7\tsignal\ttask-a.status\tsignal: task-a\n' > "$state/.wake-queue"
+  printf '7\n' > "$state/.wake-queue.seq"
+  run_watch 1000 "$dir/first.out"
+  ! grep -F 'wake-queue stalled' "$dir/first.out" >/dev/null || fail "an old row alarmed on first sight"
+  run_watch 1300 "$dir/early.out"
+  ! grep -F 'wake-queue stalled' "$dir/early.out" >/dev/null || fail "a row alarmed before the stall interval"
+  run_watch 1601 "$dir/stalled.out"
+  grep -F 'check: wake-queue stalled: 1 queued wake(s) not taken up by any conversation; oldest row=7 waiting 601s' "$dir/stalled.out" >/dev/null \
+    || fail "an untaken row did not alarm after the stall interval: $(cat "$dir/stalled.out")"
+  grep -F "$(printf 'osascript\t1 notification(s) queued with no conversation taking them for 601s (oldest row 7)')" "$alarm_log" >/dev/null \
+    || fail "the stall did not reach the active alert channel: $(cat "$alarm_log" 2>/dev/null)"
+  run_watch 1700 "$dir/again.out"
+  stall_rows=$(grep -c 'wake-queue-stall-' "$state/.wake-queue" || true)
+  [ "$stall_rows" -eq 1 ] || fail "one stalled episode published $stall_rows notifications"
+  [ "$(grep -c . "$alarm_log")" -eq 1 ] || fail "one stalled episode fired the alert channel more than once"
+
+  # Main takes the queue up: claimed rows are being handled, however long that takes.
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/drain.out" 2> "$dir/drain.err" || fail "main drain failed"
+  run_watch 5000 "$dir/claimed.out"
+  run_watch 9000 "$dir/claimed-later.out"
+  ! grep -F 'wake-queue stalled' "$dir/claimed.out" "$dir/claimed-later.out" >/dev/null \
+    || fail "rows main had claimed raised a stall alarm"
+  pass "an untaken wake row alarms once after the stall interval from first sight, through the check queue and the alert channel, and claimed rows never alarm"
+}
+
 # A retired mate reprovisioned under the same task id gets a fresh home, so its
 # wake-queue sequence restarts from scratch and can land on the very position the
 # parent last recorded for the retired generation. Those are different rows in
@@ -1206,6 +1260,49 @@ test_main_reclaims_a_grant_whose_branch_owner_exited() {
   [ ! -s "$state/.wake-queue" ] || fail "reclaimed branch row remained queued"
 
   pass "main reclaims rows granted to an exited branch owner"
+}
+
+# The 2026-10-06 omp stall: the omp branch's grant owner is the main omp
+# process itself, so owner liveness can never expire the grant. A grant whose
+# branch made no progress for FM_BRANCH_GRANT_TTL_SECS must stop reserving its
+# rows while the owner stays live: the guard counts them for main again, main's
+# drain presents them with a one-line note and acknowledges them, the owner
+# record survives so the branch can publish again, and a stale grant cannot be
+# revived by a late branch touch. A fresh grant still reserves its rows.
+test_main_reclaims_a_live_owners_grant_past_its_ttl() {
+  local dir state sequence generation
+  dir=$(make_case live-owner-grant-ttl)
+  state="$dir/state"
+
+  append_wake "$state" signal "task-a.status" "signal: task-a" || fail "signal append failed"
+  FM_STATE_OVERRIDE="$state" "$GRANT" activate "$$" ttl-owner || fail "branch owner activation failed"
+  FM_STATE_OVERRIDE="$state" "$GRANT" publish ttl-owner 1 || fail "branch grant publication failed"
+  FM_STATE_OVERRIDE="$state" "$GRANT" touch ttl-owner || fail "a fresh grant refused its own progress touch"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/fresh.out" 2> "$dir/fresh.err" || fail "fresh-grant drain failed"
+  ! grep -Fq "$(printf '\tsignal\ttask-a.status\t')" "$dir/fresh.out" \
+    || fail "main presented a row reserved by a fresh live grant"
+
+  touch -t 200001010000 "$state/.branch-eligible-rows" || fail "could not age the grant"
+  ! FM_STATE_OVERRIDE="$state" "$GRANT" touch ttl-owner \
+    || fail "a grant past its TTL was revived by a late branch touch"
+  [ "$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_wake_actor_pending_count main' _ "$ROOT/bin/fm-wake-lib.sh")" = 1 ] \
+    || fail "the guard did not count an expired grant's row for main"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/main.out" 2> "$dir/main.err" || fail "main reclaim drain failed"
+  grep -Fq 'WAKE ROWS REVERTED FROM SUPERVISION BRANCH: 1 row(s)' "$dir/main.out" \
+    || fail "main's reclaim did not say the rows reverted: $(cat "$dir/main.out")"
+  grep -Fq "$(printf '\tsignal\ttask-a.status\t')" "$dir/main.out" \
+    || fail "main did not reclaim the expired grant's row"
+  [ ! -e "$state/.branch-eligible-rows" ] || fail "the expired grant survived reclaim"
+  [ -e "$state/.branch-eligible-owner" ] || fail "reclaiming an expired grant retired the live owner record"
+  sequence=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' "$dir/main.err")
+  generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$dir/main.err")
+  FM_STATE_OVERRIDE="$state" "$DRAIN" --ack-through "$sequence" --recovery-generation "$generation" \
+    || fail "reclaimed row acknowledgement failed"
+  [ ! -s "$state/.wake-queue" ] || fail "reclaimed row remained queued"
+
+  pass "main reclaims a live owner's grant once it outlives the branch-progress TTL, and only then"
 }
 
 # A branch-actor drain or ack without a snapshot is a wiring bug, never
@@ -2100,6 +2197,7 @@ test_live_presentation_holder_is_deadlined_without_weakening_ack
 test_malformed_presentation_lock_reports_acquire_failure
 test_secondmate_foreign_queue_stall_tracks_progress_and_alerts_once
 test_secondmate_declared_pause_rows_do_not_feed_stall_escalation
+test_own_queue_stall_alarms_once_and_never_for_claimed_rows
 test_secondmate_reprovisioned_queue_starts_a_fresh_interval
 test_secondmate_active_turn_defers_stall_until_the_turn_ends
 test_secondmate_long_lived_mate_mid_turn_is_not_a_stall
@@ -2127,6 +2225,7 @@ test_unconsumable_rows_are_retired_instead_of_wedging_the_queue
 test_branch_grant_refuses_rows_already_claimed_by_main
 test_actor_filter_precedes_same_key_deduplication
 test_main_reclaims_a_grant_whose_branch_owner_exited
+test_main_reclaims_a_live_owners_grant_past_its_ttl
 test_branch_actor_without_eligible_snapshot_refuses
 test_wake_publish_requires_atomic_recovery_evidence
 test_legacy_generationless_wake_is_adopted

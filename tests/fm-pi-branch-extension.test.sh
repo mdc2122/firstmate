@@ -1750,19 +1750,23 @@ if (JSON.stringify(stored) !== JSON.stringify(["branch-driver", "other-task", "r
 
 // The classification owner names the tasks behind each eligible row: a
 // signal row by its status-log key, a stale row by the endpoint a task's
-// metadata records.
+// metadata records - window=, or an Orca task's terminal=, which is what the
+// watcher names in its stale rows. An unmapped stale row vetoes the whole scan,
+// so before terminal= was mapped one Orca stale row sent every wake to main.
 const lib = await import(pathToFileURL(`${dirname(process.env.PLUGIN)}/lib/fm-branch-dispatch.ts`).href);
+writeFileSync(`${home}/state/orca-task.meta`, "window=fm-orca-task\nproject=orca-project\nbackend=orca\nterminal=term_0123\n");
 writeFileSync(`${home}/state/.wake-queue`, [
   "1\t1\tsignal\tbranch-driver.status\tsignal: done",
   "2\t2\tstale\tdefault:wX:p1\tstale: default:wX:p1 (idle 378s)",
   "3\t3\tcheck\tmerge-poll\tcheck: merged",
+  "4\t4\tstale\tterm_0123\tstale: term_0123 (idle 300s)",
 ].join("\n") + "\n");
 const scope = lib.scopeForUnreadWake(`${home}/state`, false);
-if (JSON.stringify([...scope.eligibleTasks].sort()) !== JSON.stringify(["branch-driver", "other-task"])) {
+if (JSON.stringify([...scope.eligibleTasks].sort()) !== JSON.stringify(["branch-driver", "orca-task", "other-task"])) {
   throw new Error(`eligible rows resolved to the wrong tasks: ${JSON.stringify(scope)}`);
 }
-if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2"])) {
-  throw new Error(`the main-owned check row leaked into the branch claim: ${JSON.stringify(scope)}`);
+if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2", "4"])) {
+  throw new Error(`the main-owned check row leaked into the branch claim, or the Orca stale row was not claimable: ${JSON.stringify(scope)}`);
 }
 process.exit(0);
 EOF

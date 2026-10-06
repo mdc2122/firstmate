@@ -101,6 +101,7 @@ import {
   FM_BRANCH_DISPATCH_EVENT,
   releaseEligibleRowsSnapshot,
   scopeForUnreadWake,
+  touchEligibleRowsSnapshot,
   writeEligibleRowsSnapshot,
   type BranchDispatchOffer,
 } from "./lib/fm-branch-dispatch.ts";
@@ -1166,6 +1167,9 @@ export default function (pi: ExtensionAPI) {
         if (scopeRefusal) {
           return { content: [{ type: "text", text: scopeRefusal }], details: undefined, isError: true };
         }
+        // Branch progress keeps its row grant fresh (bin/fm-wake-lib.sh
+        // fm_wake_branch_grant_fresh); a failed refresh means the grant is gone.
+        await touchEligibleRowsSnapshot(state, wakeGrantScript, String(toolGeneration));
         const appendArgs = ["append", "--task", task, "--verdict", verdict, "--summary", summary, "--silent", String(silent)];
         if (wake) appendArgs.push("--wake", wake);
         // Ownership, the durable append, and the delivery it authorizes are
@@ -1288,6 +1292,10 @@ export default function (pi: ExtensionAPI) {
         if (activatedGeneration !== branchGeneration || !generationOwnsLockSync(branchGeneration)) {
           throw new Error("bash refused: supervision session was replaced or lost lock ownership");
         }
+        // Branch progress keeps its row grant fresh (bin/fm-wake-lib.sh
+        // fm_wake_branch_grant_fresh). spawnHook is synchronous, so the
+        // refresh runs alongside the command; a failed one means the grant is gone.
+        void touchEligibleRowsSnapshot(state, wakeGrantScript, String(branchGeneration));
         return {
           ...context,
           // Loud accidental-override guard (captain-decided): the actor

@@ -2146,10 +2146,29 @@ fm_wake_branch_owner_matches() {  # <owner-file> [<pid>] [<generation>]
   [ -n "$current" ] && [ "$current" = "$identity" ]
 }
 
+# A grant proves the branch is still working its rows only while it is fresh:
+# the branch extensions refresh the row snapshot's mtime at every branch tool
+# call (bash and report), so a branch whose prompt hangs, or whose process lives
+# on (an omp branch shares the main process pid) after it stopped producing
+# outcomes, stops reserving rows FM_BRANCH_GRANT_TTL_SECS (default 600) after
+# its last progress, and main's next drain reclaims them.
+fm_wake_branch_grant_ttl() {
+  case "${FM_BRANCH_GRANT_TTL_SECS:-}" in
+    ''|*[!0-9]*|0) printf '600\n' ;;
+    *) printf '%s\n' "$FM_BRANCH_GRANT_TTL_SECS" ;;
+  esac
+}
+
+# 0 when <rows-file>'s last branch progress is within the grant TTL.
+fm_wake_branch_grant_fresh() {  # <rows-file>
+  [ "$(fm_path_age "$1")" -lt "$(fm_wake_branch_grant_ttl)" ]
+}
+
 # 0 when a branch grant is currently reserving rows: a valid row snapshot whose
-# recorded owner is still live. Anything else means no row is reserved.
+# recorded owner is still live and whose branch progress is fresh. Anything else
+# means no row is reserved.
 fm_wake_branch_grant_live() {  # <rows-file> <owner-file>
-  fm_wake_grant_rows_valid "$1" && fm_wake_branch_owner_matches "$2"
+  fm_wake_grant_rows_valid "$1" && fm_wake_branch_owner_matches "$2" && fm_wake_branch_grant_fresh "$1"
 }
 
 # How many queued rows <actor> can act on right now - exactly the rows a drain

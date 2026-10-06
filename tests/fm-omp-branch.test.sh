@@ -125,6 +125,8 @@ const pi = {
       createdSessions.push(opts);
       const sessionEntries = [];
       const reportTool = opts.customTools.find((t) => t.name === "fm_branch_report");
+      const bashTool = opts.customTools.find((t) => t.name === "bash");
+      globalThis.__branchBash = (command) => bashTool.execute("b1", { command });
       const session = {
         prompt: async (text) => {
           branchPrompts.push(text);
@@ -140,6 +142,9 @@ const pi = {
             results.push(await reportTool.execute("c3", { task: "task-1", verdict: "captain", summary: "The task-1 worker needs a decision.", silent: true }));
             results.push(await reportTool.execute("c4", { task: "task-1", verdict: "captain", summary: "PR https://example.com/pr/1 is green" }));
             globalThis.__reportResults = results.map((r) => `${r.isError ? "error" : "ok"}:${r.content[0].text}`);
+          } else if (process.env.PROMPT_BEHAVIOR === "hang-after-bash") {
+            // A branch turn that never settles: the 2026-10-06 shape.
+            await new Promise(() => {});
           } else if (process.env.PROMPT_BEHAVIOR === "provider-error") {
             sessionEntries.push({ type: "message", message: { role: "assistant", content: "x", stopReason: "error", errorMessage: "quota" } });
           } else {
@@ -169,6 +174,9 @@ const ctx = {
   },
   model: { provider: "cursor", id: "gpt-5.4-nano" },
   agent: { kind: "main" },
+  // omp reports queued input here; tests set globalThis.__pending to model a
+  // follow-up omp is holding.
+  hasPendingMessages: () => globalThis.__pending === true,
   ui: {
     setWidget: (key, content) => { widgets[key] = content; },
     notify: () => {},
@@ -699,6 +707,113 @@ test_report_only_refuses_mutating_commands_and_writes_shadow_log
 test_report_only_shadow_records_intended_verdict
 test_report_only_classifier_refuses_bash_quoting_bypasses
 
+# --- the 2026-10-06 stall: branch side ------------------------------------------
+
+# An idle routine note becomes main's transcript tail, after which omp drains no
+# idle follow-up until the captain types (verified omp 18.4.4). A note sent
+# while omp holds queued input must start the turn that drains it; one with an
+# empty queue must not cost a turn.
+test_idle_note_kicks_parked_queue() {
+  local repo home out
+  repo="$TMP_ROOT/kick-repo"
+  home="$TMP_ROOT/kick-home"
+  install_omp_branch_fixture "$repo"
+  mkdir -p "$home/state" "$home/config"
+  printf 'on\n' > "$home/config/omp-supervision-branch"
+  printf '%s\n' "$$" > "$home/state/.lock"
+  make_omp_ancestry_ps "$TMP_ROOT/kick-ps" "$$"
+  seed_branch_eligible_wake "$home" task-1 7
+  seed_branch_eligible_wake "$home" task-1 11
+  out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+    FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/kick-ps:$PATH" PROMPT_BEHAVIOR=report-routine SETTLE_MS=2000 \
+    DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, sentToMain, ctx }; })()`);
+const { dispatch, fire, settled, sentToMain, ctx } = globalThis.__t;
+await fire("session_start", {}, ctx);
+await settled();
+const shape = () => sentToMain.map((m) => `${m.customType}${m.triggerTurn ? "+trigger" : ""}`).join(",");
+// Main idle, nothing queued: the note renders and nothing else is sent.
+let offer = dispatch("signal: task-1 done");
+await offer.settlement;
+const quiet = shape();
+sentToMain.length = 0;
+// Main idle with a follow-up omp is holding: the note is followed by one hidden turn trigger.
+globalThis.__pending = true;
+offer = dispatch("signal: task-1 done");
+await offer.settlement;
+const kicked = sentToMain.filter((m) => m.customType === "fm-branch-drain-kick");
+console.log(`quiet=${quiet} kicked=${shape()} hidden=${kicked.every((m) => m.display === false)}`);
+EOF
+)
+  [ "$out" = "quiet=fm-branch-merge kicked=fm-branch-merge,fm-branch-drain-kick+trigger hidden=true" ] \
+    || fail "an idle branch note must kick omp's parked queue only when input is queued: $out"
+  pass "an idle branch note starts a hidden drain turn when omp holds queued input, and costs nothing otherwise"
+}
+
+# A branch prompt that hangs (no settlement) must stop accepting offers once it
+# has made no progress for the grant TTL, so later wakes go to main instead of
+# queueing behind it; a branch tool call is progress and refreshes the grant.
+test_stuck_branch_prompt_declines_offers_and_tool_calls_refresh_the_grant() {
+  local repo home out
+  repo="$TMP_ROOT/stuck-repo"
+  home="$TMP_ROOT/stuck-home"
+  install_omp_branch_fixture "$repo"
+  mkdir -p "$home/state" "$home/config"
+  printf 'on\n' > "$home/config/omp-supervision-branch"
+  printf '%s\n' "$$" > "$home/state/.lock"
+  make_omp_ancestry_ps "$TMP_ROOT/stuck-ps" "$$"
+  seed_branch_eligible_wake "$home" task-1 7
+  # Two runs: a generous TTL proves a tool call refreshes an aged grant (the
+  # ownership checks before the refresh can take seconds under suite load), and
+  # a short TTL proves a silent prompt starts declining offers.
+  out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+    FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/stuck-ps:$PATH" PROMPT_BEHAVIOR=hang-after-bash SETTLE_MS=2000 \
+    FM_BRANCH_GRANT_TTL_SECS=60 DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
+const { existsSync, utimesSync, statSync } = await import("node:fs");
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, ctx, branchPrompts }; })()`);
+const { dispatch, fire, settled, ctx, branchPrompts } = globalThis.__t;
+await fire("session_start", {}, ctx);
+await settled();
+const rows = `${process.env.FM_HOME}/state/.branch-eligible-rows`;
+const first = dispatch("signal: task-1 done");
+const end = Date.now() + 30000;
+while (Date.now() < end && !(branchPrompts.length > 0 && existsSync(rows))) await new Promise((r) => setTimeout(r, 50));
+if (!existsSync(rows)) { console.log("the branch prompt never started with a published grant"); process.exit(0); }
+// Age the grant within its TTL, then let the hanging prompt make one tool call.
+const past = Date.now() / 1000 - 30;
+utimesSync(rows, past, past);
+await globalThis.__branchBash("true");
+const refreshed = Date.now() - statSync(rows).mtimeMs < 20000;
+console.log(`first=${first.accepted} refreshed=${refreshed} acceptedWhileProgressing=${dispatch("signal: task-1 done").accepted}`);
+process.exit(0);
+EOF
+)
+  [ "$out" = "first=true refreshed=true acceptedWhileProgressing=true" ] \
+    || fail "a branch tool call must refresh the row grant while its prompt keeps progressing: $out"
+  rm -f "$home/state/.branch-eligible-rows"
+  out=$(EXT="$repo/.omp/extensions/fm-omp-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+    FM_STATE_OVERRIDE="$home/state" FM_CONFIG_OVERRIDE="$home/config" PATH="$TMP_ROOT/stuck-ps:$PATH" PROMPT_BEHAVIOR=hang-after-bash SETTLE_MS=2000 \
+    FM_BRANCH_GRANT_TTL_SECS=1 DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module 2>&1 <<'EOF'
+await eval(`(async () => { ${process.env.DRIVER_PRELUDE}; globalThis.__t = { dispatch, fire, settled, ctx, branchPrompts }; })()`);
+const { dispatch, fire, settled, ctx, branchPrompts } = globalThis.__t;
+await fire("session_start", {}, ctx);
+await settled();
+const first = dispatch("signal: task-1 done");
+const end = Date.now() + 30000;
+while (Date.now() < end && branchPrompts.length === 0) await new Promise((r) => setTimeout(r, 50));
+await new Promise((r) => setTimeout(r, 1500));
+console.log(`first=${first.accepted} prompted=${branchPrompts.length} acceptedWhenStuck=${dispatch("signal: task-1 done").accepted}`);
+process.exit(0);
+EOF
+)
+  [ "$out" = "first=true prompted=1 acceptedWhenStuck=false" ] \
+    || fail "a branch prompt silent past the grant TTL must decline new offers: $out"
+  pass "a branch prompt silent past the grant TTL declines new offers, and its tool calls refresh the row grant"
+}
+
+test_idle_note_kicks_parked_queue
+test_stuck_branch_prompt_declines_offers_and_tool_calls_refresh_the_grant
+
 # --- the omp watcher's branch offer, driven through the real watch extension --
 
 install_omp_watch_fixture() {  # <repo>
@@ -731,7 +846,7 @@ SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
 }
 
-# <mode> <branch-behavior: accept-resolve|accept-reject|decline>
+# <mode> <branch-behavior: accept-resolve|accept-reject|accept-hang|decline>
 run_watch_offer_case() {
   local mode=$1 behavior=$2 name repo home
   name="watch-$mode-$behavior"
@@ -743,6 +858,7 @@ run_watch_offer_case() {
   printf 'project=x\nharness=omp\n' > "$home/state/task-1.meta"
   FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
     FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 BEHAVIOR="$behavior" \
+    FM_BRANCH_GRANT_TTL_SECS=1 FM_BRANCH_HANDBACK_GRACE_MS=200 \
     EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
 const { pathToFileURL } = await import("node:url");
 const { writeFileSync } = await import("node:fs");
@@ -752,13 +868,18 @@ const pi = {
   on(e, h) { handlers.set(e, h); },
   registerCommand() {},
   registerTool(t) { tool = t; },
-  sendUserMessage(m) { order.push(`main:${m.includes("signal: task-1 done") ? "wake" : "other"}`); },
+  sendUserMessage(m) {
+    const handedBack = /supervision branch produced no outcome for this wake within/.test(m) ? "+handback" : "";
+    order.push(`main:${m.includes("signal: task-1 done") ? "wake" : "other"}${handedBack}`);
+  },
   events: { on(c, h) { listeners.set(c, h); }, emit(c, d) { listeners.get(c)?.(d); } },
 };
 // A scripted branch on the bus: what the branch extension would do.
 pi.events.on("fm-branch-supervision:dispatch", (offer) => {
   order.push(`offer:eligible=${offer.eligible}`);
   if (process.env.BEHAVIOR === "decline") return;
+  // accept-hang: the 2026-10-06 shape, a branch that accepted and never settles.
+  if (process.env.BEHAVIOR === "accept-hang") { offer.accept(new Promise(() => {})); return; }
   offer.accept(process.env.BEHAVIOR === "accept-reject" ? Promise.reject(new Error("no durable report")) : Promise.resolve());
 });
 pi.events.on("fm-omp-branch-supervision:shadow", (shadow) => {
@@ -767,7 +888,7 @@ pi.events.on("fm-omp-branch-supervision:shadow", (shadow) => {
 const mod = await import(pathToFileURL(process.env.EXT).href);
 mod.default(pi);
 await tool.execute();
-await new Promise((r) => setTimeout(r, 2500));
+await new Promise((r) => setTimeout(r, 4000));
 process.stdout.write(order.join(" "));
 process.exit(0);
 EOF
@@ -783,9 +904,13 @@ test_watcher_offers_branch_first_and_falls_back_to_main() {
   [ "$out" = "offer:eligible=true main:wake" ] || fail "mode on (F7): a rejected branch settlement must hand the wake to main: $out"
   out=$(run_watch_offer_case on decline)
   [ "$out" = "offer:eligible=true main:wake" ] || fail "mode on: a declined offer must fall back to main: $out"
+  out=$(run_watch_offer_case on accept-hang)
+  [ "$out" = "offer:eligible=true main:wake+handback" ] || fail "mode on: a branch that never settles must hand the wake to main with a note after the grant TTL: $out"
   out=$(run_watch_offer_case report-only accept-resolve)
   [ "$out" = "main:wake shadow:rows=1:tasks=task-1" ] || fail "report-only: main must get the wake first, then the shadow copy, and no offer: $out"
-  pass "the omp watcher offers wakes to the branch first under on, falls back to main on rejection or decline, and shadows after main under report-only"
+  out=$(run_watch_offer_case off accept-resolve)
+  [ "$out" = "main:wake" ] || fail "mode off: the watcher must deliver straight to main with no offer: $out"
+  pass "the omp watcher offers wakes to the branch first under on, falls back to main on rejection, decline, or a branch that holds a wake past the grant TTL, and shadows after main under report-only"
 }
 
 # The omp primary on 2026-10-05: with the branch on, every accepted wake held

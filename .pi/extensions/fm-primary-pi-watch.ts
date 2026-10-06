@@ -147,6 +147,12 @@ const armReadyTimeoutMs = positiveInteger(
   35000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
+// An accepted branch offer is awaited at most the row-grant TTL
+// (bin/fm-wake-lib.sh fm_wake_branch_grant_ttl owns the default) plus a grace;
+// a branch still unsettled then hands the wake to main with a one-line note,
+// and its aged grant's rows revert to main's drain (docs/watcher-continuity.md).
+const branchHandbackMs = positiveInteger("FM_BRANCH_GRANT_TTL_SECS", 600) * 1000
+  + positiveInteger("FM_BRANCH_HANDBACK_GRACE_MS", 30000);
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
 
@@ -620,16 +626,24 @@ export default function (pi: ExtensionAPI) {
         return await sendWake(owner, `${message}\n\n${confirmed.detail}`, pending);
       }
     }
+    let mainMessage = message;
     if (!repairFailed) {
       const branchDelivery = offerWakeToBranch(message);
       if (branchDelivery) {
+        const { promise: expired, resolve: expire } = Promise.withResolvers<"expired">();
+        const timer = setTimeout(() => expire("expired"), branchHandbackMs);
+        timer.unref();
         try {
-          await branchDelivery;
-          return true;
-        } catch {}
+          if (await Promise.race([branchDelivery.then(() => "settled" as const), expired]) === "settled") return true;
+          mainMessage = `${message}\n\nwatcher: supervision branch produced no outcome for this wake within ${Math.round(branchHandbackMs / 60000)}m; main handles it and the branch's held rows revert to main's drain.`;
+        } catch {
+          // F7: a rejected settlement falls through to main unchanged.
+        } finally {
+          clearTimeout(timer);
+        }
       }
     }
-    return await sendWake(owner, message, pending);
+    return await sendWake(owner, mainMessage, pending);
   }
 
   function surfaceFailure(owner: SessionGeneration, message: string): void {

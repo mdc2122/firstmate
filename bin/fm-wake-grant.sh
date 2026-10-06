@@ -83,6 +83,20 @@ case "${1:-}" in
       TMP=
     fi
     ;;
+  touch)
+    # Branch progress (fm-wake-lib.sh fm_wake_branch_grant_fresh): refresh a
+    # grant this generation still holds. A grant already past its TTL is not
+    # revived, because main may have been told its rows are main's now.
+    generation=${2:-}
+    [ "$#" -eq 2 ] || exit 2
+    fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"
+    LOCK_HELD=true
+    owner_matches '' "$generation" || exit 1
+    if [ -e "$BRANCH_ROWS" ] || [ -L "$BRANCH_ROWS" ]; then
+      fm_wake_branch_grant_fresh "$BRANCH_ROWS" || exit 1
+      touch -- "$BRANCH_ROWS" || exit 1
+    fi
+    ;;
   release)
     generation=${2:-}
     [ "$#" -eq 2 ] || exit 2
@@ -101,7 +115,7 @@ case "${1:-}" in
     rm -f -- "$BRANCH_ROWS" "$BRANCH_OWNER" || exit 1
     ;;
   *)
-    echo "usage: fm-wake-grant.sh activate PID GENERATION | publish GENERATION SEQUENCE... | release GENERATION | deactivate PID GENERATION" >&2
+    echo "usage: fm-wake-grant.sh activate PID GENERATION | publish GENERATION SEQUENCE... | touch GENERATION | release GENERATION | deactivate PID GENERATION" >&2
     exit 2
     ;;
 esac

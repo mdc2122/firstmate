@@ -201,7 +201,8 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean): UnreadWak
   const projects = new Set<string>();
   const metadata = new Map<string, string>();
   // The task id behind each key a signal or stale row may carry: the task id
-  // itself, or the endpoint its metadata records.
+  // itself, or an endpoint its metadata records (window=, or an Orca task's
+  // terminal=, which is the key bin/fm-watch.sh names in its stale rows).
   const taskByKey = new Map<string, string>();
   try {
     for (const name of readdirSync(state)) {
@@ -209,15 +210,18 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean): UnreadWak
       const task = name.slice(0, -5);
       const fields = readFileSync(`${state}/${name}`, "utf8").split(/\r?\n/);
       const project = fields.find((line) => line.startsWith("project="))?.slice(8) ?? "";
-      const window = fields.find((line) => line.startsWith("window="))?.slice(7) ?? "";
+      const endpoints = fields
+        .filter((line) => line.startsWith("window=") || line.startsWith("terminal="))
+        .map((line) => line.slice(line.indexOf("=") + 1))
+        .filter(Boolean);
       if (project) {
         metadata.set(task, project);
         taskByKey.set(task, task);
         taskByKey.set(`${task}.status`, task);
         taskByKey.set(`${task}.turn-ended`, task);
-        if (window) {
-          metadata.set(window, project);
-          taskByKey.set(window, task);
+        for (const endpoint of endpoints) {
+          metadata.set(endpoint, project);
+          taskByKey.set(endpoint, task);
         }
       }
     }
@@ -398,6 +402,18 @@ export async function releaseEligibleRowsSnapshot(
   generation: string,
 ): Promise<boolean> {
   return (await runGrantScript(state, grantScript, ["release", generation])) === 0;
+}
+
+// Branch progress for the grant TTL (bin/fm-wake-lib.sh
+// fm_wake_branch_grant_fresh): true when the held grant was refreshed or there
+// was none to refresh, false when it already aged out or is not this
+// generation's.
+export async function touchEligibleRowsSnapshot(
+  state: string,
+  grantScript: string,
+  generation: string,
+): Promise<boolean> {
+  return (await runGrantScript(state, grantScript, ["touch", generation])) === 0;
 }
 
 export async function deactivateEligibleRowsOwner(
