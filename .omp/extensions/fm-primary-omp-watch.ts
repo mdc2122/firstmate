@@ -68,13 +68,17 @@
 // cost a turn for workers already torn down. Every actionable close is still
 // sent to omp at once, because each new follow-up is what retries omp's parked
 // queue drain. A wake is instead judged when omp hands it to the model (its
-// consumption, or the context event before an LLM call): one whose own wake
-// row main has already acknowledged, whose every named task or endpoint no
-// longer has state/<id>.meta, or that was sent more than
-// FM_OMP_WAKE_SUPERSEDE_AGE_SECS (default 1800) ago is dropped as superseded:
-// its record settles, the drop is logged to state/.watch-triage.log, and the
-// context event replaces its text with a one-line operational note telling
-// main no action is needed. Unreadable state never supersedes a wake.
+// consumption): one whose own wake row main has already acknowledged, whose
+// every named task or endpoint no longer has state/<id>.meta, or that was sent
+// more than FM_OMP_WAKE_SUPERSEDE_AGE_SECS (default 1800) ago is dropped as
+// superseded. Wake text repeats, so a drop is bound to that one user message
+// by omp's per-message timestamp plus its text, taken from the user
+// message_start (which follows an idle main's before_agent_start for the same
+// prompt); a consumption whose message carries no timestamp drops nothing.
+// The dropped message's record settles, the drop is logged to
+// state/.watch-triage.log, and the context event before each LLM call
+// replaces only that message with a one-line operational note telling main no
+// action is needed. Unreadable state never supersedes a wake.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
@@ -164,10 +168,14 @@ type SessionGeneration = {
   // replacement began reads it to tell a main-queued wake (replayed) from a
   // branch-handled one (finished).
   unconsumedWakes: Map<string, UnconsumedWake>;
-  // Wake text judged superseded at consumption, mapped to the note the
-  // context event shows the model instead (encoded on first use); the
-  // header's "Supersession at delivery" owns the rule.
+  // Wake messages judged superseded at consumption, keyed by omp's message
+  // timestamp and text, mapped to the note the context event shows the model
+  // instead (encoded on first use); oldest first, at most droppedWakeLimit.
+  // The header's "Supersession at delivery" owns the rule.
   droppedWakes: Map<string, { body: string; note?: string }>;
+  // A drop judged at before_agent_start, which carries no message timestamp,
+  // until the user message_start for the same prompt binds it.
+  unstampedDrop: { text: string; body: string; line: string } | null;
   // A verified successor's failure close that arrived while the pipeline was
   // still verifying the successor for an earlier close; its bounded retry runs
   // once that delivery settles instead of being skipped by the single-flight guard.
@@ -223,6 +231,9 @@ const armReadyTimeoutMs = positiveInteger(
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const wakeSupersedeAgeMs = positiveInteger("FM_OMP_WAKE_SUPERSEDE_AGE_SECS", 1800) * 1000;
+// Dropped wake messages remembered for the context event; an older one has
+// long since been followed by turns that handled the queue, or compacted away.
+const droppedWakeLimit = 128;
 const repairOnlyHint = "call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - omp session is shutting down";
 const inertHelperMessage = "watcher: unchanged - another live omp session in this process owns the watcher";
@@ -622,6 +633,7 @@ function createGeneration(): SessionGeneration {
     cleanupFailure: "",
     unconsumedWakes: new Map(),
     droppedWakes: new Map(),
+    unstampedDrop: null,
     deferredClose: null,
   };
 }
@@ -749,21 +761,33 @@ export default function (pi: ExtensionAPI) {
     return generationIsLive(owner);
   }
 
+  function droppedWakeKey(timestamp: number, text: string): string {
+    return `${timestamp}\n${text}`;
+  }
+
+  function rememberDroppedWake(owner: SessionGeneration, timestamp: number, text: string, body: string, line: string): void {
+    owner.droppedWakes.set(droppedWakeKey(timestamp, text), { body });
+    for (const key of owner.droppedWakes.keys()) {
+      if (owner.droppedWakes.size <= droppedWakeLimit) break;
+      owner.droppedWakes.delete(key);
+    }
+    triageLog(`omp extension dropped superseded wake ${line}`);
+  }
+
   // omp consumed a main follow-up: an idle main at before_agent_start, a
-  // streaming main at the user message_start that joins the running run, or
-  // the context event if neither ran first. A superseded wake is settled too,
-  // and its text is remembered for the context event to replace.
-  function consumeWake(owner: SessionGeneration, text: string): void {
+  // streaming main at the user message_start that joins the running run. A
+  // superseded wake is settled too, and the message carrying it (its omp
+  // timestamp, when known) is remembered for the context event to replace.
+  function consumeWake(owner: SessionGeneration, text: string, timestamp?: number): void {
     for (const [token, wake] of owner.unconsumedWakes) {
       if (wake.content !== text) continue;
       owner.unconsumedWakes.delete(token);
       const reason = supersededReason(wake);
       if (reason) {
-        const line = actionableLine(wake.pending.message);
-        owner.droppedWakes.set(text, {
-          body: `watcher: superseded wake dropped (${reason}): ${line} - no action needed; do not run the drain for it.`,
-        });
-        triageLog(`omp extension dropped superseded wake (${reason}): ${line}`);
+        const line = `(${reason}): ${actionableLine(wake.pending.message)}`;
+        const body = `watcher: superseded wake dropped ${line} - no action needed; do not run the drain for it.`;
+        if (timestamp === undefined) owner.unstampedDrop = { text, body, line };
+        else rememberDroppedWake(owner, timestamp, text, body, line);
       }
       wake.pending.delivered = true;
       try {
@@ -1352,26 +1376,34 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on?.("before_agent_start", (event) => {
+    generation.unstampedDrop = null;
     consumeWake(generation, String((event as { prompt?: unknown })?.prompt ?? ""));
   });
   pi.on?.("message_start", (event) => {
-    const message = (event as { message?: { role?: unknown; content?: unknown } })?.message;
+    const message = (event as { message?: { role?: unknown; content?: unknown; timestamp?: unknown } })?.message;
     if (!message || message.role !== "user") return;
-    consumeWake(generation, userMessageText(message.content));
+    const owner = generation;
+    const text = userMessageText(message.content);
+    const timestamp = typeof message.timestamp === "number" ? message.timestamp : undefined;
+    const unstamped = owner.unstampedDrop;
+    owner.unstampedDrop = null;
+    if (unstamped && unstamped.text === text) {
+      if (timestamp !== undefined) rememberDroppedWake(owner, timestamp, text, unstamped.body, unstamped.line);
+      return;
+    }
+    consumeWake(owner, text, timestamp);
   });
-  // Before each LLM call: show the model a one-line note instead of every wake
-  // judged superseded (omp hands a deep copy, so session history keeps the
-  // original text and every later call is rewritten again).
+  // Before each LLM call: show the model a one-line note instead of each wake
+  // message judged superseded (omp hands a deep copy, so session history keeps
+  // the original text and every later call is rewritten again).
   pi.on?.("context", async (event) => {
     const owner = generation;
     const messages = (event as { messages?: unknown })?.messages;
     if (!Array.isArray(messages)) return;
     let changed = false;
-    for (const message of messages as Array<{ role?: unknown; content?: unknown }>) {
-      if (!message || message.role !== "user") continue;
-      const text = userMessageText(message.content);
-      consumeWake(owner, text);
-      const dropped = owner.droppedWakes.get(text);
+    for (const message of messages as Array<{ role?: unknown; content?: unknown; timestamp?: unknown }>) {
+      if (!message || message.role !== "user" || typeof message.timestamp !== "number") continue;
+      const dropped = owner.droppedWakes.get(droppedWakeKey(message.timestamp, userMessageText(message.content)));
       if (!dropped) continue;
       const note = await droppedWakeNote(dropped);
       if (!note) continue;
