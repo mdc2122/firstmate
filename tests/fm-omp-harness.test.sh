@@ -31,8 +31,9 @@
 #      a plain agent_end is idle, turn_end is a notification only.
 #   6. The turn-end guard extension compels one continuation on exit 2 and
 #      stands down when the payload already carries stop_hook_active.
-#   7. The watch extension arms through fm_watch_arm_omp and delivers an
-#      actionable close as one follow-up.
+#   7. The watch extension arms through fm_watch_arm_omp, delivers every
+#      actionable close as one follow-up at once, and shows the model a note
+#      instead of an acknowledged stale wake for a torn-down terminal only.
 set -u
 
 # shellcheck source=tests/fixtures.sh
@@ -1070,6 +1071,193 @@ test_watch_extension_restart_decides_replay_per_wake_within_one_generation() {
   pass ".omp watch extension: closes sharing one pending recovery generation replay per wake, so acknowledging row 7 replays only row 8"
 }
 
+# An arm fixture that closes each row of state/.e2e-plan in turn
+# (<seq>\t<reason>), appending its wake row first like the real watcher, and
+# waits for the next row once the plan is empty.
+write_omp_plan_arm_fixture() {  # <repo>
+  cat > "$1/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --handling-delivered ] && exit 0
+printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-H\n' "$$"
+plan="${FM_HOME:?}/state/.e2e-plan"
+for _ in $(seq 300); do [ -s "$plan" ] && break; sleep 0.1; done
+next=$(head -n 1 "$plan")
+[ -n "$next" ] || exit 0
+tail -n +2 "$plan" > "$plan.tmp" && mv "$plan.tmp" "$plan"
+sleep 0.3
+seq=${next%%$'\t'*}; reason=${next#*$'\t'}
+printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
+printf '1700000000\t%s\tstale\tkey%s\t%s\n' "$seq" "$seq" "$reason" >> "$FM_HOME/state/.wake-queue"
+printf '%s\n' "$reason"
+SH
+  chmod +x "$1/bin/fm-watch-arm.sh"
+}
+
+# The 2026-10-05 ghost-wake shape: a main turn ended in a provider error, so
+# omp parked wake A unconsumed. A later close B must still reach omp at once as
+# a follow-up, because each new follow-up is what retries omp's parked drain.
+test_watch_extension_sends_wake_while_earlier_one_is_parked() {
+  local dir repo home out status
+  dir="$TMP_ROOT/watch-parked"; repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  write_omp_plan_arm_fixture "$repo"
+  mkdir -p "$home/state"
+  printf '7\tcheck: omp-parked A ready\n8\tcheck: omp-parked B ready\n' > "$home/state/.e2e-plan"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { writeFileSync } from "node:fs";
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m, options) { sent.push({ m, deliverAs: options?.deliverAs }); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+const deadline = Date.now() + 20000;
+while (Date.now() < deadline && sent.length < 2) await new Promise((r) => setTimeout(r, 50));
+await handlers.get("session_shutdown")({}, {});
+if (sent.length !== 2 || !sent[0].m.includes("omp-parked A") || !sent[1].m.includes("omp-parked B")) {
+  throw new Error(`B must reach omp while A is still parked, saw ${JSON.stringify(sent.map((s) => s.m.match(/omp-parked \w/)?.[0] ?? s.m))}`);
+}
+if (sent.some((s) => s.deliverAs !== "followUp")) throw new Error(`every wake must be a followUp: ${JSON.stringify(sent.map((s) => s.deliverAs))}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp parked-wake delivery: $out"
+  [ -z "$out" ] || fail "omp parked-wake delivery test printed output: $out"
+  pass ".omp watch extension: a close arriving while an earlier follow-up is parked unconsumed is sent to omp at once"
+}
+
+# The 2026-10-05 ghost wakes: omp hands main a stale wake for a terminal torn
+# down meanwhile. The context event before the LLM call shows the model a
+# no-action note only for that stale wake once main acknowledged its row; the
+# same torn-down stale wake with its row still queued, a live terminal's stale
+# wake, an unrecorded task's signal wake (a torn-down task's final word), and
+# a check wake all reach the model unchanged, and no consumed record rides a
+# replacement handoff.
+test_watch_extension_context_drops_superseded_wakes() {
+  local dir repo home out status
+  dir="$TMP_ROOT/watch-superseded"; repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  write_omp_plan_arm_fixture "$repo"
+  mkdir -p "$home/state"
+  fm_write_meta "$home/state/live.meta" "window=fm-live" "endpoint_task_id=live" "terminal=term_live" "backend=orca" "kind=ship"
+  printf '7\tstale: term_gone (idle 300s, possible wedge, escalation 6)\n8\tstale: term_gone (idle 360s, possible wedge, escalation 7)\n9\tstale: term_live (idle 300s, possible wedge, escalation 1)\n10\tsignal: %s/state/ghost.status\n11\tcheck: omp-superseded C ready\n' \
+    "$home" > "$home/state/.e2e-plan"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const state = `${process.env.FM_HOME}/state`;
+writeFileSync(`${state}/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m) { sent.push(m); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+const deadline = Date.now() + 20000;
+while (Date.now() < deadline && sent.length < 5) await new Promise((r) => setTimeout(r, 50));
+if (sent.length !== 5) throw new Error(`expected five wakes sent, saw ${sent.length}`);
+// The drain in main acknowledged every row except 8 before omp handed the wakes over.
+const rows = readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean);
+writeFileSync(`${state}/.wake-queue`, rows.filter((row) => row.split("\t")[1] === "8").map((row) => `${row}\n`).join(""));
+const text = (message) => message.content.map((part) => part.text).join("\n");
+const userMessage = (m, timestamp) => ({ role: "user", content: [{ type: "text", text: m }], timestamp });
+const history = () => [userMessage("captain: status?", 100), ...sent.map((m, index) => userMessage(m, 101 + index))];
+// omp hands the torn-down stale wake to an idle main (before_agent_start, then
+// its user message_start) and the rest to a streaming main (user message_start).
+for (const message of history()) {
+  if (message.timestamp === 101) await handlers.get("before_agent_start")({ prompt: sent[0] }, {});
+  await handlers.get("message_start")({ message }, {});
+}
+for (const pass of [1, 2]) {
+  const result = await handlers.get("context")({ type: "context", messages: history() }, {});
+  const seen = result?.messages?.map(text) ?? [];
+  if (seen[0] !== "captain: status?") throw new Error(`pass ${pass}: a non-wake message changed: ${seen[0]}`);
+  if (!/watcher: superseded wake dropped \(no state\/<id>\.meta records term_gone; wake row 7 already acknowledged\): stale: term_gone \(idle 300s.* - no action needed; do not run the drain for it\./.test(seen[1]) || seen[1].includes("FIRSTMATE WATCHER WAKE")) {
+    throw new Error(`pass ${pass}: the acknowledged torn-down stale wake reached the model: ${seen[1]}`);
+  }
+  for (const [index, label] of [[2, "queued torn-down stale"], [3, "live stale"], [4, "unrecorded signal"], [5, "check"]]) {
+    if (seen[index] !== sent[index - 1]) throw new Error(`pass ${pass}: the ${label} wake was changed: ${seen[index]}`);
+  }
+}
+const triage = readFileSync(`${state}/.watch-triage.log`, "utf8").split("\n").filter(Boolean);
+if (triage.length !== 1 || !triage[0].includes("stale: term_gone (idle 300s")) throw new Error(`only the acknowledged torn-down stale wake may be dropped: ${triage.join("\n")}`);
+await handlers.get("session_shutdown")({}, {});
+const handoff = `${state}/extensions/omp-primary-watch/session-replacement-actionable.json`;
+if (existsSync(handoff)) throw new Error(`dropped and consumed wakes must not ride the replacement handoff: ${readFileSync(handoff, "utf8")}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp superseded-wake context: $out"
+  [ -z "$out" ] || fail "omp superseded-wake context test printed output: $out"
+  pass ".omp watch extension: the context event replaces only an acknowledged stale wake for a torn-down terminal and passes every other wake unchanged"
+}
+
+# The watcher repeats one stale wake text for an endpoint. A drop
+# is bound to the one message omp handed over (its timestamp), so a later wake
+# with identical text stays live in context and pending until its own
+# consumption, riding the replacement handoff if the session ends first.
+test_watch_extension_drop_binds_one_message_of_repeated_text() {
+  local dir repo home out status
+  dir="$TMP_ROOT/watch-twin"; repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  write_omp_plan_arm_fixture "$repo"
+  mkdir -p "$home/state"
+  printf '7\tstale: term_twin\n8\tstale: term_twin\n' > "$home/state/.e2e-plan"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const state = `${process.env.FM_HOME}/state`;
+writeFileSync(`${state}/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m) { sent.push(m); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+const deadline = Date.now() + 20000;
+while (Date.now() < deadline && sent.length < 2) await new Promise((r) => setTimeout(r, 50));
+if (sent.length !== 2 || sent[0] !== sent[1]) throw new Error(`expected two identical wakes, saw ${sent.length}`);
+// Main acknowledged row 7 before omp handed its wake over.
+const rows = readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean);
+writeFileSync(`${state}/.wake-queue`, rows.filter((row) => row.split("\t")[1] !== "7").map((row) => `${row}\n`).join(""));
+const userMessage = (timestamp) => ({ role: "user", content: [{ type: "text", text: sent[0] }], timestamp });
+await handlers.get("message_start")({ message: userMessage(1) }, {});
+const result = await handlers.get("context")({ type: "context", messages: [userMessage(1), userMessage(2)] }, {});
+const seen = (result?.messages ?? []).map((message) => message.content.map((part) => part.text).join("\n"));
+if (!/watcher: superseded wake dropped \(no state\/<id>\.meta records term_twin; wake row 7 already acknowledged\)/.test(seen[0] ?? "")) throw new Error(`the acknowledged wake reached the model: ${seen[0]}`);
+if (seen[1] !== sent[1]) throw new Error(`the later identical wake was rewritten: ${seen[1]}`);
+await handlers.get("session_shutdown")({}, {});
+const handoff = `${state}/extensions/omp-primary-watch/session-replacement-actionable.json`;
+const pending = existsSync(handoff) ? JSON.parse(readFileSync(handoff, "utf8")).pending : [];
+if (pending.length !== 1 || pending[0].wakeQueueSeq !== 8) throw new Error(`only the wake for row 8 may stay pending: ${JSON.stringify(pending)}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp repeated-text drop: $out"
+  [ -z "$out" ] || fail "omp repeated-text drop test printed output: $out"
+  pass ".omp watch extension: a dropped wake rewrites only its own message, and a later identical wake stays live and pending"
+}
+
 test_detection_anchored_name_and_marker_precedence
 test_lock_identity_and_liveness_classification
 test_detection_bun_launcher_shape
@@ -1092,3 +1280,6 @@ test_nested_omp_process_never_arms
 test_watch_extension_restart_skips_acknowledged_handoff
 test_watch_extension_restart_replays_unacknowledged_handoff_once
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation
+test_watch_extension_sends_wake_while_earlier_one_is_parked
+test_watch_extension_context_drops_superseded_wakes
+test_watch_extension_drop_binds_one_message_of_repeated_text

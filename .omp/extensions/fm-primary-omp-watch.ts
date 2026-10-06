@@ -60,9 +60,31 @@
 // consumes at the user message_start carrying the exact wake text; either
 // event finishes the pending record, and a still-unconsumed record rides the
 // replacement handoff.
+//
+// Supersession at delivery (stated once here):
+// omp queues every accepted follow-up while main is not running (a turn that
+// ended in a provider error leaves it parked until the next prompt) and then
+// replays the backlog one turn each, so stale wakes for a worker torn down in
+// the meantime would each cost a turn. Every actionable close is still sent
+// to omp at once, because each new follow-up is what retries omp's parked
+// queue drain. A wake is instead judged when omp hands it to the model (its
+// consumption), and is dropped as superseded only when all of these hold: its
+// reason line starts with `stale:`; the endpoint it names maps to no
+// state/<id>.meta (no meta file named for it, none recording it as window= or
+// terminal=); and it has a queue binding whose row is no longer in
+// state/.wake-queue. A row still queued is never dropped, every other wake
+// kind always passes, and an unreadable state directory, queue, or binding
+// never drops. Wake text repeats, so a drop is bound to that one user message
+// by omp's per-message timestamp plus its text, taken from the user
+// message_start (which follows an idle main's before_agent_start for the same
+// prompt); a consumption whose message carries no timestamp drops nothing.
+// The dropped message's record settles, the drop is logged to
+// state/.watch-triage.log, and the context event before each LLM call
+// replaces only that message with a one-line operational note telling main no
+// action is needed.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
@@ -148,6 +170,14 @@ type SessionGeneration = {
   // replacement began reads it to tell a main-queued wake (replayed) from a
   // branch-handled one (finished).
   unconsumedWakes: Map<string, UnconsumedWake>;
+  // Wake messages judged superseded at consumption, keyed by omp's message
+  // timestamp and text, mapped to the note the context event shows the model
+  // instead (encoded on first use); oldest first, at most droppedWakeLimit.
+  // The header's "Supersession at delivery" owns the rule.
+  droppedWakes: Map<string, { body: string; note?: string }>;
+  // A drop judged at before_agent_start, which carries no message timestamp,
+  // until the user message_start for the same prompt binds it.
+  unstampedDrop: { text: string; body: string; line: string } | null;
   // A verified successor's failure close that arrived while the pipeline was
   // still verifying the successor for an earlier close; its bounded retry runs
   // once that delivery settles instead of being skipped by the single-flight guard.
@@ -202,6 +232,9 @@ const armReadyTimeoutMs = positiveInteger(
   35000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
+// Dropped wake messages remembered for the context event; an older one has
+// long since been followed by turns that handled the queue, or compacted away.
+const droppedWakeLimit = 128;
 const repairOnlyHint = "call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - omp session is shutting down";
 const inertHelperMessage = "watcher: unchanged - another live omp session in this process owns the watcher";
@@ -360,6 +393,57 @@ function actionableStillUnacknowledged(pending: PendingActionableClose): boolean
       .some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq));
   } catch {
     return true;
+  }
+}
+
+// Every task id and recorded endpoint (orca terminal= or window=) in this
+// home's task metadata, or null when the state directory cannot be read.
+function recordedTaskKeys(): Set<string> | null {
+  const keys = new Set<string>();
+  try {
+    for (const name of readdirSync(state)) {
+      if (!name.endsWith(".meta")) continue;
+      keys.add(name.slice(0, -".meta".length));
+      for (const field of readFileSync(`${state}/${name}`, "utf8").split(/\r?\n/)) {
+        const match = field.match(/^(?:window|terminal)=(.+)$/);
+        if (match) keys.add(match[1]);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return keys;
+}
+
+// Why a wake omp is handing to the model no longer warrants a main turn, or ""
+// when it still does; the header's "Supersession at delivery" owns the rule.
+function supersededReason(pending: PendingActionableClose): string {
+  const line = actionableLine(pending.message);
+  if (!line.startsWith("stale:") || pending.wakeQueueSeq === undefined) return "";
+  const endpoint = line.slice("stale:".length).trim().split(/\s+/, 1)[0];
+  if (!endpoint) return "";
+  let queue: string;
+  try {
+    queue = readOptional(wakeQueue);
+  } catch {
+    return "";
+  }
+  if (queue.split("\n").some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq))) return "";
+  const recorded = recordedTaskKeys();
+  if (!recorded || recorded.has(endpoint)) return "";
+  return `no state/<id>.meta records ${endpoint}; wake row ${pending.wakeQueueSeq} already acknowledged`;
+}
+
+// One line in the watcher's absorbed-wake debug log, in its timestamp format.
+function triageLog(line: string): void {
+  const now = new Date();
+  const pad = (value: number): string => String(Math.trunc(Math.abs(value))).padStart(2, "0");
+  const offset = -now.getTimezoneOffset();
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${offset < 0 ? "-" : "+"}${pad(offset / 60)}${pad(offset % 60)}`;
+  try {
+    appendFileSync(`${state}/.watch-triage.log`, `[${stamp}] ${line}\n`);
+  } catch {
+    // Debug evidence only; never blocks delivery.
   }
 }
 
@@ -523,6 +607,8 @@ function createGeneration(): SessionGeneration {
     pendingActionables: [],
     cleanupFailure: "",
     unconsumedWakes: new Map(),
+    droppedWakes: new Map(),
+    unstampedDrop: null,
     deferredClose: null,
   };
 }
@@ -650,12 +736,34 @@ export default function (pi: ExtensionAPI) {
     return generationIsLive(owner);
   }
 
+  function droppedWakeKey(timestamp: number, text: string): string {
+    return `${timestamp}\n${text}`;
+  }
+
+  function rememberDroppedWake(owner: SessionGeneration, timestamp: number, text: string, body: string, line: string): void {
+    owner.droppedWakes.set(droppedWakeKey(timestamp, text), { body });
+    for (const key of owner.droppedWakes.keys()) {
+      if (owner.droppedWakes.size <= droppedWakeLimit) break;
+      owner.droppedWakes.delete(key);
+    }
+    triageLog(`omp extension dropped superseded wake ${line}`);
+  }
+
   // omp consumed a main follow-up: an idle main at before_agent_start, a
-  // streaming main at the user message_start that joins the running run.
-  function consumeWake(owner: SessionGeneration, text: string): void {
+  // streaming main at the user message_start that joins the running run. A
+  // superseded wake is settled too, and the message carrying it (its omp
+  // timestamp, when known) is remembered for the context event to replace.
+  function consumeWake(owner: SessionGeneration, text: string, timestamp?: number): void {
     for (const [token, wake] of owner.unconsumedWakes) {
       if (wake.content !== text) continue;
       owner.unconsumedWakes.delete(token);
+      const reason = supersededReason(wake.pending);
+      if (reason) {
+        const line = `(${reason}): ${actionableLine(wake.pending.message)}`;
+        const body = `watcher: superseded wake dropped ${line} - no action needed; do not run the drain for it.`;
+        if (timestamp === undefined) owner.unstampedDrop = { text, body, line };
+        else rememberDroppedWake(owner, timestamp, text, body, line);
+      }
       wake.pending.delivered = true;
       try {
         finishPendingActionable(owner, wake.pending);
@@ -665,6 +773,21 @@ export default function (pi: ExtensionAPI) {
       }
       return;
     }
+  }
+
+  // The note shown to the model in place of a dropped wake, or "" when it
+  // cannot be encoded (the wake then reaches the model unchanged).
+  async function droppedWakeNote(dropped: { body: string; note?: string }): Promise<string> {
+    if (dropped.note === undefined) {
+      try {
+        dropped.note = branchSupport
+          ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", dropped.body)
+          : encodeFirstmateOperationalInput("watcher", dropped.body);
+      } catch {
+        return "";
+      }
+    }
+    return dropped.note;
   }
 
   function confirmationResult(
@@ -1228,12 +1351,41 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on?.("before_agent_start", (event) => {
+    generation.unstampedDrop = null;
     consumeWake(generation, String((event as { prompt?: unknown })?.prompt ?? ""));
   });
   pi.on?.("message_start", (event) => {
-    const message = (event as { message?: { role?: unknown; content?: unknown } })?.message;
+    const message = (event as { message?: { role?: unknown; content?: unknown; timestamp?: unknown } })?.message;
     if (!message || message.role !== "user") return;
-    consumeWake(generation, userMessageText(message.content));
+    const owner = generation;
+    const text = userMessageText(message.content);
+    const timestamp = typeof message.timestamp === "number" ? message.timestamp : undefined;
+    const unstamped = owner.unstampedDrop;
+    owner.unstampedDrop = null;
+    if (unstamped && unstamped.text === text) {
+      if (timestamp !== undefined) rememberDroppedWake(owner, timestamp, text, unstamped.body, unstamped.line);
+      return;
+    }
+    consumeWake(owner, text, timestamp);
+  });
+  // Before each LLM call: show the model a one-line note instead of each wake
+  // message judged superseded (omp hands a deep copy, so session history keeps
+  // the original text and every later call is rewritten again).
+  pi.on?.("context", async (event) => {
+    const owner = generation;
+    const messages = (event as { messages?: unknown })?.messages;
+    if (!Array.isArray(messages)) return;
+    let changed = false;
+    for (const message of messages as Array<{ role?: unknown; content?: unknown; timestamp?: unknown }>) {
+      if (!message || message.role !== "user" || typeof message.timestamp !== "number") continue;
+      const dropped = owner.droppedWakes.get(droppedWakeKey(message.timestamp, userMessageText(message.content)));
+      if (!dropped) continue;
+      const note = await droppedWakeNote(dropped);
+      if (!note) continue;
+      message.content = typeof message.content === "string" ? note : [{ type: "text", text: note }];
+      changed = true;
+    }
+    return changed ? { messages } : undefined;
   });
 
   pi.on?.("session_start", async () => {

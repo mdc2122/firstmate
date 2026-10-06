@@ -986,6 +986,48 @@ test_scout_teardown_removes_orca_worktree_via_helper() {
   done
   [ -e "$state/.hash-term-neighbor" ] || fail "teardown removed another endpoint's watcher marker"
   pass "fm-teardown.sh backend=orca: scout report gate then helper-backed worktree removal, retiring the closed terminal's watcher markers"
+
+  # A watcher cycle after the teardown raises no stale wake for the closed
+  # terminal, even if a stray wedge timer for it outlived the cleanup and Orca
+  # still answered for it with an idle pane: the stale check walks only
+  # endpoints a state/<id>.meta still records.
+  local pid beat last now advances=0 i=0 watchbin="$CASE_DIR/watchbin"
+  mkdir -p "$watchbin"
+  ln -sf "$(command -v node)" "$watchbin/node"
+  cat > "$watchbin/orca" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-} ${2:-}" = "terminal read" ] || exit 1
+printf '{"ok":true,"result":{"terminal":{"handle":"t","status":"running","tail":["idle prompt, finished"]}}}\n'
+SH
+  printf '#!/usr/bin/env bash\necho "state: unknown · source: none · no current-state source available"\n' > "$watchbin/fm-crew-state.sh"
+  chmod +x "$watchbin/orca" "$watchbin/fm-crew-state.sh"
+  printf 'x\n' > "$state/.hash-term-teardown"
+  printf '3\n' > "$state/.count-term-teardown"
+  printf '%s\n' $(( $(date +%s) - 3600 )) > "$state/.stale-since-term-teardown"
+  printf '6\n' > "$state/.wedge-escalations-term-teardown"
+  beat="$state/.last-watcher-beat"
+  rm -f "$beat"
+  PATH="$watchbin:$PATH" FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$watchbin/fm-crew-state.sh" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_STALE_ESCALATE_SECS=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    "$ROOT/bin/fm-watch.sh" > "$CASE_DIR/watch.out" 2>&1 &
+  pid=$!
+  last=""
+  # Eight one-second polls: a recorded idle pane needs two matching captures
+  # and then crosses the 1s wedge threshold well inside this window.
+  while [ "$advances" -lt 8 ] && [ "$i" -lt 300 ] && kill -0 "$pid" 2>/dev/null; do
+    now=$(stat -c %Y "$beat" 2>/dev/null || stat -f %m "$beat" 2>/dev/null || true)
+    if [ -n "$now" ] && [ "$now" != "$last" ]; then last=$now; advances=$((advances + 1)); fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  [ "$advances" -ge 8 ] || fail "the post-teardown watcher did not complete its poll cycles: $(cat "$CASE_DIR/watch.out")"
+  assert_not_contains "$(cat "$CASE_DIR/watch.out")" "stale: term-teardown" \
+    "a watcher cycle after teardown raised a stale wake for the closed terminal"
+  [ ! -e "$state/.wake-queue" ] || assert_no_grep "term-teardown" "$state/.wake-queue" \
+    "a watcher cycle after teardown queued a wake for the closed terminal"
+  pass "a watcher cycle after an Orca teardown raises no stale wake for the closed terminal"
 }
 
 test_scout_teardown_refuses_orca_id_path_mismatch() {
