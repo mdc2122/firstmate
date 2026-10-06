@@ -483,6 +483,16 @@ SH
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_contains "$out" "mate1 3/6 br-only (b-3, b-4, b-5)" "a secondmate's br queue was not matched against its own and the parent home's backlog"
 
+  mkdir -p "$mate/fakebin"
+  cp "$home/fakebin/br" "$mate/fakebin/br"
+  printf 'mate1\n' > "$mate/.fm-secondmate-home"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$home" > "$mate/.fm-secondmate-parent"
+  out=$(ac "$mate" scan) || fail "scan failed: $out"
+  assert_contains "$out" "br-xcheck home 3/6 br-only (b-3, b-4, b-5)" "a secondmate's own check did not match its br queue against its parent home's backlog"
+  printf 'schema=fm-secondmate-parent.v1\nroute=remote\n' > "$mate/.fm-secondmate-parent"
+  out=$(ac "$mate" scan) || fail "scan failed: $out"
+  assert_contains "$out" "br-xcheck home backlog unreadable (info) [unknown]" "a secondmate whose parent backlog cannot be read did not say so"
+
   cat > "$home/fakebin/br" <<'SH'
 #!/usr/bin/env bash
 sleep 30

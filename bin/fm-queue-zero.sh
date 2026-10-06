@@ -29,8 +29,9 @@
 #   undated  queued, not ready, filed at least FM_QUEUE_ZERO_AGE_DAYS ago
 #            (default 1), and not held with an --until date still ahead;
 #            captain holds again excluded
-#   nocheck  a queued captain hold with no open blocker and no --until date,
-#            aged from its hold-set stamp (hold_age_days): one whose hold
+#   nocheck  a queued captain hold with no open blocker and no --until date
+#            ahead, aged from its hold-set stamp (hold_age_days) or, once a
+#            past --until date has lapsed, from that date: one whose hold
 #            reason begins "owner:" (firstmate- or secondmate-owned work) gets
 #            no grace and is listed after FM_QUEUE_ZERO_AGE_DAYS like any
 #            undated row; a genuine captain call after FM_FAR_HOLDS_DAYS
@@ -144,12 +145,18 @@ queue_rows() {
                         elif $r.hold_reason != null then "held: " + $r.hold_reason
                         else "waiting" end) + "; no --until date; filed " + ($r.since // "undated"))}
             elif $r.state == "queued" and ($r.hold_bucket == "live" or $r.hold_bucket == "aged")
-                 and $r.hold_until == null and $r.hold_age_days != null
-                 and $r.hold_age_days >= (if ($r.hold_reason | startswith("owner:")) then $age_days
-                                          else $captain_days end) then
+                 and ($dated | not)
+                 and ((if $r.hold_until != null then ($r.hold_until | day_epoch) as $u
+                         | if $u == null then null else (($t - $u) / 86400 | floor) end
+                       else $r.hold_age_days end) as $lapsed
+                      | $lapsed != null
+                        and $lapsed >= (if ($r.hold_reason | startswith("owner:")) then $age_days
+                                        else $captain_days end)) then
               {class:"nocheck",
-               detail:("captain hold aged \($r.hold_age_days)d with no blocker and no --until date: "
-                       + $r.hold_reason)}
+               detail:("captain hold with no blocker and "
+                       + (if $r.hold_until != null then "a lapsed --until " + $r.hold_until
+                          else "no --until date, aged \($r.hold_age_days)d" end)
+                       + ": " + $r.hold_reason)}
             elif $r.state == "in_flight" and $r.requires_child_metadata == true
                  and ($live | index($r.id)) == null then
               {class:"orphan", detail:"in flight with no live task record"}

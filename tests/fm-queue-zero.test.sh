@@ -167,6 +167,14 @@ test_undated_captain_hold_with_no_check_is_named_nocheck() {
   axi "$home" hold restamped-call --reason "pick the name" --kind captain
   axi "$home" add dated-ask "a captain hold with a next check"
   axi "$home" hold dated-ask --reason "owner: firstmate - re-ask on the date" --kind captain --until 2026-10-02
+  axi "$home" add lapsed-owner "firstmate work whose captain-hold date passed yesterday"
+  axi "$home" hold lapsed-owner --reason "owner: firstmate - check after the deploy" --kind captain --until 2026-09-30
+  axi "$home" add lapsed-call "a genuine captain call whose date passed yesterday"
+  axi "$home" hold lapsed-call --reason "pick the venue" --kind captain --until 2026-09-30
+  axi "$home" add lapsed-old-call "a genuine captain call whose date passed two days ago"
+  axi "$home" hold lapsed-old-call --reason "pick the date" --kind captain --until 2026-09-29
+  axi "$home" add today-owner "firstmate work whose captain-hold date is today"
+  axi "$home" hold today-owner --reason "owner: firstmate - check today" --kind captain --until 2026-10-01
   axi "$home" add dep "an open dependency"
   axi "$home" add blocked-ask "a captain hold behind a dependency"
   axi "$home" block blocked-ask --by dep
@@ -185,11 +193,15 @@ test_undated_captain_hold_with_no_check_is_named_nocheck() {
   assert_contains "$out" "queue nocheck old-call" "a genuine captain call two days old was not named"
   assert_not_contains "$out" "fresh-call" "a genuine captain call inside its two days was named"
   assert_not_contains "$out" "restamped-call" "a captain call was aged from its filing date, not its hold-set stamp"
+  assert_contains "$out" "queue nocheck lapsed-owner" "an owner: captain hold a day past its date was not named"
+  assert_contains "$out" "queue nocheck lapsed-old-call" "a genuine captain call two days past its date was not named"
+  assert_not_contains "$out" "lapsed-call " "a genuine captain call inside two days past its date was named"
+  assert_not_contains "$out" "today-owner" "a captain hold dated today was named"
   assert_not_contains "$out" "dated-ask" "a captain hold with a dated next check was named"
   assert_not_contains "$out" "blocked-ask" "a captain hold behind an open dependency was named"
   out=$(FM_FAR_HOLDS_DAYS=3 qz "$home" scan --local) || fail "scan failed: $out"
   assert_not_contains "$out" "old-call" "a genuine captain call ignored the far-holds window"
-  pass "undated captain holds are named: owner: work after a day, genuine calls after the far-holds window"
+  pass "undated or lapsed captain holds are named: owner: work after a day, genuine calls after the far-holds window"
 }
 
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {

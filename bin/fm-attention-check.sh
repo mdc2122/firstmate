@@ -61,8 +61,11 @@
 # a write. The STANDING RULE it watches: br never holds the only copy of
 # captain-sequenced or dated work, so every br item that is not closed (open,
 # in progress, blocked, deferred, or any other live status) carries a
-# `mirror:<row-id>` label naming an open backlog row in its own home or in this
-# (parent) home, or is closed. The informational `br-xcheck` segment reports
+# `mirror:<row-id>` label naming an open backlog row in its own home or in its
+# parent home, or is closed. This home's queue is matched against this home's
+# backlog and its parent's - itself in the primary home, the local home named
+# by .fm-secondmate-parent in a secondmate home - and each local secondmate's
+# queue against that secondmate's backlog and this home's. The informational `br-xcheck` segment reports
 # "<home> <n>/<total> br-only (<ids>)" per queue, amber when any item has no
 # row and unknown when a queue or a backlog cannot be read; it never moves the
 # verdict. This home's own queue is also named as "not seen" with its per-status
@@ -150,6 +153,8 @@ command -v jq >/dev/null 2>&1 || die "jq not found"
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-secondmate-registry-lib.sh
 . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+# shellcheck source=bin/fm-secondmate-parent-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-parent-lib.sh"
 
 NOW=${FM_ATTENTION_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 NOW_EPOCH=$(fm_utc_iso_to_epoch "$NOW") || die "invalid FM_ATTENTION_NOW: $NOW" 2
@@ -544,11 +549,11 @@ br_only() {  # <items-json> <backlog-json> <parent-backlog-json>
 
 # The shadow-queue cross-check, one part per br crew queue this home can read:
 # its own at data/beads/.beads/beads.db, and each local registered secondmate's
-# (data/secondmates.md) at <home>/data/beads/.beads/beads.db, matched against
-# that same home's backlog and this home's. Read-only throughout.
+# (data/secondmates.md) at <home>/data/beads/.beads/beads.db, each matched
+# against its own home's backlog and its parent's. Read-only throughout.
 BR_NOT_SEEN=
 signal_br_shadow() {
-  local parts='' rating=green label db home items backlog n total ids line
+  local parts='' rating=green label db home items backlog parent n total ids line
   command -v br >/dev/null 2>&1 || return 0
   while IFS=$'\t' read -r label home; do
     [ -n "$home" ] || continue
@@ -565,12 +570,13 @@ signal_br_shadow() {
         group_by(.status) | map("\(length) \(.[0].status)")
         | if length == 0 then "0 open" else join(", ") end')
       backlog=$BACKLOG_JSON
+      parent=$(parent_backlog) || parent=
     else
-      backlog=$(env -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE FM_HOME="$home" \
-        "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) || backlog=
+      backlog=$(home_backlog "$home") || backlog=
+      parent=$BACKLOG_JSON
     fi
-    if [ -z "$backlog" ] || [ -z "$BACKLOG_JSON" ] \
-      || ! line=$(br_only "$items" "$backlog" "$BACKLOG_JSON"); then
+    if [ -z "$backlog" ] || [ -z "$parent" ] \
+      || ! line=$(br_only "$items" "$backlog" "$parent"); then
       parts="$parts${parts:+; }$label backlog unreadable"
       [ "$rating" = amber ] || rating=unknown
       continue
@@ -584,6 +590,22 @@ EOF
 $(br_queue_homes)
 EOF
   [ -z "$parts" ] || add_segment br-xcheck "$rating" "$parts (info)" info
+}
+
+# Another home's backlog, read through its own snapshot.
+home_backlog() {  # <home>
+  env -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE FM_HOME="$1" \
+    "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null
+}
+
+# This home's parent backlog: its own in the primary home; in a secondmate home,
+# the local parent home its .fm-secondmate-parent binding names. Fails when a
+# secondmate home's parent is remote or unreadable.
+parent_backlog() {
+  [ -f "$FM_HOME/.fm-secondmate-home" ] || { printf '%s' "$BACKLOG_JSON"; return 0; }
+  fm_secondmate_parent_record_parse "$FM_HOME/.fm-secondmate-parent" \
+    && [ "$FM_SECONDMATE_PARENT_ROUTE" = local ] && [ -d "$FM_SECONDMATE_PARENT_HOME" ] || return 1
+  home_backlog "$FM_SECONDMATE_PARENT_HOME"
 }
 
 # "<label>\t<home>": this home, then every local registered secondmate home.
