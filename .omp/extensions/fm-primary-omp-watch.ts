@@ -61,19 +61,20 @@
 // event finishes the pending record, and a still-unconsumed record rides the
 // replacement handoff.
 //
-// One main follow-up in flight (stated once here):
+// Supersession at delivery (stated once here):
 // omp queues every accepted follow-up while main is not running (a turn that
 // ended in a provider error leaves it parked until the next prompt) and then
 // replays the backlog one turn each, so wakes created hours earlier would each
-// cost a turn for workers already torn down. The extension therefore keeps at
-// most one main follow-up unconsumed in omp; a later actionable close is held,
-// still pending and still riding the replacement handoff. When a main run ends
-// with omp's queue empty (agent_end), each held close is re-judged oldest
-// first: one whose own wake row main has already acknowledged, or whose every
-// named task or endpoint no longer has state/<id>.meta, is dropped as
-// superseded (logged to state/.watch-triage.log); the first still-needed one
-// is sent. A follow-up omp dropped unconsumed rejoins the held closes there.
-// Unreadable state never supersedes a wake, and failure surfaces are never held.
+// cost a turn for workers already torn down. Every actionable close is still
+// sent to omp at once, because each new follow-up is what retries omp's parked
+// queue drain. A wake is instead judged when omp hands it to the model (its
+// consumption, or the context event before an LLM call): one whose own wake
+// row main has already acknowledged, whose every named task or endpoint no
+// longer has state/<id>.meta, or that was sent more than
+// FM_OMP_WAKE_SUPERSEDE_AGE_SECS (default 1800) ago is dropped as superseded:
+// its record settles, the drop is logged to state/.watch-triage.log, and the
+// context event replaces its text with a one-line operational note telling
+// main no action is needed. Unreadable state never supersedes a wake.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
@@ -139,6 +140,7 @@ type ReplacementActionableHandoff = {
 type UnconsumedWake = {
   content: string;
   pending: PendingActionableClose;
+  sentAt: number;
 };
 
 type SessionGeneration = {
@@ -162,9 +164,10 @@ type SessionGeneration = {
   // replacement began reads it to tell a main-queued wake (replayed) from a
   // branch-handled one (finished).
   unconsumedWakes: Map<string, UnconsumedWake>;
-  // Actionable closes waiting behind the one main follow-up omp still holds,
-  // oldest first; the header's "One main follow-up in flight" owns the rule.
-  heldWakes: Map<string, UnconsumedWake>;
+  // Wake text judged superseded at consumption, mapped to the note the
+  // context event shows the model instead (encoded on first use); the
+  // header's "Supersession at delivery" owns the rule.
+  droppedWakes: Map<string, { body: string; note?: string }>;
   // A verified successor's failure close that arrived while the pipeline was
   // still verifying the successor for an earlier close; its bounded retry runs
   // once that delivery settles instead of being skipped by the single-flight guard.
@@ -219,6 +222,7 @@ const armReadyTimeoutMs = positiveInteger(
   35000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
+const wakeSupersedeAgeMs = positiveInteger("FM_OMP_WAKE_SUPERSEDE_AGE_SECS", 1800) * 1000;
 const repairOnlyHint = "call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - omp session is shutting down";
 const inertHelperMessage = "watcher: unchanged - another live omp session in this process owns the watcher";
@@ -416,12 +420,14 @@ function recordedTaskKeys(): Set<string> | null {
   return keys;
 }
 
-// Why a held close no longer warrants a main turn, or "" when it still does:
-// main already acknowledged its own wake row (the queue row is the precise
-// signal here; the recovery generation the restart rule also compares moves
-// with every handling episode inside a live session), or every task it names
-// has been torn down. Unreadable state never supersedes a wake.
-function supersededReason(pending: PendingActionableClose): string {
+// Why a wake omp is handing to the model no longer warrants a main turn, or ""
+// when it still does: main already acknowledged its own wake row (the queue
+// row is the precise signal here; the recovery generation the restart rule
+// also compares moves with every handling episode inside a live session), it
+// is older than the supersede age, or every task it names has been torn down.
+// Unreadable state never supersedes a wake.
+function supersededReason(wake: UnconsumedWake): string {
+  const pending = wake.pending;
   if (pending.wakeQueueSeq !== undefined) {
     let queue: string;
     try {
@@ -433,6 +439,8 @@ function supersededReason(pending: PendingActionableClose): string {
       return `wake row ${pending.wakeQueueSeq} already acknowledged`;
     }
   }
+  const age = Date.now() - wake.sentAt;
+  if (age > wakeSupersedeAgeMs) return `sent ${Math.floor(age / 1000)}s ago`;
   const keys = wakeTaskKeys(pending.message);
   if (keys.length === 0) return "";
   const recorded = recordedTaskKeys();
@@ -613,7 +621,7 @@ function createGeneration(): SessionGeneration {
     pendingActionables: [],
     cleanupFailure: "",
     unconsumedWakes: new Map(),
-    heldWakes: new Map(),
+    droppedWakes: new Map(),
     deferredClose: null,
   };
 }
@@ -727,15 +735,7 @@ export default function (pi: ExtensionAPI) {
       ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
       : encodeFirstmateOperationalInput("watcher", body);
     if (!generationIsLive(owner)) return false;
-    if (pending) {
-      owner.unconsumedWakes.set(pending.token, { content, pending });
-      // Another main follow-up is still waiting in omp: hold this one so it
-      // is re-judged when that one is consumed instead of piling up behind it.
-      if ([...owner.unconsumedWakes.keys()].some((token) => token !== pending.token && !owner.heldWakes.has(token))) {
-        owner.heldWakes.set(pending.token, { content, pending });
-        return true;
-      }
-    }
+    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending, sentAt: Date.now() });
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch (error) {
@@ -749,50 +749,46 @@ export default function (pi: ExtensionAPI) {
     return generationIsLive(owner);
   }
 
-  // Main finished a run with no follow-up left in omp: retire every held close
-  // main no longer needs, then send the oldest one it still does.
-  function releaseHeldWake(owner: SessionGeneration): void {
-    for (const [token, held] of owner.heldWakes) {
-      if (!generationIsLive(owner)) return;
-      owner.heldWakes.delete(token);
-      const reason = supersededReason(held.pending);
-      if (!reason) {
-        try {
-          pi.sendUserMessage(held.content, { deliverAs: "followUp" });
-        } catch (error) {
-          owner.unconsumedWakes.delete(token);
-          const detail = error instanceof Error ? error.message : String(error);
-          surfaceFailure(owner, `${held.pending.message}\n\nwatcher: FAILED - omp extension could not deliver a held actionable wake\n${detail}`);
-          settleConsumedWake(owner, held.pending);
-          continue;
-        }
-        return;
-      }
-      owner.unconsumedWakes.delete(token);
-      triageLog(`omp extension dropped superseded wake (${reason}): ${actionableLine(held.pending.message)}`);
-      settleConsumedWake(owner, held.pending);
-    }
-  }
-
-  function settleConsumedWake(owner: SessionGeneration, pending: PendingActionableClose): void {
-    pending.delivered = true;
-    try {
-      finishPendingActionable(owner, pending);
-    } catch (error) {
-      surfaceCleanupFailure(owner, error);
-      schedulePendingCleanup(owner);
-    }
-  }
-
   // omp consumed a main follow-up: an idle main at before_agent_start, a
-  // streaming main at the user message_start that joins the running run.
+  // streaming main at the user message_start that joins the running run, or
+  // the context event if neither ran first. A superseded wake is settled too,
+  // and its text is remembered for the context event to replace.
   function consumeWake(owner: SessionGeneration, text: string): void {
     for (const [token, wake] of owner.unconsumedWakes) {
-      if (wake.content !== text || owner.heldWakes.has(token)) continue;
+      if (wake.content !== text) continue;
       owner.unconsumedWakes.delete(token);
-      settleConsumedWake(owner, wake.pending);
+      const reason = supersededReason(wake);
+      if (reason) {
+        const line = actionableLine(wake.pending.message);
+        owner.droppedWakes.set(text, {
+          body: `watcher: superseded wake dropped (${reason}): ${line} - no action needed; do not run the drain for it.`,
+        });
+        triageLog(`omp extension dropped superseded wake (${reason}): ${line}`);
+      }
+      wake.pending.delivered = true;
+      try {
+        finishPendingActionable(owner, wake.pending);
+      } catch (error) {
+        surfaceCleanupFailure(owner, error);
+        schedulePendingCleanup(owner);
+      }
       return;
     }
+  }
+
+  // The note shown to the model in place of a dropped wake, or "" when it
+  // cannot be encoded (the wake then reaches the model unchanged).
+  async function droppedWakeNote(dropped: { body: string; note?: string }): Promise<string> {
+    if (dropped.note === undefined) {
+      try {
+        dropped.note = branchSupport
+          ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", dropped.body)
+          : encodeFirstmateOperationalInput("watcher", dropped.body);
+      } catch {
+        return "";
+      }
+    }
+    return dropped.note;
   }
 
   function confirmationResult(
@@ -1363,19 +1359,26 @@ export default function (pi: ExtensionAPI) {
     if (!message || message.role !== "user") return;
     consumeWake(generation, userMessageText(message.content));
   });
-  // A main run ended with nothing left in omp's queue: the turn that consumed
-  // the in-flight follow-up is over, so re-judge and release the held closes.
-  // A follow-up still unconsumed here was dropped by omp (an interrupt clears
-  // queued follow-ups); it rejoins the head of the held closes so one lost
-  // follow-up can never hold every later wake.
-  pi.on?.("agent_end", (event, ctx) => {
-    if (ctx?.agent?.kind === "sub") return;
-    if (event && typeof event === "object" && "willContinue" in event && event.willContinue === true) return;
-    if (typeof ctx?.hasPendingMessages !== "function" || ctx.hasPendingMessages()) return;
+  // Before each LLM call: show the model a one-line note instead of every wake
+  // judged superseded (omp hands a deep copy, so session history keeps the
+  // original text and every later call is rewritten again).
+  pi.on?.("context", async (event) => {
     const owner = generation;
-    const lost = [...owner.unconsumedWakes].filter(([token]) => !owner.heldWakes.has(token));
-    if (lost.length > 0) owner.heldWakes = new Map([...lost, ...owner.heldWakes]);
-    releaseHeldWake(owner);
+    const messages = (event as { messages?: unknown })?.messages;
+    if (!Array.isArray(messages)) return;
+    let changed = false;
+    for (const message of messages as Array<{ role?: unknown; content?: unknown }>) {
+      if (!message || message.role !== "user") continue;
+      const text = userMessageText(message.content);
+      consumeWake(owner, text);
+      const dropped = owner.droppedWakes.get(text);
+      if (!dropped) continue;
+      const note = await droppedWakeNote(dropped);
+      if (!note) continue;
+      message.content = typeof message.content === "string" ? note : [{ type: "text", text: note }];
+      changed = true;
+    }
+    return changed ? { messages } : undefined;
   });
 
   pi.on?.("session_start", async () => {

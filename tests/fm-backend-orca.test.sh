@@ -1015,7 +1015,7 @@ SH
   # Eight one-second polls: a recorded idle pane needs two matching captures
   # and then crosses the 1s wedge threshold well inside this window.
   while [ "$advances" -lt 8 ] && [ "$i" -lt 300 ] && kill -0 "$pid" 2>/dev/null; do
-    now=$(stat -f %m "$beat" 2>/dev/null || stat -c %Y "$beat" 2>/dev/null || true)
+    now=$(stat -c %Y "$beat" 2>/dev/null || stat -f %m "$beat" 2>/dev/null || true)
     if [ -n "$now" ] && [ "$now" != "$last" ]; then last=$now; advances=$((advances + 1)); fi
     sleep 0.1
     i=$((i + 1))
