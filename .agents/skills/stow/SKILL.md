@@ -271,6 +271,7 @@ State what reset-safe means in the same breath as the claim: nothing this sessio
 It is never a claim that the home's durable records are correct, because this pass checks no record the session did not name.
 Do not hide an over-budget result behind a reset-safe claim.
 In a primary home the receipt is written after the cascade below, not instead of it.
+After the complete pass, touch this home's `state/.last-stow`; `bin/fm-stow-trigger.sh` reads it as proof the current context cycle was stowed, and a home's time-based stow reminder may read it too.
 
 ## Automatic cascade to secondmates
 

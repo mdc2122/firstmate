@@ -498,6 +498,40 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
   return runChecker("fm-cd-pretool-check.sh", command);
 }
 
+// Context-volume stow trigger (bin/fm-stow-trigger.sh owns the threshold, the
+// one-wake-per-context-cycle latch, and the durable wake append). Only the
+// fleet-lock holder reports, so a nested omp or a task worktree stays inert.
+// Fire-and-forget and fail-open: this never delays a turn or a compaction.
+function contextPercent(ctx: unknown): number | undefined {
+  if (!ctx || typeof ctx !== "object" || !("getContextUsage" in ctx) || typeof ctx.getContextUsage !== "function") {
+    return undefined;
+  }
+  let usage: unknown;
+  try {
+    usage = ctx.getContextUsage();
+  } catch {
+    return undefined;
+  }
+  if (!usage || typeof usage !== "object" || !("percent" in usage)) return undefined;
+  const percent = usage.percent;
+  return typeof percent === "number" && Number.isFinite(percent) ? percent : undefined;
+}
+
+function reportStowTrigger(action: "context" | "compacting" | "cycle", ctx?: unknown): void {
+  if (lockOwnership() !== "owned") return;
+  const args: string[] = [action];
+  const percent = action === "cycle" ? undefined : contextPercent(ctx);
+  if (percent !== undefined) args.push(String(Math.floor(percent)));
+  else if (action === "context") return;
+  try {
+    const child = spawn(`${root}/bin/fm-stow-trigger.sh`, args, { stdio: "ignore", detached: true });
+    child.on("error", () => {});
+    child.unref();
+  } catch {
+    // Reporting is best effort; the daily stow check remains the floor.
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   let sessionstartGeneration: SessionstartGeneration | null = null;
   let sessionstartExitListenerRegistered = false;
@@ -539,6 +573,23 @@ export default function (pi: ExtensionAPI) {
     markLoaded();
     registerSessionstartExitListener();
     sessionstartGeneration = createSessionstartGeneration(source, sessionIdFromContext(ctx));
+    // A fresh process or an in-process /new starts an empty context. A resume
+    // keeps the old one; only an in-process resume keeps the old cycle, since a
+    // process-level resume re-takes state/.lock and fm-stow-trigger.sh starts a
+    // new cycle for a new holder.
+    if (source !== "resume") reportStowTrigger("cycle");
+  });
+
+  // Context-volume stow trigger: one usage reading per completed agent loop,
+  // and a last chance before compaction. The before-compact handler returns
+  // nothing, so it never cancels or customizes the compaction.
+  pi.on?.("agent_end", (_event, ctx) => {
+    reportStowTrigger("context", ctx);
+  });
+
+  pi.on?.("session_before_compact", (_event, ctx) => {
+    reportStowTrigger("compacting", ctx);
+    return undefined;
   });
 
   pi.on?.("before_agent_start", async (_event, ctx) => {
@@ -552,6 +603,7 @@ export default function (pi: ExtensionAPI) {
   // is idle and auto-compaction may retry without another before_agent_start,
   // so the message is sent directly while sharing generation ownership.
   pi.on?.("session_compact", async (_event, ctx) => {
+    reportStowTrigger("cycle");
     registerSessionstartExitListener();
     const generation = createSessionstartGeneration("compact", sessionIdFromContext(ctx));
     sessionstartGeneration = generation;
