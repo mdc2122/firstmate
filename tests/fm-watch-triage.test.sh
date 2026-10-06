@@ -5071,7 +5071,8 @@ test_attention_check_tick_wakes_on_a_red_day() {
     FM_ATTENTION_CHECK_INTERVAL=1 FM_ATTENTION_NOW="${day}T23:59:00Z" "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "the watcher did not wake for a RED attention line"
-  grep -F 'check: attention: attention ' "$out" | grep -F ' RED (S3,S4):' >/dev/null \
+  grep -F 'check: attention: BINDING (RED verdict) - act on it this turn' "$out" \
+    | grep -F "; attention ${day#*-} 23:59Z RED (S3,S4):" >/dev/null \
     || fail "the attention wake did not carry the RED line: $(cat "$out")"
   grep -F $'\tcheck\tattention\t' "$state/.wake-queue" >/dev/null \
     || fail "the attention wake was not durably queued"
