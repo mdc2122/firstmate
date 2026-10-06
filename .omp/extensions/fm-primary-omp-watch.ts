@@ -64,21 +64,24 @@
 // Supersession at delivery (stated once here):
 // omp queues every accepted follow-up while main is not running (a turn that
 // ended in a provider error leaves it parked until the next prompt) and then
-// replays the backlog one turn each, so wakes created hours earlier would each
-// cost a turn for workers already torn down. Every actionable close is still
-// sent to omp at once, because each new follow-up is what retries omp's parked
+// replays the backlog one turn each, so stale wakes for a worker torn down in
+// the meantime would each cost a turn. Every actionable close is still sent
+// to omp at once, because each new follow-up is what retries omp's parked
 // queue drain. A wake is instead judged when omp hands it to the model (its
-// consumption): one whose own wake row main has already acknowledged, whose
-// every named task or endpoint no longer has state/<id>.meta, or that was sent
-// more than FM_OMP_WAKE_SUPERSEDE_AGE_SECS (default 1800) ago is dropped as
-// superseded. Wake text repeats, so a drop is bound to that one user message
+// consumption), and is dropped as superseded only when all of these hold: its
+// reason line starts with `stale:`; the endpoint it names maps to no
+// state/<id>.meta (no meta file named for it, none recording it as window= or
+// terminal=); and it has a queue binding whose row is no longer in
+// state/.wake-queue. A row still queued is never dropped, every other wake
+// kind always passes, and an unreadable state directory, queue, or binding
+// never drops. Wake text repeats, so a drop is bound to that one user message
 // by omp's per-message timestamp plus its text, taken from the user
 // message_start (which follows an idle main's before_agent_start for the same
 // prompt); a consumption whose message carries no timestamp drops nothing.
 // The dropped message's record settles, the drop is logged to
 // state/.watch-triage.log, and the context event before each LLM call
 // replaces only that message with a one-line operational note telling main no
-// action is needed. Unreadable state never supersedes a wake.
+// action is needed.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
@@ -144,7 +147,6 @@ type ReplacementActionableHandoff = {
 type UnconsumedWake = {
   content: string;
   pending: PendingActionableClose;
-  sentAt: number;
 };
 
 type SessionGeneration = {
@@ -230,7 +232,6 @@ const armReadyTimeoutMs = positiveInteger(
   35000,
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
-const wakeSupersedeAgeMs = positiveInteger("FM_OMP_WAKE_SUPERSEDE_AGE_SECS", 1800) * 1000;
 // Dropped wake messages remembered for the context event; an older one has
 // long since been followed by turns that handled the queue, or compacted away.
 const droppedWakeLimit = 128;
@@ -395,23 +396,6 @@ function actionableStillUnacknowledged(pending: PendingActionableClose): boolean
   }
 }
 
-// The task keys a wake names that the stale-check and signal scan derive from
-// state/<id>.meta (bin/fm-watch.sh recorded_windows and scan_signals): the
-// endpoint of a stale wake, the task ids of a signal wake's status and
-// turn-end files. Empty for every other wake, which never names a task.
-function wakeTaskKeys(message: string): string[] {
-  const line = actionableLine(message);
-  if (line.startsWith("stale:")) return line.slice("stale:".length).trim().split(/\s+/, 1).filter(Boolean);
-  if (!line.startsWith("signal:")) return [];
-  const keys: string[] = [];
-  for (const path of line.slice("signal:".length).trim().split(/\s+/)) {
-    const match = path.match(/(?:^|\/)([^/]+)\.(?:status|turn-ended)$/);
-    if (!match) return [];
-    keys.push(match[1]);
-  }
-  return keys;
-}
-
 // Every task id and recorded endpoint (orca terminal= or window=) in this
 // home's task metadata, or null when the state directory cannot be read.
 function recordedTaskKeys(): Set<string> | null {
@@ -432,31 +416,22 @@ function recordedTaskKeys(): Set<string> | null {
 }
 
 // Why a wake omp is handing to the model no longer warrants a main turn, or ""
-// when it still does: main already acknowledged its own wake row (the queue
-// row is the precise signal here; the recovery generation the restart rule
-// also compares moves with every handling episode inside a live session), it
-// is older than the supersede age, or every task it names has been torn down.
-// Unreadable state never supersedes a wake.
-function supersededReason(wake: UnconsumedWake): string {
-  const pending = wake.pending;
-  if (pending.wakeQueueSeq !== undefined) {
-    let queue: string;
-    try {
-      queue = readOptional(wakeQueue);
-    } catch {
-      return "";
-    }
-    if (!queue.split("\n").some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq))) {
-      return `wake row ${pending.wakeQueueSeq} already acknowledged`;
-    }
+// when it still does; the header's "Supersession at delivery" owns the rule.
+function supersededReason(pending: PendingActionableClose): string {
+  const line = actionableLine(pending.message);
+  if (!line.startsWith("stale:") || pending.wakeQueueSeq === undefined) return "";
+  const endpoint = line.slice("stale:".length).trim().split(/\s+/, 1)[0];
+  if (!endpoint) return "";
+  let queue: string;
+  try {
+    queue = readOptional(wakeQueue);
+  } catch {
+    return "";
   }
-  const age = Date.now() - wake.sentAt;
-  if (age > wakeSupersedeAgeMs) return `sent ${Math.floor(age / 1000)}s ago`;
-  const keys = wakeTaskKeys(pending.message);
-  if (keys.length === 0) return "";
+  if (queue.split("\n").some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq))) return "";
   const recorded = recordedTaskKeys();
-  if (!recorded || keys.some((key) => recorded.has(key))) return "";
-  return `no state/<id>.meta records ${keys.join(" ")}`;
+  if (!recorded || recorded.has(endpoint)) return "";
+  return `no state/<id>.meta records ${endpoint}; wake row ${pending.wakeQueueSeq} already acknowledged`;
 }
 
 // One line in the watcher's absorbed-wake debug log, in its timestamp format.
@@ -747,7 +722,7 @@ export default function (pi: ExtensionAPI) {
       ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
       : encodeFirstmateOperationalInput("watcher", body);
     if (!generationIsLive(owner)) return false;
-    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending, sentAt: Date.now() });
+    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending });
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch (error) {
@@ -782,7 +757,7 @@ export default function (pi: ExtensionAPI) {
     for (const [token, wake] of owner.unconsumedWakes) {
       if (wake.content !== text) continue;
       owner.unconsumedWakes.delete(token);
-      const reason = supersededReason(wake);
+      const reason = supersededReason(wake.pending);
       if (reason) {
         const line = `(${reason}): ${actionableLine(wake.pending.message)}`;
         const body = `watcher: superseded wake dropped ${line} - no action needed; do not run the drain for it.`;
