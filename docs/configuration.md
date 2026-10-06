@@ -277,13 +277,15 @@ The skill text owns the marker spelling, the tick order, and the reinforcement r
 
 ## Stow context threshold (config/stow-context-threshold)
 
-On an omp or Pi primary, the turn-end guard extension reads the session's context usage after every agent loop and asks for a `/stow` pass before compaction can condense knowledge held only in conversation.
-When usage first reaches the threshold in a context cycle, or compaction begins with no stow yet in that cycle, it queues one ordinary `check: stow-due: context <NN>%` wake through the durable wake queue, and firstmate runs `/stow` as a normal turn.
+A primary asks for a `/stow` pass before compaction can condense knowledge held only in conversation.
+On an omp or Pi primary, the turn-end guard extension reads the session's context usage after every agent loop and gets both triggers: the threshold trigger and the pre-compaction trigger.
+A Claude Code primary gets only the pre-compaction trigger, through the tracked `.claude/settings.json` `PreCompact` hook ([`bin/fm-stow-trigger-claude.sh`](../bin/fm-stow-trigger-claude.sh)), because Claude Code exposes no context-usage reading to a hook.
+When usage first reaches the threshold in a context cycle, or compaction begins with no stow yet in that cycle, the trigger queues one ordinary `check: stow-due` wake through the durable wake queue, and firstmate runs `/stow` as a normal turn.
 A cycle ends at compaction or a new session, and a stow completed at or above the threshold satisfies it, so one cycle produces at most one wake.
 `config/stow-context-threshold` is an optional local, gitignored file holding one whole number from 1 to 100; absent or invalid means 70.
 The setting is per home and is not inherited by secondmate homes, because context size is a property of the session doing the stowing.
 A time-based stow reminder, when a home registers one, stays the floor for quiet days on which no session fills its context.
-Other primary harnesses expose no equivalent context-usage hook to Firstmate and keep only that time-based floor.
+Other primary harnesses get only that time-based floor.
 [`bin/fm-stow-trigger.sh`](../bin/fm-stow-trigger.sh)'s header owns the latch, its record, and the wake mechanics.
 
 ## Secondmate routes (data/secondmates.md)

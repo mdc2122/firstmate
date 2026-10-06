@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the context-volume stow trigger: bin/fm-stow-trigger.sh (threshold,
 # one-wake-per-context-cycle latch, durable stow-due wake) and the omp and Pi
-# primary guard extensions that report context usage to it.
+# primary guard extensions and the Claude Code hooks that report to it.
 #
 # The gap it closes: a daily stow reminder comes due long after a busy session
 # has already compacted, so knowledge held only in conversation is condensed
@@ -211,9 +211,90 @@ test_pi_guard_reports_context_usage() {
   run_extension_case .pi Pi
 }
 
+# The tracked Claude Code hooks, run as Claude runs them: the command string
+# from .claude/settings.json under bash, with the JSON payload on stdin, as a
+# child of a claude-named process. Only the fleet-lock holder reports,
+# PreCompact queues one wake per cycle, and SessionStart (but not a resume)
+# starts a new cycle. Nothing reaches stdout and every run exits 0.
+test_claude_precompact_hook_wakes_once_per_cycle() {
+  command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; return 0; }
+  local dir fakebin precompact sessionstart out
+  dir="$TMP_ROOT/claude-home"
+  mkdir -p "$dir/state" "$dir/bin"
+  git init -q "$dir"
+  git -C "$dir" commit -q --allow-empty -m init
+  : > "$dir/AGENTS.md"
+  cp "$TRIGGER" "$ROOT/bin/fm-stow-trigger-claude.sh" "$ROOT/bin/"*-lib.sh "$dir/bin/"
+  chmod +x "$dir/bin/"*.sh
+  fakebin=$(fm_fakebin "$TMP_ROOT/claude-fakebin")
+  ln -s /bin/bash "$fakebin/claude"
+  precompact=$(jq -r '.hooks.PreCompact[].hooks[].command' "$ROOT/.claude/settings.json")
+  sessionstart=$(jq -r '.hooks.SessionStart[].hooks[].command | select(contains("fm-stow-trigger"))' "$ROOT/.claude/settings.json")
+  [ -n "$precompact" ] && [ -n "$sessionstart" ] || fail "tracked Claude stow-trigger hooks are missing"
+
+  hook() {  # <owner|other> <command> <payload>
+    local lock='$$'
+    [ "$1" = owner ] || lock=1
+    printf '%s\n' "$3" | env -u GROK_AGENT -u GROK_HOOK_EVENT CLAUDE_PROJECT_DIR="$dir" FM_HOME="$dir" \
+      FM_HOOK_CMD="$2" "$fakebin/claude" -c "printf '%s\n' \"$lock\" > \"\$FM_HOME/state/.lock\"; bash -c \"\$FM_HOOK_CMD\""
+  }
+  settle() {  # <want>
+    for _ in $(seq 1 100); do
+      [ "$(stow_rows "$dir")" = "$1" ] && grep -q '^fired=[1-9]' "$dir/state/.stow-trigger" 2>/dev/null && return 0
+      sleep 0.05
+    done
+    fail "expected $1 stow-due rows and a fired latch, saw $(stow_rows "$dir") rows"
+  }
+  cycled() {
+    for _ in $(seq 1 100); do
+      grep -qx 'fired=0' "$dir/state/.stow-trigger" 2>/dev/null && return 0
+      sleep 0.05
+    done
+    fail "SessionStart did not start a new stow cycle"
+  }
+  quiet() {  # <label>
+    sleep 0.5
+    assert_equals 0 "$(stow_rows "$dir")" "$1"
+  }
+  local pre='{"session_id":"s1","hook_event_name":"PreCompact","trigger":"auto"}'
+
+  out=$(hook other "$precompact" "$pre") || fail "PreCompact hook exited non-zero for a non-owner"
+  [ -z "$out" ] || fail "PreCompact hook printed on stdout: $out"
+  quiet "a non-owner Claude session queued a stow wake"
+  [ ! -e "$dir/state/.stow-trigger" ] || fail "a non-owner Claude session wrote the stow latch"
+
+  out=$(hook owner "$sessionstart" '{"session_id":"s1","hook_event_name":"SessionStart","source":"startup"}') \
+    || fail "SessionStart hook exited non-zero"
+  [ -z "$out" ] || fail "SessionStart hook printed on stdout: $out"
+  cycled
+  out=$(hook owner "$precompact" "$pre") || fail "PreCompact hook exited non-zero"
+  [ -z "$out" ] || fail "PreCompact hook printed on stdout: $out"
+  settle 1
+  awk -F '\t' '$4 == "stow-due"' "$dir/state/.wake-queue" | grep -F "at compaction" >/dev/null \
+    || fail "the Claude PreCompact wake did not carry the compaction reason"
+
+  drain_queue "$dir"
+  hook owner "$precompact" "$pre" >/dev/null
+  quiet "a second PreCompact in the same cycle woke again"
+
+  # A resumed session keeps its context, so it keeps its cycle too.
+  hook owner "$sessionstart" '{"session_id":"s1","hook_event_name":"SessionStart","source":"resume"}' >/dev/null
+  sleep 0.5
+  hook owner "$precompact" "$pre" >/dev/null
+  quiet "a resume re-armed the latch"
+
+  # Compaction finished: Claude opens the session again with source compact.
+  hook owner "$sessionstart" '{"session_id":"s1","hook_event_name":"SessionStart","source":"compact"}' >/dev/null
+  cycled
+  hook owner "$precompact" "$pre" >/dev/null
+  settle 1
+  pass "Claude PreCompact hook: owner-only, one stow-due wake per cycle, re-armed by SessionStart but not resume, silent on stdout"
+}
+
 test_threshold_crossing_wakes_once_per_cycle
 test_stow_at_high_usage_satisfies_the_cycle
 test_compaction_wakes_when_threshold_never_crossed
 test_configured_threshold_and_no_duplicate_rows
 test_omp_guard_reports_context_usage
 test_pi_guard_reports_context_usage
+test_claude_precompact_hook_wakes_once_per_cycle

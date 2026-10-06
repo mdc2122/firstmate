@@ -5,8 +5,11 @@
 # time-based stow reminder comes due, so knowledge held only in conversation can
 # be condensed away before a /stow captures it. The omp and Pi primary turn-end
 # guard extensions (.omp/extensions/fm-primary-turnend-guard.ts,
-# .pi/extensions/fm-primary-turnend-guard.ts) report context usage here, only
-# from the fleet-lock holder, and this script queues ONE ordinary durable
+# .pi/extensions/fm-primary-turnend-guard.ts) get the threshold trigger plus the
+# pre-compaction trigger; a Claude Code primary gets only the pre-compaction
+# trigger, through its PreCompact hook (bin/fm-stow-trigger-claude.sh); other
+# primary harnesses get only the time-based floor. Reports come only from the
+# fleet-lock holder, and this script queues ONE ordinary durable
 # `check` wake (key stow-due) per context cycle so the stow runs as a normal
 # firstmate turn. It never runs the stow and never touches compaction.
 #
