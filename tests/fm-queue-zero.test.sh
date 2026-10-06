@@ -149,6 +149,32 @@ test_inflight_row_without_a_live_task_is_named_orphan() {
   pass "an in-flight backlog row with no live task is named instead of left as a silent warning"
 }
 
+# A captain hold with no blocker and no date ages out of Captain's Call into
+# nobody's list; the queued-row rule names it until it is worked, dated, or
+# closed, while a dated or blocked captain hold carries its own next check.
+test_aged_captain_hold_with_no_check_is_named_nocheck() {
+  local home out
+  home=$(make_home nocheck)
+  axi "$home" add stale-ask "an old captain hold nobody checks"
+  axi "$home" hold stale-ask --reason "queued behind other work" --kind captain
+  axi "$home" add dated-ask "a captain hold with a next check"
+  axi "$home" hold dated-ask --reason "re-ask on the date" --kind captain --until 2026-10-02
+  axi "$home" add dep "an open dependency"
+  axi "$home" add blocked-ask "a captain hold behind a dependency"
+  axi "$home" block blocked-ask --by dep
+  axi "$home" hold blocked-ask --reason "waits on dep" --kind captain
+  set_since "$home" stale-ask 2026-09-01
+  set_since "$home" blocked-ask 2026-09-01
+  set_since "$home" dep 2026-10-01
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue nocheck stale-ask" "an aged captain hold with no blocker or date was not named"
+  assert_not_contains "$out" "dated-ask" "a captain hold with a dated next check was named"
+  assert_not_contains "$out" "blocked-ask" "a captain hold behind an open dependency was named"
+  out=$(FM_SNAPSHOT_UNDATED_HOLD_AGE_DAYS=60 qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "stale-ask" "a captain hold still inside Captain's Call was named"
+  pass "an aged captain hold with no blocker and no date is named; dated or blocked ones are not"
+}
+
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {
   local home out
   home=$(make_home empty)
@@ -472,6 +498,7 @@ test_paperclip_release_is_guarded() {
 
 test_ready_and_undated_rows_are_named_and_dated_holds_are_not
 test_inflight_row_without_a_live_task_is_named_orphan
+test_aged_captain_hold_with_no_check_is_named_nocheck
 test_empty_queue_is_silent_and_unpaired_state_is_silent
 test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode

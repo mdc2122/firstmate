@@ -386,7 +386,7 @@ test_daily_check_runs_once_after_1300_and_wakes_only_on_red() {
   [ -e "$home/state/.attention-first-seen" ] || fail "a morning check did not sample decisions"
 
   out=$(AC_NOW=2026-10-03T13:05:00Z ac "$home" check) || fail "afternoon check failed"
-  assert_contains "$out" "check: attention: attention 10-03 13:05Z RED (S1,S3):" "the first check after 13:00Z did not wake on RED"
+  assert_contains "$out" "; attention 10-03 13:05Z RED (S1,S3):" "the first check after 13:00Z did not wake on RED"
   grep -F $'\tcheck\tattention\t' "$home/state/.wake-queue" >/dev/null \
     || fail "the RED wake was printed but not durably queued"
   out=$(AC_NOW=2026-10-03T15:00:00Z ac "$home" check) || fail "repeat check failed"
@@ -404,30 +404,91 @@ test_daily_check_runs_once_after_1300_and_wakes_only_on_red() {
   pass "check samples every run, records the line once a day after 13:00Z, and wakes only on RED"
 }
 
-test_beads_crew_queue_is_named_as_not_seen() {
+# A forced-red day: the binding wake fires once per window, carries the owed
+# action, and the handling turn's act records it against that same line; act
+# refuses a non-binding or unrecorded day. S11 red alone (two windows under
+# 40%) also binds even though the verdict is only AMBER.
+test_binding_line_wakes_once_and_records_the_action() {
   local home out
+  home=$(make_home bind-red)
+  open_decision "$home" t1 k1 0
+  printf 'https://github.com/o/r/pull/7 abc %s 0\n' $((NOW_EPOCH - 3 * 3600)) > "$home/state/t1.pr-green-blocked"
+  AC_NOW=2026-10-03T11:00:00Z ac "$home" check >/dev/null || fail "morning sample failed"
+  out=$(AC_NOW=2026-10-03T13:05:00Z ac "$home" act drain "early" 2>&1) && fail "act before any line was recorded succeeded: $out"
+  out=$(AC_NOW=2026-10-03T13:05:00Z ac "$home" check) || fail "binding check failed"
+  assert_contains "$out" "check: attention: BINDING (RED verdict) - act on it this turn" "a RED day did not queue a binding wake"
+  assert_contains "$out" "fm-attention-check.sh act reallocate|drain" "the binding wake did not name the action it owes"
+  out=$(AC_NOW=2026-10-03T16:00:00Z ac "$home" check) || fail "repeat check failed"
+  [ -z "$out" ] || fail "a binding window woke twice: $out"
+  [ "$(grep -c $'\tcheck\tattention\t' "$home/state/.wake-queue")" = 1 ] || fail "the binding wake was not queued exactly once"
+  out=$(AC_NOW=2026-10-03T16:05:00Z ac "$home" act drain "answered k1 and two other decisions") || fail "act failed: $out"
+  grep -F 'action=2026-10-03T16:05:00Z drain answered k1 and two other decisions' "$home/state/.attention-check" >/dev/null \
+    || fail "the action was not recorded against the day's line"
+  grep -F 'bound=RED verdict' "$home/state/.attention-check" >/dev/null || fail "the binding reason was lost by act"
+  out=$(AC_NOW=2026-10-03T16:06:00Z ac "$home" act sleep "nothing" 2>&1) && fail "an unknown act kind was accepted: $out"
+  out=$(AC_NOW=2026-10-04T09:00:00Z ac "$home" act drain "late" 2>&1) && fail "act against yesterday's line succeeded: $out"
+
+  home=$(make_home bind-green)
+  AC_NOW=2026-10-03T13:05:00Z ac "$home" check >/dev/null || fail "green check failed"
+  out=$(AC_NOW=2026-10-03T13:10:00Z ac "$home" act reallocate "x" 2>&1) && fail "act against a non-binding line succeeded: $out"
+  assert_contains "$out" "not binding" "a non-binding act refusal did not say why"
+
+  home=$(make_home bind-s11)
+  constraint_row "$home" finish
+  inflight_row "$home" other
+  steer "$home" finish 2026-10-03T09:00:00Z
+  steer "$home" other 2026-10-03T09:10:00Z
+  steer "$home" other 2026-10-03T09:20:00Z
+  steer "$home" other 2026-10-02T10:10:00Z
+  out=$(AC_NOW=2026-10-03T13:05:00Z ac "$home" check) || fail "S11 check failed"
+  assert_contains "$out" "BINDING (S11 red two windows running)" "S11 red on its own did not bind"
+  assert_contains "$out" "AMBER (S11):" "S11 alone changed the verdict"
+  pass "a binding line wakes once per window, names its owed action, and act records it against that line"
+}
+
+test_br_items_without_a_backlog_row_are_flagged() {
+  local home mate out
   home=$(make_home beads)
   mkdir -p "$home/data/beads/.beads"
   : > "$home/data/beads/.beads/beads.db"
+  inflight_row "$home" mapped-row
   cat > "$home/fakebin/br" <<'SH'
 #!/usr/bin/env bash
-printf '%s\n' '{"total":9,"groups":[{"group":"open","count":7},{"group":"in_progress","count":2}]}'
+case " $* " in *" list "*) ;; *) exit 9 ;; esac
+case " $* " in *" create "*|*" update "*|*" close "*) exit 9 ;; esac
+printf '%s\n' '{"issues":[
+ {"id":"b-1","status":"open","labels":["mirror:mapped-row"]},
+ {"id":"b-2","status":"in_progress","labels":["row:gone-row"]},
+ {"id":"b-3","status":"open","labels":["ops"],"external_ref":"mapped-row"},
+ {"id":"b-4","status":"open","labels":[]}]}'
 SH
   chmod +x "$home/fakebin/br"
   out=$(ac "$home" scan) || fail "scan failed: $out"
-  assert_contains "$out" "not seen: br crew queue 7 open, 2 in_progress units" "the br crew queue was not named as a blind spot"
+  assert_contains "$out" "br-xcheck home 2/4 br-only (b-2, b-4) (info) [amber]" "br items with no open backlog row were not flagged"
+  assert_contains "$out" "not seen: br crew queue 3 open, 1 in_progress units" "the br crew queue was not named as a blind spot"
+  assert_contains "$out" "GREEN:" "the informational cross-check moved the verdict"
+
+  mate=$(make_home beads-mate)
+  mkdir -p "$mate/data/beads/.beads"
+  : > "$mate/data/beads/.beads/beads.db"
+  inflight_row "$mate" gone-row
+  printf -- '- mate1 - a mate (home: %s; scope: ops; projects: x; added 2026-10-01)\n' "$mate" > "$home/data/secondmates.md"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_contains "$out" "mate1 3/4 br-only (b-1, b-3, b-4)" "a secondmate's br queue was not matched against its own backlog"
+
   cat > "$home/fakebin/br" <<'SH'
 #!/usr/bin/env bash
 sleep 30
 SH
   out=$(FM_ATTENTION_BR_TIMEOUT=1 ac "$home" scan) || fail "scan failed: $out"
   assert_contains "$out" "not seen: br crew queue unreadable units" "a hung br call was not bounded"
+  assert_contains "$out" "home br unreadable" "an unreadable br queue was not named in the cross-check"
   home=$(make_home no-beads)
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_not_contains "$out" "not seen" "a home without a br queue named a blind spot"
-  pass "a home with a br crew queue names its units as not seen instead of guessing"
+  assert_not_contains "$out" "br-xcheck" "a home without a br queue ran the cross-check"
+  pass "br items with no open backlog row in their own home are flagged on the line, read-only and bounded"
 }
-
 test_decision_count_and_longest_wait_thresholds
 test_three_open_at_once_threshold
 test_sampled_decision_keeps_its_wait_after_it_closes
@@ -442,4 +503,5 @@ test_release_sequencing_steers_are_informational
 test_verdict_counts_red_signals
 test_scan_writes_nothing
 test_daily_check_runs_once_after_1300_and_wakes_only_on_red
-test_beads_crew_queue_is_named_as_not_seen
+test_binding_line_wakes_once_and_records_the_action
+test_br_items_without_a_backlog_row_are_flagged
