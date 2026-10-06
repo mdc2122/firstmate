@@ -781,6 +781,16 @@ _fm_recovery_marker_begin_handling() {
   fi
   case "$line" in
     pending:handling:*|announced:handling:*) ;;
+    acked:*)
+      # A generation-bound confirmation that arrives after a drain already
+      # presented and acknowledged this exact episode has nothing left to begin:
+      # the handling it would open is complete, so it is not a rejection. With
+      # no expected generation an acknowledged marker still refuses, as before.
+      if [ -z "$expected_generation" ]; then
+        fm_lock_release "$lock"
+        return 1
+      fi
+      ;;
     pending:downtime:*)
       if ! _fm_recovery_marker_write_locked "$marker" handling "$generation"; then
         fm_lock_release "$lock"

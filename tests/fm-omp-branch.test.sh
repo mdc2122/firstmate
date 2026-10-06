@@ -788,4 +788,87 @@ test_watcher_offers_branch_first_and_falls_back_to_main() {
   pass "the omp watcher offers wakes to the branch first under on, falls back to main on rejection or decline, and shadows after main under report-only"
 }
 
+# The omp primary on 2026-10-05: with the branch on, every accepted wake held
+# the delivery pipeline until the branch's turn settled (minutes), and a watcher
+# close arriving meanwhile waited behind it with no successor, so the home ran
+# with no live watcher for the rest of that branch turn ("TURN WOULD END BLIND",
+# "WATCHER DOWN", beats 21-157s stale). The second close must start its
+# successor while the first wake's branch settlement is still pending, and the
+# pipeline must later reuse that child rather than start a duplicate.
+test_watcher_successor_does_not_wait_for_branch_settlement() {
+  local name repo home out
+  name="watch-settlement-successor"
+  repo="$TMP_ROOT/$name/repo"
+  home="$TMP_ROOT/$name/home"
+  install_omp_watch_fixture "$repo"
+  # Arm 1 closes with wake 7; arm 2 (wake 7's successor) closes with wake 8
+  # a second later; every later arm stays up.
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --handling-delivered ] && exit 0
+printf 'arm\n' >> "${FM_HOME:?}/state/.e2e-arms"
+n=$(grep -c . "$FM_HOME/state/.e2e-arms")
+printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-1\n' "$$"
+if [ "$n" -le 2 ]; then
+  sleep 1
+  seq=$((n + 6))
+  printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
+  printf '1700000000\t%s\tsignal\ttask-1.status\tsignal: task-1 wake %s\n' "$seq" "$seq" >> "$FM_HOME/state/.wake-queue"
+  printf 'signal: task-1 wake %s\n' "$seq"
+  exit 0
+fi
+sleep 30
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  mkdir -p "$home/state" "$home/config"
+  printf 'on\n' > "$home/config/omp-supervision-branch"
+  printf 'project=x\nharness=omp\n' > "$home/state/task-1.meta"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+const { pathToFileURL } = await import("node:url");
+const { writeFileSync, readFileSync } = await import("node:fs");
+const home = process.env.FM_HOME;
+writeFileSync(`${home}/state/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const listeners = new Map(); let tool = null; const sent = [];
+const pi = {
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool(t) { tool = t; },
+  sendUserMessage(m) { sent.push(m); },
+  events: { on(c, h) { listeners.set(c, h); }, emit(c, d) { listeners.get(c)?.(d); } },
+};
+// The branch takes the first wake and holds its turn open; later offers
+// are declined so main receives them.
+let release = () => {};
+let offers = 0;
+pi.events.on("fm-branch-supervision:dispatch", (offer) => {
+  offers += 1;
+  if (offers === 1) offer.accept(new Promise((resolve) => { release = resolve; }));
+});
+const arms = () => readFileSync(`${home}/state/.e2e-arms`, "utf8").trim().split("\n").length;
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default(pi);
+await tool.execute();
+// Arm 1 closes at ~1s (wake 7 goes to the branch, which holds it); its
+// successor arm 2 closes at ~2s with wake 8 while the branch turn is open.
+await new Promise((r) => setTimeout(r, 3500));
+const duringBranchTurn = arms();
+release();
+await new Promise((r) => setTimeout(r, 2500));
+const afterSettlement = arms();
+const wake8 = sent.filter((m) => m.includes("signal: task-1 wake 8")).length;
+process.stdout.write(`during=${duringBranchTurn} after=${afterSettlement} wake8=${wake8} offers=${offers}`);
+process.exit(0);
+EOF
+)
+  case "$out" in
+    "during=3 after=3 wake8=1 offers=2") ;;
+    *) fail "a watcher close during a pending branch turn must start its successor at once, reuse it after the settlement, and still deliver the wake: $out" ;;
+  esac
+  pass "the omp watcher starts a close's successor while an earlier wake's branch turn is still settling, without a duplicate"
+}
+
+test_watcher_successor_does_not_wait_for_branch_settlement
+
 test_watcher_offers_branch_first_and_falls_back_to_main

@@ -855,6 +855,104 @@ EOF
   pass ".omp watch extension: an in-process helper session's start and shutdown leave the owner armed and are logged as inert; a genuine replacement still takes over"
 }
 
+# The omp primary on 2026-10-05: a nested omp the session ran from its own
+# home (fm-spawn's `omp models --json` probe at every omp dispatch) auto-loaded
+# both tracked extensions, walked up to the lock-owning session, and rewrote
+# both loaded-build markers with its own short-lived pid. That broke
+# fm_omp_extension_owns_supervision, so every ordinary watcher hand-off read
+# as "WATCHER DOWN". A descendant of the lock owner must leave the session's
+# markers alone, while the lock owner itself still records them.
+test_nested_omp_process_keeps_the_session_markers() {
+  local repo home out
+  repo="$TMP_ROOT/nested-markers/repo"; home="$TMP_ROOT/nested-markers/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  printf '#!/usr/bin/env bash\nsleep 30\n' > "$repo/bin/fm-watch-arm.sh"
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  # shellcheck disable=SC2016 # expanded by the inner bash, which stands in for the session
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" REPO="$repo" LIB="$ROOT/bin/fm-wake-lib.sh" bash -c '
+    . "$LIB"
+    state=$FM_HOME/state
+    printf "%s\n" "$$" > "$state/.lock"
+    for pair in fm-primary-omp-watch.ts:.omp-watch-extension-loaded fm-primary-turnend-guard.ts:.omp-turnend-extension-loaded; do
+      printf "%s\n%s\n" "$(fm_pi_extension_version "$REPO/.omp/extensions/${pair%%:*}")" "$$" > "$state/${pair#*:}"
+    done
+    fm_omp_extension_owns_supervision "$state" "$REPO" || { echo "fixture proof did not hold"; exit 1; }
+    # A nested process under the session loads both extensions, as omp does.
+    node --input-type=module -e "
+      const { pathToFileURL } = await import(\"node:url\");
+      const pi = { on() {}, registerCommand() {}, registerTool() {}, sendUserMessage() {} };
+      for (const f of [\"fm-primary-omp-watch.ts\", \"fm-primary-turnend-guard.ts\"]) {
+        (await import(pathToFileURL(process.env.REPO + \"/.omp/extensions/\" + f).href)).default(pi);
+      }
+      process.exit(0);
+    " || { echo "nested load failed"; exit 1; }
+    fm_omp_extension_owns_supervision "$state" "$REPO" && echo nested-kept || echo "nested-clobbered: $(sed -n 2p "$state/.omp-watch-extension-loaded") $(sed -n 2p "$state/.omp-turnend-extension-loaded") lock=$$"
+  ' 2>&1)
+  [ "$out" = nested-kept ] || fail "a nested omp process under the lock owner must not rewrite the session's markers: $out"
+  pass ".omp extensions: a nested omp process under the lock-owning session leaves its loaded-build markers and ownership proof intact"
+}
+
+# A nested omp under the session also fires session_start and exposes
+# fm_watch_arm_omp; through an ancestor walk either one would start
+# fm-watch-arm.sh --restart, replacing the session's watcher with one parented
+# to the short-lived nested process. Only the lock-holding process may arm.
+test_nested_omp_process_never_arms() {
+  local repo home out launches
+  repo="$TMP_ROOT/nested-arm/repo"; home="$TMP_ROOT/nested-arm/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$PPID" >> "${FM_HOME:?}/state/.arm-launches"
+printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-1\n' "$$"
+sleep 30
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  # shellcheck disable=SC2016 # expanded by the inner bash, which stands in for the session
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" bash -c '
+    printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+    node --input-type=module -e "
+      const { pathToFileURL } = await import(\"node:url\");
+      const { readFileSync } = await import(\"node:fs\");
+      const lockPid = readFileSync(process.env.FM_HOME + \"/state/.lock\", \"utf8\").trim();
+      if (lockPid === String(process.pid)) { console.log(\"not nested: node holds the lock pid \" + lockPid); process.exit(1); }
+      const handlers = new Map(); let tool = null;
+      const pi = { on(e, h) { handlers.set(e, h); }, registerCommand() {}, registerTool(t) { tool = t; }, sendUserMessage() {} };
+      (await import(pathToFileURL(process.env.EXT).href)).default(pi);
+      await handlers.get(\"session_start\")({}, {});
+      console.log((await tool.execute()).content[0].text);
+      await handlers.get(\"session_shutdown\")({}, {});
+      process.exit(0);
+    " || exit 1
+    exit 0
+  ' 2>&1)
+  [ "$out" = "watcher: read-only - session lock is held by another firstmate session" ] \
+    || fail "a nested omp process under the lock owner must refuse to arm: $out"
+  [ ! -e "$home/state/.arm-launches" ] || fail "a nested omp process started an arm child: $(cat "$home/state/.arm-launches")"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const handlers = new Map();
+const pi = { on(e, h) { handlers.set(e, h); }, registerCommand() {}, registerTool() {}, sendUserMessage() {} };
+(await import(pathToFileURL(process.env.EXT).href)).default(pi);
+await handlers.get("session_start")({}, {});
+for (let i = 0; i < 150 && !existsSync(`${process.env.FM_HOME}/state/.arm-launches`); i += 1) await new Promise((r) => setTimeout(r, 20));
+const launches = readFileSync(`${process.env.FM_HOME}/state/.arm-launches`, "utf8").trim().split("\n");
+if (launches.length !== 1 || launches[0] !== String(process.pid)) throw new Error(`the lock owner did not arm exactly once: ${launches}`);
+await handlers.get("session_shutdown")({}, {});
+process.exit(0);
+EOF
+)
+  [ -z "$out" ] || fail "the lock-owning omp process did not arm on session_start: $out"
+  launches=$(wc -l < "$home/state/.arm-launches" | tr -d ' ')
+  [ "$launches" = 1 ] || fail "expected one arm launch from the lock owner, saw $launches"
+  pass ".omp watch extension: a nested omp process under the lock-owning session never starts an arm child, while the lock owner arms"
+}
+
 # One restart round of the replacement-handoff replay contract against the real
 # extension: session 1 receives one actionable close per <wakes> entry, each
 # after its watcher queued the durable row under the shared pending recovery
@@ -989,6 +1087,8 @@ test_ownership_proof_is_omp_keyed
 test_turnend_guard_extension_compels_one_continuation
 test_watch_extension_arms_and_delivers
 test_watch_extension_helper_session_leaves_owner_live
+test_nested_omp_process_keeps_the_session_markers
+test_nested_omp_process_never_arms
 test_watch_extension_restart_skips_acknowledged_handoff
 test_watch_extension_restart_replays_unacknowledged_handoff_once
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation
