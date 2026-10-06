@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# fm-stow-trigger.sh - context-volume /stow trigger for a firstmate primary.
+#
+# A busy session fills its context window and compacts long before a
+# time-based stow reminder comes due, so knowledge held only in conversation can
+# be condensed away before a /stow captures it. The omp and Pi primary turn-end
+# guard extensions (.omp/extensions/fm-primary-turnend-guard.ts,
+# .pi/extensions/fm-primary-turnend-guard.ts) report context usage here, only
+# from the fleet-lock holder, and this script queues ONE ordinary durable
+# `check` wake (key stow-due) per context cycle so the stow runs as a normal
+# firstmate turn. It never runs the stow and never touches compaction.
+#
+# Usage:
+#   fm-stow-trigger.sh context <percent>       agent loop ended at <percent> usage
+#   fm-stow-trigger.sh compacting [<percent>]  the harness is about to compact
+#   fm-stow-trigger.sh cycle                   a new context cycle began
+#                                              (compaction finished, or a session started)
+#   fm-stow-trigger.sh threshold               print the effective threshold
+#   fm-stow-trigger.sh --help
+#
+# Threshold: config/stow-context-threshold holds one whole number 1-100 (local,
+# gitignored); absent or invalid means 70. docs/configuration.md documents it.
+#
+# Latch, one wake per context cycle. A cycle starts at the first report after
+# install, at every `cycle`, and never otherwise. state/.stow-trigger records
+#   cycle=<epoch>  when the current cycle started
+#   above=<epoch>  when usage was first seen at or above the threshold this cycle (0: not yet)
+#   fired=<epoch>  when this cycle's wake was queued (0: not yet)
+# and the stow marker is state/.last-stow, which the /stow skill touches after
+# every completed pass.
+#   context:    wakes when <percent> >= threshold, nothing fired this cycle, and
+#               no stow completed since usage first reached the threshold. A
+#               stow below the threshold (the daily floor on a quiet morning)
+#               does not cover the later busy part of the cycle; a stow at or
+#               above it does, so usage that stays high never re-wakes.
+#   compacting: wakes when nothing fired this cycle and no stow completed since
+#               the cycle started, whatever the usage.
+# The wake row is appended before the record is written, so a failed append is
+# retried at the next report rather than suppressed; an identical stow-due row
+# still queued is not appended twice. Prints the wake reason when it wakes,
+# nothing otherwise.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+RECORD="$STATE/.stow-trigger"
+RECORD_SCHEMA=fm-stow-trigger-v1
+STOW_MARKER="$STATE/.last-stow"
+DEFAULT_THRESHOLD=70
+
+usage() {
+  sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'
+}
+
+die() { printf 'fm-stow-trigger: %s\n' "$1" >&2; exit "${2:-1}"; }
+
+threshold() {
+  local v=''
+  [ -f "$CONFIG/stow-context-threshold" ] && read -r v < "$CONFIG/stow-context-threshold" 2>/dev/null
+  v=${v//[[:space:]]/}
+  case "$v" in ''|*[!0-9]*) printf '%s\n' "$DEFAULT_THRESHOLD"; return ;; esac
+  v=$((10#$v))
+  if [ "$v" -ge 1 ] && [ "$v" -le 100 ]; then printf '%s\n' "$v"; else printf '%s\n' "$DEFAULT_THRESHOLD"; fi
+}
+
+whole_percent() {  # <raw> -> whole number, or fail
+  local p=${1%%.*}
+  case "$p" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$((10#$p))"
+}
+
+REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0
+record_read() {
+  local line key value
+  REC_CYCLE=0 REC_ABOVE=0 REC_FIRED=0
+  [ -f "$RECORD" ] || return 1
+  { read -r line && [ "$line" = "$RECORD_SCHEMA" ]; } < "$RECORD" || return 1
+  while IFS='=' read -r key value; do
+    case "$value" in ''|*[!0-9]*) continue ;; esac
+    case "$key" in
+      cycle) REC_CYCLE=$value ;;
+      above) REC_ABOVE=$value ;;
+      fired) REC_FIRED=$value ;;
+    esac
+  done < "$RECORD"
+  [ "$REC_CYCLE" -gt 0 ]
+}
+
+record_write() {  # <cycle> <above> <fired>
+  local tmp
+  tmp=$(mktemp "$RECORD.XXXXXX" 2>/dev/null) || return 1
+  if ! printf '%s\ncycle=%s\nabove=%s\nfired=%s\n' "$RECORD_SCHEMA" "$1" "$2" "$3" > "$tmp" \
+    || ! mv -f -- "$tmp" "$RECORD"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+}
+
+stowed_since() {  # <epoch>: 0 when state/.last-stow is at or after <epoch>
+  local m
+  [ -f "$STOW_MARKER" ] || return 1
+  m=$(fm_path_mtime "$STOW_MARKER") || return 1
+  [ "$m" -ge "$1" ]
+}
+
+queue_wake() {  # <reason>
+  local status=0
+  fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"
+  if ! fm_wake_queued_keys_locked check | grep -Fx stow-due >/dev/null; then
+    fm_wake_append_locked check stow-due "$1" || status=$?
+  fi
+  fm_lock_release "$FM_WAKE_QUEUE_LOCK"
+  return "$status"
+}
+
+# Runs under the trigger lock.
+decide() {  # <action> [<percent>]
+  local action=$1 raw=${2:-} percent='' limit now cycle above fired reason
+  limit=$(threshold)
+  now=$(date +%s)
+  if [ -n "$raw" ]; then
+    percent=$(whole_percent "$raw") || die "invalid percent: $raw" 2
+  fi
+  record_read || REC_CYCLE=$now
+  cycle=$REC_CYCLE above=$REC_ABOVE fired=$REC_FIRED
+
+  case "$action" in
+    cycle)
+      record_write "$now" 0 0 || die "could not write $RECORD"
+      return 0
+      ;;
+    context)
+      [ -n "$percent" ] || die "context needs a percent" 2
+      if [ "$percent" -lt "$limit" ]; then
+        [ -f "$RECORD" ] || record_write "$cycle" "$above" "$fired" || true
+        return 0
+      fi
+      [ "$above" -gt 0 ] || above=$now
+      if [ "$fired" -gt 0 ] || stowed_since "$above"; then
+        record_write "$cycle" "$above" "$fired" || true
+        return 0
+      fi
+      reason="check: stow-due: context ${percent}% (threshold ${limit}%) - run the /stow pass before compaction condenses this session"
+      ;;
+    compacting)
+      if [ "$fired" -gt 0 ] || stowed_since "$cycle"; then
+        [ -f "$RECORD" ] || record_write "$cycle" "$above" "$fired" || true
+        return 0
+      fi
+      reason="check: stow-due: context ${percent:-?}% at compaction - run the /stow pass; knowledge this session held only in conversation may already be condensed"
+      ;;
+  esac
+  queue_wake "$reason" || die "could not queue the stow-due wake; it is retried at the next report"
+  record_write "$cycle" "$above" "$now" || true
+  printf '%s\n' "$reason"
+}
+
+case "${1:-}" in
+  context|compacting|cycle) ;;
+  threshold) threshold; exit 0 ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
+TRIGGER_LOCK="$STATE/.stow-trigger.lock"
+fm_lock_acquire_wait "$TRIGGER_LOCK"
+rc=0
+( decide "$@" ) || rc=$?
+fm_lock_release "$TRIGGER_LOCK"
+exit "$rc"
