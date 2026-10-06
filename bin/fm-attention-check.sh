@@ -65,9 +65,13 @@
 # parent home, or is closed. This home's queue is matched against this home's
 # backlog and its parent's - itself in the primary home, the local home named
 # by .fm-secondmate-parent in a secondmate home - and each local secondmate's
-# queue against that secondmate's backlog and this home's. The informational `br-xcheck` segment reports
-# "<home> <n>/<total> br-only (<ids>)" per queue, amber when any item has no
-# row and unknown when a queue or a backlog cannot be read; it never moves the
+# queue against that secondmate's backlog and this home's. The informational
+# `br-xcheck` segment reports "<home> <n>/<total> br-only (<ids>)" per queue,
+# amber when any item has no row and unknown when a queue or its own backlog
+# cannot be read. When only the parent backlog cannot be read (a remote parent
+# route, say), the queue is still matched against its own backlog and the part
+# ends ", parent not checked", rated at least unknown, so only an item
+# mirroring a parent row can be a false br-only there. It never moves the
 # verdict. This home's own queue is also named as "not seen" with its per-status
 # counts, because S8 and S11 read only backlog rows, task records, and steering
 # inboxes, and br crews have none.
@@ -553,7 +557,7 @@ br_only() {  # <items-json> <backlog-json> <parent-backlog-json>
 # against its own home's backlog and its parent's. Read-only throughout.
 BR_NOT_SEEN=
 signal_br_shadow() {
-  local parts='' rating=green label db home items backlog parent n total ids line
+  local parts='' rating=green label db home items backlog parent note n total ids line
   command -v br >/dev/null 2>&1 || return 0
   while IFS=$'\t' read -r label home; do
     [ -n "$home" ] || continue
@@ -575,8 +579,13 @@ signal_br_shadow() {
       backlog=$(home_backlog "$home") || backlog=
       parent=$BACKLOG_JSON
     fi
-    if [ -z "$backlog" ] || [ -z "$parent" ] \
-      || ! line=$(br_only "$items" "$backlog" "$parent"); then
+    note=
+    if [ -z "$parent" ]; then
+      parent=$backlog
+      note=', parent not checked'
+      [ "$rating" = amber ] || rating=unknown
+    fi
+    if [ -z "$backlog" ] || ! line=$(br_only "$items" "$backlog" "$parent"); then
       parts="$parts${parts:+; }$label backlog unreadable"
       [ "$rating" = amber ] || rating=unknown
       continue
@@ -585,7 +594,7 @@ signal_br_shadow() {
 $line
 EOF
     [ "$n" -eq 0 ] || rating=amber
-    parts="$parts${parts:+; }$label $n/$total br-only${ids:+ ($(names_capped "$(printf '%s' "$ids" | tr ',' '\n')"))}"
+    parts="$parts${parts:+; }$label $n/$total br-only${ids:+ ($(names_capped "$(printf '%s' "$ids" | tr ',' '\n')"))}$note"
   done <<EOF
 $(br_queue_homes)
 EOF

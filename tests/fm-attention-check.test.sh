@@ -491,7 +491,7 @@ SH
   assert_contains "$out" "br-xcheck home 3/6 br-only (b-3, b-4, b-5)" "a secondmate's own check did not match its br queue against its parent home's backlog"
   printf 'schema=fm-secondmate-parent.v1\nroute=remote\n' > "$mate/.fm-secondmate-parent"
   out=$(ac "$mate" scan) || fail "scan failed: $out"
-  assert_contains "$out" "br-xcheck home backlog unreadable (info) [unknown]" "a secondmate whose parent backlog cannot be read did not say so"
+  assert_contains "$out" "br-xcheck home 5/6 br-only (b-1, b-3, b-4 +2), parent not checked (info) [amber]" "a secondmate with a remote parent did not match its br queue against its own backlog and say the parent was not checked"
 
   cat > "$home/fakebin/br" <<'SH'
 #!/usr/bin/env bash
