@@ -60,9 +60,23 @@
 // consumes at the user message_start carrying the exact wake text; either
 // event finishes the pending record, and a still-unconsumed record rides the
 // replacement handoff.
+//
+// One main follow-up in flight (stated once here):
+// omp queues every accepted follow-up while main is not running (a turn that
+// ended in a provider error leaves it parked until the next prompt) and then
+// replays the backlog one turn each, so wakes created hours earlier would each
+// cost a turn for workers already torn down. The extension therefore keeps at
+// most one main follow-up unconsumed in omp; a later actionable close is held,
+// still pending and still riding the replacement handoff. When a main run ends
+// with omp's queue empty (agent_end), each held close is re-judged oldest
+// first: one whose own wake row main has already acknowledged, or whose every
+// named task or endpoint no longer has state/<id>.meta, is dropped as
+// superseded (logged to state/.watch-triage.log); the first still-needed one
+// is sent. A follow-up omp dropped unconsumed rejoins the held closes there.
+// Unreadable state never supersedes a wake, and failure surfaces are never held.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
@@ -148,6 +162,9 @@ type SessionGeneration = {
   // replacement began reads it to tell a main-queued wake (replayed) from a
   // branch-handled one (finished).
   unconsumedWakes: Map<string, UnconsumedWake>;
+  // Actionable closes waiting behind the one main follow-up omp still holds,
+  // oldest first; the header's "One main follow-up in flight" owns the rule.
+  heldWakes: Map<string, UnconsumedWake>;
   // A verified successor's failure close that arrived while the pipeline was
   // still verifying the successor for an earlier close; its bounded retry runs
   // once that delivery settles instead of being skipped by the single-flight guard.
@@ -363,6 +380,79 @@ function actionableStillUnacknowledged(pending: PendingActionableClose): boolean
   }
 }
 
+// The task keys a wake names that the stale-check and signal scan derive from
+// state/<id>.meta (bin/fm-watch.sh recorded_windows and scan_signals): the
+// endpoint of a stale wake, the task ids of a signal wake's status and
+// turn-end files. Empty for every other wake, which never names a task.
+function wakeTaskKeys(message: string): string[] {
+  const line = actionableLine(message);
+  if (line.startsWith("stale:")) return line.slice("stale:".length).trim().split(/\s+/, 1).filter(Boolean);
+  if (!line.startsWith("signal:")) return [];
+  const keys: string[] = [];
+  for (const path of line.slice("signal:".length).trim().split(/\s+/)) {
+    const match = path.match(/(?:^|\/)([^/]+)\.(?:status|turn-ended)$/);
+    if (!match) return [];
+    keys.push(match[1]);
+  }
+  return keys;
+}
+
+// Every task id and recorded endpoint (orca terminal= or window=) in this
+// home's task metadata, or null when the state directory cannot be read.
+function recordedTaskKeys(): Set<string> | null {
+  const keys = new Set<string>();
+  try {
+    for (const name of readdirSync(state)) {
+      if (!name.endsWith(".meta")) continue;
+      keys.add(name.slice(0, -".meta".length));
+      for (const field of readFileSync(`${state}/${name}`, "utf8").split(/\r?\n/)) {
+        const match = field.match(/^(?:window|terminal)=(.+)$/);
+        if (match) keys.add(match[1]);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return keys;
+}
+
+// Why a held close no longer warrants a main turn, or "" when it still does:
+// main already acknowledged its own wake row (the queue row is the precise
+// signal here; the recovery generation the restart rule also compares moves
+// with every handling episode inside a live session), or every task it names
+// has been torn down. Unreadable state never supersedes a wake.
+function supersededReason(pending: PendingActionableClose): string {
+  if (pending.wakeQueueSeq !== undefined) {
+    let queue: string;
+    try {
+      queue = readOptional(wakeQueue);
+    } catch {
+      return "";
+    }
+    if (!queue.split("\n").some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq))) {
+      return `wake row ${pending.wakeQueueSeq} already acknowledged`;
+    }
+  }
+  const keys = wakeTaskKeys(pending.message);
+  if (keys.length === 0) return "";
+  const recorded = recordedTaskKeys();
+  if (!recorded || keys.some((key) => recorded.has(key))) return "";
+  return `no state/<id>.meta records ${keys.join(" ")}`;
+}
+
+// One line in the watcher's absorbed-wake debug log, in its timestamp format.
+function triageLog(line: string): void {
+  const now = new Date();
+  const pad = (value: number): string => String(Math.trunc(Math.abs(value))).padStart(2, "0");
+  const offset = -now.getTimezoneOffset();
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${offset < 0 ? "-" : "+"}${pad(offset / 60)}${pad(offset % 60)}`;
+  try {
+    appendFileSync(`${state}/.watch-triage.log`, `[${stamp}] ${line}\n`);
+  } catch {
+    // Debug evidence only; never blocks delivery.
+  }
+}
+
 function createPendingActionable(message: string, predecessorArmPid: string): PendingActionableClose {
   return {
     version: 1,
@@ -523,6 +613,7 @@ function createGeneration(): SessionGeneration {
     pendingActionables: [],
     cleanupFailure: "",
     unconsumedWakes: new Map(),
+    heldWakes: new Map(),
     deferredClose: null,
   };
 }
@@ -636,7 +727,15 @@ export default function (pi: ExtensionAPI) {
       ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
       : encodeFirstmateOperationalInput("watcher", body);
     if (!generationIsLive(owner)) return false;
-    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending });
+    if (pending) {
+      owner.unconsumedWakes.set(pending.token, { content, pending });
+      // Another main follow-up is still waiting in omp: hold this one so it
+      // is re-judged when that one is consumed instead of piling up behind it.
+      if ([...owner.unconsumedWakes.keys()].some((token) => token !== pending.token && !owner.heldWakes.has(token))) {
+        owner.heldWakes.set(pending.token, { content, pending });
+        return true;
+      }
+    }
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
     } catch (error) {
@@ -650,19 +749,48 @@ export default function (pi: ExtensionAPI) {
     return generationIsLive(owner);
   }
 
+  // Main finished a run with no follow-up left in omp: retire every held close
+  // main no longer needs, then send the oldest one it still does.
+  function releaseHeldWake(owner: SessionGeneration): void {
+    for (const [token, held] of owner.heldWakes) {
+      if (!generationIsLive(owner)) return;
+      owner.heldWakes.delete(token);
+      const reason = supersededReason(held.pending);
+      if (!reason) {
+        try {
+          pi.sendUserMessage(held.content, { deliverAs: "followUp" });
+        } catch (error) {
+          owner.unconsumedWakes.delete(token);
+          const detail = error instanceof Error ? error.message : String(error);
+          surfaceFailure(owner, `${held.pending.message}\n\nwatcher: FAILED - omp extension could not deliver a held actionable wake\n${detail}`);
+          settleConsumedWake(owner, held.pending);
+          continue;
+        }
+        return;
+      }
+      owner.unconsumedWakes.delete(token);
+      triageLog(`omp extension dropped superseded wake (${reason}): ${actionableLine(held.pending.message)}`);
+      settleConsumedWake(owner, held.pending);
+    }
+  }
+
+  function settleConsumedWake(owner: SessionGeneration, pending: PendingActionableClose): void {
+    pending.delivered = true;
+    try {
+      finishPendingActionable(owner, pending);
+    } catch (error) {
+      surfaceCleanupFailure(owner, error);
+      schedulePendingCleanup(owner);
+    }
+  }
+
   // omp consumed a main follow-up: an idle main at before_agent_start, a
   // streaming main at the user message_start that joins the running run.
   function consumeWake(owner: SessionGeneration, text: string): void {
     for (const [token, wake] of owner.unconsumedWakes) {
-      if (wake.content !== text) continue;
+      if (wake.content !== text || owner.heldWakes.has(token)) continue;
       owner.unconsumedWakes.delete(token);
-      wake.pending.delivered = true;
-      try {
-        finishPendingActionable(owner, wake.pending);
-      } catch (error) {
-        surfaceCleanupFailure(owner, error);
-        schedulePendingCleanup(owner);
-      }
+      settleConsumedWake(owner, wake.pending);
       return;
     }
   }
@@ -1234,6 +1362,20 @@ export default function (pi: ExtensionAPI) {
     const message = (event as { message?: { role?: unknown; content?: unknown } })?.message;
     if (!message || message.role !== "user") return;
     consumeWake(generation, userMessageText(message.content));
+  });
+  // A main run ended with nothing left in omp's queue: the turn that consumed
+  // the in-flight follow-up is over, so re-judge and release the held closes.
+  // A follow-up still unconsumed here was dropped by omp (an interrupt clears
+  // queued follow-ups); it rejoins the head of the held closes so one lost
+  // follow-up can never hold every later wake.
+  pi.on?.("agent_end", (event, ctx) => {
+    if (ctx?.agent?.kind === "sub") return;
+    if (event && typeof event === "object" && "willContinue" in event && event.willContinue === true) return;
+    if (typeof ctx?.hasPendingMessages !== "function" || ctx.hasPendingMessages()) return;
+    const owner = generation;
+    const lost = [...owner.unconsumedWakes].filter(([token]) => !owner.heldWakes.has(token));
+    if (lost.length > 0) owner.heldWakes = new Map([...lost, ...owner.heldWakes]);
+    releaseHeldWake(owner);
   });
 
   pi.on?.("session_start", async () => {

@@ -31,8 +31,9 @@
 #      a plain agent_end is idle, turn_end is a notification only.
 #   6. The turn-end guard extension compels one continuation on exit 2 and
 #      stands down when the payload already carries stop_hook_active.
-#   7. The watch extension arms through fm_watch_arm_omp and delivers an
-#      actionable close as one follow-up.
+#   7. The watch extension arms through fm_watch_arm_omp, delivers an
+#      actionable close as one follow-up, keeps one main follow-up in flight,
+#      and drops held closes main already acknowledged or whose tasks are gone.
 set -u
 
 # shellcheck source=tests/fixtures.sh
@@ -996,8 +997,9 @@ SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
   cat > "$dir/session.mjs" <<'EOF'
 import { pathToFileURL } from "node:url";
-import { writeFileSync } from "node:fs";
-writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const state = `${process.env.FM_HOME}/state`;
+writeFileSync(`${state}/.lock`, `${process.pid}\n`);
 const handlers = new Map(); const sent = [];
 const mod = await import(pathToFileURL(process.env.EXT).href);
 mod.default({
@@ -1007,17 +1009,27 @@ mod.default({
   sendUserMessage(m) { sent.push(m); return undefined; },
 });
 await handlers.get("session_start")({}, {});
-// Wait until EXPECT wakes arrived (a slow host must not drop a late re-arm),
-// or WAIT_MS elapsed when asserting that nothing more arrives.
-const delivered = () => sent.filter((m) => /signal: omp-replay [AB] done/.test(m));
+// Wait until the watcher closed all EXPECT planned wakes (a slow host must not
+// drop a late re-arm), or WAIT_MS elapsed when asserting nothing more arrives.
+// A close after the first is held behind the unconsumed first follow-up, so
+// completion is read from the plan the arm fixture drains, not from sends.
+const planDrained = () => readFileSync(`${state}/.e2e-plan`, "utf8") === "" &&
+  (existsSync(`${state}/.wake-queue`) ? readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean).length : 0) >= Number(process.env.EXPECT);
 const deadline = Date.now() + Number(process.env.WAIT_MS);
-while (Date.now() < deadline && !(Number(process.env.EXPECT) > 0 && delivered().length >= Number(process.env.EXPECT))) {
+while (Date.now() < deadline && !(Number(process.env.EXPECT) > 0 && planDrained())) {
   await new Promise((r) => setTimeout(r, 50));
 }
-const wakes = delivered();
+if (Number(process.env.EXPECT) > 0) await new Promise((r) => setTimeout(r, 500));
+const delivered = () => sent.filter((m) => /signal: omp-replay [AB] done/.test(m));
 if (process.env.CONSUME === "1") {
-  for (const m of wakes) await handlers.get("before_agent_start")({ prompt: m }, {});
+  // Consume each wake as its own main run; an idle run end releases the next held one.
+  const ctx = { hasPendingMessages: () => false };
+  for (let consumed = 0; consumed < delivered().length; consumed += 1) {
+    await handlers.get("before_agent_start")({ prompt: delivered()[consumed] }, ctx);
+    await handlers.get("agent_end")({ type: "agent_end" }, ctx);
+  }
 }
+const wakes = delivered();
 await handlers.get("session_shutdown")({}, {});
 const count = (label) => wakes.filter((m) => m.includes(`omp-replay ${label} done`)).length;
 process.stdout.write(`${count("A")},${count("B")}`);
@@ -1062,12 +1074,148 @@ test_watch_extension_restart_replays_unacknowledged_handoff_once() {
 
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation() {
   run_omp_restart_replay "$TMP_ROOT/watch-replay-shared-generation" 7 "7:A 8:B"
-  [ "$OMP_REPLAY_FIRST" = 1,1 ] || fail "session 1 must deliver both closes once before the restart, got '$OMP_REPLAY_FIRST'"
-  [ "$OMP_REPLAY_HANDOFF" = present ] || fail "unconsumed closes must ride the replacement handoff across shutdown"
+  # B is held behind the unconsumed A, never sent to omp, and still rides the handoff.
+  [ "$OMP_REPLAY_FIRST" = 1,0 ] || fail "session 1 must deliver A once and hold B behind it before the restart, got '$OMP_REPLAY_FIRST'"
+  [ "$OMP_REPLAY_HANDOFF" = present ] || fail "unconsumed and held closes must ride the replacement handoff across shutdown"
   [ "$OMP_REPLAY_SECOND" = 0,1 ] || fail "after --ack-through 7 under a still-pending shared generation, only the close for row 8 may replay, saw '$OMP_REPLAY_SECOND'"
   [ "$OMP_REPLAY_THIRD" = 0,0 ] || fail "neither close may replay again on a later restart, saw '$OMP_REPLAY_THIRD'"
   [ "$OMP_REPLAY_LEFTOVER" = absent ] || fail "both closes must be retired from the handoff file"
   pass ".omp watch extension: closes sharing one pending recovery generation replay per wake, so acknowledging row 7 replays only row 8"
+}
+
+# The 2026-10-05 ghost-wake shape: main is not consuming (a turn ended in a
+# provider error), the watcher keeps closing, and omp would replay every queued
+# follow-up hours later, including stale wakes for torn-down workers. Four
+# closes arrive while the first follow-up is unconsumed: A (a check, never
+# superseded), B (a signal whose wake row main acknowledges meanwhile), C (a
+# stale wake for a terminal no state/<id>.meta records any more) and D (a stale
+# wake for a still-recorded terminal). Only A reaches omp at first; when main's
+# run ends with omp's queue empty, B and C are dropped as superseded and D, the
+# oldest still-needed close, is sent.
+test_watch_extension_holds_and_supersedes_parked_wakes() {
+  local dir repo home out status
+  dir="$TMP_ROOT/watch-held"; repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  fm_write_meta "$home/state/live.meta" "window=fm-live" "endpoint_task_id=live" "terminal=term_live" "backend=orca" "kind=ship"
+  printf '7\tcheck: omp-held A ready\n8\tsignal: %s/state/btask.status\n9\tstale: term_gone (idle 300s, possible wedge, escalation 6)\n10\tstale: term_live (idle 300s, possible wedge, escalation 1)\n' \
+    "$home" > "$home/state/.e2e-plan"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --handling-delivered ] && exit 0
+printf 'watcher: started pid=%s (beacon 0s) recovery-generation=gen-H\n' "$$"
+plan="${FM_HOME:?}/state/.e2e-plan"
+next=$(head -n 1 "$plan")
+if [ -n "$next" ]; then
+  tail -n +2 "$plan" > "$plan.tmp" && mv "$plan.tmp" "$plan"
+  sleep 1
+  seq=${next%%$'\t'*}; reason=${next#*$'\t'}
+  printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
+  printf '1700000000\t%s\tstale\tkey%s\t%s\n' "$seq" "$seq" "$reason" >> "$FM_HOME/state/.wake-queue"
+  printf '%s\n' "$reason"
+  exit 0
+fi
+sleep 30
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const state = `${process.env.FM_HOME}/state`;
+writeFileSync(`${state}/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m) { sent.push(m); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+const rows = () => (existsSync(`${state}/.wake-queue`) ? readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean) : []);
+const deadline = Date.now() + 30000;
+while (Date.now() < deadline && !(rows().length >= 4 && readFileSync(`${state}/.e2e-plan`, "utf8") === "")) {
+  await new Promise((r) => setTimeout(r, 50));
+}
+await new Promise((r) => setTimeout(r, 500));
+const label = (m) => (m.match(/WAKE: (check: omp-held A|signal: \S+btask|stale: term_gone|stale: term_live)/) || [])[1] ?? m;
+if (sent.length !== 1 || !sent[0].includes("check: omp-held A ready")) throw new Error(`while A is unconsumed only A may reach omp, saw ${JSON.stringify(sent.map(label))}`);
+const handoff = `${state}/extensions/omp-primary-watch/session-replacement-actionable.json`;
+// Main handles and acknowledges row 8 (B) through some other path meanwhile.
+writeFileSync(`${state}/.wake-queue`, rows().filter((row) => row.split("\t")[1] !== "8").map((row) => `${row}\n`).join(""));
+const ctx = { hasPendingMessages: () => false };
+await handlers.get("before_agent_start")({ prompt: sent[0] }, ctx);
+await handlers.get("agent_end")({ type: "agent_end" }, ctx);
+if (sent.length !== 2 || !sent[1].includes("stale: term_live")) throw new Error(`after A's run only D may be sent, saw ${JSON.stringify(sent.map(label))}`);
+const triage = readFileSync(`${state}/.watch-triage.log`, "utf8");
+if (!/dropped superseded wake \(wake row 8 already acknowledged\): signal: /.test(triage)) throw new Error(`B was not logged as acknowledged: ${triage}`);
+if (!/dropped superseded wake \(no state\/<id>\.meta records term_gone\): stale: term_gone/.test(triage)) throw new Error(`C was not logged as torn down: ${triage}`);
+// A run that ends with D still queued in omp releases nothing more.
+await handlers.get("agent_end")({ type: "agent_end" }, { hasPendingMessages: () => true });
+if (sent.length !== 2) throw new Error(`a run ending with a queued follow-up released another wake: ${sent.length}`);
+await handlers.get("message_start")({ message: { role: "user", content: [{ type: "text", text: sent[1] }] } }, ctx);
+await handlers.get("agent_end")({ type: "agent_end" }, ctx);
+await handlers.get("session_shutdown")({}, {});
+if (existsSync(handoff)) throw new Error(`consumed and superseded wakes must not ride the replacement handoff: ${readFileSync(handoff, "utf8")}`);
+if (sent.length !== 2) throw new Error(`no further wake may be sent, saw ${sent.length}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp held-wake supersession: $out"
+  [ -z "$out" ] || fail "omp held-wake supersession test printed output: $out"
+  pass ".omp watch extension: wakes parked behind an unconsumed follow-up are dropped once acknowledged or torn down, and the next still-needed one is sent"
+}
+
+# A follow-up omp drops unconsumed (an interrupt clears queued follow-ups) must
+# not hold every later close: at the next idle run end it rejoins the held
+# closes ahead of them and is re-sent, while a close no longer needed is not.
+test_watch_extension_lost_follow_up_does_not_hold_later_wakes() {
+  local dir repo home out status
+  dir="$TMP_ROOT/watch-lost"; repo="$dir/repo"; home="$dir/home"
+  install_omp_extension_fixture "$repo"
+  mkdir -p "$home/state"
+  printf '7\tcheck: omp-lost A ready\n8\tcheck: omp-lost B ready\n' > "$home/state/.e2e-plan"
+  cp "$TMP_ROOT/watch-held/repo/bin/fm-watch-arm.sh" "$repo/bin/fm-watch-arm.sh"
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const state = `${process.env.FM_HOME}/state`;
+writeFileSync(`${state}/.lock`, `${process.pid}\n`);
+const handlers = new Map(); const sent = [];
+const mod = await import(pathToFileURL(process.env.EXT).href);
+mod.default({
+  on(e, h) { handlers.set(e, h); },
+  registerCommand() {},
+  registerTool() {},
+  sendUserMessage(m) { sent.push(m); return undefined; },
+});
+await handlers.get("session_start")({}, {});
+const rows = () => (existsSync(`${state}/.wake-queue`) ? readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean) : []);
+const deadline = Date.now() + 30000;
+while (Date.now() < deadline && !(rows().length >= 2 && readFileSync(`${state}/.e2e-plan`, "utf8") === "")) {
+  await new Promise((r) => setTimeout(r, 50));
+}
+await new Promise((r) => setTimeout(r, 500));
+if (sent.length !== 1 || !sent[0].includes("omp-lost A")) throw new Error(`only A may be in flight, saw ${sent.length}`);
+// omp dropped A without consuming it; the run ends with an empty queue.
+const ctx = { hasPendingMessages: () => false };
+await handlers.get("agent_end")({ type: "agent_end" }, ctx);
+if (sent.length !== 2 || !sent[1].includes("omp-lost A")) throw new Error(`the lost A was not re-sent ahead of B: ${JSON.stringify(sent)}`);
+await handlers.get("before_agent_start")({ prompt: sent[1] }, ctx);
+await handlers.get("agent_end")({ type: "agent_end" }, ctx);
+if (sent.length !== 3 || !sent[2].includes("omp-lost B")) throw new Error(`B was not released after A: ${JSON.stringify(sent)}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp lost follow-up recovery: $out"
+  [ -z "$out" ] || fail "omp lost follow-up test printed output: $out"
+  pass ".omp watch extension: a follow-up omp dropped unconsumed is re-sent at the next idle run end and never holds later wakes"
 }
 
 test_detection_anchored_name_and_marker_precedence
@@ -1092,3 +1240,5 @@ test_nested_omp_process_never_arms
 test_watch_extension_restart_skips_acknowledged_handoff
 test_watch_extension_restart_replays_unacknowledged_handoff_once
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation
+test_watch_extension_holds_and_supersedes_parked_wakes
+test_watch_extension_lost_follow_up_does_not_hold_later_wakes
