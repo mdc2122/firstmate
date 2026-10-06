@@ -1,0 +1,27 @@
+$ check @11:00Z (sample)
+  (exit 0)
+$ act drain "early" before any line (must refuse)
+fm-attention-check: no attention line is recorded for 2026-10-06; nothing to act against
+  (exit 1)
+$ check @13:05Z (forced RED)
+check: attention: BINDING (RED verdict) - act on it this turn: reallocate non-constraint steers toward the constraint or drain the open decisions, then record it with bin/fm-attention-check.sh act reallocate|drain "<what was done>"; attention 10-06 13:05Z RED (S1,S3): S1 decisions>30m 1 (2.1 wh, max 2h; sampled since 11:00Z) [red] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 3h) [red] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green]
+  (exit 0)
+$ check @16:00Z (must not wake again)
+  (exit 0)
+--- state/.wake-queue
+1791329010	1	check	attention	check: attention: BINDING (RED verdict) - act on it this turn: reallocate non-constraint steers toward the constraint or drain the open decisions, then record it with bin/fm-attention-check.sh act reallocate|drain "<what was done>"
+$ act drain "answered k1; unblocked PR 7"
+attention action recorded 2026-10-06T16:05:00Z: drain answered k1; unblocked PR 7
+  (exit 0)
+$ act sleep "nothing" (adversarial)
+fm-attention-check: act kind must be reallocate or drain: sleep
+  (exit 2)
+$ act drain "late" next day (adversarial)
+fm-attention-check: no attention line is recorded for 2026-10-07; nothing to act against
+  (exit 1)
+--- state/.attention-check
+fm-attention-check-v1
+reported=2026-10-06
+line=attention 10-06 13:05Z RED (S1,S3): S1 decisions>30m 1 (2.1 wh, max 2h; sampled since 11:00Z) [red] | S2 >=3 open 0m [green] | S3 green>30m 1 (o/r/pull/7 3h) [red] | S4 unreleased n/a (no prod-ta
+bound=RED verdict
+action=2026-10-06T16:05:00Z drain answered k1; unblocked PR 7

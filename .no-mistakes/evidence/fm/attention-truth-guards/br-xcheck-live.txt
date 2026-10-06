@@ -1,0 +1,3 @@
+$ FM_HOME=$H bin/fm-attention-check.sh scan   # real br 0.7.4, disposable home
+attention 10-06 14:00Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green] | br-xcheck home 2/3 br-only (beads-ctq, beads-nyv) (info) [amber] | not seen: br crew queue 1 deferred, 2 open units (S8/S11 read no br crews)
+beads.db unchanged by scan

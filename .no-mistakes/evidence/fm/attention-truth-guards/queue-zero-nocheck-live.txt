@@ -1,0 +1,6 @@
+$ FM_HOME=<disposable> bin/fm-queue-zero.sh scan --local   (today 2026-10-06)
+queue nocheck title-bakeoff-summary - bearings item mislabelled your-call [captain hold with no blocker and no --until date, aged 2d: owner: firstmate - queued behind other work]
+queue nocheck dispatch-revert-glm - firstmate work, lapsed captain date [captain hold with no blocker and a lapsed --until 2026-10-04: owner: firstmate - check after deploy]
+queue nocheck pick-region - genuine old captain call [captain hold with no blocker and no --until date, aged 3d: pick the region]
+queue ready dep - dependency [filed 2026-10-05]
+exit=0
