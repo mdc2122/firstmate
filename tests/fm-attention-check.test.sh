@@ -456,16 +456,23 @@ test_br_items_without_a_backlog_row_are_flagged() {
 #!/usr/bin/env bash
 case " $* " in *" list "*) ;; *) exit 9 ;; esac
 case " $* " in *" create "*|*" update "*|*" close "*) exit 9 ;; esac
-printf '%s\n' '{"issues":[
+filter='map(select(.status == "open" or .status == "in_progress"))'
+case " $* " in *" -s all "*) filter='.' ;; esac
+jq -c "{issues: (.issues | $filter)}" <<'JSON'
+{"issues":[
  {"id":"b-1","status":"open","labels":["mirror:mapped-row"]},
- {"id":"b-2","status":"in_progress","labels":["row:gone-row"]},
- {"id":"b-3","status":"open","labels":["ops"],"external_ref":"mapped-row"},
- {"id":"b-4","status":"open","labels":[]}]}'
+ {"id":"b-2","status":"in_progress","labels":["mirror:gone-row"]},
+ {"id":"b-3","status":"open","labels":["row:mapped-row"],"external_ref":"mapped-row"},
+ {"id":"b-4","status":"open","labels":[]},
+ {"id":"b-5","status":"deferred","labels":["ops"]},
+ {"id":"b-6","status":"blocked","labels":["mirror:mapped-row"]},
+ {"id":"b-7","status":"closed","labels":[]}]}
+JSON
 SH
   chmod +x "$home/fakebin/br"
   out=$(ac "$home" scan) || fail "scan failed: $out"
-  assert_contains "$out" "br-xcheck home 2/4 br-only (b-2, b-4) (info) [amber]" "br items with no open backlog row were not flagged"
-  assert_contains "$out" "not seen: br crew queue 3 open, 1 in_progress units" "the br crew queue was not named as a blind spot"
+  assert_contains "$out" "br-xcheck home 4/6 br-only (b-2, b-3, b-4 +1) (info) [amber]" "br items with no mirror: label naming an open backlog row were not flagged"
+  assert_contains "$out" "not seen: br crew queue 1 blocked, 1 deferred, 1 in_progress, 3 open units" "the br crew queue was not named as a blind spot with every non-closed status"
   assert_contains "$out" "GREEN:" "the informational cross-check moved the verdict"
 
   mate=$(make_home beads-mate)
@@ -474,7 +481,7 @@ SH
   inflight_row "$mate" gone-row
   printf -- '- mate1 - a mate (home: %s; scope: ops; projects: x; added 2026-10-01)\n' "$mate" > "$home/data/secondmates.md"
   out=$(ac "$home" scan) || fail "scan failed: $out"
-  assert_contains "$out" "mate1 3/4 br-only (b-1, b-3, b-4)" "a secondmate's br queue was not matched against its own backlog"
+  assert_contains "$out" "mate1 3/6 br-only (b-3, b-4, b-5)" "a secondmate's br queue was not matched against its own and the parent home's backlog"
 
   cat > "$home/fakebin/br" <<'SH'
 #!/usr/bin/env bash
@@ -487,7 +494,7 @@ SH
   out=$(ac "$home" scan) || fail "scan failed: $out"
   assert_not_contains "$out" "not seen" "a home without a br queue named a blind spot"
   assert_not_contains "$out" "br-xcheck" "a home without a br queue ran the cross-check"
-  pass "br items with no open backlog row in their own home are flagged on the line, read-only and bounded"
+  pass "non-closed br items with no mirror: row in their own or the parent home are flagged on the line, read-only and bounded"
 }
 test_decision_count_and_longest_wait_thresholds
 test_three_open_at_once_threshold

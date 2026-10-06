@@ -16,8 +16,8 @@
 # decision, so nothing parks in Charted Next indefinitely.
 #
 # THE QUEUED-ROW RULE: every queued row carries a named blocker or dependency
-# (an open `blocked-by` task, or a live captain hold, whose blocker is the
-# captain) or a dated next check (`hold-until` today or later). A dated next
+# (an open `blocked-by` task, or a fresh genuine captain call, whose blocker is
+# the captain) or a dated next check (`hold-until` today or later). A dated next
 # check is a near one: a date more than FM_FAR_HOLDS_DAYS out without the
 # captain's own deferral words is bin/fm-far-holds.sh's row, so dating a row
 # here never parks it far away unseen.
@@ -29,11 +29,15 @@
 #   undated  queued, not ready, filed at least FM_QUEUE_ZERO_AGE_DAYS ago
 #            (default 1), and not held with an --until date still ahead;
 #            captain holds again excluded
-#   nocheck  a queued captain hold with no open blocker and no --until date
-#            that bin/fm-fleet-snapshot.sh has aged out of Captain's Call
-#            (hold_bucket "aged"): it waits on nobody and nothing checks it,
-#            so it is worked, dated, re-asked through
-#            bin/fm-captain-hold.sh hold, or closed
+#   nocheck  a queued captain hold with no open blocker and no --until date,
+#            aged from its hold-set stamp (hold_age_days): one whose hold
+#            reason begins "owner:" (firstmate- or secondmate-owned work) gets
+#            no grace and is listed after FM_QUEUE_ZERO_AGE_DAYS like any
+#            undated row; a genuine captain call after FM_FAR_HOLDS_DAYS
+#            (default 2, bin/fm-far-holds.sh's window). It waits on nobody
+#            and nothing checks it, so it is worked, dated, brought back to
+#            the captain through bin/fm-captain-hold.sh hold (recording the
+#            captain's own deferral date), or closed
 #   orphan   in flight in the backlog with no live task record: the
 #            "(main-inventory)" Bearings warning; close it or re-dispatch it
 # Rows from the Paperclip board (source "paperclip"), only when this home
@@ -91,6 +95,7 @@ whole_setting() {  # <name> <default>
   printf '%s' "$v"
 }
 AGE_DAYS=$(whole_setting FM_QUEUE_ZERO_AGE_DAYS 1)
+CAPTAIN_DAYS=$(whole_setting FM_FAR_HOLDS_DAYS 2)
 RENAG_HOURS=$(whole_setting FM_QUEUE_ZERO_RENAG_HOURS 24)
 MAX_CHARS=$(whole_setting FM_QUEUE_ZERO_MAX_CHARS 1500)
 NOW=${FM_QUEUE_ZERO_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
@@ -119,7 +124,7 @@ queue_rows() {
     | awk '/^ready\[[0-9]+\]/ { t = 1; next } t && /^  / { sub(/^  /, ""); split($0, f, ","); print f[1]; next } { t = 0 }' \
     | jq -Rsc 'split("\n") | map(select(. != ""))')
   printf '%s' "$input" | jq -c --argjson ready "$ready_ids" --arg today "$TODAY" \
-    --argjson age_days "$AGE_DAYS" '
+    --argjson age_days "$AGE_DAYS" --argjson captain_days "$CAPTAIN_DAYS" '
     def day_epoch: try ((. // "") + "T00:00:00Z" | fromdateiso8601) catch null;
     ($today | day_epoch) as $t
     | ([.tasks[].id]) as $live
@@ -138,10 +143,13 @@ queue_rows() {
                detail:((if ($r.blocked_by_ids | length) > 0 then "blocked-by " + ($r.blocked_by_ids | join(","))
                         elif $r.hold_reason != null then "held: " + $r.hold_reason
                         else "waiting" end) + "; no --until date; filed " + ($r.since // "undated"))}
-            elif $r.state == "queued" and $r.hold_bucket == "aged" then
+            elif $r.state == "queued" and ($r.hold_bucket == "live" or $r.hold_bucket == "aged")
+                 and $r.hold_until == null and $r.hold_age_days != null
+                 and $r.hold_age_days >= (if ($r.hold_reason | startswith("owner:")) then $age_days
+                                          else $captain_days end) then
               {class:"nocheck",
-               detail:("captain hold aged \($r.hold_age_days // "?")d with no blocker and no --until date: "
-                       + ($r.hold_reason // "-"))}
+               detail:("captain hold aged \($r.hold_age_days)d with no blocker and no --until date: "
+                       + $r.hold_reason)}
             elif $r.state == "in_flight" and $r.requires_child_metadata == true
                  and ($live | index($r.id)) == null then
               {class:"orphan", detail:"in flight with no live task record"}

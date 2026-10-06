@@ -59,14 +59,15 @@
 # (data/secondmates.md) at the same relative path - gets one read-only
 # `br list` call bounded to FM_ATTENTION_BR_TIMEOUT seconds (default 5), never
 # a write. The STANDING RULE it watches: br never holds the only copy of
-# captain-sequenced or dated work, so every open or in-progress br item maps to
-# an open backlog row in its own home (through a `mirror:<row>` or `row:<row>`
-# label or its external_ref) or is closed. The informational `br-xcheck`
-# segment reports "<home> <n>/<total> br-only (<ids>)" per queue, amber when
-# any item has no row and unknown when a queue or its backlog cannot be read;
-# it never moves the verdict. This home's own queue is also named as "not
-# seen" with its open and in-progress counts, because S8 and S11 read only
-# backlog rows, task records, and steering inboxes, and br crews have none.
+# captain-sequenced or dated work, so every br item that is not closed (open,
+# in progress, blocked, deferred, or any other live status) carries a
+# `mirror:<row-id>` label naming an open backlog row in its own home or in this
+# (parent) home, or is closed. The informational `br-xcheck` segment reports
+# "<home> <n>/<total> br-only (<ids>)" per queue, amber when any item has no
+# row and unknown when a queue or a backlog cannot be read; it never moves the
+# verdict. This home's own queue is also named as "not seen" with its per-status
+# counts, because S8 and S11 read only backlog rows, task records, and steering
+# inboxes, and br crews have none.
 #
 # Status lines carry no timestamps, so decision ages come from sampling.
 # `check` folds the open decision set on every run and keeps one record,
@@ -520,22 +521,23 @@ EOF
   add_segment release-seq "$rating" "steers $release (info)" info
 }
 
-# One bounded read-only br call: the open and in-progress items of <db> as
-# [{id,status,refs}], refs being the backlog row ids the item names through a
-# `mirror:<row>` or `row:<row>` label or its external_ref. Fails when br does.
+# One bounded read-only br call: every item of <db> that is not closed or
+# tombstoned, as [{id,status,refs}], refs being the backlog row ids the item
+# names through its `mirror:<row-id>` labels. Fails when br does.
 br_items() {  # <db>
   local out
   out=$(fm_run_timed "$BR_TIMEOUT" br --db "$1" --no-auto-import --no-auto-flush \
-    list --json -s open -s in_progress --limit 0 2>/dev/null) || return 1
-  printf '%s' "$out" | jq -ce '.issues | map({id, status,
-    refs:([.labels[]? | select(startswith("mirror:") or startswith("row:")) | sub("^[a-z]+:"; "")]
-          + [.external_ref // empty | tostring])})' 2>/dev/null
+    list --json -s all --limit 0 2>/dev/null) || return 1
+  printf '%s' "$out" | jq -ce '.issues
+    | map(select(.status != "closed" and .status != "tombstone") | {id, status,
+        refs:[.labels[]? | select(startswith("mirror:")) | ltrimstr("mirror:")]})' 2>/dev/null
 }
 
-# "<n-br-only> <total> <ids>" for <items> against the open rows of <backlog-json>.
-br_only() {  # <items-json> <backlog-json>
-  jq -nr --argjson items "$1" --argjson backlog "$2" '
-    [$backlog.backlog.records[] | select(.structured == true and .state != "done") | .id] as $rows
+# "<n-br-only> <total> <ids>" for <items> against the open rows of
+# <backlog-json> and of this (parent) home's <parent-backlog-json>.
+br_only() {  # <items-json> <backlog-json> <parent-backlog-json>
+  jq -nr --argjson items "$1" --argjson backlog "$2" --argjson parent "$3" '
+    [$backlog, $parent | .backlog.records[] | select(.structured == true and .state != "done") | .id] as $rows
     | [$items[] | select(any(.refs[]; . as $r | $rows | index($r)) | not) | .id] as $only
     | "\($only | length) \($items | length) \($only | join(","))"'
 }
@@ -543,7 +545,7 @@ br_only() {  # <items-json> <backlog-json>
 # The shadow-queue cross-check, one part per br crew queue this home can read:
 # its own at data/beads/.beads/beads.db, and each local registered secondmate's
 # (data/secondmates.md) at <home>/data/beads/.beads/beads.db, matched against
-# that same home's backlog. Read-only throughout.
+# that same home's backlog and this home's. Read-only throughout.
 BR_NOT_SEEN=
 signal_br_shadow() {
   local parts='' rating=green label db home items backlog n total ids line
@@ -560,15 +562,15 @@ signal_br_shadow() {
     fi
     if [ "$label" = home ]; then
       BR_NOT_SEEN=$(printf '%s' "$items" | jq -r '
-        [(map(select(.status == "open")) | length | select(. > 0) | "\(.) open"),
-         (map(select(.status == "in_progress")) | length | select(. > 0) | "\(.) in_progress")]
+        group_by(.status) | map("\(length) \(.[0].status)")
         | if length == 0 then "0 open" else join(", ") end')
       backlog=$BACKLOG_JSON
     else
       backlog=$(env -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE FM_HOME="$home" \
         "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) || backlog=
     fi
-    if [ -z "$backlog" ] || ! line=$(br_only "$items" "$backlog"); then
+    if [ -z "$backlog" ] || [ -z "$BACKLOG_JSON" ] \
+      || ! line=$(br_only "$items" "$backlog" "$BACKLOG_JSON"); then
       parts="$parts${parts:+; }$label backlog unreadable"
       [ "$rating" = amber ] || rating=unknown
       continue
