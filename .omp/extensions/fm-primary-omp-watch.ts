@@ -965,7 +965,7 @@ export default function (pi: ExtensionAPI) {
       triageLog(`omp extension handed a wake back to main: supervision branch produced no outcome within ${minutes}m: ${actionableLine(message)}`);
       return {
         handled: false,
-        note: `watcher: supervision branch produced no outcome for this wake within ${minutes}m; main handles it and the branch's held rows revert to main's drain.`,
+        note: `watcher: supervision branch produced no outcome for this wake within ${minutes}m; main handles this wake, and any rows the branch still holds revert to main once the branch shows no progress for the grant TTL.`,
       };
     } catch {
       return { handled: false, note: "" };

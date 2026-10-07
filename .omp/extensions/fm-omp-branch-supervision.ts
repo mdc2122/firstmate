@@ -714,6 +714,7 @@ export default function (pi: ExtensionAPI) {
         }
         const timeoutRaw = typeof params.timeout === "number" && params.timeout > 0 ? params.timeout : BASH_DEFAULT_TIMEOUT_S;
         const result = await runBranchShell(command, timeoutRaw, ownedLockPid, abortSignal);
+        await recordBranchProgress(toolGeneration);
         const text = result.output || "(no output)";
         return result.code === 0 ? textResult(text) : textResult(`${text}\n[exit ${result.code ?? "signal"}]`, true);
       },

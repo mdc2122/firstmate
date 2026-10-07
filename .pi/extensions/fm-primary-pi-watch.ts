@@ -630,12 +630,14 @@ export default function (pi: ExtensionAPI) {
     if (!repairFailed) {
       const branchDelivery = offerWakeToBranch(message);
       if (branchDelivery) {
-        const { promise: expired, resolve: expire } = Promise.withResolvers<"expired">();
-        const timer = setTimeout(() => expire("expired"), branchHandbackMs);
-        timer.unref();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const expired = new Promise<"expired">((resolve) => {
+          timer = setTimeout(() => resolve("expired"), branchHandbackMs);
+          timer.unref();
+        });
         try {
           if (await Promise.race([branchDelivery.then(() => "settled" as const), expired]) === "settled") return true;
-          mainMessage = `${message}\n\nwatcher: supervision branch produced no outcome for this wake within ${Math.round(branchHandbackMs / 60000)}m; main handles it and the branch's held rows revert to main's drain.`;
+          mainMessage = `${message}\n\nwatcher: supervision branch produced no outcome for this wake within ${Math.round(branchHandbackMs / 60000)}m; main handles this wake, and any rows the branch still holds revert to main once the branch shows no progress for the grant TTL.`;
         } catch {
           // F7: a rejected settlement falls through to main unchanged.
         } finally {

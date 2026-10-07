@@ -201,8 +201,7 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean): UnreadWak
   const projects = new Set<string>();
   const metadata = new Map<string, string>();
   // The task id behind each key a signal or stale row may carry: the task id
-  // itself, or an endpoint its metadata records (window=, or an Orca task's
-  // terminal=, which is the key bin/fm-watch.sh names in its stale rows).
+  // itself, or the endpoint its metadata records.
   const taskByKey = new Map<string, string>();
   try {
     for (const name of readdirSync(state)) {
@@ -210,18 +209,15 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean): UnreadWak
       const task = name.slice(0, -5);
       const fields = readFileSync(`${state}/${name}`, "utf8").split(/\r?\n/);
       const project = fields.find((line) => line.startsWith("project="))?.slice(8) ?? "";
-      const endpoints = fields
-        .filter((line) => line.startsWith("window=") || line.startsWith("terminal="))
-        .map((line) => line.slice(line.indexOf("=") + 1))
-        .filter(Boolean);
+      const window = fields.find((line) => line.startsWith("window="))?.slice(7) ?? "";
       if (project) {
         metadata.set(task, project);
         taskByKey.set(task, task);
         taskByKey.set(`${task}.status`, task);
         taskByKey.set(`${task}.turn-ended`, task);
-        for (const endpoint of endpoints) {
-          metadata.set(endpoint, project);
-          taskByKey.set(endpoint, task);
+        if (window) {
+          metadata.set(window, project);
+          taskByKey.set(window, task);
         }
       }
     }

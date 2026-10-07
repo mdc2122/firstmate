@@ -1284,7 +1284,7 @@ export default function (pi: ExtensionAPI) {
     await loader.reload();
     if (!(await actingAsOwner(branchGeneration))) throw new Error("supervision session was replaced or lost lock ownership");
     const leaseHolderPid = ownedLockPid;
-    const bashTool = createBashToolDefinition(fmRoot, {
+    const baseBashTool = createBashToolDefinition(fmRoot, {
       spawnHook: (context) => {
         // Activation has always already happened by the time the branch can
         // run a shell command, so an unactivated generation is refused here
@@ -1293,8 +1293,8 @@ export default function (pi: ExtensionAPI) {
           throw new Error("bash refused: supervision session was replaced or lost lock ownership");
         }
         // Branch progress keeps its row grant fresh (bin/fm-wake-lib.sh
-        // fm_wake_branch_grant_fresh). spawnHook is synchronous, so the
-        // refresh runs alongside the command; a failed one means the grant is gone.
+        // fm_wake_branch_grant_fresh), at the command's start and again when it
+        // finishes; a failed refresh means the grant is gone.
         void touchEligibleRowsSnapshot(state, wakeGrantScript, String(branchGeneration));
         return {
           ...context,
@@ -1316,6 +1316,16 @@ ${context.command}
         };
       },
     });
+    const bashTool: typeof baseBashTool = {
+      ...baseBashTool,
+      execute: async (...args) => {
+        try {
+          return await baseBashTool.execute(...args);
+        } finally {
+          await touchEligibleRowsSnapshot(state, wakeGrantScript, String(branchGeneration));
+        }
+      },
+    };
     const created = await createAgentSession({
       cwd: fmRoot,
       sessionManager,
