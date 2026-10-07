@@ -573,6 +573,8 @@ A `git` entry reports how many commits the local clone is behind its remote bran
 An omitted `branch` uses the remote's default branch, taken from the clone's own record of it and otherwise asked of the remote directly, so a `--single-branch` clone still resolves.
 Both probe kinds are read-only and bounded, and a probe that cannot answer is reported as a check failure rather than assumed current.
 See [`docs/examples/watched-tools.json`](examples/watched-tools.json) for a starting point to copy into local `config/watched-tools.json`.
+An optional top-level `"fleet_pins": {"clone": "<absolute path>"}` names a fleet-pins clone (mdc2122/firstmate-fleet-backup) whose drift reader joins the sweep; without it the fleet-pins agent's own clone at `~/.fleet-backup/pins/repo` is used when it exists.
+Each target that runs something other than its pin is reported as `<tool> pin drift: ...`, and a target that will not report its version as `<tool> pin check failed: ...`; a host without the clone reports nothing about pins.
 
 Arm the check once per home with `bin/fm-tool-update-check.sh arm`.
 That writes `state/tool-updates.check.sh` and binds its bytes with `bin/fm-check-register.sh`, so the existing watcher polls it on its normal cadence and turns its one line into a `check:` wake; no separate schedule is involved.

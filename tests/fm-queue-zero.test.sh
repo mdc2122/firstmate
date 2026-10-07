@@ -105,15 +105,15 @@ SH
 
 # --- local queue -------------------------------------------------------------
 
-test_ready_and_undated_rows_are_named_and_dated_holds_are_not() {
+test_ready_and_unowned_rows_are_named_and_owned_rows_are_not() {
   local home out
   home=$(make_home local-classes)
   axi "$home" add ready-now "ready queued work" --kind ship
   axi "$home" add blocker-open "still open blocker"
   axi "$home" add waits-on "waits on an open blocker"
   axi "$home" block waits-on --by blocker-open
-  axi "$home" add watch-only "Watch Paperclip FIR-9 to merge"
-  axi "$home" hold watch-only --reason "FIR-9 owned by the viral-moment engineer" --until 2099-12-31
+  axi "$home" add dated-only "held to a date with nobody on it"
+  axi "$home" hold dated-only --reason "check back later" --until 2099-12-31
   axi "$home" add past-date "held until a date that passed"
   axi "$home" hold past-date --reason "waiting on x" --until 2026-09-30
   axi "$home" add captain-call "a captain decision"
@@ -123,16 +123,58 @@ test_ready_and_undated_rows_are_named_and_dated_holds_are_not() {
   set_since "$home" blocker-open 2026-09-30
   set_since "$home" waits-on 2026-09-29
   set_since "$home" parked 2026-09-29
+  set_since "$home" dated-only 2026-09-29
+  set_since "$home" past-date 2026-09-29
 
   out=$(qz "$home" scan --local) || fail "scan failed: $out"
   assert_contains "$out" "queue ready ready-now" "a ready queued row was not named"
   assert_contains "$out" "queue ready past-date" "a hold whose --until date passed was not named as ready"
-  assert_contains "$out" "queue undated waits-on" "an aged blocked row without a date was not named"
-  assert_contains "$out" "queue undated parked" "an aged hold without a date was not named"
   assert_contains "$out" "queue ready blocker-open" "an unblocked unheld row was not named ready"
-  assert_not_contains "$out" "watch-only" "a watch row held with an owner and a future date was named"
-  assert_not_contains "$out" "captain-call" "a captain hold leaked out of Captain's Call into the queue rows"
-  pass "ready, past-date, and undated rows are named; dated holds and captain holds are not"
+  assert_contains "$out" "queue unowned waits-on" "a row blocked only by an ownerless row was not named unowned"
+  assert_contains "$out" "queue unowned parked" "an aged hold without an owner was not named"
+  assert_contains "$out" "queue unowned dated-only" "a far date was accepted as an owner"
+  assert_not_contains "$out" "captain-call" "a fresh captain call leaked out of Captain's Call into the queue rows"
+  pass "ready rows and rows whose only owner is the supervisor are named, whatever their date"
+}
+
+# Invariant 2: a row is owned only by something that is running - a live
+# worker, the beads crew, a registered secondmate, a condition watch, a genuine
+# captain call, or a blocked-by edge to a row that is itself owned. A date or
+# an "owner: firstmate" reason is not an owner.
+test_unowned_row_flagged_and_each_running_owner_clears_it() {
+  local home out id
+  home=$(make_home owners)
+  for id in bare by-firstmate by-mate by-unknown-mate by-watch by-worker dep-owned behind-owned dep-bare behind-bare; do
+    axi "$home" add "$id" "row $id"
+  done
+  axi "$home" hold bare --reason "later" --until 2099-10-03
+  axi "$home" hold by-firstmate --reason "owner: firstmate - after the release" --kind captain
+  axi "$home" hold by-mate --reason "owner: sm-web - building it" --until 2099-10-03
+  axi "$home" hold by-unknown-mate --reason "owner: sm-gone - building it" --until 2099-10-03
+  axi "$home" hold by-watch --reason "fires when the deploy lands" --until 2099-10-03
+  axi "$home" hold by-worker --reason "worker on it" --until 2099-10-03
+  axi "$home" hold dep-owned --reason "owner: sm-web" --until 2099-10-03
+  axi "$home" block behind-owned --by dep-owned
+  axi "$home" hold dep-bare --reason "later" --until 2099-10-03
+  axi "$home" block behind-bare --by dep-bare
+  for id in bare by-firstmate by-mate by-unknown-mate by-watch by-worker dep-owned behind-owned dep-bare behind-bare; do
+    set_since "$home" "$id" 2026-09-25
+  done
+  printf '%s\n' "- sm-web - web work (home: $home/sm-web; scope: web; projects: web; added 2026-09-01)" \
+    > "$home/data/secondmates.md"
+  mkdir -p "$home/state/procevent"
+  printf 'adapter=when\n' > "$home/state/procevent/when-by-watch--deploy.source"
+  printf 'kind=ship\n' > "$home/state/by-worker.meta"
+
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  for id in bare by-firstmate by-unknown-mate dep-bare behind-bare; do
+    assert_contains "$out" "queue unowned $id " "row $id has no running owner but was not flagged unowned"
+  done
+  for id in by-mate by-watch by-worker dep-owned behind-owned; do
+    assert_not_contains "$out" " $id " "row $id has a running owner but was flagged"
+  done
+  assert_contains "$out" "a date is not an owner" "the unowned detail did not say a date is not an answer"
+  pass "a row whose only owner is the supervisor is flagged unowned; a worker, secondmate, watch, or owned blocker clears it"
 }
 
 test_inflight_row_without_a_live_task_is_named_orphan() {
@@ -149,12 +191,11 @@ test_inflight_row_without_a_live_task_is_named_orphan() {
   pass "an in-flight backlog row with no live task is named instead of left as a silent warning"
 }
 
-# A captain hold with no blocker and no date waits on nobody unless it is a
-# fresh genuine captain call. One whose reason begins "owner:" is firstmate- or
-# secondmate-owned work mislabelled as the captain's and gets no grace; a
-# genuine call gets bin/fm-far-holds.sh's two days, aged from its hold-set
-# stamp. A dated or blocked captain hold carries its own next check.
-test_undated_captain_hold_with_no_check_is_named_nocheck() {
+# A genuine captain call (a captain hold whose reason does not begin "owner:")
+# gets bin/fm-far-holds.sh's two days, aged from its hold-set stamp or a lapsed
+# date, before it is named nocheck. An "owner:" captain hold is not a captain
+# call at all: it is supervisor-owned work and is named unowned.
+test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not() {
   local home out tmp
   home=$(make_home nocheck)
   axi "$home" add owner-ask "firstmate work parked as a captain hold"
@@ -165,43 +206,33 @@ test_undated_captain_hold_with_no_check_is_named_nocheck() {
   axi "$home" hold old-call --reason "pick the region" --kind captain
   axi "$home" add restamped-call "an old row whose captain call was re-asked yesterday"
   axi "$home" hold restamped-call --reason "pick the name" --kind captain
-  axi "$home" add dated-ask "a captain hold with a next check"
-  axi "$home" hold dated-ask --reason "owner: firstmate - re-ask on the date" --kind captain --until 2026-10-02
-  axi "$home" add lapsed-owner "firstmate work whose captain-hold date passed yesterday"
-  axi "$home" hold lapsed-owner --reason "owner: firstmate - check after the deploy" --kind captain --until 2026-09-30
   axi "$home" add lapsed-call "a genuine captain call whose date passed yesterday"
   axi "$home" hold lapsed-call --reason "pick the venue" --kind captain --until 2026-09-30
   axi "$home" add lapsed-old-call "a genuine captain call whose date passed two days ago"
   axi "$home" hold lapsed-old-call --reason "pick the date" --kind captain --until 2026-09-29
-  axi "$home" add today-owner "firstmate work whose captain-hold date is today"
-  axi "$home" hold today-owner --reason "owner: firstmate - check today" --kind captain --until 2026-10-01
-  axi "$home" add dep "an open dependency"
-  axi "$home" add blocked-ask "a captain hold behind a dependency"
-  axi "$home" block blocked-ask --by dep
-  axi "$home" hold blocked-ask --reason "owner: firstmate - waits on dep" --kind captain
+  axi "$home" add dated-owner "firstmate work dated as a captain hold"
+  axi "$home" hold dated-owner --reason "owner: firstmate - re-ask on the date" --kind captain --until 2099-10-02
   set_since "$home" owner-ask 2026-09-30
   set_since "$home" fresh-call 2026-09-30
   set_since "$home" old-call 2026-09-29
   set_since "$home" restamped-call 2026-09-01
-  set_since "$home" blocked-ask 2026-09-01
-  set_since "$home" dep 2026-10-01
+  set_since "$home" lapsed-call 2026-09-01
+  set_since "$home" lapsed-old-call 2026-09-01
+  set_since "$home" dated-owner 2026-09-30
   tmp=$(mktemp)
   awk '{ print } /^- \[ \] restamped-call - / { print "  Captain hold set: 2026-09-30T08:00:00Z" }' \
     "$home/data/backlog.md" > "$tmp" && mv "$tmp" "$home/data/backlog.md"
   out=$(qz "$home" scan --local) || fail "scan failed: $out"
-  assert_contains "$out" "queue nocheck owner-ask" "an owner: captain hold got captain grace"
+  assert_contains "$out" "queue unowned owner-ask" "an owner: captain hold was treated as a captain call"
+  assert_contains "$out" "queue unowned dated-owner" "a dated owner: captain hold was cleared by its date"
   assert_contains "$out" "queue nocheck old-call" "a genuine captain call two days old was not named"
   assert_not_contains "$out" "fresh-call" "a genuine captain call inside its two days was named"
   assert_not_contains "$out" "restamped-call" "a captain call was aged from its filing date, not its hold-set stamp"
-  assert_contains "$out" "queue nocheck lapsed-owner" "an owner: captain hold a day past its date was not named"
   assert_contains "$out" "queue nocheck lapsed-old-call" "a genuine captain call two days past its date was not named"
   assert_not_contains "$out" "lapsed-call " "a genuine captain call inside two days past its date was named"
-  assert_not_contains "$out" "today-owner" "a captain hold dated today was named"
-  assert_not_contains "$out" "dated-ask" "a captain hold with a dated next check was named"
-  assert_not_contains "$out" "blocked-ask" "a captain hold behind an open dependency was named"
   out=$(FM_FAR_HOLDS_DAYS=3 qz "$home" scan --local) || fail "scan failed: $out"
   assert_not_contains "$out" "old-call" "a genuine captain call ignored the far-holds window"
-  pass "undated or lapsed captain holds are named: owner: work after a day, genuine calls after the far-holds window"
+  pass "genuine captain calls get the far-holds window; owner: captain holds are unowned work"
 }
 
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {
@@ -214,6 +245,173 @@ test_empty_queue_is_silent_and_unpaired_state_is_silent() {
     FM_QUEUE_ZERO_NOW="$NOW" "$QZ" check) || fail "unpaired check failed"
   [ -z "$out" ] || fail "a state override without its data directory still reported: $out"
   pass "an empty queue and an unpaired state override stay silent"
+}
+
+# --- alarms force an end ----------------------------------------------------
+
+captain_hold() {  # <home> <args...>; prints stderr, returns the command's status
+  local home=$1
+  shift
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_QUEUE_ZERO_NOW="${QZ_NOW:-$NOW}" \
+    FM_CAPTAIN_HOLD_NOW="${QZ_NOW:-$NOW}" "$ROOT/bin/fm-captain-hold.sh" hold "$@" 3>&1 1>/dev/null 2>&3
+}
+
+hold_until() {  # <home> <id>
+  sed -n "s/^- \[ \] $2 - .*(hold-until: \([0-9-]*\)).*/\1/p" "$1/data/backlog.md"
+}
+
+# Invariant 1: the first re-date passes; a second re-date with nothing new
+# since is refused, naming the only answers, and leaves the date untouched.
+test_second_redate_without_evidence_is_refused() {
+  local home out rc
+  home=$(make_home redate-refused)
+  axi "$home" add follow "a follow-up nobody is on"
+  captain_hold "$home" follow --reason "owner: firstmate - after the deploy" --until 2099-10-02 \
+    || fail "the first hold was refused"
+  captain_hold "$home" follow --reason "owner: firstmate - after the deploy" --until 2099-10-03 \
+    || fail "the first re-date was refused"
+  rc=0
+  out=$(captain_hold "$home" follow --reason "owner: firstmate - after the deploy" --until 2099-10-04) || rc=$?
+  [ "$rc" = 3 ] || fail "a second re-date without new evidence was not refused (exit $rc): $out"
+  assert_contains "$out" "refused" "the refusal did not say so"
+  assert_contains "$out" "start it" "the refusal did not name starting it"
+  assert_contains "$out" "close it with a reason" "the refusal did not name closing it"
+  assert_contains "$out" "captain's own decision" "the refusal did not name the captain hold"
+  [ "$(hold_until "$home" follow)" = 2099-10-03 ] || fail "a refused re-date still moved the date: $(hold_until "$home" follow)"
+  grep -F '"kind":"refused"' "$home/state/.queue-zero-redates.jsonl" >/dev/null \
+    || fail "the refusal was not logged as a re-date without progress"
+
+  # New evidence since the last hold - a status line - allows the next re-date.
+  printf 'working: started on the follow-up\n' > "$home/state/follow.status"
+  captain_hold "$home" follow --reason "owner: firstmate - after the deploy" --until 2099-10-04 \
+    || fail "a re-date after a new status line was refused"
+  [ "$(hold_until "$home" follow)" = 2099-10-04 ] || fail "the allowed re-date did not land"
+  pass "a second re-date without new evidence is refused with the only answers; new evidence allows it"
+}
+
+# A captain hold is not a running owner: re-dating one without the captain's
+# words is still a strike, and the second such re-date is refused.
+test_dated_captain_hold_redate_is_refused() {
+  local home out rc
+  home=$(make_home redate-captain-dated)
+  axi "$home" add later "a call parked with a date"
+  captain_hold "$home" later --reason "decide later" --until 2099-10-02 || fail "the first hold was refused"
+  captain_hold "$home" later --reason "decide later" --until 2099-10-03 || fail "the first re-date was refused"
+  rc=0
+  out=$(captain_hold "$home" later --reason "decide later" --until 2099-10-04) || rc=$?
+  [ "$rc" = 3 ] || fail "a second re-date of a captain hold without his words was not refused (exit $rc): $out"
+  [ "$(hold_until "$home" later)" = 2099-10-03 ] || fail "a refused captain re-date still moved the date"
+  pass "re-dating a captain hold without the captain's words is refused the second time"
+}
+
+test_captain_deferral_is_never_refused() {
+  local home words
+  home=$(make_home redate-captain)
+  words="$home/words.txt"
+  axi "$home" add tabled "work the captain tabled"
+  captain_hold "$home" tabled --reason "owner: firstmate - later" --until 2099-10-02 || fail "first hold refused"
+  captain_hold "$home" tabled --reason "owner: firstmate - later" --until 2099-10-03 || fail "first re-date refused"
+  printf 'Not this week - bring it back on the 20th.\n' > "$words"
+  captain_hold "$home" tabled --reason "captain tabled it" --until 2026-10-20 --captain-words-file "$words" \
+    || fail "the captain's own deferral was refused"
+  printf 'Push it to November.\n' > "$words"
+  captain_hold "$home" tabled --reason "captain tabled it" --until 2026-11-01 --captain-words-file "$words" \
+    || fail "a second captain deferral was refused"
+  [ "$(hold_until "$home" tabled)" = 2026-11-01 ] || fail "the captain's deferral date did not land"
+  pass "the captain's own deferral is never refused, however often it moves"
+}
+
+# A re-date made around the gate (a direct tasks-axi hold) is still caught by
+# the fold, and the row is listed `redated` until something changes.
+test_redate_around_the_gate_is_listed_redated() {
+  local home out
+  home=$(make_home redate-fold)
+  axi "$home" add drift "a row re-dated by hand"
+  axi "$home" hold drift --reason "later" --until 2099-10-02
+  qz "$home" check >/dev/null || fail "first fold failed"
+  axi "$home" hold drift --reason "later" --until 2099-10-03
+  qz "$home" check >/dev/null || fail "second fold failed"
+  axi "$home" hold drift --reason "later" --until 2099-10-04
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue redated drift" "a row re-dated twice without evidence was not listed redated"
+  printf 'blocked: waiting on the vendor\n' > "$home/state/drift.status"
+  axi "$home" hold drift --reason "later" --until 2099-10-05
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "queue redated drift" "a re-date with new evidence stayed listed redated"
+  pass "a re-date around the gate is folded and listed redated until new evidence arrives"
+}
+
+# Each answer the alarm names ends a `redated` listing without another date:
+# new evidence, a running owner (a watch, a secondmate), a genuine captain
+# call, or closing it. A dated hand-off to a secondmate passes the gate.
+test_redated_row_clears_on_each_answer() {
+  local home out id
+  home=$(make_home redate-exits)
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" add "$id" "row $id re-dated by hand"
+    axi "$home" hold "$id" --reason "later" --until 2099-10-02
+  done
+  qz "$home" check >/dev/null || fail "first fold failed"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" hold "$id" --reason "later" --until 2099-10-03
+  done
+  qz "$home" check >/dev/null || fail "second fold failed"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" hold "$id" --reason "later" --until 2099-10-04
+  done
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    assert_contains "$out" "queue redated $id " "row $id re-dated twice without evidence was not listed redated"
+  done
+
+  printf 'working: picked it up\n' > "$home/state/by-status.status"
+  mkdir -p "$home/state/procevent"
+  printf 'adapter=when\n' > "$home/state/procevent/when-by-watch.source"
+  printf '%s\n' "- sm-web - web work (home: $home/sm-web; scope: web; projects: web; added 2026-09-01)" \
+    > "$home/data/secondmates.md"
+  captain_hold "$home" by-mate --reason "owner: sm-web - building it" --until 2099-10-05 \
+    || fail "a dated hand-off to a registered secondmate was refused"
+  captain_hold "$home" by-captain --reason "pick the vendor" || fail "the captain hold failed"
+  axi "$home" "done" by-close
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    assert_not_contains "$out" "redated $id " "row $id stayed listed redated after an answer"
+  done
+  qz "$home" check >/dev/null || fail "fold after the answers failed"
+  jq -e '[.rows[] | .strikes] | all(. == 0)' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "the ledger kept strikes after the answers: $(cat "$home/state/.queue-zero-holds.json")"
+  pass "a redated row clears on new evidence, a running owner, a captain call, or closing it"
+}
+
+# Invariant 3: the three numbers, per home.
+test_load_reports_unowned_median_age_and_redates() {
+  local home out
+  home=$(make_home load)
+  axi "$home" add old-bare "nobody on it"
+  axi "$home" add new-bare "nobody on it either"
+  axi "$home" add worked "a worker is on it"
+  axi "$home" start worked
+  printf 'kind=ship\n' > "$home/state/worked.meta"
+  set_since "$home" old-bare 2026-09-21
+  set_since "$home" new-bare 2026-10-01
+  set_since "$home" worked 2026-09-27
+  out=$(qz "$home" load) || fail "load failed: $out"
+  printf '%s' "$out" | jq -e '.open == 3 and .unowned == 2 and (.unowned_ids | sort) == ["new-bare","old-bare"]
+    and .unowned_over_day == 1 and .unowned_over_day_ids == ["old-bare"]
+    and .median_open_age_days == 4 and .redates_no_progress == 0' >/dev/null \
+    || fail "load numbers are wrong: $out"
+  axi "$home" hold old-bare --reason "later" --until 2099-10-02
+  qz "$home" check >/dev/null || fail "fold failed"
+  axi "$home" hold old-bare --reason "later" --until 2099-10-03
+  qz "$home" check >/dev/null || fail "fold failed"
+  out=$(qz "$home" load) || fail "load failed: $out"
+  printf '%s' "$out" | jq -e '.redates_no_progress == 1' >/dev/null \
+    || fail "a re-date without progress was not counted: $out"
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_QUEUE_ZERO_NOW=2026-10-03T12:00:01Z "$QZ" load) \
+    || fail "load failed: $out"
+  printf '%s' "$out" | jq -e '.redates_no_progress == 0' >/dev/null \
+    || fail "a re-date older than 24 h was still counted: $out"
+  pass "load reports unowned rows (and those over 24 h), median open age, and re-dates without progress"
 }
 
 # --- one wake per episode ---------------------------------------------------
@@ -525,10 +723,17 @@ test_paperclip_release_is_guarded() {
   pass "release moves only backlog or blocked issues whose every blocker is done"
 }
 
-test_ready_and_undated_rows_are_named_and_dated_holds_are_not
+test_ready_and_unowned_rows_are_named_and_owned_rows_are_not
+test_unowned_row_flagged_and_each_running_owner_clears_it
 test_inflight_row_without_a_live_task_is_named_orphan
-test_undated_captain_hold_with_no_check_is_named_nocheck
+test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not
 test_empty_queue_is_silent_and_unpaired_state_is_silent
+test_second_redate_without_evidence_is_refused
+test_captain_deferral_is_never_refused
+test_redate_around_the_gate_is_listed_redated
+test_redated_row_clears_on_each_answer
+test_dated_captain_hold_redate_is_refused
+test_load_reports_unowned_median_age_and_redates
 test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode
 test_failed_append_does_not_suppress_the_episode

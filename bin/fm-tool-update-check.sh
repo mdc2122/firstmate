@@ -31,6 +31,14 @@
 # manager's "latest" directory can hold an older build. A copy that will not
 # report a version is reported as a check failure rather than assumed current.
 #
+# Fleet pins drift is folded in as well: when the fleet-pins clone's reader
+# (<clone>/pins/fleetpins.py; the clone is the registry's fleet_pins.clone,
+# default ~/.fleet-backup/pins/repo) exists, one bounded
+# `python3 <reader> drift` run joins the sweep and each line it prints -
+# "<tool> pin drift: ..." or "<tool> pin check failed: ..." - becomes a
+# finding. It prints nothing when every pinned target runs its pin, and a host
+# without the clone or python3 skips it silently.
+#
 # What this script never does: it reports, and it repairs nothing. It does not
 # install, update, uninstall, reorder PATH, or touch any version manager's
 # configuration, and it never fetches into a watched git repository. Every git
@@ -333,6 +341,10 @@ config_validate() {
       if type != "object" then ["the top level must be an object"]
       elif (.tools | type) != "array" then ["tools must be an array"]
       elif (.tools | length) == 0 then ["tools must list at least one tool"]
+      elif has("fleet_pins") and ((.fleet_pins | type) != "object"
+           or ((.fleet_pins | has("clone")) and ((.fleet_pins.clone | type) != "string"
+                or (.fleet_pins.clone | startswith("/") | not) or (.fleet_pins.clone | test("[[:cntrl:]]")))))
+        then ["fleet_pins must be an object whose optional clone is an absolute path on one line"]
       else
         [.tools[] | tool_problem(.)]
         + (if ([.tools[].name] | unique | length) != (.tools | length) then ["tool names must be unique"] else [] end)
@@ -370,6 +382,46 @@ config_records() {
       (.git.branch // "")
     ] | join("\u001f")
   ' "$CONFIG" 2>/dev/null
+}
+
+# --- fleet pins drift -------------------------------------------------------
+
+# The fleet-pins clone whose drift reader this check folds in: the registry's
+# fleet_pins.clone, else the fleet-pins agent's own clone. Printed only when
+# its reader exists, so a host without the clone reads nothing and says nothing.
+fleet_pins_reader() {
+  local clone
+  clone=$(jq -r '.fleet_pins.clone // empty' "$CONFIG" 2>/dev/null)
+  [ -n "$clone" ] || clone="${HOME:-}/.fleet-backup/pins/repo"
+  [ -f "$clone/pins/fleetpins.py" ] || return 1
+  printf '%s\n' "$clone/pins/fleetpins.py"
+}
+
+# Fold the reader's own lines ("<tool> pin drift: ..." or "<tool> pin check
+# failed: ...", nothing when every target runs its pin) into the findings. The
+# reader is the contract owner (mdc2122/firstmate-fleet-backup pins/README.md);
+# it always exits 0, so any other status or a run past the budget is reported
+# as this check's own failure rather than read as converged.
+fleet_pins_findings() {
+  local reader out status=0 line
+  reader=$(fleet_pins_reader) || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  budget_allows "fleet pins" || return 0
+  out=$(fm_run_timed "$(probe_bound)" python3 "$reader" drift 2>/dev/null) || status=$?
+  if [ "$status" -ne 0 ]; then
+    if [ "$status" -eq 124 ]; then
+      emit "fleet pins check failed: the drift reader did not finish inside the time budget"
+    else
+      emit "fleet pins check failed: the drift reader exited $status"
+    fi
+    return 0
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    emit "$line"
+  done <<EOF
+$out
+EOF
 }
 
 # --- PATH probes ------------------------------------------------------------
@@ -715,6 +767,7 @@ action_check() {
       [ -z "$command_name" ] || command_findings "$name" "$command_name" "$args_joined" "$announce" "$announce_args"
       [ -z "$repo" ] || git_findings "$name" "$repo" "$remote" "$branch"
     done < <(config_records)
+    fleet_pins_findings
   fi
 
   line=

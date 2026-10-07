@@ -22,7 +22,7 @@ make_home() {  # <name>
 ac() {  # <home> <args...>
   local home=$1
   shift
-  PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_ATTENTION_NOW="${AC_NOW:-$NOW}" "$AC" "$@"
+  PATH="$home/fakebin:$PATH" HOME="$home" FM_HOME="$home" FM_ATTENTION_NOW="${AC_NOW:-$NOW}" "$AC" "$@"
 }
 
 # The rating a signal segment carries, e.g. "red" for "S1 ... [red]".
@@ -337,6 +337,7 @@ test_release_sequencing_steers_are_informational() {
   local home out
   home=$(make_home release)
   inflight_row "$home" a
+  fm_write_meta "$home/state/a.meta" kind=ship
   steer "$home" a 2026-10-03T09:00:00Z "Merged. Release it after ballot-top-finishing deploys prod-6."
   steer "$home" a 2026-10-03T09:10:00Z "You are next in line for the release."
   steer "$home" a 2026-10-03T09:20:00Z "Thanks, good work."
@@ -436,6 +437,8 @@ test_binding_line_wakes_once_and_records_the_action() {
   home=$(make_home bind-s11)
   constraint_row "$home" finish
   inflight_row "$home" other
+  fm_write_meta "$home/state/finish.meta" kind=ship
+  fm_write_meta "$home/state/other.meta" kind=ship
   steer "$home" finish 2026-10-03T09:00:00Z
   steer "$home" other 2026-10-03T09:10:00Z
   steer "$home" other 2026-10-03T09:20:00Z
@@ -506,6 +509,72 @@ SH
   assert_not_contains "$out" "br-xcheck" "a home without a br queue ran the cross-check"
   pass "non-closed br items with no mirror: row in their own or the parent home are flagged on the line, read-only and bounded"
 }
+
+# --- S12 supervisor load and Class E -------------------------------------------
+
+queued_row() {  # <home> <id> <since> [extra-row-suffix]
+  local home=$1 tmp
+  tmp=$(mktemp)
+  awk -v row="- [ ] $2 - work $2 (repo: x) (kind: ship) (since $3)${4:-}" '
+    { print }
+    /^## Queued/ { print row }' "$home/data/backlog.md" > "$tmp"
+  mv "$tmp" "$home/data/backlog.md"
+}
+
+test_load_numbers_per_home_and_red_after_a_day() {
+  local home mate out
+  command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found; S12 cases not run"; return 0; }
+  home=$(make_home s12)
+  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
+  queued_row "$home" fresh 2026-10-03 " (hold: later) (hold-until: 2026-10-04)"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_rating "$out" S12 amber "a row unowned under a day"
+  assert_contains "$out" "S12 load home unowned 1 (0 >24h: fresh), median age 0d, re-dates without progress 0" \
+    "the three numbers were not on the line"
+
+  queued_row "$home" stale 2026-09-25
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_rating "$out" S12 red "a row unowned over a day"
+  assert_contains "$out" "unowned 2 (1 >24h: " "the over-a-day count was not on the line"
+  assert_contains "$out" "AMBER (S12):" "a red S12 did not count toward the verdict"
+
+  mate=$(make_home s12-mate)
+  cp "$ROOT/.tasks.toml" "$mate/.tasks.toml"
+  queued_row "$mate" mate-row 2026-09-20
+  printf -- '- mate1 - a mate (home: %s; scope: ops; projects: x; added 2026-10-01)\n' "$mate" > "$home/data/secondmates.md"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_contains "$out" "; mate1 unowned 1 (1 >24h: mate-row), median age 13d" "a secondmate home's load was not on the line"
+
+  fm_write_meta "$home/state/stale.meta" kind=ship
+  fm_write_meta "$home/state/fresh.meta" kind=ship
+  rm "$home/data/secondmates.md"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_rating "$out" S12 green "every row has a running owner"
+  pass "S12 shows unowned rows, median open age, and re-dates without progress per home, red after a day"
+}
+
+test_class_e_applications_are_counted_from_the_fleet_pins_log() {
+  local home out log
+  home=$(make_home class-e)
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_not_contains "$out" "class-e" "a host without the Class E log showed a Class E segment"
+  log="$home/.fleet-backup/pins/class-e.log"
+  mkdir -p "${log%/*}"
+  {
+    printf '2026-10-03T09:00:00Z\tclass-e\tpackage=omp\tversion=1->2\ttarget=omp:studio2\twindow=open(x)\thealth=pass\treceipt=r1\n'
+    printf '2026-10-03T10:00:00Z\tclass-e\tpackage=omp\tversion=2->3\ttarget=omp:studio1\twindow=open(x)\thealth=pass\treceipt=r2\n'
+    printf '2026-10-02T13:00:00Z\tclass-e\tpackage=omp\tversion=0->1\ttarget=omp:studio2\twindow=open(x)\thealth=pass\treceipt=r0\n'
+    printf '2026-10-03T11:00:00Z\tclass-x\tpackage=omp\thealth=pass\n'
+    printf 'garbage line\n'
+  } > "$log"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_contains "$out" "class-e applied 2 (pass=2) (info) [green]" "Class E applications in the window were not counted"
+  printf '2026-10-03T12:00:00Z\tclass-e\tpackage=herdr\tversion=1->2\ttarget=herdr:tmuxbot\twindow=open(x)\thealth=fail-rolled-back\treceipt=r3\n' >> "$log"
+  out=$(ac "$home" scan) || fail "scan failed: $out"
+  assert_contains "$out" "class-e applied 3 (fail-rolled-back=1 pass=2) (info) [amber]" "a failed Class E application was not flagged"
+  assert_contains "$out" "GREEN:" "the informational Class E count moved the verdict"
+  pass "Class E applications in the window are counted from the fleet-pins log, split by health, and never move the verdict"
+}
 test_decision_count_and_longest_wait_thresholds
 test_three_open_at_once_threshold
 test_sampled_decision_keeps_its_wait_after_it_closes
@@ -522,3 +591,5 @@ test_scan_writes_nothing
 test_daily_check_runs_once_after_1300_and_wakes_only_on_red
 test_binding_line_wakes_once_and_records_the_action
 test_br_items_without_a_backlog_row_are_flagged
+test_load_numbers_per_home_and_red_after_a_day
+test_class_e_applications_are_counted_from_the_fleet_pins_log

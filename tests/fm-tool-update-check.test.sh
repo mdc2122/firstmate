@@ -104,8 +104,57 @@ run_check() {
   local home=$1 path=$2 out=$3
   shift 3
   local status=0
-  env FM_CHECK_TIMEOUT=30 "$@" FM_HOME="$home" PATH="$path" FM_TOOL_UPDATE_INTERVAL=0 "$CHECK" >"$out" 2>&1 || status=$?
+  env FM_CHECK_TIMEOUT=30 HOME="$home" "$@" FM_HOME="$home" PATH="$path" FM_TOOL_UPDATE_INTERVAL=0 "$CHECK" >"$out" 2>&1 || status=$?
   expect_code 0 "$status" "check exit"
+}
+
+# --- fleet pins drift ---------------------------------------------------------
+
+# A fake fleet-pins clone whose drift reader prints <lines> (and records it ran).
+fleet_pins_clone() {  # <dir> <exit> <lines...>
+  local dir=$1 rc=$2
+  shift 2
+  mkdir -p "$dir/pins"
+  {
+    printf 'import sys\n'
+    printf 'open(%s, "a").write(" ".join(sys.argv[1:]) + "\\n")\n' "'$dir/ran.log'"
+    local line
+    for line in "$@"; do printf 'print(%s)\n' "'$line'"; done
+    printf 'sys.exit(%s)\n' "$rc"
+  } > "$dir/pins/fleetpins.py"
+}
+
+test_fleet_pins_drift_is_folded_in_and_absent_clone_is_silent() {
+  local home bin out report
+  command -v python3 >/dev/null 2>&1 || { echo "skip: python3 not found; fleet pins cases not run"; return 0; }
+  home=$(make_home fleet-pins)
+  bin="$home/bin"
+  make_copy "$bin" "$TOOL" "herdr 0.8.2"
+  write_config "$home" "{\"tools\":[{\"name\":\"herdr\",\"command\":\"$TOOL\"}]}"
+  out="$home/out"
+  run_check "$home" "$(fixture_path "$bin")" "$out"
+  [ ! -s "$out" ] || fail "a host without a fleet-pins clone reported something: $(cat "$out")"
+
+  fleet_pins_clone "$home/.fleet-backup/pins/repo" 0 \
+    "omp pin drift: omp:studio1 runs 18.4.5, pinned 18.4.8" \
+    "herdr pin check failed: herdr:tmuxbot did not report a version"
+  run_check "$home" "$(fixture_path "$bin")" "$out"
+  report=$(cat "$out")
+  assert_contains "$report" "omp pin drift: omp:studio1 runs 18.4.5, pinned 18.4.8" "a pin drift line was not reported"
+  assert_contains "$report" "herdr pin check failed: herdr:tmuxbot did not report a version" "a pin check failure was not reported"
+  assert_contains "$(cat "$home/.fleet-backup/pins/repo/ran.log")" "drift" "the reader was not asked for drift"
+
+  fleet_pins_clone "$home/elsewhere" 0
+  write_config "$home" "{\"fleet_pins\":{\"clone\":\"$home/elsewhere\"},\"tools\":[{\"name\":\"herdr\",\"command\":\"$TOOL\"}]}"
+  rm -f "$home/state/.tool-updates"
+  run_check "$home" "$(fixture_path "$bin")" "$out"
+  [ ! -s "$out" ] || fail "a converged fleet reported something: $(cat "$out")"
+  [ -f "$home/elsewhere/ran.log" ] || fail "the configured clone was not used"
+
+  fleet_pins_clone "$home/elsewhere" 2
+  run_check "$home" "$(fixture_path "$bin")" "$out"
+  assert_contains "$(cat "$out")" "fleet pins check failed: the drift reader exited 2" "a broken reader was read as converged"
+  pass "fleet pins drift lines join the report; a converged fleet or an absent clone stays silent; a broken reader is a failure"
 }
 
 # --- the regression this script exists for ----------------------------------
@@ -1006,6 +1055,7 @@ test_armed_check_wakes_the_watcher_with_the_skew_report() {
 }
 
 test_path_skew_is_reported_from_every_copy
+test_fleet_pins_drift_is_folded_in_and_absent_clone_is_silent
 test_newest_copy_first_on_path_is_silent
 test_identical_versions_are_silent
 test_one_copy_reached_twice_is_probed_once
