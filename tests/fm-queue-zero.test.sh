@@ -326,6 +326,48 @@ test_redate_around_the_gate_is_listed_redated() {
   pass "a re-date around the gate is folded and listed redated until new evidence arrives"
 }
 
+# Each answer the alarm names ends a `redated` listing without another date:
+# new evidence, a running owner (a watch, a secondmate), a genuine captain
+# call, or closing it. A dated hand-off to a secondmate passes the gate.
+test_redated_row_clears_on_each_answer() {
+  local home out id
+  home=$(make_home redate-exits)
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" add "$id" "row $id re-dated by hand"
+    axi "$home" hold "$id" --reason "later" --until 2099-10-02
+  done
+  qz "$home" check >/dev/null || fail "first fold failed"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" hold "$id" --reason "later" --until 2099-10-03
+  done
+  qz "$home" check >/dev/null || fail "second fold failed"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    axi "$home" hold "$id" --reason "later" --until 2099-10-04
+  done
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    assert_contains "$out" "queue redated $id " "row $id re-dated twice without evidence was not listed redated"
+  done
+
+  printf 'working: picked it up\n' > "$home/state/by-status.status"
+  mkdir -p "$home/state/procevent"
+  printf 'adapter=when\n' > "$home/state/procevent/when-by-watch.source"
+  printf '%s\n' "- sm-web - web work (home: $home/sm-web; scope: web; projects: web; added 2026-09-01)" \
+    > "$home/data/secondmates.md"
+  captain_hold "$home" by-mate --reason "owner: sm-web - building it" --until 2099-10-05 \
+    || fail "a dated hand-off to a registered secondmate was refused"
+  captain_hold "$home" by-captain --reason "pick the vendor" || fail "the captain hold failed"
+  axi "$home" "done" by-close
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  for id in by-status by-watch by-mate by-captain by-close; do
+    assert_not_contains "$out" "redated $id " "row $id stayed listed redated after an answer"
+  done
+  qz "$home" check >/dev/null || fail "fold after the answers failed"
+  jq -e '[.rows[] | .strikes] | all(. == 0)' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "the ledger kept strikes after the answers: $(cat "$home/state/.queue-zero-holds.json")"
+  pass "a redated row clears on new evidence, a running owner, a captain call, or closing it"
+}
+
 # Invariant 3: the three numbers, per home.
 test_load_reports_unowned_median_age_and_redates() {
   local home out
@@ -674,6 +716,7 @@ test_empty_queue_is_silent_and_unpaired_state_is_silent
 test_second_redate_without_evidence_is_refused
 test_captain_deferral_is_never_refused
 test_redate_around_the_gate_is_listed_redated
+test_redated_row_clears_on_each_answer
 test_load_reports_unowned_median_age_and_redates
 test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode

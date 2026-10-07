@@ -7,7 +7,7 @@
 #   fm-queue-zero.sh scan [--local] [--json]
 #   fm-queue-zero.sh check
 #   fm-queue-zero.sh observe
-#   fm-queue-zero.sh hold-gate <task-id> <YYYY-MM-DD>
+#   fm-queue-zero.sh hold-gate <task-id> <YYYY-MM-DD> [<reason>]
 #   fm-queue-zero.sh load
 #   fm-queue-zero.sh --help
 #
@@ -42,7 +42,8 @@
 # row's date while the fingerprint is unchanged is a re-date without new
 # evidence; the second such re-date in a row is refused by `hold-gate` and,
 # when it happened anyway (a direct tasks-axi hold), lists the row as
-# `redated`. New evidence resets the count. A date that carries the captain's
+# `redated`. New evidence since the last date, or any running owner (a
+# genuine captain call included), resets the count. A date that carries the captain's
 # own deferral record (bin/fm-captain-hold.sh --captain-words-file) is never
 # counted. Every observed re-date is appended to state/.queue-zero-redates.jsonl
 # (kept seven days), with kind progress, none, captain, or refused.
@@ -51,7 +52,8 @@
 #   ready    queued, every blocker done, no active hold or its date has passed
 #            (exactly bin/fm-tasks-axi.sh ready), excluding captain holds
 #   redated  an open row re-dated twice running with no new evidence; listed
-#            until it gains evidence, is started, or is closed
+#            until it gains evidence, gets a running owner (a genuine captain
+#            call included), or is closed
 #   unowned  queued, not ready, filed at least FM_QUEUE_ZERO_AGE_DAYS ago
 #            (default 1), and with no owner above, whatever its hold date
 #   nocheck  a genuine captain call with no open blocker and no --until date
@@ -86,7 +88,9 @@
 # bin/fm-captain-hold.sh runs it after every hold so the new date's evidence
 # fingerprint is the one taken at hold time.
 #
-# `hold-gate <id> <date>` is asked before a hold sets <id>'s --until to <date>.
+# `hold-gate <id> <date> [<reason>]` is asked before a hold sets <id>'s
+# --until to <date>, with the hold's reason so a hand-off to a registered
+# secondmate passes.
 # It folds the current backlog into the ledger, then exits 0 when the hold may
 # proceed, or exits 3 naming the only answers when it would be the second
 # re-date running without new evidence since the last hold (and logs the
@@ -129,7 +133,8 @@ Usage:
   fm-queue-zero.sh scan [--local] [--json]   list queued rows that must leave the queue now
   fm-queue-zero.sh check                      heartbeat hook: fold the re-date ledger, one wake per new episode
   fm-queue-zero.sh observe                    fold the re-date ledger now (run after every hold)
-  fm-queue-zero.sh hold-gate <id> <date>      exit 0 when a hold may set <id>'s --until to <date>,
+  fm-queue-zero.sh hold-gate <id> <date> [<reason>]
+                                              exit 0 when a hold may set <id>'s --until to <date>,
                                               3 when it is a second re-date without new evidence
   fm-queue-zero.sh load                       this home's attention numbers as JSON
   fm-queue-zero.sh --help                     print this help
@@ -288,7 +293,8 @@ build_model() {
     | ([$all[] | {key:.id, value:.}] | from_entries) as $by_id
     | [$all[] | select(.state != "done")] as $open
     # Fold the ledger: a moved hold-until date is a re-date, scored against
-    # the evidence fingerprint stored when the previous date was set.
+    # the evidence fingerprint stored when the previous date was set. New
+    # evidence since that date, or any running owner, clears the strikes.
     | [ $open[] | . as $r
         | ($evidence[$r.id] // {status:0, worker:false}) as $e
         | {status:$e.status, worker:$e.worker,
@@ -297,7 +303,7 @@ build_model() {
         | ($ledger[$r.id]) as $prev
         | ($r.hold_until // "") as $until
         | ($r | owner($live; $by_id; [$r.id])) as $owner
-        | (if $prev == null then {entry:{until:$until, fp:$fp, strikes:0}, event:null}
+        | ((if $prev == null then {entry:{until:$until, fp:$fp, strikes:0}, event:null}
            elif $until != "" and ($prev.until // "") != "" and $until != $prev.until then
              (if any(($r.body_lines // [])[]; . == "Captain deferral until \($until):") then "captain"
               elif $fp != $prev.fp then "progress" else "none" end) as $kind
@@ -306,7 +312,9 @@ build_model() {
                 event:{at:$now, id:$r.id, from:$prev.until, to:$until, kind:$kind}}
            elif $until != "" and ($prev.until // "") == "" then
              {entry:{until:$until, fp:$fp, strikes:($prev.strikes // 0)}, event:null}
-           else {entry:{until:$prev.until, fp:$prev.fp, strikes:($prev.strikes // 0)}, event:null} end) as $step
+           else {entry:{until:$prev.until, fp:$prev.fp, strikes:($prev.strikes // 0)}, event:null} end)
+          | if $owner != null or ($prev != null and $fp != $prev.fp) then .entry.strikes = 0 else . end)
+          as $step
         | {id:$r.id, row:$r, owner:$owner, cur_fp:$fp, event:$step.event,
            entry:($step.entry + {unowned_since:(
              if $owner != null then null
@@ -322,7 +330,7 @@ build_model() {
         | {source:"queue", ref:$r.id, title:($r.title // "")}
           + if $r.state == "queued" and $is_ready != null and $r.hold_kind != "captain" then
               {class:"ready", detail:("filed " + ($r.since // "undated"))}
-            elif ($f.entry.strikes // 0) >= 2 and $f.owner != "worker" then
+            elif ($f.entry.strikes // 0) >= 2 then
               {class:"redated",
                detail:("re-dated \($f.entry.strikes) times running with no new evidence, now until "
                        + ($r.hold_until // "-"))}
@@ -518,23 +526,28 @@ action_observe() {
 }
 
 # A re-date is refused when the row was already re-dated once with no new
-# evidence and nothing has changed since: same evidence fingerprint as when its
-# current date was set. A live worker, a first date, or the same date passes.
-action_hold_gate() {  # <id> <date>
-  local id=${1:-} until=${2:-} verdict from
-  [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+# evidence and nothing has changed since (the fold clears the strike on new
+# evidence or a running owner). A first date, the same date, or a hold whose
+# reason hands the row to a registered secondmate passes.
+action_hold_gate() {  # <id> <date> [<reason>]
+  local id=${1:-} until=${2:-} reason=${3:-} verdict from word
+  [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || { usage >&2; exit 2; }
   case "$until" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) : ;;
     *) die "hold-gate needs a YYYY-MM-DD date: $until" 2 ;;
   esac
   home_paired || return 0
+  word=$(printf '%s' "$reason" | sed -n 's/^owner:[[:space:]]*\([A-Za-z0-9._-][A-Za-z0-9._-]*\).*/\1/p')
+  if [ -n "$word" ] && secondmate_ids | jq -e --arg w "$word" 'index($w) != null' >/dev/null; then
+    return 0
+  fi
   ledger_lock
   build_model || die "cannot judge re-dating $id: $MODEL_ERROR" 2
   persist_model || die "cannot record the re-date ledger before holding $id" 2
   verdict=$(printf '%s' "$MODEL" | jq -r --arg id "$id" --arg until "$until" '
     [.folded[] | select(.id == $id)][0] as $f
-    | if $f == null or $f.owner == "worker" or ($f.until // "") == "" or $f.until == $until then "allow"
-      elif ($f.strikes // 0) >= 1 and $f.cur_fp == $f.fp then "refuse \($f.until)"
+    | if $f == null or ($f.until // "") == "" or $f.until == $until then "allow"
+      elif ($f.strikes // 0) >= 1 then "refuse \($f.until)"
       else "allow" end')
   if [ "${verdict%% *}" = refuse ]; then
     from=${verdict#refuse }

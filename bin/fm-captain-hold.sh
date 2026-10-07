@@ -949,7 +949,7 @@ command_hold() {
   if [ -n "$until" ] && [ -z "$words_file" ]; then
     gate_rc=0
     FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
-      "$SCRIPT_DIR/fm-queue-zero.sh" hold-gate "$id" "$until" || gate_rc=$?
+      "$SCRIPT_DIR/fm-queue-zero.sh" hold-gate "$id" "$until" "$reason" || gate_rc=$?
     case "$gate_rc" in
       0) : ;;
       3) exit 3 ;;
