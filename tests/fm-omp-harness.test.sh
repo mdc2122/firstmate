@@ -767,9 +767,11 @@ if (marker[1] !== String(process.pid)) throw new Error("loaded marker must recor
 const again = await tool.execute();
 if (!/^watcher: unchanged - omp extension already owns an arm child/.test(again.content[0].text)) throw new Error(`redundant arm was not an ownership no-op: ${again.content[0].text}`);
 await new Promise((r) => setTimeout(r, 2500));
-if (sent.length !== 1) throw new Error(`expected one follow-up wake, saw ${sent.length}: ${JSON.stringify(sent)}`);
+if (sent.length !== 1) throw new Error(`expected one wake, saw ${sent.length}: ${JSON.stringify(sent)}`);
 if (!sent[0].m.startsWith("⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: signal: omp-e2e done")) throw new Error(`unexpected wake text: ${sent[0].m}`);
-if (sent[0].o?.deliverAs !== "followUp") throw new Error("wake must be delivered as a follow-up");
+// No run has started, so main is idle: the wake must start a turn (aside),
+// never queue as an idle follow-up that omp can park.
+if (sent[0].o?.deliverAs !== "aside") throw new Error(`an idle main must get the wake as an aside, got ${JSON.stringify(sent[0].o)}`);
 // The wake is consumed when omp starts the next run with that exact prompt.
 await handlers.get("before_agent_start")({ type: "before_agent_start", prompt: sent[0].m }, {});
 await handlers.get("session_shutdown")({}, {});
@@ -780,7 +782,7 @@ EOF
   status=$?
   expect_code 0 "$status" "omp watch extension contract: $out"
   [ -z "$out" ] || fail "omp watch extension test printed output: $out"
-  pass ".omp watch extension: fm_watch_arm_omp arms once, repeats as a no-op, and delivers an actionable close as one follow-up"
+  pass ".omp watch extension: fm_watch_arm_omp arms once, repeats as a no-op, and delivers an actionable close to an idle main as one turn-starting wake"
 }
 
 test_watch_extension_helper_session_leaves_owner_live() {
@@ -1093,10 +1095,13 @@ SH
   chmod +x "$1/bin/fm-watch-arm.sh"
 }
 
-# The 2026-10-05 ghost-wake shape: a main turn ended in a provider error, so
-# omp parked wake A unconsumed. A later close B must still reach omp at once as
-# a follow-up, because each new follow-up is what retries omp's parked drain.
-test_watch_extension_sends_wake_while_earlier_one_is_parked() {
+# The 2026-10-06 stall: an idle custom message (a supervision-branch note) made
+# omp park every idle follow-up until the captain typed - 87 rows over 2.5h.
+# With main idle, each close must reach omp at once as an aside (which starts a
+# turn), never an idle follow-up, even while an earlier wake is unconsumed; a
+# streaming main still gets a follow-up. A wake left unconsumed while main is
+# idle gets one hidden triggerTurn re-poke naming it, and consumption stops it.
+test_watch_extension_idle_wakes_start_turns_and_unconsumed_ones_are_repoked() {
   local dir repo home out status
   dir="$TMP_ROOT/watch-parked"; repo="$dir/repo"; home="$dir/home"
   install_omp_extension_fixture "$repo"
@@ -1104,34 +1109,67 @@ test_watch_extension_sends_wake_while_earlier_one_is_parked() {
   mkdir -p "$home/state"
   printf '7\tcheck: omp-parked A ready\n8\tcheck: omp-parked B ready\n' > "$home/state/.e2e-plan"
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
-    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
+    FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 FM_OMP_WAKE_REPOKE_SECS=2 \
     EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
 import { pathToFileURL } from "node:url";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync } from "node:fs";
 writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
-const handlers = new Map(); const sent = [];
+const handlers = new Map(); const sent = []; const pokes = [];
+let idle = true;
+const ctx = { isIdle: () => idle };
 const mod = await import(pathToFileURL(process.env.EXT).href);
 mod.default({
   on(e, h) { handlers.set(e, h); },
   registerCommand() {},
   registerTool() {},
   sendUserMessage(m, options) { sent.push({ m, deliverAs: options?.deliverAs }); return undefined; },
+  sendMessage(m, options) { pokes.push({ ...m, ...options }); },
 });
-await handlers.get("session_start")({}, {});
-const deadline = Date.now() + 20000;
-while (Date.now() < deadline && sent.length < 2) await new Promise((r) => setTimeout(r, 50));
-await handlers.get("session_shutdown")({}, {});
-if (sent.length !== 2 || !sent[0].m.includes("omp-parked A") || !sent[1].m.includes("omp-parked B")) {
-  throw new Error(`B must reach omp while A is still parked, saw ${JSON.stringify(sent.map((s) => s.m.match(/omp-parked \w/)?.[0] ?? s.m))}`);
+await handlers.get("session_start")({}, ctx);
+// Main ran a turn and settled: the idle state the stall happened in.
+await handlers.get("agent_start")({}, ctx);
+idle = false;
+await handlers.get("agent_end")({}, ctx);
+idle = true;
+const wait = async (cond, ms) => { const end = Date.now() + ms; while (Date.now() < end && !cond()) await new Promise((r) => setTimeout(r, 50)); };
+await wait(() => sent.length >= 2, 20000);
+if (sent.length < 2 || !sent[0].m.includes("omp-parked A") || !sent[1].m.includes("omp-parked B")) {
+  throw new Error(`B must reach omp while A is still unconsumed, saw ${JSON.stringify(sent.map((s) => s.m.match(/omp-parked \w/)?.[0] ?? s.m))}`);
 }
-if (sent.some((s) => s.deliverAs !== "followUp")) throw new Error(`every wake must be a followUp: ${JSON.stringify(sent.map((s) => s.deliverAs))}`);
+if (sent.slice(0, 2).some((s) => s.deliverAs !== "aside")) throw new Error(`an idle main must get every wake as an aside: ${JSON.stringify(sent.map((s) => s.deliverAs))}`);
+// Neither was consumed: each is re-poked once its own interval passes, as a
+// hidden turn trigger naming it and the drain.
+const poked = (tag) => pokes.some((p) => p.content.includes(tag));
+await wait(() => poked("omp-parked A") && poked("omp-parked B"), 8000);
+if (!poked("omp-parked A") || !poked("omp-parked B")) throw new Error(`both unconsumed wakes must be re-poked, saw ${JSON.stringify(pokes.map((p) => p.content))}`);
+for (const poke of pokes) {
+  if (poke.triggerTurn !== true || poke.display !== false) throw new Error(`a re-poke must be a hidden triggerTurn message: ${JSON.stringify(poke)}`);
+  if (!poke.content.includes("fm-wake-drain.sh")) throw new Error(`a re-poke must name the drain: ${poke.content}`);
+}
+if (!/re-poked [12] unconsumed wake/.test(readFileSync(`${process.env.FM_HOME}/state/.watch-triage.log`, "utf8"))) throw new Error("the re-poke was not logged");
+// The poke started a turn that consumed both wakes; while main streams, the next
+// close is a follow-up joining the running run, and no further poke fires.
+await handlers.get("before_agent_start")({ prompt: sent[0].m }, ctx);
+await handlers.get("message_start")({ message: { role: "user", content: [{ type: "text", text: sent[1].m }], timestamp: 1 } }, ctx);
+idle = false;
+await handlers.get("agent_start")({}, ctx);
+// The next close arrives only now, while main streams.
+writeFileSync(`${process.env.FM_HOME}/state/.e2e-plan`, "9\tcheck: omp-parked C ready\n");
+const pokesAtConsumption = pokes.length;
+await wait(() => sent.length >= 3, 20000);
+if (sent[2]?.deliverAs !== "followUp") throw new Error(`a streaming main must get the wake as a follow-up: ${JSON.stringify(sent.map((s) => s.deliverAs))}`);
+await handlers.get("message_start")({ message: { role: "user", content: [{ type: "text", text: sent[2].m }], timestamp: 2 } }, ctx);
+idle = true;
+await new Promise((r) => setTimeout(r, 3000));
+if (pokes.length !== pokesAtConsumption) throw new Error(`consumed wakes must not be re-poked, saw ${pokes.length - pokesAtConsumption} more`);
+await handlers.get("session_shutdown")({}, ctx);
 process.exit(0);
 EOF
 )
   status=$?
-  expect_code 0 "$status" "omp parked-wake delivery: $out"
-  [ -z "$out" ] || fail "omp parked-wake delivery test printed output: $out"
-  pass ".omp watch extension: a close arriving while an earlier follow-up is parked unconsumed is sent to omp at once"
+  expect_code 0 "$status" "omp idle-wake delivery and re-poke: $out"
+  [ -z "$out" ] || fail "omp idle-wake delivery test printed output: $out"
+  pass ".omp watch extension: idle wakes start turns, unconsumed ones are re-poked once, and a streaming main gets follow-ups"
 }
 
 # The 2026-10-05 ghost wakes: omp hands main a stale wake for a terminal torn
@@ -1280,6 +1318,6 @@ test_nested_omp_process_never_arms
 test_watch_extension_restart_skips_acknowledged_handoff
 test_watch_extension_restart_replays_unacknowledged_handoff_once
 test_watch_extension_restart_decides_replay_per_wake_within_one_generation
-test_watch_extension_sends_wake_while_earlier_one_is_parked
+test_watch_extension_idle_wakes_start_turns_and_unconsumed_ones_are_repoked
 test_watch_extension_context_drops_superseded_wakes
 test_watch_extension_drop_binds_one_message_of_repeated_text

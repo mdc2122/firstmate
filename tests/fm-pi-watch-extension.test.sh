@@ -452,7 +452,8 @@ trap 'exit 0' TERM INT
 while [ ! -e "$FM_STOP_FILE" ]; do sleep 0.02; done
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
-  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" node --input-type=module 2>&1 <<'EOF'
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" \
+    FM_BRANCH_GRANT_TTL_SECS=1 FM_BRANCH_HANDBACK_GRACE_MS=200 node --input-type=module 2>&1 <<'EOF'
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -460,7 +461,7 @@ import { pathToFileURL } from "node:url";
 // branch listener the wake must be owned by the branch (no main follow-up);
 // with a bus but no acceptor the dispatcher must fall back to main. The
 // divergence between the two runs is asserted, so the case cannot go vacuous.
-async function runScenario(withAcceptor) {
+async function runScenario(withAcceptor, settlement = () => Promise.resolve()) {
   writeFileSync(process.env.FM_ARM_LOG, "");
   const offers = [];
   let mainPrompt = "";
@@ -478,7 +479,7 @@ async function runScenario(withAcceptor) {
   if (withAcceptor) {
     bus.on("fm-branch-supervision:dispatch", (offer) => {
       offers.push({ message: offer.message, projects: offer.projects });
-      offer.accept();
+      offer.accept(settlement());
     });
   }
   const pi = {
@@ -495,8 +496,8 @@ async function runScenario(withAcceptor) {
   const mod = await import(`${pathToFileURL(process.env.PLUGIN).href}?scenario=${withAcceptor}`);
   mod.default(pi);
   await tool.execute("tool-call-branch-offer", {}, undefined, undefined, {});
-  for (let i = 0; i < 250; i += 1) {
-    const settled = withAcceptor ? offers.length > 0 : mainPrompt !== "";
+  for (let i = 0; i < 400; i += 1) {
+    const settled = withAcceptor === "hang" ? mainPrompt !== "" : withAcceptor ? offers.length > 0 : mainPrompt !== "";
     if (settled) break;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -527,6 +528,13 @@ if (!declined.mainPrompt.includes("FIRSTMATE WATCHER WAKE")) {
 if (!declined.mainPrompt.includes("signal: branch-offer synthetic wake")) {
   throw new Error(`fallback wake lost the reason line: ${declined.mainPrompt}`);
 }
+// A branch that accepts and never settles (the 2026-10-06 stall shape) holds
+// the wake only for the grant TTL plus grace, then main gets it with a note.
+const hung = await runScenario("hang", () => new Promise(() => {}));
+if (hung.offers.length !== 1) throw new Error(`the hanging branch was not offered the wake: ${hung.offers.length}`);
+if (!hung.mainPrompt.includes("signal: branch-offer synthetic wake") || !/supervision branch produced no outcome for this wake within/.test(hung.mainPrompt)) {
+  throw new Error(`a branch that never settles must hand the wake to main with a note: ${hung.mainPrompt}`);
+}
 writeFileSync(process.env.FM_STOP_FILE, "stop\n");
 process.exit(0);
 EOF
@@ -534,7 +542,7 @@ EOF
   status=$?
   expect_code 0 "$status" "Pi dispatcher must hand an accepted wake to the branch and fall back to main otherwise"
   [ -z "$out" ] || fail "Pi branch-offer test printed output: $out"
-  pass "Pi dispatcher branch offer owns accepted wakes and falls back to main"
+  pass "Pi dispatcher branch offer owns accepted wakes, falls back to main, and hands back a wake the branch holds past the grant TTL"
 }
 
 test_pi_branch_offer_flags_heartbeat() {

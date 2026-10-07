@@ -70,11 +70,20 @@ MAIN_ROWS_FILE="$STATE/.main-eligible-rows"
 
 rows_file_valid() { fm_wake_grant_rows_valid "$1"; }
 
+# An owner that is gone retires the whole grant. A live owner whose grant aged
+# past the TTL (fm_wake_branch_grant_fresh) keeps its owner record, so the
+# branch can publish again, but its rows revert to main with a one-line note.
 reclaim_stale_branch_grant_locked() {
   [ -e "$ELIGIBLE_ROWS_FILE" ] || [ -L "$ELIGIBLE_ROWS_FILE" ] || return 0
-  if ! fm_wake_branch_grant_live "$ELIGIBLE_ROWS_FILE" "$ELIGIBLE_OWNER_FILE"; then
-    rm -f -- "$ELIGIBLE_ROWS_FILE" "$ELIGIBLE_OWNER_FILE"
+  fm_wake_branch_grant_live "$ELIGIBLE_ROWS_FILE" "$ELIGIBLE_OWNER_FILE" && return 0
+  if fm_wake_grant_rows_valid "$ELIGIBLE_ROWS_FILE" && fm_wake_branch_owner_matches "$ELIGIBLE_OWNER_FILE"; then
+    [ "$ACTOR" = main ] || return 0
+    printf 'WAKE ROWS REVERTED FROM SUPERVISION BRANCH: %s row(s) held %ss without branch progress (TTL %ss) are main'"'"'s now.\n' \
+      "$(grep -c . "$ELIGIBLE_ROWS_FILE")" "$(fm_path_age "$ELIGIBLE_ROWS_FILE")" "$(fm_wake_branch_grant_ttl)"
+    rm -f -- "$ELIGIBLE_ROWS_FILE"
+    return
   fi
+  rm -f -- "$ELIGIBLE_ROWS_FILE" "$ELIGIBLE_OWNER_FILE"
 }
 
 # Retire rows no actor can ever consume. A claim, a presentation, and an
@@ -639,7 +648,9 @@ else
   exit 1
 fi
 DRAIN_LOCK_HELD=true
-reclaim_stale_branch_grant_locked || exit 1
+if [ "$ACTOR" != main ] || [ -z "$ACK_THROUGH" ]; then
+  reclaim_stale_branch_grant_locked || exit 1
+fi
 [ "$ACTOR" != main ] || retire_unconsumable_rows_locked
 [ "$ACTOR" != branch ] || require_branch_eligible_rows || exit 1
 

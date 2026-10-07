@@ -212,6 +212,11 @@ mkdir -p "$STATE"
 # watcher reads only its presence (afk_record_present below).
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# Active alert channels for the wake-queue stall alarm (wake_queue_stall_tick);
+# their diagnostics go to the triage log.
+wedge_alarm_log() { triage_log "$*"; }
+# shellcheck source=bin/fm-wedge-alarm-lib.sh
+. "$SCRIPT_DIR/fm-wedge-alarm-lib.sh"
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -332,6 +337,12 @@ BUSY_TURN_MAX_SECS=${FM_BUSY_TURN_MAX_SECS:-3600}
 # secondmate_wake_stall_tick, never a substitute for it.
 SECONDMATE_WAKE_STALL_SECS=${FM_SECONDMATE_WAKE_STALL_SECS:-}
 case "$SECONDMATE_WAKE_STALL_SECS" in ''|*[!0-9]*|0) SECONDMATE_WAKE_STALL_SECS=180 ;; esac
+# This home's own queue is the 2026-10-06 omp case: the watcher kept queueing
+# and delivering while main never woke, so 87 rows sat for 2.5 hours in
+# silence. wake_queue_stall_tick raises one wake plus the active alert channel
+# (bin/fm-wedge-alarm-lib.sh) when the oldest row stays queued this long.
+WAKE_QUEUE_STALL_SECS=${FM_WAKE_QUEUE_STALL_SECS:-}
+case "$WAKE_QUEUE_STALL_SECS" in ''|*[!0-9]*|0) WAKE_QUEUE_STALL_SECS=600 ;; esac
 # A crew that declared a pause is idling on a known external wait, so its stale
 # pane is absorbed rather than wedge-escalated.
 # A captain-held or paused crew whose agent has confidently exited uses the same
@@ -902,6 +913,93 @@ EOF
     wake "$reason"
   done
   return 0
+}
+
+# The oldest row in this home's own queue that no actor has taken up: not
+# claimed by a main drain (state/.main-eligible-rows) and not reserved by a live
+# branch grant. A row an actor holds is being handled; one nobody holds after
+# WAKE_QUEUE_STALL_SECS is a wake that never reached a conversation. Prints
+# "<seq> <count>" or nothing.
+wake_queue_unheld_oldest() {
+  local grant=
+  [ -f "$FM_WAKE_QUEUE" ] || return 0
+  if fm_wake_branch_grant_live "$STATE/.branch-eligible-rows" "$STATE/.branch-eligible-owner"; then
+    grant="$STATE/.branch-eligible-rows"
+  fi
+  awk -F '\t' -v main="$STATE/.main-eligible-rows" -v grant="$grant" '
+    BEGIN {
+      while ((getline line < main) > 0) held[line] = 1
+      if (grant != "") while ((getline line < grant) > 0) held[line] = 1
+    }
+    NF >= 5 && $2 ~ /^[0-9]+$/ && !($2 in held) {
+      n++
+      if (oldest == "" || $2 + 0 < oldest + 0) oldest = $2
+    }
+    END { if (n) print oldest, n }
+  ' "$FM_WAKE_QUEUE" 2>/dev/null || true
+}
+
+# 0 iff a conversation that will take the queue up is provably mid-turn, bounded
+# by BUSY_TURN_MAX_SECS on <idle> exactly as secondmate_in_active_turn is: main
+# when state/.main-turn-busy (written by the omp watch extension at agent_start,
+# removed at agent_end) names the live pid holding state/.lock, or the branch
+# when its row grant is live and fresh. Any absence of proof is not a turn.
+wake_queue_consumer_in_active_turn() {  # <idle>
+  local pid generation started extra
+  [ "$1" -lt "$BUSY_TURN_MAX_SECS" ] || return 1
+  fm_wake_branch_grant_live "$STATE/.branch-eligible-rows" "$STATE/.branch-eligible-owner" && return 0
+  read -r pid generation started extra < "$STATE/.main-turn-busy" 2>/dev/null || return 1
+  [ -z "$extra" ] || return 1
+  case "$generation$started" in ''|*[!0-9]*) return 1 ;; esac
+  [ -n "$generation" ] && [ -n "$started" ] || return 1
+  [ "$pid" = "$(sed -n '1p' "$STATE/.lock" 2>/dev/null)" ] || return 1
+  fm_pid_alive "$pid"
+}
+
+# Alarm once per episode when this home's own queue holds a row no conversation
+# has taken up for WAKE_QUEUE_STALL_SECS. The interval is measured from when
+# this watcher first saw that row as the oldest unheld one (the secondmate
+# tick's progress-marker discipline), so a row's age from before an outage never
+# alarms on sight and a draining queue keeps restarting the clock. The alarm is
+# one check wake for main plus the configured active alert channel, because a
+# conversation that is not taking wakes may not see the first. A consumer
+# provably mid-turn defers the alarm, but only while that same interval is under
+# BUSY_TURN_MAX_SECS, so a turn that never ends cannot hide a frozen queue.
+wake_queue_stall_tick() {
+  local now oldest count observed observed_at observed_seq idle marker progress reason key
+  now=$(date +%s)
+  marker="$STATE/.wake-queue-stall-alerted"
+  progress="$STATE/.wake-queue-stall-progress"
+  read -r oldest count <<EOF
+$(wake_queue_unheld_oldest)
+EOF
+  if [ -z "${oldest:-}" ]; then
+    rm -f -- "$marker" "$progress"
+    return 0
+  fi
+  observed=$(cat "$progress" 2>/dev/null || true)
+  observed_at=${observed%% *}
+  observed_seq=${observed#* }
+  case "$observed_at" in ''|*[!0-9]*) observed_at= ;; esac
+  if [ -z "$observed_at" ] || [ "$observed_seq" != "$oldest" ] || [ "$now" -lt "$observed_at" ]; then
+    printf '%s %s\n' "$now" "$oldest" > "$progress" || return 1
+    rm -f -- "$marker"
+    return 0
+  fi
+  [ "$(cat "$marker" 2>/dev/null || true)" != "$oldest" ] || return 0
+  idle=$((now - observed_at))
+  [ "$idle" -ge "$WAKE_QUEUE_STALL_SECS" ] || return 0
+  ! wake_queue_consumer_in_active_turn "$idle" || return 0
+  reason="check: wake-queue stalled: $count queued wake(s) not taken up by any conversation; oldest row=$oldest waiting ${idle}s"
+  key="wake-queue-stall-$oldest"
+  if ! fm_wake_queued_keys check | grep -Fx "$key" >/dev/null 2>&1; then
+    fm_wake_append check "$key" "$reason" || return 1
+  fi
+  printf '%s\n' "$oldest" > "$marker" || return 1
+  triage_log "wake-queue stall alarm: $reason"
+  ( WEDGE_ALARM_TITLE="firstmate: monitoring notifications not reaching the conversation" \
+    wedge_alarm_notify "$count notification(s) queued with no conversation taking them for ${idle}s (oldest row $oldest)" "$progress" ) >/dev/null 2>&1 || true
+  wake "$reason"
 }
 
 # Consecutive wedge-escalation count for a window past FM_WEDGE_DEMAND_INSPECT_COUNT
@@ -2420,6 +2518,11 @@ while :; do
     echo "watcher: secondmate wake-loop observation failed" >&2
     exit 1
   }
+
+  # This home's own queue: a wake no conversation has taken up for
+  # WAKE_QUEUE_STALL_SECS raises a check wake and the active alert channel.
+  # Observation failure is reported but never stops the cycle.
+  wake_queue_stall_tick || echo "watcher: wake-queue stall observation failed" >&2
 
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this

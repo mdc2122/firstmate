@@ -400,6 +400,18 @@ export async function releaseEligibleRowsSnapshot(
   return (await runGrantScript(state, grantScript, ["release", generation])) === 0;
 }
 
+// Branch progress for the grant TTL (bin/fm-wake-lib.sh
+// fm_wake_branch_grant_fresh): true when the held grant was refreshed or there
+// was none to refresh, false when it already aged out or is not this
+// generation's.
+export async function touchEligibleRowsSnapshot(
+  state: string,
+  grantScript: string,
+  generation: string,
+): Promise<boolean> {
+  return (await runGrantScript(state, grantScript, ["touch", generation])) === 0;
+}
+
 export async function deactivateEligibleRowsOwner(
   state: string,
   grantScript: string,

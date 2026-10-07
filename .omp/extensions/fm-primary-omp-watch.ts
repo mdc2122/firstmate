@@ -51,23 +51,44 @@
 // tagged owner or inert, to state/extensions/omp-primary-watch/session-generations.log.
 //
 // Delivery versus consumption (stated once here):
-// A main follow-up is delivered once omp accepts it (sendUserMessage returns).
+// A main wake is delivered once omp accepts it (sendUserMessage returns).
 // The successor pipeline never waits for the model to read it: a follow-up
 // queued while main is streaming joins the running run without ever raising
 // before_agent_start, so waiting on that event stalls every later close.
-// Consumption is tracked only so a replacement can replay a follow-up omp had
-// not consumed. An idle main consumes at before_agent_start; a streaming main
-// consumes at the user message_start carrying the exact wake text; either
-// event finishes the pending record, and a still-unconsumed record rides the
-// replacement handoff.
+// An idle main is handed the wake as an `aside`, which starts a turn at once.
+// It is never handed an idle follow-up: omp drains idle follow-ups only while
+// the transcript ends in an assistant or tool result (verified omp 18.4.4,
+// agent-session #canAutoContinueForFollowUp), so one idle custom message - a
+// supervision-branch note, a hidden processing record - or a captain interrupt
+// parks every later follow-up until the captain types (the 2026-10-06 stall:
+// 87 rows, 13:41-16:19). A streaming main still gets a follow-up, which the
+// running agent loop consumes at its end.
+// Consumption is tracked so a replacement can replay a wake omp had not
+// consumed and so a parked one is re-poked. An idle main consumes at
+// before_agent_start; a streaming main consumes at the user message_start
+// carrying the exact wake text; either event finishes the pending record, and
+// a still-unconsumed record rides the replacement handoff. A wake still
+// unconsumed FM_OMP_WAKE_REPOKE_SECS (default 90) after delivery while main
+// is idle gets one hidden triggerTurn re-poke per interval, at most
+// repokeLimit times; that turn drains omp's parked queue (verified) and its
+// own text names the wake, so main drains even if omp dropped the follow-up.
+// bin/fm-watch.sh's queue-stall alarm owns anything older still.
+//
+// Branch hand-back (stated once here):
+// An accepted supervision-branch offer is awaited for at most the grant TTL
+// (FM_BRANCH_GRANT_TTL_SECS, default 600; bin/fm-wake-lib.sh owns it) plus
+// FM_BRANCH_HANDBACK_GRACE_MS (default 30000). A branch still unsettled then
+// is treated as holding the wake without an outcome: the wake goes to main
+// with a one-line note, and
+// the grant has by then aged past its TTL unless the branch kept proving
+// progress, so main's drain reclaims those rows (docs/watcher-continuity.md).
 //
 // Supersession at delivery (stated once here):
-// omp queues every accepted follow-up while main is not running (a turn that
+// omp queues an accepted follow-up while main is not running (a turn that
 // ended in a provider error leaves it parked until the next prompt) and then
 // replays the backlog one turn each, so stale wakes for a worker torn down in
 // the meantime would each cost a turn. Every actionable close is still sent
-// to omp at once, because each new follow-up is what retries omp's parked
-// queue drain. A wake is instead judged when omp hands it to the model (its
+// to omp at once. A wake is instead judged when omp hands it to the model (its
 // consumption), and is dropped as superseded only when all of these hold: its
 // reason line starts with `stale:`; the endpoint it names maps to no
 // state/<id>.meta (no meta file named for it, none recording it as window= or
@@ -105,10 +126,15 @@ import type { OmpBranchShadowWake } from "./lib/fm-omp-branch.ts";
 type ExtensionAPI = {
   on?: (event: string, handler: (event: any, ctx: any) => unknown) => void;
   sendUserMessage: (content: string, options?: { deliverAs?: string }) => unknown;
+  sendMessage?: (message: { customType: string; content: string; display: boolean }, options?: { triggerTurn?: boolean; deliverAs?: string }) => unknown;
   registerCommand?: (name: string, command: { description: string; handler: (args: string, ctx: any) => Promise<void> | void }) => void;
   registerTool?: (tool: Record<string, unknown>) => void;
   events?: { emit(channel: string, data: unknown): void };
 };
+
+// The slice of omp's handler context the delivery path reads (verified omp
+// 18.4.4: isIdle is `!session.isStreaming`).
+type MainContext = { isIdle?: () => boolean };
 
 type ArmResult = {
   ok: boolean;
@@ -147,6 +173,8 @@ type ReplacementActionableHandoff = {
 type UnconsumedWake = {
   content: string;
   pending: PendingActionableClose;
+  deliveredAt: number;
+  repokes: number;
 };
 
 type SessionGeneration = {
@@ -178,6 +206,8 @@ type SessionGeneration = {
   // A drop judged at before_agent_start, which carries no message timestamp,
   // until the user message_start for the same prompt binds it.
   unstampedDrop: { text: string; body: string; line: string } | null;
+  // The consumption watchdog's single timer; armed while any wake is unconsumed.
+  repokeTimer: NodeJS.Timeout | null;
   // A verified successor's failure close that arrived while the pipeline was
   // still verifying the successor for an earlier close; its bounded retry runs
   // once that delivery settles instead of being skipped by the single-flight guard.
@@ -216,6 +246,10 @@ const branchSupport = await (async () => {
 })();
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
+// bin/fm-watch.sh's queue-stall alarm defers while this names the live lock
+// holder: "<pid> <generation> <started-epoch>", written at agent_start and
+// removed at the run's agent_end or when the generation stops.
+const mainTurnMarker = `${state}/.main-turn-busy`;
 const handoffDir = `${state}/extensions/omp-primary-watch`;
 const actionableHandoff = `${handoffDir}/session-replacement-actionable.json`;
 const wakeQueue = `${state}/.wake-queue`;
@@ -235,6 +269,13 @@ const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 100
 // Dropped wake messages remembered for the context event; an older one has
 // long since been followed by turns that handled the queue, or compacted away.
 const droppedWakeLimit = 128;
+// The header's "Delivery versus consumption" owns the re-poke rule.
+const repokeMs = positiveInteger("FM_OMP_WAKE_REPOKE_SECS", 90) * 1000;
+const repokeLimit = 3;
+// The header's "Branch hand-back" owns this bound; bin/fm-wake-lib.sh owns the
+// TTL default.
+const branchHandbackMs = positiveInteger("FM_BRANCH_GRANT_TTL_SECS", 600) * 1000
+  + positiveInteger("FM_BRANCH_HANDBACK_GRACE_MS", 30000);
 const repairOnlyHint = "call fm_watch_arm_omp again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - omp session is shutting down";
 const inertHelperMessage = "watcher: unchanged - another live omp session in this process owns the watcher";
@@ -609,6 +650,7 @@ function createGeneration(): SessionGeneration {
     unconsumedWakes: new Map(),
     droppedWakes: new Map(),
     unstampedDrop: null,
+    repokeTimer: null,
     deferredClose: null,
   };
 }
@@ -639,6 +681,24 @@ function recordSessionEvent(generation: SessionGeneration, instance: number, eve
   }
 }
 
+function recordMainTurnStart(generation: SessionGeneration): void {
+  if (!generationIsLive(generation) || lockOwnership() !== "owned") return;
+  try {
+    writeFileSync(mainTurnMarker, `${process.pid} ${generation.id} ${Math.floor(Date.now() / 1000)}\n`);
+  } catch {
+    // A missing marker only lets the stall alarm fire; it never blocks a turn.
+  }
+}
+
+function clearMainTurn(generation: SessionGeneration): void {
+  try {
+    const [pid, id] = readFileSync(mainTurnMarker, "utf8").trim().split(" ");
+    if (pid === String(process.pid) && id === String(generation.id)) unlinkSync(mainTurnMarker);
+  } catch {
+    // Absent already, or another owner's.
+  }
+}
+
 function generationIsLive(generation: SessionGeneration): boolean {
   return activeGeneration === generation && !generation.stopping;
 }
@@ -649,10 +709,13 @@ function refusalMessage(generation: SessionGeneration): string {
 
 function stopGeneration(generation: SessionGeneration): ChildProcess | null {
   generation.stopping = true;
-  if (generation.retryTimer) clearTimeout(generation.retryTimer);
-  if (generation.cleanupTimer) clearTimeout(generation.cleanupTimer);
+  clearMainTurn(generation);
+  clearTimeout(generation.retryTimer ?? undefined);
+  clearTimeout(generation.cleanupTimer ?? undefined);
+  clearTimeout(generation.repokeTimer ?? undefined);
   generation.retryTimer = null;
   generation.cleanupTimer = null;
+  generation.repokeTimer = null;
   const child = generation.child;
   if (child) child.kill("SIGTERM");
   generation.child = null;
@@ -710,6 +773,27 @@ export default function (pi: ExtensionAPI) {
   let generation = createGeneration();
   claimGeneration(generation);
   recordSessionEvent(generation, instance, "load");
+  // Main's run state for the header's "Delivery versus consumption" rule:
+  // omp's own isIdle when a handler context has been seen, else the
+  // agent_start/agent_end boundary. A wrong guess is still safe both ways: an
+  // aside to a running main joins it at the next step boundary, and a
+  // follow-up to an idle main is re-poked by the consumption watchdog.
+  let mainContext: MainContext | null = null;
+  let mainStreaming = false;
+  const mainIdle = (): boolean => {
+    try {
+      if (mainContext?.isIdle) return mainContext.isIdle();
+    } catch {
+      // A stale context falls back to the event boundary.
+    }
+    return !mainStreaming;
+  };
+
+  async function encodeWake(body: string): Promise<string> {
+    return branchSupport
+      ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
+      : encodeFirstmateOperationalInput("watcher", body);
+  }
 
   async function sendWake(
     owner: SessionGeneration,
@@ -717,23 +801,64 @@ export default function (pi: ExtensionAPI) {
     pending?: PendingActionableClose,
   ): Promise<boolean> {
     if (!generationIsLive(owner)) return false;
-    const body = `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`;
-    const content = branchSupport
-      ? await encodeFirstmateOperationalInputWith(branchSupport.runCommandAsync, "watcher", body)
-      : encodeFirstmateOperationalInput("watcher", body);
+    const content = await encodeWake(
+      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
+    );
     if (!generationIsLive(owner)) return false;
-    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending });
+    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending, deliveredAt: Date.now(), repokes: 0 });
     try {
-      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      await pi.sendUserMessage(content, { deliverAs: mainIdle() ? "aside" : "followUp" });
     } catch (error) {
       if (pending) owner.unconsumedWakes.delete(pending.token);
       throw error;
     }
+    if (pending) scheduleRepoke(owner);
     // Accepted by omp (sendUserMessage returns synchronously there; awaiting a
     // non-promise resolves at once). A generation replaced while omp was
     // accepting it may have lost the follow-up with the old session, so report
     // it undelivered and let the replacement replay the still-pending record.
     return generationIsLive(owner);
+  }
+
+  // The consumption watchdog (header, "Delivery versus consumption"). One
+  // timer per generation, re-armed while any delivered wake is unconsumed.
+  function scheduleRepoke(owner: SessionGeneration): void {
+    if (!generationIsLive(owner) || owner.repokeTimer) return;
+    if (![...owner.unconsumedWakes.values()].some((wake) => wake.repokes < repokeLimit)) return;
+    const timer = setTimeout(() => {
+      if (owner.repokeTimer === timer) owner.repokeTimer = null;
+      void repokeUnconsumed(owner).finally(() => scheduleRepoke(owner));
+    }, repokeMs);
+    timer.unref();
+    owner.repokeTimer = timer;
+  }
+
+  async function repokeUnconsumed(owner: SessionGeneration): Promise<void> {
+    if (!generationIsLive(owner) || !mainIdle()) return;
+    const now = Date.now();
+    const due = [...owner.unconsumedWakes.values()].filter(
+      (wake) => wake.repokes < repokeLimit && now - wake.deliveredAt >= repokeMs * (wake.repokes + 1),
+    );
+    if (due.length === 0) return;
+    const lines = due.map((wake) => actionableLine(wake.pending.message) || wake.pending.message.split("\n", 1)[0]);
+    const waited = Math.round((now - Math.min(...due.map((wake) => wake.deliveredAt))) / 1000);
+    let content: string;
+    try {
+      content = await encodeWake(
+        `FIRSTMATE WATCHER WAKE: re-poke - ${due.length} delivered wake(s) not started after ${waited}s while main was idle:\n${lines.join("\n")}\n\nRun bin/fm-wake-drain.sh first and handle the queued wakes. Watcher continuity is extension-owned.`,
+      );
+    } catch {
+      return;
+    }
+    if (!generationIsLive(owner) || !mainIdle()) return;
+    for (const wake of due) wake.repokes += 1;
+    triageLog(`omp extension re-poked ${due.length} unconsumed wake(s) after ${waited}s idle: ${lines.join(" | ")}`);
+    try {
+      if (pi.sendMessage) pi.sendMessage({ customType: "fm-watch-repoke", content, display: false }, { triggerTurn: true });
+      else await pi.sendUserMessage(content, { deliverAs: "aside" });
+    } catch {
+      // The next interval retries; the watcher's queue-stall alarm is the backstop.
+    }
   }
 
   function droppedWakeKey(timestamp: number, text: string): string {
@@ -844,18 +969,31 @@ export default function (pi: ExtensionAPI) {
   // `on`: offer the wake to the supervision branch first, exactly as the Pi
   // watcher does; classifyWakeForBranch owns eligibility. An accepted offer
   // whose settlement rejects falls through to main (F7), and so does an offer
-  // nobody accepts.
-  async function offerWakeToBranch(message: string): Promise<boolean> {
-    if (branchSupport?.mode !== "on") return false;
+  // nobody accepts. `handled` means the branch reported the wake; otherwise
+  // `note` is what main's wake carries ("" for an ordinary decline or F7
+  // rejection). The wait is bounded by the header's "Branch hand-back".
+  async function offerWakeToBranch(message: string): Promise<{ handled: boolean; note: string }> {
+    if (branchSupport?.mode !== "on") return { handled: false, note: "" };
     const { scope, heartbeat, eligible } = branchSupport.classifyWakeForBranch(state, message);
     const offer = branchSupport.createBranchDispatchOffer(message, scope.projects, heartbeat, eligible);
     pi.events?.emit(branchSupport.FM_BRANCH_DISPATCH_EVENT, offer);
-    if (!offer.accepted) return false;
+    if (!offer.accepted) return { handled: false, note: "" };
+    const { promise: expired, resolve: expire } = Promise.withResolvers<"expired">();
+    const timer = setTimeout(() => expire("expired"), branchHandbackMs);
+    timer.unref();
     try {
-      await offer.settlement;
-      return true;
+      const outcome = await Promise.race([offer.settlement.then(() => "settled" as const), expired]);
+      if (outcome === "settled") return { handled: true, note: "" };
+      const minutes = Math.round(branchHandbackMs / 60000);
+      triageLog(`omp extension handed a wake back to main: supervision branch produced no outcome within ${minutes}m: ${actionableLine(message)}`);
+      return {
+        handled: false,
+        note: `watcher: supervision branch produced no outcome for this wake within ${minutes}m; main handles this wake, and any rows the branch still holds revert to main once the branch shows no progress for the grant TTL.`,
+      };
     } catch {
-      return false;
+      return { handled: false, note: "" };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -895,9 +1033,14 @@ export default function (pi: ExtensionAPI) {
       }
     }
     // A watcher-repair failure is main's alone: only main can repair the cycle.
-    if (!repairFailed && await offerWakeToBranch(message)) return generationIsLive(owner);
+    let mainMessage = message;
+    if (!repairFailed) {
+      const offered = await offerWakeToBranch(message);
+      if (offered.handled) return generationIsLive(owner);
+      if (offered.note) mainMessage = `${message}\n\n${offered.note}`;
+    }
     const shadow = repairFailed ? null : shadowWakeFor(message);
-    const delivered = await sendWake(owner, message, pending);
+    const delivered = await sendWake(owner, mainMessage, pending);
     if (delivered && shadow && branchSupport) pi.events?.emit(branchSupport.FM_OMP_BRANCH_SHADOW_EVENT, shadow);
     return delivered;
   }
@@ -1350,9 +1493,24 @@ export default function (pi: ExtensionAPI) {
     return result;
   }
 
-  pi.on?.("before_agent_start", (event) => {
+  pi.on?.("before_agent_start", (event, ctx) => {
+    if (ctx) mainContext = ctx as MainContext;
     generation.unstampedDrop = null;
     consumeWake(generation, String((event as { prompt?: unknown })?.prompt ?? ""));
+  });
+  pi.on?.("agent_start", (_event, ctx) => {
+    if (ctx) mainContext = ctx as MainContext;
+    mainStreaming = true;
+    recordMainTurnStart(generation);
+  });
+  // omp has no agent_settled; agent_end without willContinue is the run
+  // boundary after which a parked wake can only start through a re-poke.
+  pi.on?.("agent_end", (event, ctx) => {
+    if ((event as { willContinue?: unknown })?.willContinue === true) return;
+    if (ctx) mainContext = ctx as MainContext;
+    mainStreaming = false;
+    clearMainTurn(generation);
+    scheduleRepoke(generation);
   });
   pi.on?.("message_start", (event) => {
     const message = (event as { message?: { role?: unknown; content?: unknown; timestamp?: unknown } })?.message;

@@ -4,6 +4,8 @@ The away-mode sub-supervisor (`bin/fm-supervise-daemon.sh`) buffers escalations 
 When injection cannot confirm a submit past `FM_MAX_DEFER_SECS`, `inject_wedge_alarm` raises a loud, rate-limited alarm so the stall never stays invisible.
 The active alert is pane-independent because a tmux status-line flash has no cross-backend equivalent and cannot reach an unattended captain reliably.
 The durable marker and tmux flash remain as additional signals.
+The same channels also carry the watcher's wake-queue stall alarm ([`watcher-continuity.md`](watcher-continuity.md#wake-queue-stall-alarm)), which fires in every posture, not only away mode.
+`bin/fm-wedge-alarm-lib.sh` owns the channel helpers both callers source.
 
 ## Channels
 

@@ -74,6 +74,7 @@ import {
   FM_BRANCH_DISPATCH_EVENT,
   releaseEligibleRowsSnapshot,
   scopeForUnreadWake,
+  touchEligibleRowsSnapshot,
   writeEligibleRowsSnapshot,
   type BranchDispatchOffer,
 } from "../../.pi/extensions/lib/fm-branch-dispatch.ts";
@@ -118,6 +119,7 @@ type MainContext = {
   model?: unknown;
   agent?: { kind?: string };
   ui?: { setWidget?(key: string, content: string[] | undefined): void };
+  hasPendingMessages?(): boolean;
 };
 type ToolResult = { content: Array<{ type: "text"; text: string }>; details?: unknown; isError?: boolean };
 // omp treats an unmarked tool object passed as a session customTool as its
@@ -184,6 +186,11 @@ const PROVIDER_REPROBE_MAX_MS = 60 * 60 * 1000;
 const BASH_DEFAULT_TIMEOUT_S = 600;
 const BASH_OUTPUT_CAP = 256 * 1024;
 const LOCK_ANCESTRY_DEPTH = 8;
+// bin/fm-wake-lib.sh fm_wake_branch_grant_ttl owns this default.
+const grantTtlMs = (() => {
+  const raw = Number(process.env.FM_BRANCH_GRANT_TTL_SECS);
+  return (Number.isSafeInteger(raw) && raw > 0 ? raw : 600) * 1000;
+})();
 const PROCESSING_INSTRUCTION =
   "This is a supervision processing request delivered automatically by the supervision branch. " +
   "It was not typed by the captain. " +
@@ -355,6 +362,11 @@ export default function (pi: ExtensionAPI) {
   let providerRecovery: { cooldownMs: number; retryNotBefore: number; probeInFlight: boolean } | null = null;
   let durableReportRevision = 0;
   let wakeTaskScope: { rows: string[]; tasks: Set<string> } | null = null;
+  // When the in-flight branch prompt last made progress (prompt start or a
+  // branch tool call), or 0 when no prompt is in flight. A prompt silent for
+  // the grant TTL is stuck: new offers are declined so main gets the wakes
+  // (the 2026-10-06 stall, where a branch stopped taking rows at 13:39).
+  let promptProgressAt = 0;
   let mainStreaming = false;
   let shuttingDown = false;
   // A helper session (an in-process task subagent) binds this factory again and
@@ -441,9 +453,34 @@ export default function (pi: ExtensionAPI) {
     appendFileSync(shadowLog, `${JSON.stringify({ epoch: Math.floor(Date.now() / 1000), ...record })}\n`);
   }
 
+  // An idle custom message becomes main's transcript tail, and omp drains idle
+  // follow-ups only behind an assistant or tool-result tail (verified omp
+  // 18.4.4), so any follow-up already queued would park until the captain
+  // typed - the 2026-10-06 stall began right after an idle note. When main is
+  // idle and omp holds queued input, one hidden triggerTurn message starts the
+  // turn that drains it. The watcher never queues an idle follow-up itself
+  // (.omp/extensions/fm-primary-omp-watch.ts, "Delivery versus consumption").
+  function sendIdleSafe(message: { customType: string; content: string; display: boolean }, options: Record<string, unknown>): void {
+    const idle = !mainStreaming;
+    pi.sendMessage(message, options);
+    if (!idle) return;
+    let pending = false;
+    try {
+      pending = mainContext?.hasPendingMessages?.() === true;
+    } catch {
+      return;
+    }
+    if (!pending) return;
+    pi.sendMessage(
+      { customType: "fm-branch-drain-kick", content: "Queued input is waiting; continue with it.", display: false },
+      { triggerTurn: true },
+    );
+  }
+
   function deliverNote(text: string): void {
     const message = { customType: "fm-branch-merge", content: `${MERGE_NOTE_BOAT} ${text}`, display: true };
-    pi.sendMessage(message, mainStreaming ? { deliverAs: "nextTurn" } : {});
+    if (mainStreaming) pi.sendMessage(message, { deliverAs: "nextTurn" });
+    else sendIdleSafe(message, {});
   }
 
   function recordSettledProviderError(detail: string): void {
@@ -543,7 +580,7 @@ export default function (pi: ExtensionAPI) {
     } else if (!processing.nextTurnQueued) {
       processing.nextTurnQueued = true;
       processing.pending = true;
-      pi.sendMessage(message, { deliverAs: "nextTurn" });
+      sendIdleSafe(message, { deliverAs: "nextTurn" });
     }
     return true;
   }
@@ -581,6 +618,15 @@ export default function (pi: ExtensionAPI) {
 
   const textResult = (text: string, isError = false): ToolResult => ({ content: [{ type: "text", text }], details: undefined, ...(isError ? { isError } : {}) });
 
+  // A branch tool call is progress: it keeps the stuck-prompt decline away and
+  // refreshes the row grant's TTL (bin/fm-wake-lib.sh fm_wake_branch_grant_fresh).
+  // A failed refresh is not an error here: the grant may be released already,
+  // and an aged-out one is exactly what main's drain is entitled to reclaim.
+  async function recordBranchProgress(toolGeneration: number): Promise<void> {
+    if (promptProgressAt) promptProgressAt = Date.now();
+    if (!reportOnly) await touchEligibleRowsSnapshot(state, wakeGrantScript, String(toolGeneration));
+  }
+
   function createReportTool(toolGeneration: number, shadowWake: string): ToolDefinition {
     return {
       name: "fm_branch_report",
@@ -607,6 +653,7 @@ export default function (pi: ExtensionAPI) {
         }
         const refusal = wakeScopeRefusal(task);
         if (refusal) return textResult(refusal, true);
+        await recordBranchProgress(toolGeneration);
         return enqueueDelivery(async () => {
           if (!(await actingAsOwner(toolGeneration))) {
             return textResult("report refused: supervision session was replaced or lost lock ownership", true);
@@ -653,6 +700,7 @@ export default function (pi: ExtensionAPI) {
         if (activatedGeneration !== toolGeneration || !(await generationOwnsLock(toolGeneration))) {
           return textResult("bash refused: supervision session was replaced or lost lock ownership", true);
         }
+        await recordBranchProgress(toolGeneration);
         if (reportOnly) {
           const refused = readOnlyCommandRefusal(command);
           if (refused) {
@@ -666,6 +714,7 @@ export default function (pi: ExtensionAPI) {
         }
         const timeoutRaw = typeof params.timeout === "number" && params.timeout > 0 ? params.timeout : BASH_DEFAULT_TIMEOUT_S;
         const result = await runBranchShell(command, timeoutRaw, ownedLockPid, abortSignal);
+        await recordBranchProgress(toolGeneration);
         const text = result.output || "(no output)";
         return result.code === 0 ? textResult(text) : textResult(`${text}\n[exit ${result.code ?? "signal"}]`, true);
       },
@@ -827,9 +876,11 @@ export default function (pi: ExtensionAPI) {
         }
         const reportRevisionBeforePrompt = durableReportRevision;
         const entryOffset = branchForWake.sessionManager.getEntries().length;
+        promptProgressAt = Date.now();
         try {
           await branchForWake.session.prompt(prompt);
         } finally {
+          promptProgressAt = 0;
           wakeTaskScope = null;
         }
         const providerError = settledProviderError(branchForWake.sessionManager, entryOffset);
@@ -865,6 +916,9 @@ export default function (pi: ExtensionAPI) {
   function branchAvailable(): boolean | null {
     if (helper || shuttingDown || activatedGeneration !== generation) return null;
     if (existsSync(afkFlag)) return null; // a legacy away daemon flag owns supervision
+    // A prompt with no progress for the grant TTL is stuck; queueing more wakes
+    // behind it would hold them for as long as it hangs.
+    if (promptProgressAt && Date.now() - promptProgressAt >= grantTtlMs) return null;
     const recoveryProbe = Boolean(branchBroken && providerRecovery && !providerRecovery.probeInFlight && Date.now() >= providerRecovery.retryNotBefore);
     if (branchBroken && !recoveryProbe) return null;
     if (recoveryProbe && providerRecovery) providerRecovery.probeInFlight = true;
