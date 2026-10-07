@@ -1,0 +1,31 @@
+# commit fe95b47; FM_BRANCH_GRANT_TTL_SECS=6; branch owner = live pid 72067
+# queue seqs: 1 2 3 
+$ bin/fm-wake-grant.sh activate 72067 gen1
+    [exit=0]
+$ bin/fm-wake-grant.sh publish gen1 2
+    [exit=0]
+# main drain while the branch grant on row 2 is fresh:
+$ bin/fm-wake-drain.sh
+    1791333627	1	signal	taskA.status	signal: taskA.status
+    1791333627	3	signal	taskC.status	signal: taskC.status
+    WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 72247.1791333627.QudWmV
+    [exit=0]
+# t=2s branch makes progress (bash call -> touch):
+$ bin/fm-wake-grant.sh touch gen1
+    usage: fm-wake-grant.sh activate PID GENERATION | publish GENERATION SEQUENCE... | release GENERATION | deactivate PID GENERATION
+    [exit=2]
+# t=5s (~3s since progress, TTL 6): grant LIVE (reserving rows)
+# t=11s (9s since progress, TTL 6): grant LIVE (reserving rows)
+# branch tries to refresh the expired grant:
+$ bin/fm-wake-grant.sh touch gen1
+    usage: fm-wake-grant.sh activate PID GENERATION | publish GENERATION SEQUENCE... | release GENERATION | deactivate PID GENERATION
+    [exit=2]
+# main acknowledges what it was presented (--ack-through 3 --recovery-generation 72247.1791333627.QudWmV) after the grant expired:
+$ bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 72247.1791333627.QudWmV
+    [exit=0]
+# queue after ack: seqs 2 
+# main's next presenting drain:
+$ bin/fm-wake-drain.sh
+    WAKE ROWS HELD BY SUPERVISION BRANCH: 1 queued row(s) (2) are granted to the live supervision branch, which presents and acknowledges them.
+    [exit=0]
+# owner record kept: yes

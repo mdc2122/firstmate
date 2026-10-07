@@ -1,0 +1,6 @@
+ok - .omp watch extension: fm_watch_arm_omp arms once, repeats as a no-op, and delivers an actionable close to an idle main as one turn-starting wake
+ok - .omp watch extension: after a restart, a handed-off close whose queued wake is still unacknowledged is replayed exactly once
+ok - .omp watch extension: idle wakes start turns, unconsumed ones are re-poked once, and a streaming main gets follow-ups
+ok - .omp watch extension: the context event replaces only an acknowledged stale wake for a torn-down terminal and passes every other wake unchanged
+ok - .omp watch extension: a nested omp process under the lock-owning session never starts an arm child, while the lock owner arms
+exit=0

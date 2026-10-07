@@ -1,0 +1,31 @@
+# commit 91f3e09; FM_BRANCH_GRANT_TTL_SECS=6; branch owner = live pid 56056
+# queue seqs: 1 2 3 
+$ bin/fm-wake-grant.sh activate 56056 gen1
+    [exit=0]
+$ bin/fm-wake-grant.sh publish gen1 2
+    [exit=0]
+# main drain while the branch grant on row 2 is fresh:
+$ bin/fm-wake-drain.sh
+    1791333611	1	signal	taskA.status	signal: taskA.status
+    1791333611	3	signal	taskC.status	signal: taskC.status
+    WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 56276.1791333611.CSmNMj
+    [exit=0]
+# t=2s branch makes progress (bash call -> touch):
+$ bin/fm-wake-grant.sh touch gen1
+    [exit=0]
+# t=5s (~3s since progress, TTL 6): grant LIVE (reserving rows)
+# t=11s (9s since progress, TTL 6): grant EXPIRED (reserves nothing)
+# branch tries to refresh the expired grant:
+$ bin/fm-wake-grant.sh touch gen1
+    [exit=1]
+# main acknowledges what it was presented (--ack-through 3 --recovery-generation 56276.1791333611.CSmNMj) after the grant expired:
+$ bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 56276.1791333611.CSmNMj
+    [exit=0]
+# queue after ack: seqs 2 
+# main's next presenting drain:
+$ bin/fm-wake-drain.sh
+    WAKE ROWS REVERTED FROM SUPERVISION BRANCH: 1 row(s) held 10s without branch progress (TTL 6s) are main's now.
+    1791333611	2	signal	taskB.status	signal: taskB.status
+    WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 56276.1791333611.CSmNMj
+    [exit=0]
+# owner record kept: yes

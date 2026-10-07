@@ -1,0 +1,3 @@
+1 2026-10-07T00:36:46.966Z nmsgs=3 last=user: ⁣FIRSTMATE_OP: v1 session-start: ================================================================================ ⏎ SESSION START - /private/tmp/fmlab/base/project ⏎ ======================================================
+2 2026-10-07T00:38:42.285Z nmsgs=6 last=user: captain types at last
+3 2026-10-07T00:38:42.293Z nmsgs=8 last=user: ⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: signal: /private/tmp/fmlab/base/project/state/lab-task.status ⏎  ⏎ Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.
