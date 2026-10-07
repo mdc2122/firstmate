@@ -209,6 +209,12 @@ That same rule governs routing generally: a Relay-linked request whose work goes
 It refuses any destination that is not a genuine seeded firstmate home with safe operational directories and a matching `.fm-secondmate-home` marker, so a move can never land in a project.
 Do not hand off `local-only` items.
 
+## Crew queues (br)
+
+A secondmate may keep a beads (br) crew queue at `data/beads/.beads/beads.db` for its internal crew units, but br never holds the only copy of captain-sequenced or dated work.
+Every br item that is not closed carries a `mirror:<row-id>` label naming an open backlog row in the secondmate's own `data/backlog.md` or in the main home's, or it is closed.
+[`bin/fm-attention-check.sh`](../../../bin/fm-attention-check.sh) owns the cross-check mechanics and names every item without such a row as br-only on the daily attention line.
+
 ## Recovery
 
 For local `kind=secondmate` meta with no window, treat the secondmate as a dead persistent direct report and respawn it with:

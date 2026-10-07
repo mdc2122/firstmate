@@ -149,6 +149,61 @@ test_inflight_row_without_a_live_task_is_named_orphan() {
   pass "an in-flight backlog row with no live task is named instead of left as a silent warning"
 }
 
+# A captain hold with no blocker and no date waits on nobody unless it is a
+# fresh genuine captain call. One whose reason begins "owner:" is firstmate- or
+# secondmate-owned work mislabelled as the captain's and gets no grace; a
+# genuine call gets bin/fm-far-holds.sh's two days, aged from its hold-set
+# stamp. A dated or blocked captain hold carries its own next check.
+test_undated_captain_hold_with_no_check_is_named_nocheck() {
+  local home out tmp
+  home=$(make_home nocheck)
+  axi "$home" add owner-ask "firstmate work parked as a captain hold"
+  axi "$home" hold owner-ask --reason "owner: firstmate - queued behind other work" --kind captain
+  axi "$home" add fresh-call "a genuine captain call asked yesterday"
+  axi "$home" hold fresh-call --reason "pick the vendor" --kind captain
+  axi "$home" add old-call "a genuine captain call asked two days ago"
+  axi "$home" hold old-call --reason "pick the region" --kind captain
+  axi "$home" add restamped-call "an old row whose captain call was re-asked yesterday"
+  axi "$home" hold restamped-call --reason "pick the name" --kind captain
+  axi "$home" add dated-ask "a captain hold with a next check"
+  axi "$home" hold dated-ask --reason "owner: firstmate - re-ask on the date" --kind captain --until 2026-10-02
+  axi "$home" add lapsed-owner "firstmate work whose captain-hold date passed yesterday"
+  axi "$home" hold lapsed-owner --reason "owner: firstmate - check after the deploy" --kind captain --until 2026-09-30
+  axi "$home" add lapsed-call "a genuine captain call whose date passed yesterday"
+  axi "$home" hold lapsed-call --reason "pick the venue" --kind captain --until 2026-09-30
+  axi "$home" add lapsed-old-call "a genuine captain call whose date passed two days ago"
+  axi "$home" hold lapsed-old-call --reason "pick the date" --kind captain --until 2026-09-29
+  axi "$home" add today-owner "firstmate work whose captain-hold date is today"
+  axi "$home" hold today-owner --reason "owner: firstmate - check today" --kind captain --until 2026-10-01
+  axi "$home" add dep "an open dependency"
+  axi "$home" add blocked-ask "a captain hold behind a dependency"
+  axi "$home" block blocked-ask --by dep
+  axi "$home" hold blocked-ask --reason "owner: firstmate - waits on dep" --kind captain
+  set_since "$home" owner-ask 2026-09-30
+  set_since "$home" fresh-call 2026-09-30
+  set_since "$home" old-call 2026-09-29
+  set_since "$home" restamped-call 2026-09-01
+  set_since "$home" blocked-ask 2026-09-01
+  set_since "$home" dep 2026-10-01
+  tmp=$(mktemp)
+  awk '{ print } /^- \[ \] restamped-call - / { print "  Captain hold set: 2026-09-30T08:00:00Z" }' \
+    "$home/data/backlog.md" > "$tmp" && mv "$tmp" "$home/data/backlog.md"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue nocheck owner-ask" "an owner: captain hold got captain grace"
+  assert_contains "$out" "queue nocheck old-call" "a genuine captain call two days old was not named"
+  assert_not_contains "$out" "fresh-call" "a genuine captain call inside its two days was named"
+  assert_not_contains "$out" "restamped-call" "a captain call was aged from its filing date, not its hold-set stamp"
+  assert_contains "$out" "queue nocheck lapsed-owner" "an owner: captain hold a day past its date was not named"
+  assert_contains "$out" "queue nocheck lapsed-old-call" "a genuine captain call two days past its date was not named"
+  assert_not_contains "$out" "lapsed-call " "a genuine captain call inside two days past its date was named"
+  assert_not_contains "$out" "today-owner" "a captain hold dated today was named"
+  assert_not_contains "$out" "dated-ask" "a captain hold with a dated next check was named"
+  assert_not_contains "$out" "blocked-ask" "a captain hold behind an open dependency was named"
+  out=$(FM_FAR_HOLDS_DAYS=3 qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "old-call" "a genuine captain call ignored the far-holds window"
+  pass "undated or lapsed captain holds are named: owner: work after a day, genuine calls after the far-holds window"
+}
+
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {
   local home out
   home=$(make_home empty)
@@ -472,6 +527,7 @@ test_paperclip_release_is_guarded() {
 
 test_ready_and_undated_rows_are_named_and_dated_holds_are_not
 test_inflight_row_without_a_live_task_is_named_orphan
+test_undated_captain_hold_with_no_check_is_named_nocheck
 test_empty_queue_is_silent_and_unpaired_state_is_silent
 test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode

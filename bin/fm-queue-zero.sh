@@ -15,6 +15,13 @@
 # held that way drops off until its date arrives, then comes back for a fresh
 # decision, so nothing parks in Charted Next indefinitely.
 #
+# THE QUEUED-ROW RULE: every queued row carries a named blocker or dependency
+# (an open `blocked-by` task, or a fresh genuine captain call, whose blocker is
+# the captain) or a dated next check (`hold-until` today or later). A dated next
+# check is a near one: a date more than FM_FAR_HOLDS_DAYS out without the
+# captain's own deferral words is bin/fm-far-holds.sh's row, so dating a row
+# here never parks it far away unseen.
+#
 # Rows from this home's backlog (source "queue"):
 #   ready    queued, every blocker done, no active hold or its date has passed
 #            (exactly bin/fm-tasks-axi.sh ready), excluding captain holds,
@@ -22,6 +29,16 @@
 #   undated  queued, not ready, filed at least FM_QUEUE_ZERO_AGE_DAYS ago
 #            (default 1), and not held with an --until date still ahead;
 #            captain holds again excluded
+#   nocheck  a queued captain hold with no open blocker and no --until date
+#            ahead, aged from its hold-set stamp (hold_age_days) or, once a
+#            past --until date has lapsed, from that date: one whose hold
+#            reason begins "owner:" (firstmate- or secondmate-owned work) gets
+#            no grace and is listed after FM_QUEUE_ZERO_AGE_DAYS like any
+#            undated row; a genuine captain call after FM_FAR_HOLDS_DAYS
+#            (default 2, bin/fm-far-holds.sh's window). It waits on nobody
+#            and nothing checks it, so it is worked, dated, brought back to
+#            the captain through bin/fm-captain-hold.sh hold (recording the
+#            captain's own deferral date), or closed
 #   orphan   in flight in the backlog with no live task record: the
 #            "(main-inventory)" Bearings warning; close it or re-dispatch it
 # Rows from the Paperclip board (source "paperclip"), only when this home
@@ -79,6 +96,7 @@ whole_setting() {  # <name> <default>
   printf '%s' "$v"
 }
 AGE_DAYS=$(whole_setting FM_QUEUE_ZERO_AGE_DAYS 1)
+CAPTAIN_DAYS=$(whole_setting FM_FAR_HOLDS_DAYS 2)
 RENAG_HOURS=$(whole_setting FM_QUEUE_ZERO_RENAG_HOURS 24)
 MAX_CHARS=$(whole_setting FM_QUEUE_ZERO_MAX_CHARS 1500)
 NOW=${FM_QUEUE_ZERO_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
@@ -98,7 +116,7 @@ error_row() {  # <source> <detail>
 queue_rows() {
   local input ready_out ready_ids
   [ -f "$DATA/backlog.md" ] || { printf '[]'; return 0; }
-  input=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) \
+  input=$(FM_SNAPSHOT_NOW="$NOW" "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) \
     || { error_row queue "the backlog could not be parsed"; return 0; }
   ready_out=$("$SCRIPT_DIR/fm-tasks-axi.sh" ready 2>&1) \
     || { error_row queue "tasks-axi ready failed: $(printf '%s' "$ready_out" | head -n 1)"; return 0; }
@@ -107,7 +125,7 @@ queue_rows() {
     | awk '/^ready\[[0-9]+\]/ { t = 1; next } t && /^  / { sub(/^  /, ""); split($0, f, ","); print f[1]; next } { t = 0 }' \
     | jq -Rsc 'split("\n") | map(select(. != ""))')
   printf '%s' "$input" | jq -c --argjson ready "$ready_ids" --arg today "$TODAY" \
-    --argjson age_days "$AGE_DAYS" '
+    --argjson age_days "$AGE_DAYS" --argjson captain_days "$CAPTAIN_DAYS" '
     def day_epoch: try ((. // "") + "T00:00:00Z" | fromdateiso8601) catch null;
     ($today | day_epoch) as $t
     | ([.tasks[].id]) as $live
@@ -126,6 +144,19 @@ queue_rows() {
                detail:((if ($r.blocked_by_ids | length) > 0 then "blocked-by " + ($r.blocked_by_ids | join(","))
                         elif $r.hold_reason != null then "held: " + $r.hold_reason
                         else "waiting" end) + "; no --until date; filed " + ($r.since // "undated"))}
+            elif $r.state == "queued" and ($r.hold_bucket == "live" or $r.hold_bucket == "aged")
+                 and ($dated | not)
+                 and ((if $r.hold_until != null then ($r.hold_until | day_epoch) as $u
+                         | if $u == null then null else (($t - $u) / 86400 | floor) end
+                       else $r.hold_age_days end) as $lapsed
+                      | $lapsed != null
+                        and $lapsed >= (if ($r.hold_reason | startswith("owner:")) then $age_days
+                                        else $captain_days end)) then
+              {class:"nocheck",
+               detail:("captain hold with no blocker and "
+                       + (if $r.hold_until != null then "a lapsed --until " + $r.hold_until
+                          else "no --until date, aged \($r.hold_age_days)d" end)
+                       + ": " + $r.hold_reason)}
             elif $r.state == "in_flight" and $r.requires_child_metadata == true
                  and ($live | index($r.id)) == null then
               {class:"orphan", detail:"in flight with no live task record"}
@@ -189,8 +220,8 @@ action_check() {
         if (.text | length) + ($i | length) + 2 <= $max
         then .text += (if .n > 0 then "; " else "" end) + $i | .n += 1 else . end)) as $kept
     | "check: queue-zero: \($q) queue row(s) and \($p) Paperclip item(s) must leave the queue this turn"
-      + " (dispatch, hold --until with a named blocker or owner, or close; Paperclip: release, date, or decide;"
-      + " bin/fm-queue-zero.sh scan shows details): " + $kept.text
+      + " (work it now, hold --until a near date (bin/fm-far-holds.sh window) with a named blocker or owner, or close;"
+      + " Paperclip: release, date, or decide; bin/fm-queue-zero.sh scan shows details): " + $kept.text
       + (if ($items | length) > $kept.n then "; +\(($items | length) - $kept.n) more" else "" end)')
   # shellcheck source=bin/fm-wake-lib.sh
   . "$SCRIPT_DIR/fm-wake-lib.sh"

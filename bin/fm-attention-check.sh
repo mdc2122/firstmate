@@ -5,6 +5,8 @@
 # Usage:
 #   fm-attention-check.sh [scan]    print the line now (on demand; writes nothing)
 #   fm-attention-check.sh check     watcher hook: sample decisions, record the daily line
+#   fm-attention-check.sh act reallocate|drain "<what was done>"
+#                                   record the same-day action a binding line owes
 #   fm-attention-check.sh --help
 #
 # Every signal looks at the trailing 24 hours ending now and is rated green,
@@ -51,12 +53,28 @@
 # The verdict follows data/firstmate-bottleneck-plan section 5: RED when two or
 # more of S1, S2, S3, S4, S8, S11 are red, AMBER when one is, GREEN otherwise.
 #
-# Blind spots are named on the line rather than guessed: when the home keeps a
-# beads (br) crew queue at data/beads/.beads/beads.db and br is installed, the
-# line reports its open and in-progress unit counts as not seen (one read-only
-# br call bounded to FM_ATTENTION_BR_TIMEOUT seconds, default 5), because S8
-# and S11 read only backlog rows, task records, and steering inboxes, and br
-# crews have none of those.
+# Blind spots and the shadow-queue cross-check are named on the line rather
+# than guessed. When br is installed, every beads (br) crew queue this home can
+# read - its own at data/beads/.beads/beads.db and each local secondmate home's
+# (data/secondmates.md) at the same relative path - gets one read-only
+# `br list` call bounded to FM_ATTENTION_BR_TIMEOUT seconds (default 5), never
+# a write. The STANDING RULE it watches: br never holds the only copy of
+# captain-sequenced or dated work, so every br item that is not closed (open,
+# in progress, blocked, deferred, or any other live status) carries a
+# `mirror:<row-id>` label naming an open backlog row in its own home or in its
+# parent home, or is closed. This home's queue is matched against this home's
+# backlog and its parent's - itself in the primary home, the local home named
+# by .fm-secondmate-parent in a secondmate home - and each local secondmate's
+# queue against that secondmate's backlog and this home's. The informational
+# `br-xcheck` segment reports "<home> <n>/<total> br-only (<ids>)" per queue,
+# amber when any item has no row and unknown when a queue or its own backlog
+# cannot be read. When only the parent backlog cannot be read (a remote parent
+# route, say), the queue is still matched against its own backlog and the part
+# ends ", parent not checked", rated at least unknown, so only an item
+# mirroring a parent row can be a false br-only there. It never moves the
+# verdict. This home's own queue is also named as "not seen" with its per-status
+# counts, because S8 and S11 read only backlog rows, task records, and steering
+# inboxes, and br crews have none.
 #
 # Status lines carry no timestamps, so decision ages come from sampling.
 # `check` folds the open decision set on every run and keeps one record,
@@ -70,14 +88,25 @@
 #
 # `check` is the watcher's hook (bin/fm-watch.sh runs it every
 # FM_ATTENTION_CHECK_INTERVAL seconds, default 600). On its first run at or
-# after 13:00Z each UTC day it computes the line and records it in
-# state/.attention-check (reported=<date>, line=<line>). When the verdict is
-# RED it first appends one durable `check` wake (key attention) and prints that
-# wake reason; otherwise it prints nothing and the line waits in the record,
-# which the fleet snapshot and bin/fm-fleet-view.sh show without a wake.
-# A failed wake append is retried on the next run instead of being recorded.
-# Those two records and that wake are the only writes.
+# after 13:00Z each UTC day (one window) it computes the line and records it in
+# state/.attention-check (reported=<date>, line=<line>). The line is BINDING
+# when the verdict is RED or S11 is red (under 40% in two consecutive windows):
+# the record then also carries bound=<why>, and check first appends one durable
+# `check` wake (key attention) naming the owed action and prints that wake
+# reason. Once a window is recorded no later run that day wakes again, so a
+# binding wake fires at most once per window. Otherwise it prints nothing and
+# the line waits in the record, which the fleet snapshot and
+# bin/fm-fleet-view.sh show without a wake. A failed wake append is retried on
+# the next run instead of being recorded.
 #
+# The turn that handles a binding wake acts the same day - reallocates
+# non-constraint steers toward the constraint, or drains the open decisions -
+# and records it with `act reallocate|drain "<what was done>"`, which appends
+# action=<utc> <kind> <note> to that day's record. act refuses when no line is
+# recorded for today or today's line is not binding, so an action is always
+# against the window's own binding line.
+# The first-seen record, the daily record, that wake, and act's action lines
+# are the only writes.
 # FM_ATTENTION_NOW (UTC ISO-8601) pins the clock for tests.
 set -u
 export LC_ALL=C
@@ -104,7 +133,9 @@ Usage:
   fm-attention-check.sh [scan]   print the attention line now (writes nothing)
   fm-attention-check.sh check    watcher hook: sample decisions; at the first run
                                  after 13:00Z each day record the line, waking
-                                 firstmate once when it is RED
+                                 firstmate once when it is binding (RED, or S11 red)
+  fm-attention-check.sh act reallocate|drain "<what was done>"
+                                 record today's action against a binding line
   fm-attention-check.sh --help   print this help
 EOF
 }
@@ -112,7 +143,7 @@ EOF
 die() { printf 'fm-attention-check: %s\n' "$1" >&2; exit "${2:-1}"; }
 
 case "${1:-scan}" in
-  scan|check) ;;
+  scan|check|act) ;;
   -h|--help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -124,6 +155,10 @@ command -v jq >/dev/null 2>&1 || die "jq not found"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
+# shellcheck source=bin/fm-secondmate-registry-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+# shellcheck source=bin/fm-secondmate-parent-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-parent-lib.sh"
 
 NOW=${FM_ATTENTION_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 NOW_EPOCH=$(fm_utc_iso_to_epoch "$NOW") || die "invalid FM_ATTENTION_NOW: $NOW" 2
@@ -495,15 +530,108 @@ EOF
   add_segment release-seq "$rating" "steers $release (info)" info
 }
 
+# One bounded read-only br call: every item of <db> that is not closed or
+# tombstoned, as [{id,status,refs}], refs being the backlog row ids the item
+# names through its `mirror:<row-id>` labels. Fails when br does.
+br_items() {  # <db>
+  local out
+  out=$(fm_run_timed "$BR_TIMEOUT" br --db "$1" --no-auto-import --no-auto-flush \
+    list --json -s all --limit 0 2>/dev/null) || return 1
+  printf '%s' "$out" | jq -ce '.issues
+    | map(select(.status != "closed" and .status != "tombstone") | {id, status,
+        refs:[.labels[]? | select(startswith("mirror:")) | ltrimstr("mirror:")]})' 2>/dev/null
+}
+
+# "<n-br-only> <total> <ids>" for <items> against the open rows of
+# <backlog-json> and of this (parent) home's <parent-backlog-json>.
+br_only() {  # <items-json> <backlog-json> <parent-backlog-json>
+  jq -nr --argjson items "$1" --argjson backlog "$2" --argjson parent "$3" '
+    [$backlog, $parent | .backlog.records[] | select(.structured == true and .state != "done") | .id] as $rows
+    | [$items[] | select(any(.refs[]; . as $r | $rows | index($r)) | not) | .id] as $only
+    | "\($only | length) \($items | length) \($only | join(","))"'
+}
+
+# The shadow-queue cross-check, one part per br crew queue this home can read:
+# its own at data/beads/.beads/beads.db, and each local registered secondmate's
+# (data/secondmates.md) at <home>/data/beads/.beads/beads.db, each matched
+# against its own home's backlog and its parent's. Read-only throughout.
+BR_NOT_SEEN=
+signal_br_shadow() {
+  local parts='' rating=green label db home items backlog parent note n total ids line
+  command -v br >/dev/null 2>&1 || return 0
+  while IFS=$'\t' read -r label home; do
+    [ -n "$home" ] || continue
+    db="$home/data/beads/.beads/beads.db"
+    [ -f "$db" ] || continue
+    if ! items=$(br_items "$db"); then
+      [ "$label" != home ] || BR_NOT_SEEN=unreadable
+      parts="$parts${parts:+; }$label br unreadable"
+      [ "$rating" = amber ] || rating=unknown
+      continue
+    fi
+    if [ "$label" = home ]; then
+      BR_NOT_SEEN=$(printf '%s' "$items" | jq -r '
+        group_by(.status) | map("\(length) \(.[0].status)")
+        | if length == 0 then "0 open" else join(", ") end')
+      backlog=$BACKLOG_JSON
+      parent=$(parent_backlog) || parent=
+    else
+      backlog=$(home_backlog "$home") || backlog=
+      parent=$BACKLOG_JSON
+    fi
+    note=
+    if [ -z "$parent" ]; then
+      parent=$backlog
+      note=', parent not checked'
+      [ "$rating" = amber ] || rating=unknown
+    fi
+    if [ -z "$backlog" ] || ! line=$(br_only "$items" "$backlog" "$parent"); then
+      parts="$parts${parts:+; }$label backlog unreadable"
+      [ "$rating" = amber ] || rating=unknown
+      continue
+    fi
+    read -r n total ids <<EOF
+$line
+EOF
+    [ "$n" -eq 0 ] || rating=amber
+    parts="$parts${parts:+; }$label $n/$total br-only${ids:+ ($(names_capped "$(printf '%s' "$ids" | tr ',' '\n')"))}$note"
+  done <<EOF
+$(br_queue_homes)
+EOF
+  [ -z "$parts" ] || add_segment br-xcheck "$rating" "$parts (info)" info
+}
+
+# Another home's backlog, read through its own snapshot.
+home_backlog() {  # <home>
+  env -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE FM_HOME="$1" \
+    "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null
+}
+
+# This home's parent backlog: its own in the primary home; in a secondmate home,
+# the local parent home its .fm-secondmate-parent binding names. Fails when a
+# secondmate home's parent is remote or unreadable.
+parent_backlog() {
+  [ -f "$FM_HOME/.fm-secondmate-home" ] || { printf '%s' "$BACKLOG_JSON"; return 0; }
+  fm_secondmate_parent_record_parse "$FM_HOME/.fm-secondmate-parent" \
+    && [ "$FM_SECONDMATE_PARENT_ROUTE" = local ] && [ -d "$FM_SECONDMATE_PARENT_HOME" ] || return 1
+  home_backlog "$FM_SECONDMATE_PARENT_HOME"
+}
+
+# "<label>\t<home>": this home, then every local registered secondmate home.
+br_queue_homes() {
+  local line
+  printf 'home\t%s\n' "$FM_HOME"
+  [ -f "$DATA/secondmates.md" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    secondmate_registry_parse_line "$line" 2>/dev/null || continue
+    [ "$SECONDMATE_REGISTRY_REMOTE" -eq 0 ] && [ -d "$SECONDMATE_REGISTRY_HOME" ] || continue
+    printf '%s\t%s\n' "$SECONDMATE_REGISTRY_ID" "$SECONDMATE_REGISTRY_HOME"
+  done < "$DATA/secondmates.md"
+}
+
 blind_spots() {
-  local db counts
-  db="$DATA/beads/.beads/beads.db"
-  [ -f "$db" ] && command -v br >/dev/null 2>&1 || return 0
-  counts=$(fm_run_timed "$BR_TIMEOUT" br --db "$db" --no-auto-import --no-auto-flush count --by-status --json 2>/dev/null) \
-    && counts=$(printf '%s' "$counts" \
-      | jq -er '[.groups[] | select(.group == "open" or .group == "in_progress") | "\(.count) \(.group)"] | join(", ")' 2>/dev/null) \
-    || counts=unreadable
-  printf 'not seen: br crew queue %s units (S8/S11 read no br crews)' "${counts:-0 open}"
+  [ -n "$BR_NOT_SEEN" ] || return 0
+  printf 'not seen: br crew queue %s units (S8/S11 read no br crews)' "$BR_NOT_SEEN"
 }
 
 VERDICT=
@@ -519,6 +647,7 @@ attention_line() {  # <record-text>
   VERDICT=GREEN
   [ "${reds:-0}" -lt 1 ] || VERDICT=AMBER
   [ "${reds:-0}" -lt 2 ] || VERDICT=RED
+  signal_br_shadow
   blind=$(blind_spots)
   LINE="attention $(printf '%s' "$NOW_ISO" | cut -c6-10) $(printf '%s' "$NOW_ISO" | cut -c12-16)Z $VERDICT${RED_SIGNALS:+ ($RED_SIGNALS)}: $SEGMENTS${blind:+ | $blind}"
 }
@@ -528,23 +657,38 @@ action_scan() {
   printf '%s\n' "$LINE"
 }
 
+# The binding trigger: a RED verdict, or S11 red on its own (S11 is red only
+# when the constraint share was under 40% in this window and the one before).
+binding_reason() {
+  if [ "$VERDICT" = RED ]; then
+    printf 'RED verdict'
+  elif case ",$RED_SIGNALS," in *,S11,*) true ;; *) false ;; esac; then
+    printf 'S11 red two windows running'
+  fi
+}
+
+record_today() {  # -> 0 when the record is today's, with its body in RECORD_BODY
+  RECORD_BODY=
+  [ -f "$RECORD" ] && [ "$(head -n 1 "$RECORD")" = "$RECORD_SCHEMA" ] || return 1
+  RECORD_BODY=$(cat "$RECORD")
+  [ "$(printf '%s\n' "$RECORD_BODY" | sed -n 's/^reported=//p' | head -n 1)" = "${NOW_ISO%%T*}" ]
+}
+
 action_check() {
-  local record today reason
+  local record today reason bound
   record=$(merged_record)
   write_atomic "$FIRST_SEEN" "$record" || die "could not write $FIRST_SEEN"
   today=${NOW_ISO%%T*}
   [ "$((10#$(printf '%s' "$NOW_ISO" | cut -c12-13)))" -ge "$DAILY_HOUR" ] || return 0
-  if [ -f "$RECORD" ] && [ "$(head -n 1 "$RECORD")" = "$RECORD_SCHEMA" ] \
-    && [ "$(sed -n 's/^reported=//p' "$RECORD" | head -n 1)" = "$today" ]; then
-    return 0
-  fi
+  ! record_today || return 0
   attention_line "$record"
-  if [ "$VERDICT" = RED ]; then
-    reason="check: attention: $LINE"
+  bound=$(binding_reason)
+  if [ -n "$bound" ]; then
+    reason="check: attention: BINDING ($bound) - act on it this turn: reallocate non-constraint steers toward the constraint or drain the open decisions, then record it with bin/fm-attention-check.sh act reallocate|drain \"<what was done>\"; $LINE"
     # shellcheck source=bin/fm-wake-lib.sh
     . "$SCRIPT_DIR/fm-wake-lib.sh"
     fm_wake_append check attention "$reason" || die "could not queue the attention wake; it is retried next run"
-    write_atomic "$RECORD" "$RECORD_SCHEMA"$'\n'"reported=$today"$'\n'"line=$LINE" || true
+    write_atomic "$RECORD" "$RECORD_SCHEMA"$'\n'"reported=$today"$'\n'"line=$LINE"$'\n'"bound=$bound" || true
     printf '%s\n' "$reason"
     return 0
   fi
@@ -552,7 +696,21 @@ action_check() {
     || die "could not write $RECORD"
 }
 
+action_act() {  # <reallocate|drain> <note>
+  local kind=${1:-} note=${2:-}
+  [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+  case "$kind" in reallocate|drain) ;; *) die "act kind must be reallocate or drain: $kind" 2 ;; esac
+  note=$(printf '%s' "$note" | tr '\n\t' '  ' | sed 's/^ *//; s/ *$//')
+  [ -n "$note" ] || die "act needs a note naming what was done" 2
+  record_today || die "no attention line is recorded for ${NOW_ISO%%T*}; nothing to act against" 1
+  printf '%s\n' "$RECORD_BODY" | grep -q '^bound=' \
+    || die "today's attention line is not binding; no action is owed" 1
+  write_atomic "$RECORD" "$RECORD_BODY"$'\n'"action=$NOW_ISO $kind $note" || die "could not write $RECORD"
+  printf 'attention action recorded %s: %s %s\n' "$NOW_ISO" "$kind" "$note"
+}
+
 case "${1:-scan}" in
   scan) action_scan ;;
   check) action_check ;;
+  act) shift; action_act "$@" ;;
 esac

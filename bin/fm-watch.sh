@@ -3012,7 +3012,7 @@ EOF
   fi
 
   # Daily attention check (bin/fm-attention-check.sh owns the signals, the
-  # thresholds, the 13:00Z once-a-day rule, and the durable RED wake). Every
+  # thresholds, the 13:00Z once-a-day rule, and the durable binding wake). Every
   # run also samples the open decision set so decision ages exist; its own
   # .last-attention-check cadence keeps sampling steady while the heartbeat
   # backs off. A failed or timed-out run prints nothing and is retried.
