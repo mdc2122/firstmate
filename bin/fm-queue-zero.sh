@@ -42,8 +42,9 @@
 # row's date while the fingerprint is unchanged is a re-date without new
 # evidence; the second such re-date in a row is refused by `hold-gate` and,
 # when it happened anyway (a direct tasks-axi hold), lists the row as
-# `redated`. New evidence since the last date, or any running owner (a
-# genuine captain call included), resets the count. A date that carries the captain's
+# `redated`. New evidence since the last date, a running owner, or a genuine
+# captain call held with no date resets the count; re-dating a captain hold
+# without the captain's words is still a strike. A date that carries the captain's
 # own deferral record (bin/fm-captain-hold.sh --captain-words-file) is never
 # counted. Every observed re-date is appended to state/.queue-zero-redates.jsonl
 # (kept seven days), with kind progress, none, captain, or refused.
@@ -52,8 +53,8 @@
 #   ready    queued, every blocker done, no active hold or its date has passed
 #            (exactly bin/fm-tasks-axi.sh ready), excluding captain holds
 #   redated  an open row re-dated twice running with no new evidence; listed
-#            until it gains evidence, gets a running owner (a genuine captain
-#            call included), or is closed
+#            until it gains evidence, gets a running owner, is held undated
+#            for the captain's decision, or is closed
 #   unowned  queued, not ready, filed at least FM_QUEUE_ZERO_AGE_DAYS ago
 #            (default 1), and with no owner above, whatever its hold date
 #   nocheck  a genuine captain call with no open blocker and no --until date
@@ -294,7 +295,8 @@ build_model() {
     | [$all[] | select(.state != "done")] as $open
     # Fold the ledger: a moved hold-until date is a re-date, scored against
     # the evidence fingerprint stored when the previous date was set. New
-    # evidence since that date, or any running owner, clears the strikes.
+    # evidence since that date, a running owner, or an undated captain call
+    # clears the strikes; a dated captain hold does not.
     | [ $open[] | . as $r
         | ($evidence[$r.id] // {status:0, worker:false}) as $e
         | {status:$e.status, worker:$e.worker,
@@ -313,7 +315,8 @@ build_model() {
            elif $until != "" and ($prev.until // "") == "" then
              {entry:{until:$until, fp:$fp, strikes:($prev.strikes // 0)}, event:null}
            else {entry:{until:$prev.until, fp:$prev.fp, strikes:($prev.strikes // 0)}, event:null} end)
-          | if $owner != null or ($prev != null and $fp != $prev.fp) then .entry.strikes = 0 else . end)
+          | if ($owner != null and $owner != "captain") or ($owner == "captain" and $until == "")
+               or ($prev != null and $fp != $prev.fp) then .entry.strikes = 0 else . end)
           as $step
         | {id:$r.id, row:$r, owner:$owner, cur_fp:$fp, event:$step.event,
            entry:($step.entry + {unowned_since:(

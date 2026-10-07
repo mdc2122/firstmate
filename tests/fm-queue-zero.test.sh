@@ -289,6 +289,21 @@ test_second_redate_without_evidence_is_refused() {
   pass "a second re-date without new evidence is refused with the only answers; new evidence allows it"
 }
 
+# A captain hold is not a running owner: re-dating one without the captain's
+# words is still a strike, and the second such re-date is refused.
+test_dated_captain_hold_redate_is_refused() {
+  local home out rc
+  home=$(make_home redate-captain-dated)
+  axi "$home" add later "a call parked with a date"
+  captain_hold "$home" later --reason "decide later" --until 2099-10-02 || fail "the first hold was refused"
+  captain_hold "$home" later --reason "decide later" --until 2099-10-03 || fail "the first re-date was refused"
+  rc=0
+  out=$(captain_hold "$home" later --reason "decide later" --until 2099-10-04) || rc=$?
+  [ "$rc" = 3 ] || fail "a second re-date of a captain hold without his words was not refused (exit $rc): $out"
+  [ "$(hold_until "$home" later)" = 2099-10-03 ] || fail "a refused captain re-date still moved the date"
+  pass "re-dating a captain hold without the captain's words is refused the second time"
+}
+
 test_captain_deferral_is_never_refused() {
   local home words
   home=$(make_home redate-captain)
@@ -717,6 +732,7 @@ test_second_redate_without_evidence_is_refused
 test_captain_deferral_is_never_refused
 test_redate_around_the_gate_is_listed_redated
 test_redated_row_clears_on_each_answer
+test_dated_captain_hold_redate_is_refused
 test_load_reports_unowned_median_age_and_redates
 test_check_wakes_once_per_episode_and_queues_durably
 test_row_that_leaves_and_returns_is_a_new_episode
