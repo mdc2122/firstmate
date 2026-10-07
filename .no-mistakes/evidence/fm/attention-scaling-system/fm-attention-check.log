@@ -1,0 +1,18 @@
+ok - S1 turns amber past 30 min and red at five such decisions or one past 2 h
+ok - S2 turns red only once three decisions are open together for over 30 min
+ok - a decision's wait is the span from first sample to first sample closed, even after it closes
+ok - S3 turns red when a green PR has been unable to merge for over 30 min
+ok - S4 turns red when main holds a commit the newest prod tag lacks for over 4 h
+ok - S4 turns red when over a quarter of the window's merges took over 2 h to go live
+ok - S4 never treats a lightweight prod tag as a release and says so on the line
+ok - S8 names In-flight rows gone over 12 h and skips dated waits
+ok - an unreadable backlog rates S8 and S11 unknown and keeps them out of the verdict
+ok - S11 turns red only when the constraint share is under 40% for two days running
+ok - release-sequencing steers in the window are counted but never move the verdict
+ok - the verdict is RED at two red signals, AMBER at one, GREEN otherwise, on one line
+ok - an on-demand scan writes nothing
+ok - check samples every run, records the line once a day after 13:00Z, and wakes only on RED
+ok - a binding line wakes once per window, names its owed action, and act records it against that line
+ok - non-closed br items with no mirror: row in their own or the parent home are flagged on the line, read-only and bounded
+ok - S12 shows unowned rows, median open age, and re-dates without progress per home, red after a day
+ok - Class E applications in the window are counted from the fleet-pins log, split by health, and never move the verdict

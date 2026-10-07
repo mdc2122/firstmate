@@ -1,0 +1,67 @@
+== S1 gate: owner: firstmate re-dated via fm-captain-hold.sh
+$ fm-captain-hold.sh hold follow --reason 'owner: firstmate' --until 2099-10-02
+  -> exit 0
+$ fm-captain-hold.sh hold follow --reason 'owner: firstmate' --until 2099-10-03
+  -> exit 0
+$ fm-captain-hold.sh hold follow --reason 'owner: firstmate' --until 2099-10-04
+fm-queue-zero: refused: follow was already re-dated once with no new evidence, and nothing has changed since its last hold (no status line, linked worker, blocker change, or captain words); moving its date from 2099-10-03 to 2099-10-04 again is not an answer.
+fm-queue-zero: the only answers: start it (give it a running owner - dispatch a worker, hand it to the beads crew or a secondmate, or arm a condition watch named follow), close it with a reason, or hold it for the captain's own decision (bin/fm-captain-hold.sh hold follow --reason "<the question>", or record his deferral with --until <date> --captain-words-file <file>).
+  -> exit 3
+  hold-until now: 2099-10-03
+write state/follow.status (new evidence), retry 2099-10-04
+  -> exit 0
+  hold-until now: 2099-10-04
+
+== S2 gate: captain-kind 'decide later' re-dated three times
+$ fm-captain-hold.sh hold later --reason 'decide later' --until 2099-10-02
+  -> exit 0
+$ fm-captain-hold.sh hold later --reason 'decide later' --until 2099-10-03
+  -> exit 0
+$ fm-captain-hold.sh hold later --reason 'decide later' --until 2099-10-04
+fm-queue-zero: refused: later was already re-dated once with no new evidence, and nothing has changed since its last hold (no status line, linked worker, blocker change, or captain words); moving its date from 2099-10-03 to 2099-10-04 again is not an answer.
+fm-queue-zero: the only answers: start it (give it a running owner - dispatch a worker, hand it to the beads crew or a secondmate, or arm a condition watch named later), close it with a reason, or hold it for the captain's own decision (bin/fm-captain-hold.sh hold later --reason "<the question>", or record his deferral with --until <date> --captain-words-file <file>).
+  -> exit 3
+  hold-until now: 2099-10-03
+
+== S3 captain's own words never refused
+$ ... --until 2099-10-02 --captain-words-file
+  -> exit 0
+$ ... --until 2099-10-03 --captain-words-file
+  -> exit 0
+$ ... --until 2099-10-04 --captain-words-file
+  -> exit 0
+$ ... --until 2099-10-05 --captain-words-file
+  -> exit 0
+
+== S4 direct tasks-axi re-dates around the gate -> redated; then each answer
+$ fm-queue-zero.sh scan --local | grep redated
+queue redated by-status - row by-status [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-watch - row by-watch [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-mate - row by-mate [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-crew - row by-crew [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-captain-undated - row by-captain-undated [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-captain-dated - row by-captain-dated [re-dated 2 times running with no new evidence, now until 2099-10-04]
+queue redated by-close - row by-close [re-dated 2 times running with no new evidence, now until 2099-10-04]
+-- giving answers: status line, watch, secondmate hand-off, br crew item, undated captain call, (adversarial) dated captain hold w/o words, close
+$ fm-captain-hold.sh hold by-mate --reason 'owner: sm-web' --until 2099-10-05
+  -> exit 0
+  br crew item: [["mirror:by-crew"]]
+$ fm-captain-hold.sh hold by-captain-undated --reason 'pick the vendor'
+  -> exit 0
+$ fm-captain-hold.sh hold by-captain-dated --reason 'pick the vendor' --until 2099-10-06 (no words; expect refusal)
+fm-queue-zero: refused: by-captain-dated was already re-dated once with no new evidence, and nothing has changed since its last hold (no status line, linked worker, blocker change, or captain words); moving its date from 2099-10-04 to 2099-10-06 again is not an answer.
+fm-queue-zero: the only answers: start it (give it a running owner - dispatch a worker, hand it to the beads crew or a secondmate, or arm a condition watch named by-captain-dated), close it with a reason, or hold it for the captain's own decision (bin/fm-captain-hold.sh hold by-captain-dated --reason "<the question>", or record his deferral with --until <date> --captain-words-file <file>).
+  -> exit 3
+$ fm-queue-zero.sh scan --local
+queue redated by-captain-dated - row by-captain-dated [re-dated 2 times running with no new evidence, now until 2099-10-04]
+ledger strikes: [{"id":null,"strikes":0},{"id":null,"strikes":1},{"id":null,"strikes":0},{"id":null,"strikes":0},{"id":null,"strikes":0},{"id":null,"strikes":0},{"id":null,"strikes":0},{"id":null,"strikes":0},{"id":null,"strikes":2}]
+
+== S5 load + attention line
+$ fm-queue-zero.sh load
+{"open":9,"unowned":3,"unowned_ids":["follow","by-status","by-captain-dated"],"unowned_over_day":0,"unowned_over_day_ids":[],"median_open_age_days":0,"redates_no_progress":18}
+
+$ fm-attention-check.sh scan
+attention 10-07 14:00Z GREEN: S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 14:00Z) [green] | S2 >=3 open 0m [green] | S3 green>30m 0 [green] | S4 unreleased n/a (no prod-tagged project) [green] | S8 ownerless in-flight 0 [green] | S11 constraint steers n/a (0 steers) [green] | release-seq steers 0 (info) [green] | S12 load home unowned 3 (0 >24h: follow, by-status, by-captain-dated), median age 0d, re-dates without progress 18 [amber] | br-xcheck home 0/1 br-only (info) [green] | not seen: br crew queue 1 open units (S8/S11 read no br crews)
+
+== S6 fleet-pins / Class E absent (HOME has no ~/.fleet-backup)
+  class-e segments on line: 0

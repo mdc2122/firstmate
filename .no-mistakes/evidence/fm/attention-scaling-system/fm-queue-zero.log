@@ -1,0 +1,21 @@
+ok - ready rows and rows whose only owner is the supervisor are named, whatever their date
+ok - a row whose only owner is the supervisor is flagged unowned; a worker, secondmate, watch, or owned blocker clears it
+ok - an in-flight backlog row with no live task is named instead of left as a silent warning
+ok - genuine captain calls get the far-holds window; owner: captain holds are unowned work
+ok - an empty queue and an unpaired state override stay silent
+ok - a second re-date without new evidence is refused with the only answers; new evidence allows it
+ok - the captain's own deferral is never refused, however often it moves
+ok - a re-date around the gate is folded and listed redated until new evidence arrives
+ok - a redated row clears on new evidence, a running owner, a captain call, or closing it
+ok - re-dating a captain hold without the captain's words is refused the second time
+ok - load reports unowned rows (and those over 24 h), median open age, and re-dates without progress
+ok - check wakes once per episode, names its rows, queues durably, and re-nags only after the window
+ok - a row that leaves the queue and returns wakes again
+ok - a wake that could not be queued is retried, never recorded as reported
+ok - the Paperclip sweep names stuck issues and stale approvals and leaves covered or dated work alone
+ok - the newest valid fm-next-check comment marker with an owner hides a blocked issue through later acknowledgments until the date passes; malformed markers and stale edges do not
+ok - the first comment transport failure stops the comment reads and unread issues stay listed
+ok - Paperclip rows join the one wake, an unreadable board is an error row, and unconfigured homes skip it
+ok - release moves only backlog or blocked issues whose every blocker is done
+ok - the approval age defaults to 0, reads whole minutes from the .env, and a malformed value falls back to 0
+ok - a newly appearing approval is a new queue-zero episode that wakes firstmate on the next check
