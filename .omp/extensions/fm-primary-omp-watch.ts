@@ -246,6 +246,10 @@ const branchSupport = await (async () => {
 })();
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
+// bin/fm-watch.sh's queue-stall alarm defers while this names the live lock
+// holder: "<pid> <generation> <started-epoch>", written at agent_start and
+// removed at the run's agent_end or when the generation stops.
+const mainTurnMarker = `${state}/.main-turn-busy`;
 const handoffDir = `${state}/extensions/omp-primary-watch`;
 const actionableHandoff = `${handoffDir}/session-replacement-actionable.json`;
 const wakeQueue = `${state}/.wake-queue`;
@@ -677,6 +681,24 @@ function recordSessionEvent(generation: SessionGeneration, instance: number, eve
   }
 }
 
+function recordMainTurnStart(generation: SessionGeneration): void {
+  if (!generationIsLive(generation) || lockOwnership() !== "owned") return;
+  try {
+    writeFileSync(mainTurnMarker, `${process.pid} ${generation.id} ${Math.floor(Date.now() / 1000)}\n`);
+  } catch {
+    // A missing marker only lets the stall alarm fire; it never blocks a turn.
+  }
+}
+
+function clearMainTurn(generation: SessionGeneration): void {
+  try {
+    const [pid, id] = readFileSync(mainTurnMarker, "utf8").trim().split(" ");
+    if (pid === String(process.pid) && id === String(generation.id)) unlinkSync(mainTurnMarker);
+  } catch {
+    // Absent already, or another owner's.
+  }
+}
+
 function generationIsLive(generation: SessionGeneration): boolean {
   return activeGeneration === generation && !generation.stopping;
 }
@@ -687,6 +709,7 @@ function refusalMessage(generation: SessionGeneration): string {
 
 function stopGeneration(generation: SessionGeneration): ChildProcess | null {
   generation.stopping = true;
+  clearMainTurn(generation);
   clearTimeout(generation.retryTimer ?? undefined);
   clearTimeout(generation.cleanupTimer ?? undefined);
   clearTimeout(generation.repokeTimer ?? undefined);
@@ -1478,6 +1501,7 @@ export default function (pi: ExtensionAPI) {
   pi.on?.("agent_start", (_event, ctx) => {
     if (ctx) mainContext = ctx as MainContext;
     mainStreaming = true;
+    recordMainTurnStart(generation);
   });
   // omp has no agent_settled; agent_end without willContinue is the run
   // boundary after which a parked wake can only start through a re-poke.
@@ -1485,6 +1509,7 @@ export default function (pi: ExtensionAPI) {
     if ((event as { willContinue?: unknown })?.willContinue === true) return;
     if (ctx) mainContext = ctx as MainContext;
     mainStreaming = false;
+    clearMainTurn(generation);
     scheduleRepoke(generation);
   });
   pi.on?.("message_start", (event) => {

@@ -440,6 +440,68 @@ SH
   pass "an untaken wake row alarms once after the stall interval from first sight, through the check queue and the alert channel, and claimed rows never alarm"
 }
 
+# A main omp turn can run far past the stall interval while a follow-up wake
+# waits for it to end. A turn proven by state/.main-turn-busy (the live lock
+# holder's pid) defers the alarm only until that interval reaches
+# FM_BUSY_TURN_MAX_SECS; a marker naming a dead pid proves nothing and alarms.
+test_own_queue_stall_defers_for_a_proven_main_turn_until_the_cap() {
+  local dir state fakebin real_date live_pid dead_pid
+  dir=$(make_case own-queue-stall-busy)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  real_date=$(command -v date)
+  cat > "$fakebin/date" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = +%s ]; then
+  cat "\${FM_FAKE_NOW_FILE:?}"
+else
+  exec "$real_date" "\$@"
+fi
+SH
+  chmod +x "$fakebin/date"
+  run_watch() {  # <now> <out>
+    printf '%s\n' "$1" > "$dir/now"
+    PATH="$fakebin:$PATH" FM_FAKE_NOW_FILE="$dir/now" FM_HOME="$dir" FM_ROOT_OVERRIDE="$ROOT" \
+      FM_STATE_OVERRIDE="$state" FM_WAKE_QUEUE_STALL_SECS=600 FM_BUSY_TURN_MAX_SECS=1800 FM_POLL=1 FM_SIGNAL_GRACE=0 \
+      FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_WEDGE_ALARM_CHANNEL=osascript FM_WEDGE_ALARM_LOG="$dir/alarm.log" \
+      "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 4 > "$2" 2> "$2.err" || true
+  }
+  sleep 600 &
+  live_pid=$!
+  printf '%s\n' "$live_pid" > "$state/.lock"
+  printf '%s 1 960\n' "$live_pid" > "$state/.main-turn-busy"
+  # Main's turn started at 960; a signal row queues a minute in.
+  printf '1020\t7\tsignal\ttask-a.status\tsignal: task-a\n' > "$state/.wake-queue"
+  printf '7\n' > "$state/.wake-queue.seq"
+  run_watch 1020 "$dir/first.out"
+  run_watch 1621 "$dir/busy.out"
+  run_watch 1920 "$dir/busy-later.out"
+  ! grep -F 'wake-queue stalled' "$dir/busy.out" "$dir/busy-later.out" >/dev/null \
+    || { kill "$live_pid" 2>/dev/null; fail "a proven main turn did not defer the stall alarm"; }
+  run_watch 2821 "$dir/capped.out"
+  grep -F 'check: wake-queue stalled: 1 queued wake(s) not taken up by any conversation; oldest row=7 waiting 1801s' "$dir/capped.out" >/dev/null \
+    || { kill "$live_pid" 2>/dev/null; fail "a main turn past FM_BUSY_TURN_MAX_SECS hid the stall: $(cat "$dir/capped.out")"; }
+  kill "$live_pid" 2>/dev/null
+  wait "$live_pid" 2>/dev/null
+
+  dir=$(make_case own-queue-stall-dead-marker)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  cp "$TMP_ROOT/own-queue-stall-busy/fakebin/date" "$fakebin/date"
+  true &
+  dead_pid=$!
+  wait "$dead_pid" 2>/dev/null
+  printf '%s\n' "$dead_pid" > "$state/.lock"
+  printf '%s 1 960\n' "$dead_pid" > "$state/.main-turn-busy"
+  printf '1020\t7\tsignal\ttask-a.status\tsignal: task-a\n' > "$state/.wake-queue"
+  printf '7\n' > "$state/.wake-queue.seq"
+  run_watch 1020 "$dir/first.out"
+  run_watch 1621 "$dir/stalled.out"
+  grep -F 'check: wake-queue stalled: 1 queued wake(s) not taken up by any conversation; oldest row=7 waiting 601s' "$dir/stalled.out" >/dev/null \
+    || fail "a dead-pid busy marker deferred the stall alarm: $(cat "$dir/stalled.out")"
+  pass "a proven main turn defers the wake-queue stall alarm only until FM_BUSY_TURN_MAX_SECS, and a dead-pid marker alarms at the stall interval"
+}
+
 # A retired mate reprovisioned under the same task id gets a fresh home, so its
 # wake-queue sequence restarts from scratch and can land on the very position the
 # parent last recorded for the retired generation. Those are different rows in
@@ -1303,6 +1365,40 @@ test_main_reclaims_a_live_owners_grant_past_its_ttl() {
   [ ! -s "$state/.wake-queue" ] || fail "reclaimed row remained queued"
 
   pass "main reclaims a live owner's grant once it outlives the branch-progress TTL, and only then"
+}
+
+# Main's ack must never consume a row it was not presented. Rows 1-3 are
+# queued and a stuck branch's grant holds row 2, so main is presented 1 and 3.
+# The grant then outlives its TTL while main handles them: main's ack through 3
+# must leave row 2 queued for main's next drain, which presents it.
+test_main_ack_never_consumes_a_row_reverted_after_presentation() {
+  local dir state sequence generation
+  dir=$(make_case ack-after-grant-ttl)
+  state="$dir/state"
+
+  append_wake "$state" signal "task-a.status" "signal: task-a" || fail "signal append failed"
+  append_wake "$state" signal "task-b.status" "signal: task-b" || fail "signal append failed"
+  append_wake "$state" signal "task-c.status" "signal: task-c" || fail "signal append failed"
+  FM_STATE_OVERRIDE="$state" "$GRANT" activate "$$" ttl-owner || fail "branch owner activation failed"
+  FM_STATE_OVERRIDE="$state" "$GRANT" publish ttl-owner 2 || fail "branch grant publication failed"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/main.out" 2> "$dir/main.err" || fail "main drain failed"
+  ! grep -Fq "$(printf '\tsignal\ttask-b.status\t')" "$dir/main.out" \
+    || fail "main was presented a row a fresh grant reserved"
+  sequence=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' "$dir/main.err")
+  generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$dir/main.err")
+  [ "$sequence" = 3 ] || fail "main's presented cutoff was $sequence, not 3"
+
+  touch -t 200001010000 "$state/.branch-eligible-rows" || fail "could not age the grant"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" --ack-through "$sequence" --recovery-generation "$generation" \
+    > "$dir/ack.out" 2> "$dir/ack.err" || fail "main acknowledgement failed"
+  [ "$(awk -F '\t' '{ print $2 }' "$state/.wake-queue")" = 2 ] \
+    || fail "main's ack consumed a row it was never presented: $(cat "$state/.wake-queue")"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/next.out" 2> "$dir/next.err" || fail "main's next drain failed"
+  grep -Fq "$(printf '\tsignal\ttask-b.status\t')" "$dir/next.out" \
+    || fail "main's next drain did not present the reverted row: $(cat "$dir/next.out")"
+  pass "main's ack keeps a row reverted from an expired grant after presentation for main's next drain"
 }
 
 # A branch-actor drain or ack without a snapshot is a wiring bug, never
@@ -2198,6 +2294,7 @@ test_malformed_presentation_lock_reports_acquire_failure
 test_secondmate_foreign_queue_stall_tracks_progress_and_alerts_once
 test_secondmate_declared_pause_rows_do_not_feed_stall_escalation
 test_own_queue_stall_alarms_once_and_never_for_claimed_rows
+test_own_queue_stall_defers_for_a_proven_main_turn_until_the_cap
 test_secondmate_reprovisioned_queue_starts_a_fresh_interval
 test_secondmate_active_turn_defers_stall_until_the_turn_ends
 test_secondmate_long_lived_mate_mid_turn_is_not_a_stall
@@ -2226,6 +2323,7 @@ test_branch_grant_refuses_rows_already_claimed_by_main
 test_actor_filter_precedes_same_key_deduplication
 test_main_reclaims_a_grant_whose_branch_owner_exited
 test_main_reclaims_a_live_owners_grant_past_its_ttl
+test_main_ack_never_consumes_a_row_reverted_after_presentation
 test_branch_actor_without_eligible_snapshot_refuses
 test_wake_publish_requires_atomic_recovery_evidence
 test_legacy_generationless_wake_is_adopted

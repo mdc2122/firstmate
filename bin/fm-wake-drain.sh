@@ -648,7 +648,9 @@ else
   exit 1
 fi
 DRAIN_LOCK_HELD=true
-reclaim_stale_branch_grant_locked || exit 1
+if [ "$ACTOR" != main ] || [ -z "$ACK_THROUGH" ]; then
+  reclaim_stale_branch_grant_locked || exit 1
+fi
 [ "$ACTOR" != main ] || retire_unconsumable_rows_locked
 [ "$ACTOR" != branch ] || require_branch_eligible_rows || exit 1
 

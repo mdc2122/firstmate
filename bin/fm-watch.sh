@@ -939,13 +939,32 @@ wake_queue_unheld_oldest() {
   ' "$FM_WAKE_QUEUE" 2>/dev/null || true
 }
 
+# 0 iff a conversation that will take the queue up is provably mid-turn, bounded
+# by BUSY_TURN_MAX_SECS on <idle> exactly as secondmate_in_active_turn is: main
+# when state/.main-turn-busy (written by the omp watch extension at agent_start,
+# removed at agent_end) names the live pid holding state/.lock, or the branch
+# when its row grant is live and fresh. Any absence of proof is not a turn.
+wake_queue_consumer_in_active_turn() {  # <idle>
+  local pid generation started extra
+  [ "$1" -lt "$BUSY_TURN_MAX_SECS" ] || return 1
+  fm_wake_branch_grant_live "$STATE/.branch-eligible-rows" "$STATE/.branch-eligible-owner" && return 0
+  read -r pid generation started extra < "$STATE/.main-turn-busy" 2>/dev/null || return 1
+  [ -z "$extra" ] || return 1
+  case "$generation$started" in ''|*[!0-9]*) return 1 ;; esac
+  [ -n "$generation" ] && [ -n "$started" ] || return 1
+  [ "$pid" = "$(sed -n '1p' "$STATE/.lock" 2>/dev/null)" ] || return 1
+  fm_pid_alive "$pid"
+}
+
 # Alarm once per episode when this home's own queue holds a row no conversation
 # has taken up for WAKE_QUEUE_STALL_SECS. The interval is measured from when
 # this watcher first saw that row as the oldest unheld one (the secondmate
 # tick's progress-marker discipline), so a row's age from before an outage never
 # alarms on sight and a draining queue keeps restarting the clock. The alarm is
 # one check wake for main plus the configured active alert channel, because a
-# conversation that is not taking wakes may not see the first.
+# conversation that is not taking wakes may not see the first. A consumer
+# provably mid-turn defers the alarm, but only while that same interval is under
+# BUSY_TURN_MAX_SECS, so a turn that never ends cannot hide a frozen queue.
 wake_queue_stall_tick() {
   local now oldest count observed observed_at observed_seq idle marker progress reason key
   now=$(date +%s)
@@ -970,6 +989,7 @@ EOF
   [ "$(cat "$marker" 2>/dev/null || true)" != "$oldest" ] || return 0
   idle=$((now - observed_at))
   [ "$idle" -ge "$WAKE_QUEUE_STALL_SECS" ] || return 0
+  ! wake_queue_consumer_in_active_turn "$idle" || return 0
   reason="check: wake-queue stalled: $count queued wake(s) not taken up by any conversation; oldest row=$oldest waiting ${idle}s"
   key="wake-queue-stall-$oldest"
   if ! fm_wake_queued_keys check | grep -Fx "$key" >/dev/null 2>&1; then

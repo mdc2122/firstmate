@@ -106,7 +106,9 @@ The same suite pins the counted-equals-presentable invariant against `bin/fm-gua
 A wake that no conversation takes up is the worst silent failure, so `bin/fm-watch.sh` watches its own queue: when the oldest row that is neither claimed by a main drain nor reserved by a live branch grant stays oldest for `FM_WAKE_QUEUE_STALL_SECS` (default 600), it appends one `check: wake-queue stalled` row, fires the active alert channel from [`wedge-alarm.md`](wedge-alarm.md), and wakes.
 The interval starts when the watcher first sees that row as the oldest unclaimed one, never from the row's own age, so a backlog surviving an outage cannot alarm the moment it is seen, and a draining queue restarts the clock.
 It alarms once per stalled row; claimed rows are being handled and never count.
-`tests/fm-wake-queue.test.sh` pins the first-sight interval, the single alarm through both the check row and the alert channel, and the claimed-row exemption.
+A consumer provably mid-turn defers the alarm, as a secondmate's active turn does, but only while the same interval is under `FM_BUSY_TURN_MAX_SECS`: main counts when `state/.main-turn-busy` (`<pid> <generation> <started-epoch>`, written by the omp watch extension at `agent_start` and removed at the run's `agent_end` or when its session generation stops) names the live pid in `state/.lock`, and the branch counts while its row grant is live and fresh.
+A missing, malformed, foreign, or dead-pid marker is no proof, so the alarm fires.
+`tests/fm-wake-queue.test.sh` pins the first-sight interval, the single alarm through both the check row and the alert channel, the claimed-row exemption, and the busy-turn deferral and its cap.
 
 ## Arm-layer cycle contract
 
