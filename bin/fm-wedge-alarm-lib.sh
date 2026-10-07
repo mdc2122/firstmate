@@ -126,7 +126,7 @@ wedge_alarm_stop_active_notifier() {
 # name and summary are handed to that command instead of ever invoking osascript
 # or herdr or a captain-supplied command. This is the one injection point the test harness forces to a recorder
 # so no test can post a real desktop notification - the library-mode guard at the
-# foot of this file defaults it to "discard" whenever the daemon is SOURCED
+# foot of bin/fm-supervise-daemon.sh defaults it to "discard" whenever the daemon is SOURCED
 # rather than executed, which is the only way a test reaches these functions. The
 # special value "discard" fires nothing; unset means production (the executed
 # daemon), so the real channels fire.

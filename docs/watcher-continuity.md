@@ -78,6 +78,7 @@ A branch grant is published through `bin/fm-wake-grant.sh` under that same lock 
 A main drain validates that owner evidence under the queue lock and reclaims the grant when its process is gone or its identity no longer matches.
 Owner liveness alone cannot prove the branch is still working, because an omp branch runs inside the main omp process, so a grant also expires `FM_BRANCH_GRANT_TTL_SECS` (default 600) after the branch's last progress: each branch tool call refreshes it through `bin/fm-wake-grant.sh touch`, which refuses to revive an expired grant.
 An expired grant reserves nothing, and main's next drain takes its rows with a one-line `WAKE ROWS REVERTED FROM SUPERVISION BRANCH` note while keeping the live owner record, so the branch can publish again.
+Only a presenting drain performs that revert: a main `--ack-through` leaves an expired grant's rows queued, so it can never delete a row main was not shown, and the next presenting drain shows them.
 A main drain claims every currently unclaimed row and excludes an active branch grant from both presentation and acknowledgement.
 Because that exclusion makes those rows invisible to main, `bin/fm-guard.sh`'s queued-wake warning counts only the rows the calling actor can itself present or retire, so an actor is never sent to a drain that provably has nothing for it.
 `bin/fm-wake-lib.sh` owns that per-actor count (`fm_wake_actor_pending_count`) alongside the grant row-list and owner-record reads that the drain and `bin/fm-wake-grant.sh` share.
@@ -99,7 +100,7 @@ Because branch claims contain no check-kind rows, a branch acknowledgement skips
 `tests/fm-wake-queue.test.sh`'s mixed-queue actor, stale-acknowledgement remedy, and presentation-deadline tests drive the real scripts: branch acknowledgement cannot swallow a main row, a concurrent main turn cannot present or acknowledge an active branch grant, a no-op stale acknowledgement names the current presented wake's exact command, live-holder presentation contention stays bounded and retriable, and acknowledgement locking remains blocking.
 The same suite pins the counted-equals-presentable invariant against `bin/fm-guard.sh` and `bin/fm-wake-drain.sh` together: a branch-held row raises the held advisory rather than the ordinary queued-wake warning for main, and is presented with its acknowledgement command - with the ordinary warning restored - as soon as the grant clears, and structurally unusable rows are retired by main alone while every remaining row stays presentable and acknowledgeable.
 `tests/fm-pi-branch-extension.test.sh` pins extension-side classification, claim publication and release, and the pre-drain recheck.
-`tests/fm-wake-queue.test.sh` also pins the grant TTL: a fresh live grant still reserves its rows, an expired one reverts them to main and cannot be revived, and the owner record survives.
+`tests/fm-wake-queue.test.sh` also pins the grant TTL: a fresh live grant still reserves its rows, an expired one reverts them to main and cannot be revived, the owner record survives, and a main acknowledgement never consumes a row reverted after main's presentation.
 
 ## Wake-queue stall alarm
 
