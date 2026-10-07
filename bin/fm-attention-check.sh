@@ -46,12 +46,32 @@
 #       torn down left with their inbox and are not counted.
 #       When data/backlog.md exists but cannot be read, S8 and S11 are rated
 #       unknown, say so, and never count toward the verdict.
+#   S12 supervisor load, per home - this home, then every local registered
+#       secondmate home (data/secondmates.md) - from that home's own
+#       `bin/fm-queue-zero.sh load`, which owns ownership and the re-date
+#       ledger: "<home> unowned <n> (<n> >24h), median age <d>d, re-dates
+#       without progress <n>". unowned counts open rows whose only owner is
+#       the supervisor (target 0); median age is the median filed age of open
+#       rows; re-dates without progress counts hold dates moved (or refused)
+#       with no new evidence in the window. Red when any home has a row
+#       unowned for 24 h or more; amber when any home has an unowned row or a
+#       re-date without progress; unknown (not counted) when a home's load
+#       cannot be read.
 #   release-seq  inbox messages in the window that sequence a release by hand
 #       ("next in line", "queued behind", "after ... deploys"). Informational:
 #       amber when any, never part of the verdict.
+#   class-e  fleet-pins Class E applications in the window, read from the
+#       fleet-pins agent's log (FM_ATTENTION_CLASS_E_LOG, default
+#       ~/.fleet-backup/pins/class-e.log; mdc2122/firstmate-fleet-backup
+#       pins/README.md owns the format): a line counts when its second
+#       tab-separated field is exactly `class-e` and its first, a UTC
+#       YYYY-MM-DDTHH:MM:SSZ stamp, falls in the window, with the count split
+#       by its health= value. Informational: amber when any application did not
+#       pass health, never part of the verdict; absent when the log is absent.
 #
 # The verdict follows data/firstmate-bottleneck-plan section 5: RED when two or
-# more of S1, S2, S3, S4, S8, S11 are red, AMBER when one is, GREEN otherwise.
+# more of S1, S2, S3, S4, S8, S11, S12 are red, AMBER when one is, GREEN
+# otherwise.
 #
 # Blind spots and the shadow-queue cross-check are named on the line rather
 # than guessed. When br is installed, every beads (br) crew queue this home can
@@ -126,6 +146,7 @@ CONSTRAINT_RE='(^|[^a-z])(ballot|review|repair|finish)'
 RELEASE_RE='next in line|queued behind|after [^.]{1,80} deploys'
 BR_TIMEOUT=${FM_ATTENTION_BR_TIMEOUT:-5}
 case "$BR_TIMEOUT" in ''|*[!0-9]*|0) BR_TIMEOUT=5 ;; esac
+CLASS_E_LOG=${FM_ATTENTION_CLASS_E_LOG:-${HOME:-}/.fleet-backup/pins/class-e.log}
 
 usage() {
   cat <<'EOF'
@@ -634,6 +655,81 @@ blind_spots() {
   printf 'not seen: br crew queue %s units (S8/S11 read no br crews)' "$BR_NOT_SEEN"
 }
 
+# "<label>\t<home>" per home whose load S12 reads: this home under its own
+# (possibly overridden) state and data, then each local registered secondmate
+# home through its own FM_HOME.
+load_homes() {
+  local line
+  printf 'home\t%s\n' "$FM_HOME"
+  [ -f "$DATA/secondmates.md" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    secondmate_registry_parse_line "$line" 2>/dev/null || continue
+    [ "$SECONDMATE_REGISTRY_REMOTE" -eq 0 ] && [ -d "$SECONDMATE_REGISTRY_HOME" ] || continue
+    printf '%s\t%s\n' "$SECONDMATE_REGISTRY_ID" "$SECONDMATE_REGISTRY_HOME"
+  done < "$DATA/secondmates.md"
+}
+
+signal_load() {
+  local parts='' rating=green label home load n day median redates ids
+  while IFS=$'\t' read -r label home; do
+    [ -n "$home" ] || continue
+    if [ "$label" = home ]; then
+      load=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" FM_QUEUE_ZERO_NOW="$NOW_ISO" \
+        "$SCRIPT_DIR/fm-queue-zero.sh" load 2>/dev/null) || load=
+    else
+      load=$(env -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE FM_HOME="$home" FM_QUEUE_ZERO_NOW="$NOW_ISO" \
+        "$SCRIPT_DIR/fm-queue-zero.sh" load 2>/dev/null) || load=
+    fi
+    if [ -z "$load" ] || ! read -r n day median redates ids <<EOF
+$(printf '%s' "$load" | jq -r '"\(.unowned) \(.unowned_over_day) \(.median_open_age_days // "-") \(.redates_no_progress) \(.unowned_ids | join(","))"' 2>/dev/null)
+EOF
+    then
+      parts="$parts${parts:+; }$label load unknown"
+      [ "$rating" != green ] || rating=unknown
+      continue
+    fi
+    case "$n" in ''|*[!0-9]*) n=x ;; esac
+    case "$day" in ''|*[!0-9]*) n=x ;; esac
+    case "$redates" in ''|*[!0-9]*) n=x ;; esac
+    if [ "$n" = x ]; then
+      parts="$parts${parts:+; }$label load unknown"
+      [ "$rating" != green ] || rating=unknown
+      continue
+    fi
+    [ "$day" -eq 0 ] || rating=red
+    if [ "$rating" != red ] && { [ "$n" -gt 0 ] || [ "$redates" -gt 0 ]; }; then rating=amber; fi
+    parts="$parts${parts:+; }$label unowned $n ($day >24h${ids:+: $(names_capped "$(printf '%s' "$ids" | tr ',' '\n')")}), median age ${median}d, re-dates without progress $redates"
+  done <<EOF
+$(load_homes)
+EOF
+  add_segment S12 "$rating" "load $parts"
+}
+
+# Class E applications in the window, split by health; nothing when the log is
+# absent or unreadable.
+signal_class_e() {
+  local out n health rating
+  [ -f "$CLASS_E_LOG" ] && [ -r "$CLASS_E_LOG" ] || return 0
+  out=$(awk -F '\t' -v w0="$WIN0_ISO" -v now="$NOW_ISO" '
+    $2 == "class-e" && $1 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/ && $1 >= w0 && $1 <= now {
+      n++; h = "?"
+      for (i = 3; i <= NF; i++) if (index($i, "health=") == 1) h = substr($i, 8)
+      c[h]++
+    }
+    END {
+      printf "%d", n
+      for (h in c) printf " %s=%d", h, c[h]
+      printf "\n"
+    }' "$CLASS_E_LOG" 2>/dev/null) || return 0
+  read -r n health <<EOF
+$out
+EOF
+  health=$(printf '%s\n' "$health" | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ' | sed 's/ $//')
+  rating=green
+  case " $health " in *" fail-"*|*" ?="*) rating=amber ;; esac
+  add_segment class-e "$rating" "applied $n${health:+ ($health)} (info)" info
+}
+
 VERDICT=
 attention_line() {  # <record-text>
   local reds blind
@@ -643,11 +739,13 @@ attention_line() {  # <record-text>
   signal_merged_not_live
   signal_ownerless
   signal_steering
+  signal_load
   reds=$(printf '%s' "$RED_SIGNALS" | awk -F ',' '{ print NF }')
   VERDICT=GREEN
   [ "${reds:-0}" -lt 1 ] || VERDICT=AMBER
   [ "${reds:-0}" -lt 2 ] || VERDICT=RED
   signal_br_shadow
+  signal_class_e
   blind=$(blind_spots)
   LINE="attention $(printf '%s' "$NOW_ISO" | cut -c6-10) $(printf '%s' "$NOW_ISO" | cut -c12-16)Z $VERDICT${RED_SIGNALS:+ ($RED_SIGNALS)}: $SEGMENTS${blind:+ | $blind}"
 }

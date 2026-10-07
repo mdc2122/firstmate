@@ -1485,10 +1485,10 @@ queue_zero_report() {
   rows=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
     "$SCRIPT_DIR/fm-queue-zero.sh" scan --local 2>/dev/null) || rows=
   if [ -z "$rows" ]; then
-    printf '%s\n' "Queue: nothing is ready or undated."
+    printf '%s\n' "Queue: nothing must leave the queue now."
     return 0
   fi
-  printf '%s\n' "Queue: each row below leaves the queue this turn - dispatch it, hold it with --until and a reason naming its blocker or owner, or close it:"
+  printf '%s\n' "Queue: each row below leaves the queue this turn - dispatch a ready row; start an unowned or re-dated row with a running owner, close it with a reason, or hold it for the captain (a new date is not an answer):"
   printf '%s\n' "$rows" | sed 's/^/  /'
 }
 

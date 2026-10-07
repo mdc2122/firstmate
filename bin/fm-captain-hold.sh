@@ -54,7 +54,9 @@
 # bound to its date: bin/fm-far-holds.sh treats a far `--until` as the
 # captain's only while a record for that same date exists, and names every
 # other far-dated hold so a deferral firstmate chose gets justified or
-# dispatched.
+# dispatched. Any other `--until` is first asked of bin/fm-queue-zero.sh
+# hold-gate, which refuses (exit 3, nothing written) a second re-date with no
+# new evidence since the last hold; a captain deferral is never asked.
 #
 # `answer` records the captain's exact words and resolves the call in the same
 # act. It requires a non-empty captain decision file of at most 8192 bytes and
@@ -870,7 +872,7 @@ write_deferral_record() {  # <task-id> <shown-body> <until>
 
 command_hold() {
   local id=${1:-} title='' reason='' repo='' origin='' until='' words_file='' show state existing_title body='' hold_kind hold_set occurrence
-  local existing_hold_kind='' existing_held='' preserve_hold_set=0
+  local existing_hold_kind='' existing_held='' preserve_hold_set=0 gate_rc
   [ "$#" -ge 1 ] || { usage >&2; exit 2; }
   shift
   while [ "$#" -gt 0 ]; do
@@ -941,6 +943,19 @@ command_hold() {
         || fail "could not create task $id"
     fi
   fi
+  # A date that is not the captain's own deferral is asked of the re-date gate
+  # before anything is written: a second re-date without new evidence is
+  # refused there with the only answers (bin/fm-queue-zero.sh owns the rule).
+  if [ -n "$until" ] && [ -z "$words_file" ]; then
+    gate_rc=0
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
+      "$SCRIPT_DIR/fm-queue-zero.sh" hold-gate "$id" "$until" || gate_rc=$?
+    case "$gate_rc" in
+      0) : ;;
+      3) exit 3 ;;
+      *) fail "could not judge re-dating $id (bin/fm-queue-zero.sh hold-gate exited $gate_rc)" ;;
+    esac
+  fi
   # Publish the timestamp before the captain-hold annotation. A concurrent
   # snapshot may see the harmless stamp by itself, but can never see a newly
   # held task without the timestamp that defines this hold lifecycle's age.
@@ -959,6 +974,9 @@ command_hold() {
     tasks_axi hold "$id" --reason "$reason" --kind captain >/dev/null \
       || fail "could not hold task $id for the captain"
   fi
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
+    "$SCRIPT_DIR/fm-queue-zero.sh" observe \
+    || printf 'fm-captain-hold: %s is held, but the re-date ledger was not updated; the next queue-zero check folds it\n' "$id" >&2
   task_show "$id" || fail "task $id disappeared while holding it"
   show=$TASK_SHOW_OUTPUT
   hold_kind=$(show_field_value "$show" hold_kind)

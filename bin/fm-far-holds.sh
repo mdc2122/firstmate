@@ -17,9 +17,11 @@
 # That record is bound to its date: re-dating the hold to anything else makes
 # the item firstmate's deferral again. Every other far-dated hold - a captain
 # hold carrying no such record, or any non-captain hold - is listed here, and
-# the turn that sees it either dispatches the item, shortens the date to
-# within the window with a reason naming its blocker, or records the
-# captain's own words for it.
+# the turn that sees it starts the item (dispatches it or gives it another
+# running owner), closes it with a reason, or records the captain's own words
+# for it. Shortening the date is not an answer on its own: a date is not an
+# owner, and bin/fm-queue-zero.sh refuses a second re-date without new
+# evidence and lists an ownerless row as `unowned` whatever its date.
 #
 # A listed row is any open backlog item (not Done) with a hold reason and a
 # hold-until date more than FM_FAR_HOLDS_DAYS days after today (UTC), whose
@@ -60,9 +62,10 @@ Usage:
   fm-far-holds.sh check           heartbeat hook: one wake line per new episode
   fm-far-holds.sh --help          print this help
 
-Every listed item is dispatched, re-held within the window with its named
-blocker, or re-held with the captain's own words through
+Every listed item is started (dispatched or given a running owner), closed
+with a reason, or re-held with the captain's own words through
 bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>.
+A new date alone is not an answer (bin/fm-queue-zero.sh owns the re-date rule).
 EOF
 }
 
@@ -136,8 +139,9 @@ action_check() {
         if (.text | length) + ($i | length) + 2 <= $max
         then .text += (if .n > 0 then "; " else "" end) + $i | .n += 1 else . end)) as $kept
     | "check: far-holds: \($items | length) backlog item(s) held more than \($days) day(s) out without the captain'"'"'s own deferral"
-      + " (dispatch now, re-hold within \($days) day(s) naming the blocker, or record the captain'"'"'s words with"
-      + " bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; bin/fm-far-holds.sh scan shows details): "
+      + " (start it - dispatch it or give it a running owner - close it with a reason, or record the captain'"'"'s words with"
+      + " bin/fm-captain-hold.sh hold --until <date> --captain-words-file <file>; a new date alone is not an answer;"
+      + " bin/fm-far-holds.sh scan shows details): "
       + $kept.text
       + (if ($items | length) > $kept.n then "; +\(($items | length) - $kept.n) more" else "" end)')
   # shellcheck source=bin/fm-wake-lib.sh
