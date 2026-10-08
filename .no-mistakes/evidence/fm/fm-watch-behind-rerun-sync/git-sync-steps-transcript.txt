@@ -1,0 +1,74 @@
++(eval):6> git init -q --bare origin.git
++(eval):7> git init -q -b main seed
++(eval):7> cd seed
++(eval):7> echo base
++(eval):7> git add .
++(eval):7> git commit -qm base
++(eval):7> git remote add origin ../origin.git
++(eval):7> git push -q origin main
++(eval):8> git checkout -qb feature
++(eval):8> echo feat
++(eval):8> git add .
++(eval):8> git commit -qm feature-commit
++(eval):8> git push -q origin feature
++(eval):9> git push -q origin feature:refs/pull/1/head
++(eval):10> cd ..
++(eval):10> git clone -q -b feature origin.git worker
++(eval):10> cd seed
++(eval):12> git checkout -q main
++(eval):12> echo more
++(eval):12> git add .
++(eval):12> git commit -qm main-advance
++(eval):12> git push -q origin main
++(eval):13> git checkout -q feature
++(eval):13> git rebase -q main
++(eval):13> git push -qf origin feature
++(eval):13> git push -qf origin feature:refs/pull/1/head
++(eval):14> NEW=+(eval):14> git rev-parse HEAD
++(eval):14> NEW=fcbe4cb20311ba92c329d25e323de86fbee329d0 
++(eval):14> cd ../worker
++(eval):15> set +x
+=== Scenario: worker local branch at pre-rebase head, PR head is fcbe4cb20311ba92c329d25e323de86fbee329d0
++(eval):16> git rev-parse HEAD
+03e8ae3db05988d7c83df15d06aefcc81725e127
++(eval):17> git fetch -q origin refs/pull/1/head
++(eval):18> git cherry fcbe4cb20311ba92c329d25e323de86fbee329d0 HEAD
+- 03e8ae3db05988d7c83df15d06aefcc81725e127
++(eval):18> grep -c '^+'
++(eval):18> git cherry fcbe4cb20311ba92c329d25e323de86fbee329d0 HEAD
++(eval):18> echo 'plus-lines: 0'
+plus-lines: 0
++(eval):19> git reset --keep fcbe4cb20311ba92c329d25e323de86fbee329d0
++(eval):19> git rev-parse HEAD
++(eval):19> test fcbe4cb20311ba92c329d25e323de86fbee329d0 '=' fcbe4cb20311ba92c329d25e323de86fbee329d0
++(eval):19> echo 'SYNCED to PR head'
+SYNCED to PR head
++(eval):20> set +x
+=== Adversarial: worker has an unpushed local commit missing from the PR head
++(eval):21> echo extra
++(eval):21> git add .
++(eval):21> git commit -qm unpushed-local
++(eval):22> git cherry fcbe4cb20311ba92c329d25e323de86fbee329d0 HEAD
++ bd8105d8e68367189e67157247482868a5ab3b52
++(eval):22> git cherry fcbe4cb20311ba92c329d25e323de86fbee329d0 HEAD
++(eval):22> grep -c '^+'
++(eval):22> echo 'plus-lines: 1  -> steer says stop and report blocked'
+plus-lines: 1  -> steer says stop and report blocked
++(eval):23> git reset -q --hard fcbe4cb20311ba92c329d25e323de86fbee329d0
++(eval):24> set +x
+=== Adversarial: uncommitted edit to a file the reset would change
++(eval):25> git reset -q --hard 'HEAD~1'
++(eval):26> git checkout -q fcbe4cb20311ba92c329d25e323de86fbee329d0 -- .
++(eval):26> git reset -q --hard ORIG_HEAD
++(eval):27> git reset -q --hard 'fcbe4cb20311ba92c329d25e323de86fbee329d0~1'
++(eval):27> echo dirty
++(eval):28> git status --short
+?? feat.txt
++(eval):29> git reset --keep fcbe4cb20311ba92c329d25e323de86fbee329d0
+error: Untracked working tree file 'feat.txt' would be overwritten by merge.
+fatal: Could not reset index file to revision 'fcbe4cb20311ba92c329d25e323de86fbee329d0'.
++(eval):29> git rev-parse HEAD
++(eval):29> git status --short
++(eval):29> echo 'reset --keep rc=128 ; HEAD=192769c7829a7aebde88c7647a5e4aa819955206; dirty edit kept: ?? feat.txt'
+reset --keep rc=128 ; HEAD=192769c7829a7aebde88c7647a5e4aa819955206; dirty edit kept: ?? feat.txt
++(eval):30> set +x
