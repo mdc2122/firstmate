@@ -210,7 +210,7 @@ decide() {  # <action> [<percent>]
           return 0
         fi
         reason="check: stow-due: context ${percent}% (${REARM_STEP}+ points since the last /stow at ${base}%) - run the /stow pass again before compaction condenses this session"
-      elif [ "$fired" -gt 0 ] || [ "$stow_m" -ge "$above" ]; then
+      elif [ "$fired" -gt 0 ]; then
         record_write || true
         return 0
       else
