@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for the context-volume stow trigger: bin/fm-stow-trigger.sh (threshold,
-# one-wake-per-context-cycle latch, durable stow-due wake) and the omp and Pi
+# per-context-cycle latch with post-stow growth re-arm, durable stow-due wake) and the omp and Pi
 # primary guard extensions and the Claude Code hooks that report to it.
 #
 # The gap it closes: a daily stow reminder comes due long after a busy session
@@ -83,17 +83,60 @@ test_stow_at_high_usage_satisfies_the_cycle() {
   drain_queue "$home"
 
   # A new cycle where the stow lands after usage is already high: no wake,
-  # and staying high never wakes later.
+  # and usage that stays within one re-arm step never wakes later.
   trig "$home" cycle
   stow_at "$home" $((now + 60))
   out=$(trig "$home" context 80)
   [ -z "$out" ] || fail "a stow already done at high usage still woke: $out"
-  out=$(trig "$home" context 90)
+  out=$(trig "$home" context 84)
   [ -z "$out" ] || fail "sustained high usage after a stow woke: $out"
   out=$(trig "$home" compacting 96)
   [ -z "$out" ] || fail "compaction after a stow this cycle woke: $out"
   assert_equals 0 "$(stow_rows "$home")" "a stow this cycle did not satisfy the latch"
   pass "fm-stow-trigger: a stow at high usage satisfies the cycle; one before it does not"
+}
+
+# The 2026-10-08 miss on a 1M-context omp primary: the 70% wake fired, /stow
+# ran, and context then grew for hours to auto-compaction at ~81% with no
+# further stow, because one stow satisfied the whole cycle. After a completed
+# stow, every further 5 points of usage queues one more wake.
+test_growth_after_a_stow_rearms_the_wake() {
+  local home out now
+  home=$(make_home rearm)
+  now=$(date +%s)
+  # Today's record: the cycle began hours ago and the 70% wake fired an hour ago.
+  printf 'fm-stow-trigger-v1\ncycle=%s\nabove=%s\nfired=%s\nholder=\n' \
+    $((now - 14400)) $((now - 3600)) $((now - 3600)) > "$home/state/.stow-trigger"
+
+  # No stow yet: growth alone never re-wakes.
+  out=$(trig "$home" context 76)
+  [ -z "$out" ] || fail "growth without a completed stow woke: $out"
+
+  # The stow completes after that wake; the next report records its usage as the base.
+  stow_at "$home" $((now - 3000))
+  out=$(trig "$home" context 70)
+  [ -z "$out" ] || fail "the report right after the stow woke: $out"
+  out=$(trig "$home" context 74)
+  [ -z "$out" ] || fail "growth under one step after the stow woke: $out"
+  out=$(trig "$home" context 75)
+  assert_contains "$out" "context 75% (5+ points since the last /stow at 70%)" "five points of growth after the stow did not wake"
+  assert_equals 1 "$(stow_rows "$home")" "the re-arm did not queue exactly one wake"
+  drain_queue "$home"
+
+  # One wake per step: more growth with no new stow stays silent, compaction too.
+  out=$(trig "$home" context 81)
+  [ -z "$out" ] || fail "a second step without a new stow woke: $out"
+  out=$(trig "$home" compacting 81)
+  [ -z "$out" ] || fail "compaction after a step wake woke again: $out"
+  assert_equals 0 "$(stow_rows "$home")" "the step latch let a second wake through"
+
+  # The next stow re-arms the next step from its own usage.
+  stow_at "$home" $((now + 60))
+  out=$(trig "$home" context 81)
+  [ -z "$out" ] || fail "the report right after the second stow woke: $out"
+  out=$(trig "$home" context 86)
+  assert_contains "$out" "since the last /stow at 81%" "the second stow did not re-arm the next step"
+  pass "fm-stow-trigger: each completed stow re-arms one wake per further 5 points of usage"
 }
 
 test_compaction_wakes_when_threshold_never_crossed() {
@@ -444,6 +487,7 @@ test_claude_precompact_hook_wakes_once_per_cycle() {
 
 test_threshold_crossing_wakes_once_per_cycle
 test_stow_at_high_usage_satisfies_the_cycle
+test_growth_after_a_stow_rearms_the_wake
 test_compaction_wakes_when_threshold_never_crossed
 test_configured_threshold_and_no_duplicate_rows
 test_new_lock_holder_starts_a_new_cycle
