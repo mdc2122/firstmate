@@ -124,7 +124,14 @@
 #                          an armed GitHub merge poll's pull request has had every
 #                          check green but could not merge for
 #                          FM_PR_GREEN_BLOCKED_SECS (default 30 minutes); one wake
-#                          per episode (pr_green_blocked_tick)
+#                          per episode (pr_green_blocked_tick). Before that, a
+#                          yolo=on task whose green pull request is blocked only
+#                          because it is behind its base gets no wake: its worker
+#                          receives one bin/fm-send.sh steer per head asking for
+#                          the supported no-mistakes rerun, at most
+#                          FM_PR_BEHIND_RERUN_PER_HOUR (default 3) per pull
+#                          request per hour (pr_behind_rerun_steer); the wake
+#                          stays the backstop when the rerun does not clear it
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: queue-zero: ... queued rows or Paperclip items that must leave the
@@ -282,6 +289,10 @@ PR_GREEN_BLOCKED_SECS=${FM_PR_GREEN_BLOCKED_SECS:-1800}  # green-but-unmergeable
 case "$PR_GREEN_BLOCKED_SECS" in
   ''|*[!0-9]*) PR_GREEN_BLOCKED_SECS=1800 ;;
 esac
+PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base rerun steers per pull request per rolling hour
+case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
+PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
+case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
   ''|*[!0-9]*|0) HOME_SUMMARY_INTERVAL=300 ;;
@@ -2390,7 +2401,7 @@ retire_merged_pr_poll() {  # <id>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked"
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun"
 }
 
 # A green pull request that cannot merge raises no merge poll output, so an
@@ -2408,6 +2419,13 @@ retire_merged_pr_poll() {  # <id>
 # own timer rather than hiding inside the alerted one. An unknown reading
 # changes nothing. The wake row is queued before the episode is marked
 # alerted, preferring a rare duplicate over silence.
+# A yolo=on task's pull request that is green and blocked only because its
+# branch is behind its base (a strict up-to-date rule, with no merge queue to
+# bring it current) does not wait out that timer: pr_behind_rerun_steer asks
+# the task's worker at once for the supported no-mistakes rerun, which rebases
+# and revalidates. The episode and its wake still run unchanged as the
+# backstop for every other blocking reason and for a rerun that does not clear
+# the block.
 # Runs after the poll's own capture in the check loop. It holds the caller's
 # PR poll control lock only when that loop still does: the yolo merge path
 # releases the lock before bin/fm-pr-merge.sh runs and retakes it only for a
@@ -2424,8 +2442,51 @@ pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
   return 1
 }
 
+# One bin/fm-send.sh steer per behind pull-request head, asking the worker for
+# the supported pipeline rerun (never a hand rebase or a forge branch update:
+# the pipeline owns the branch and its required attestation is bound to the
+# head it pushed). state/<id>.pr-behind-rerun keeps one "<url> <head-sha>
+# <epoch>" line per delivered steer for the task's current pull request: a
+# head already listed is never steered again, and at most
+# PR_BEHIND_RERUN_PER_HOUR steers go out per pull request in any rolling hour.
+# It survives the episode's clear readings (the rerun's own pending CI is one)
+# so the cap spans reruns, and retires with the merged poll and at teardown.
+# Only a delivered steer is recorded, so a refused send (another supervision
+# actor's lease, a retired endpoint) retries on a later sweep.
+pr_behind_rerun_steer() {  # <id> <url> <head>
+  local id=$1 url=$2 head=$3 file now recent msg tmp
+  [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
+  file="$STATE/$id.pr-behind-rerun"
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    awk -v u="$url" -v h="$head" '$1 == u && $2 == h { found = 1 } END { exit !found }' "$file" \
+      && return 0
+    recent=$(awk -v u="$url" -v since=$((now - 3600)) '$1 == u && $3 + 0 > since { n++ } END { print n + 0 }' "$file")
+    if [ "$recent" -ge "$PR_BEHIND_RERUN_PER_HOUR" ]; then
+      triage_log "behind-rerun steer for $id withheld: $recent already sent for $url within the hour"
+      return 0
+    fi
+  fi
+  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at head $head. Run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or update the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
+  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+    triage_log "behind-rerun steer for $id refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
+    return 0
+  fi
+  triage_log "behind-rerun steer sent to $id for $url at $head"
+  tmp=$(mktemp "$STATE/.pr-behind-rerun.XXXXXX") || return 0
+  if {
+    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
+    printf '%s %s %s\n' "$url" "$head" "$now"
+  } > "$tmp" && mv -f -- "$tmp" "$file"; then
+    return 0
+  fi
+  rm -f "$tmp"
+}
+
 pr_green_blocked_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file probe verdict head detail now age reason
+  local id=$1 c=$2 url=$3 file probe verdict head code detail now age reason
   local rec_url='' rec_head='' first='' alerted=''
   file="$STATE/$id.pr-green-blocked"
   probe="$SCRIPT_DIR/fm-pr-green-blocked.sh"
@@ -2434,13 +2495,16 @@ pr_green_blocked_tick() {  # <id> <check-path> <url>
   verdict=${FM_CHECK_RESULT%%$'\n'*}
   case "$verdict" in
     clear) rm -f "$file"; return 0 ;;
-    'blocked '*' '*)
+    'blocked '*' '*' '*)
       detail=${verdict#blocked }
       head=${detail%% *}
+      detail=${detail#* }
+      code=${detail%% *}
       detail=${detail#* }
       ;;
     *) return 0 ;;
   esac
+  [ "$code" != behind ] || pr_behind_rerun_steer "$id" "$url" "$head"
   now=$(date +%s)
   if [ -f "$file" ] && [ ! -L "$file" ]; then
     read -r rec_url rec_head first alerted < "$file" || true

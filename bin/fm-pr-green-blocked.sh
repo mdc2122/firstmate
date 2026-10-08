@@ -5,7 +5,7 @@
 # forge once and classifies what it saw.
 #
 # Prints exactly one line:
-#   blocked <head-sha> <reason>
+#   blocked <head-sha> <code> <reason>
 #                     every check is green (bin/fm-pr-lib.sh's
 #                     fm_pr_github_checks_not_green, the check-green rule
 #                     bin/fm-pr-merge.sh also gates on), every check the base
@@ -19,7 +19,10 @@
 #                     branch behind its base, or base-branch protection such as
 #                     a missing review; <head-sha> is the head commit the
 #                     reading describes, so the caller can tell a re-pushed
-#                     head that is blocked again from the same stuck head
+#                     head that is blocked again from the same stuck head;
+#                     <code> is one stable word naming the blocking reason
+#                     (draft, conflict, behind, protection) for callers that
+#                     act on one reason, and <reason> is its prose
 #   clear             the stuck condition does not hold: the pull request is
 #                     merged or closed, a check is red or pending, a required
 #                     check has not reported (its CI has not passed, however
@@ -76,13 +79,13 @@ case "$head" in
 esac
 
 if [ "$draft" = true ]; then
-  reason='pull request is a draft'
+  reason='draft pull request is a draft'
 elif [ "$mergeable" = CONFLICTING ] || [ "$merge_state" = DIRTY ]; then
-  reason='merge conflicts with the base branch'
+  reason='conflict merge conflicts with the base branch'
 elif [ "$merge_state" = BEHIND ]; then
-  reason='branch is behind the base branch'
+  reason='behind branch is behind the base branch'
 elif [ "$merge_state" = BLOCKED ]; then
-  reason='base-branch protection refuses the merge (a required review or another branch rule)'
+  reason='protection base-branch protection refuses the merge (a required review or another branch rule)'
 else
   case "$merge_state" in
     CLEAN|HAS_HOOKS|UNSTABLE) echo clear ;;
