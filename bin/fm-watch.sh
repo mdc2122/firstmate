@@ -2445,12 +2445,18 @@ pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
 # One bin/fm-send.sh steer per behind pull-request head, asking the worker for
 # the supported pipeline rerun (never a hand rebase, a hand push, or a forge
 # branch update: the pipeline owns the branch and its required attestation is
-# bound to the head it pushed). A rerun refuses when the worker's local branch
-# is not the pull request's head, which is the usual state after an earlier
-# rerun rebased and pushed from the pipeline's own copy, so the steer first has
-# the worker bring its local branch to that head: the pipeline's offered sync
-# or custody recovery when it has one, otherwise a fetch of the pull request
-# head and git reset --keep onto it once git cherry shows every local commit is
+# bound to the head it pushed). The previous run's post-green CI monitor is
+# often still live on the branch and never rebases a behind pull request, yet
+# its custody blocks both the local sync and the rerun, so the steer has the
+# worker abort that run first, but only when it is the sole active run and
+# its only active step is ci after checks passed, confirming the cancel
+# through axi status; any other active run is never aborted and is reported
+# blocked instead. A rerun also refuses when the worker's local branch is not
+# the pull request's head, which is the usual state after an earlier rerun
+# rebased and pushed from the pipeline's own copy, so the steer next has the
+# worker bring its local branch to that head: the pipeline's offered sync or
+# custody recovery when it has one, otherwise a fetch of the pull request head
+# and git reset --keep onto it once git cherry shows every local commit is
 # already in that head, and a blocked report instead when one is missing.
 # state/<id>.pr-behind-rerun keeps one "<url> <head-sha>
 # <epoch>" line per delivered steer for the task's current pull request: a
@@ -2474,7 +2480,7 @@ pr_behind_rerun_steer() {  # <id> <url> <head>
       return 0
     fi
   fi
-  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. First bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
     run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
   if [ "$FM_ACTION_STATUS" -ne 0 ]; then
