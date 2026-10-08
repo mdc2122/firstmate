@@ -1703,6 +1703,16 @@ test_yolo_behind_pr_steers_one_rerun_per_head() {
 
   green_blocked_cycle "$dir" "$dir/w3.out" BEHIND SUCCESS 1800 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
   [ "$(behind_rerun_steers "$state")" = 2 ] || fail "a new head behind again after the rerun was not steered once more"
+  # The worker's local branch still sits at the head it pushed before the
+  # rerun, and that run's post-green CI monitor may still hold the branch, so
+  # a bare rerun refuses. The steer for the new head must first stop only that
+  # monitor (any other active run is reported blocked, never aborted), then
+  # bring the local branch to exactly that head under a containment check.
+  msg=$(cat "$(find "$state/task-a.inbox" -name '*.msg' | LC_ALL=C sort | tail -1)")
+  case "$msg" in
+    *"only active step is ci"*"no-mistakes axi abort"*"cancelled"*"any other active run do not abort"*"report blocked"*"refs/pull/1/head"*"git cherry bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb HEAD"*"git reset --keep bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"*"report blocked"*"no-mistakes rerun"*) ;;
+    *) fail "the new head's steer did not clear the post-green monitor and sync the local branch to that PR head before the rerun: $msg" ;;
+  esac
 
   green_blocked_cycle "$dir" "$dir/w4.out" BEHIND SUCCESS 1800 cccccccccccccccccccccccccccccccccccccccc
   [ "$(behind_rerun_steers "$state")" = 2 ] || fail "the hourly per-PR cap did not withhold a third steer"
