@@ -499,7 +499,7 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
 }
 
 // Context-volume stow trigger (bin/fm-stow-trigger.sh owns the threshold, the
-// one-wake-per-context-cycle latch, and the durable wake append). Only the
+// stow-due wake latch, and the durable wake append). Only the
 // fleet-lock holder reports, so a nested omp or a task worktree stays inert.
 // Fire-and-forget and fail-open: this never delays a turn or a compaction.
 function contextPercent(ctx: unknown): number | undefined {
