@@ -1,0 +1,63 @@
+== S1 regression: threshold wake -> /stow at 72% -> long session grows to 86% -> compaction
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  queued stow-due rows: 1
+  $ fm-stow-trigger.sh context 72     -> (silent)
+  record: fm-stow-trigger-v1 cycle=1791455885 above=1791455885 fired=1791455885 holder=86386 stowed=1791455888 base=72 
+  $ fm-stow-trigger.sh context 76     -> (silent)
+  $ fm-stow-trigger.sh context 79     -> check: stow-due: context 79% (5+ points since the last /stow at 72%) - run the /stow pass again before compaction condenses this session
+  queued stow-due rows after growth: 1
+  $ fm-stow-trigger.sh context 86     -> (silent)
+  $ fm-stow-trigger.sh compacting 88  -> (silent)
+  queued after re-latch: 0
+== S2 boundary: growth of 4 points stays silent, exactly 5 wakes
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 75     -> check: stow-due: context 75% (threshold 70%) - run the /stow pass before compaction condenses this session
+  $ fm-stow-trigger.sh context 78     -> (silent)
+  $ fm-stow-trigger.sh context 82     -> (silent)
+  rows at +4: 0
+  $ fm-stow-trigger.sh context 83     -> check: stow-due: context 83% (5+ points since the last /stow at 78%) - run the /stow pass again before compaction condenses this session
+  rows at +5: 1
+== S3 incident variant: no wake ever fired, a manual /stow at high usage, then growth
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 65     -> (silent)
+  record: fm-stow-trigger-v1 cycle=1791455896 above=1791455898 fired=1791455898 holder=86386 stowed=0 base=0 
+  $ fm-stow-trigger.sh context 74     -> (silent)
+  record: fm-stow-trigger-v1 cycle=1791455896 above=1791455898 fired=0 holder=86386 stowed=1791455900 base=74 
+  $ fm-stow-trigger.sh context 79     -> check: stow-due: context 79% (5+ points since the last /stow at 74%) - run the /stow pass again before compaction condenses this session
+  rows: 1
+== S4 guard: stow before the threshold (daily floor) does not cover; crossing still wakes once, no step wake w/o stow
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  rows: 1
+  $ fm-stow-trigger.sh context 80     -> (silent)
+  $ fm-stow-trigger.sh context 95     -> (silent)
+  rows after growth with no new stow: 0
+== S5 guard: high usage held flat after a stow never re-wakes
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  $ fm-stow-trigger.sh context 80     -> (silent)
+  $ fm-stow-trigger.sh context 80     -> (silent)
+  $ fm-stow-trigger.sh context 81     -> (silent)
+  $ fm-stow-trigger.sh context 82     -> (silent)
+  $ fm-stow-trigger.sh context 84     -> (silent)
+  rows: 0
+== S6 new fleet-lock holder resets: stale stowed/base not carried
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  $ fm-stow-trigger.sh context 72     -> (silent)
+  record: fm-stow-trigger-v1 cycle=1791455910 above=1791455910 fired=1791455910 holder=86386 stowed=1791455913 base=72 
+  $ fm-stow-trigger.sh context 50     -> (silent)
+  record: fm-stow-trigger-v1 cycle=1791455915 above=0 fired=0 holder=999999 stowed=0 base=0 
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  rows: 1
+== S7 compaction rule unchanged (declined review-1): stow covers cycle, compacting at base+8 stays silent
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 71     -> check: stow-due: context 71% (threshold 70%) - run the /stow pass before compaction condenses this session
+  $ fm-stow-trigger.sh context 78     -> (silent)
+  $ fm-stow-trigger.sh compacting 86  -> (silent)
+  rows: 0
+  $ fm-stow-trigger.sh cycle          -> (silent)
+  $ fm-stow-trigger.sh context 40     -> (silent)
+  $ fm-stow-trigger.sh compacting 90  -> check: stow-due: context 90% at compaction - run the /stow pass; knowledge this session held only in conversation may already be condensed
+  compaction with no stow and no wake -> rows: 1
