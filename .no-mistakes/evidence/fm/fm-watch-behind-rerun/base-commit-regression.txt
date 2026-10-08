@@ -1,0 +1,2 @@
+cycle $TMP/yolo-behind-rerun/w1.out took 6.54s
+not ok - a green behind yolo PR did not steer its worker exactly once: 0

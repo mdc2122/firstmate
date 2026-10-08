@@ -1,0 +1,10 @@
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/yolo-behind-rerun/w1.out took 8.52s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/yolo-behind-rerun/w2.out took 5.71s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/yolo-behind-rerun/w3.out took 9.20s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/yolo-behind-rerun/w4.out took 12.39s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/yolo-behind-rerun/w5.out took 10.91s
+ok - a green behind yolo PR steers one supported rerun per head, capped per hour, with the green-unmergeable wake as backstop
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/behind-rerun-non-yolo/off.out took 8.28s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/behind-rerun-red-and-protection/red.out took 13.06s
+cycle /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.zmBSm1/behind-rerun-red-and-protection/blocked.out took 12.32s
+ok - the behind rerun steer skips yolo=off tasks, red PRs, and non-behind blocks

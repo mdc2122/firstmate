@@ -1,0 +1,16 @@
+== cycle 1 (inbox blocked) watcher stdout:
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.3kBbUy/nm-evidence/home/state/z-stop.check.sh: stop-cycle
+== record present?
+ls: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.3kBbUy/nm-evidence/home/state/task-a.pr-behind-rerun: No such file or directory
+== triage log lines:
+[2026-10-08T05:33:41-0500] behind-rerun steer for task-a refused or failed (rc=1): mkdir: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.3kBbUy/nm-evidence/home/state/task-a.inbox: Not a directory error: steer not sent to task-a: its inbox record could not be written under /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.3kBbUy/nm-evidence/home/state/task-a.inbox
+== cycle 2 (inbox restored) watcher stdout:
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.3kBbUy/nm-evidence/home/state/z-stop.check.sh: stop-cycle
+== state/task-a.pr-behind-rerun:
+https://github.com/o/r/pull/1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1791455630
+== steer messages in inbox:
+--- 001.msg
+schema=fm-task-inbox.v1
+at=2026-10-08T10:33:51Z
+--
+PR https://github.com/o/r/pull/1 is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at head aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or update the branch yourself. When CI is green again, report done: PR https://github.com/o/r/pull/1 checks green; the armed merge poll lands it.

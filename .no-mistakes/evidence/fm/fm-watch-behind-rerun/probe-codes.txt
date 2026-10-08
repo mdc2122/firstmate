@@ -1,0 +1,4 @@
+BEHIND   -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa behind branch is behind the base branch
+BLOCKED  -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa protection base-branch protection refuses the merge (a required review or another branch rule)
+DIRTY    -> blocked aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa conflict merge conflicts with the base branch
+CLEAN    -> clear
