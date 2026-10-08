@@ -1667,6 +1667,85 @@ test_green_unmergeable_pr_alerts_once_per_episode() {
   pass "a green but unmergeable PR raises one wake per stuck episode, keyed by URL and head, after the threshold"
 }
 
+# A yolo=on task whose green pull request is blocked only because it is behind
+# its base gets the supported pipeline rerun requested from its worker at
+# once, through the task's steering inbox, instead of waiting out the
+# green-unmergeable timer: one steer per head, a re-pushed head that is behind
+# again earns one more, and FM_PR_BEHIND_RERUN_PER_HOUR caps the steers per
+# pull request per hour, after which the green-unmergeable wake remains the
+# backstop. GitHub refuses the yolo merge attempt each cycle (the fake forge
+# reports the pull request still open after it).
+behind_rerun_steers() {  # <state>
+  find "$1/task-a.inbox" -name '*.msg' 2>/dev/null | wc -l | tr -d ' '
+}
+
+test_yolo_behind_pr_steers_one_rerun_per_head() {
+  local dir state url=https://github.com/o/r/pull/1 msg
+  dir=$(make_case yolo-behind-rerun)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_poll_meta "$state" task-a "$url" yolo=on
+  seed_canonical_poll "$dir" task-a "$url"
+  add_stop_custom_check "$dir"
+  export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false FM_PR_BEHIND_RERUN_PER_HOUR=2
+
+  green_blocked_cycle "$dir" "$dir/w1.out" BEHIND SUCCESS 1800
+  case "$(cat "$dir/w1.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a behind yolo PR raised a wake instead of steering: $(cat "$dir/w1.out")" ;; esac
+  [ "$(behind_rerun_steers "$state")" = 1 ] || fail "a green behind yolo PR did not steer its worker exactly once: $(behind_rerun_steers "$state")"
+  msg=$(cat "$state"/task-a.inbox/*.msg)
+  case "$msg" in
+    *"$url"*"no-mistakes rerun"*"never hand-rebase"*) ;;
+    *) fail "the behind steer did not name the PR and ask for the supported rerun: $msg" ;;
+  esac
+
+  green_blocked_cycle "$dir" "$dir/w2.out" BEHIND SUCCESS 1800
+  [ "$(behind_rerun_steers "$state")" = 1 ] || fail "the same behind head was steered twice"
+
+  green_blocked_cycle "$dir" "$dir/w3.out" BEHIND SUCCESS 1800 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  [ "$(behind_rerun_steers "$state")" = 2 ] || fail "a new head behind again after the rerun was not steered once more"
+
+  green_blocked_cycle "$dir" "$dir/w4.out" BEHIND SUCCESS 1800 cccccccccccccccccccccccccccccccccccccccc
+  [ "$(behind_rerun_steers "$state")" = 2 ] || fail "the hourly per-PR cap did not withhold a third steer"
+  case "$(cat "$dir/w4.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a capped behind PR woke before its threshold: $(cat "$dir/w4.out")" ;; esac
+
+  green_blocked_cycle "$dir" "$dir/w5.out" BEHIND SUCCESS 0 cccccccccccccccccccccccccccccccccccccccc
+  case "$(cat "$dir/w5.out")" in
+    *"task-a.check.sh: green-unmergeable $url for "*"m: branch is behind the base branch") ;;
+    *) fail "the green-unmergeable backstop did not fire for a behind PR the rerun did not clear: $(cat "$dir/w5.out")" ;;
+  esac
+  [ "$(behind_rerun_steers "$state")" = 2 ] || fail "the backstop wake sent another steer past the cap"
+  unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED FM_PR_BEHIND_RERUN_PER_HOUR
+  pass "a green behind yolo PR steers one supported rerun per head, capped per hour, with the green-unmergeable wake as backstop"
+}
+
+# The behind steer is yolo-only and behind-only: a yolo=off task, a red PR,
+# and a green PR blocked for any other reason send nothing.
+test_behind_rerun_steer_skips_non_yolo_red_and_other_blocks() {
+  local dir state url=https://github.com/o/r/pull/1
+  dir=$(make_case behind-rerun-non-yolo)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_poll_meta "$state" task-a "$url" yolo=off
+  seed_canonical_poll "$dir" task-a "$url"
+  add_stop_custom_check "$dir"
+  green_blocked_cycle "$dir" "$dir/off.out" BEHIND SUCCESS 1800
+  [ "$(behind_rerun_steers "$state")" = 0 ] || fail "a yolo=off behind PR steered its worker"
+
+  dir=$(make_case behind-rerun-red-and-protection)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_poll_meta "$state" task-a "$url" yolo=on
+  seed_canonical_poll "$dir" task-a "$url"
+  add_stop_custom_check "$dir"
+  export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false
+  green_blocked_cycle "$dir" "$dir/red.out" BEHIND FAILURE 1800
+  [ "$(behind_rerun_steers "$state")" = 0 ] || fail "a red behind yolo PR steered its worker"
+  green_blocked_cycle "$dir" "$dir/blocked.out" BLOCKED SUCCESS 1800
+  [ "$(behind_rerun_steers "$state")" = 0 ] || fail "a protection-blocked yolo PR steered its worker"
+  unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED
+  pass "the behind rerun steer skips yolo=off tasks, red PRs, and non-behind blocks"
+}
+
 # A required check that has not reported is absent from the rollup rather than
 # red, so a behind-its-base PR with an empty-looking green rollup has not
 # passed CI. The probe consults the base branch's required set (a read only
@@ -3043,6 +3122,8 @@ test_gitlab_merge_watch
 test_merged_poll_retires_once
 test_closed_terminal_done_task_keeps_pr_poll_without_stale_wakes
 test_green_unmergeable_pr_alerts_once_per_episode
+test_yolo_behind_pr_steers_one_rerun_per_head
+test_behind_rerun_steer_skips_non_yolo_red_and_other_blocks
 test_green_pr_with_unreported_required_check_does_not_alert
 test_green_pr_in_merge_queue_does_not_alert
 test_merged_poll_leaves_no_green_blocked_record

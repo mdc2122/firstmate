@@ -1078,6 +1078,8 @@ FM_PR_SWEEP_TIMEOUT=90   # seconds allowed for one whole forge-side PR sweep; ca
 FM_PR_SWEEP_GH_TIMEOUT=20   # seconds allowed for each GitHub read inside a sweep
 FM_PR_SWEEP_ARM_TIMEOUT=60   # seconds allowed for one bin/fm-pr-check.sh arm inside a sweep
 FM_PR_GREEN_BLOCKED_SECS=1800   # seconds an armed GitHub merge poll's pull request may stay green but unmergeable before one wake per episode; bin/fm-watch.sh owns the episode
+FM_PR_BEHIND_RERUN_PER_HOUR=3   # rerun steers per pull request per rolling hour sent to a yolo=on worker whose green pull request is behind its base; one per head; bin/fm-watch.sh owns the record
+FM_PR_BEHIND_RERUN_TIMEOUT=30   # seconds allowed for one such bin/fm-send.sh steer
 FM_MAIL_CHECK_BUDGET=15   # seconds allowed for one standing mail poll; valid 5..25, cut to fit FM_CHECK_TIMEOUT
 FM_MAIL_POLL_MAX_WAKES=20   # per-poll wake cap for a mail poll; valid 1..200, keeps a flood from flooding firstmate
 FM_MAIL_TIMEOUT=20   # mail-plane IMAP/SMTP socket timeout in seconds; invalid or non-positive values become 20

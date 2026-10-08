@@ -1278,7 +1278,7 @@ remove_pr_poll_artifacts() {
   rm -f "$state_dir/$id.check.sh" "$state_dir/$id.pr-poll" \
     "$state_dir/$id.pr-poll-registration" "$state_dir/$id.pr-poll-retirement" \
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" \
-    "$state_dir/$id.pr-green-blocked" || return 1
+    "$state_dir/$id.pr-green-blocked" "$state_dir/$id.pr-behind-rerun" || return 1
 }
 
 # Resolve the PR number for a worktree branch via gh-axi. Echoes the number on a
