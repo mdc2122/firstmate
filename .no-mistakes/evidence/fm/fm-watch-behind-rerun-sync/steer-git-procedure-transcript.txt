@@ -1,0 +1,118 @@
++(eval):3> export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
++(eval):4> git init -q --bare -b main origin.git
++(eval):5> git clone -q origin.git seed
+warning: You appear to have cloned an empty repository.
++(eval):5> cd seed
++(eval):5> echo base
++(eval):5> git add a
++(eval):5> git commit -qm base
++(eval):5> git push -q origin main
++(eval):7> git clone -q ../origin.git ../worker
++(eval):7> cd ../worker
++(eval):7> git checkout -qb feat
++(eval):7> echo f
++(eval):7> git add feat.txt
++(eval):7> git commit -qm feature
++(eval):7> git push -q origin feat:refs/pull/1/head
++(eval):8> PRE=+(eval):8> git rev-parse HEAD
++(eval):8> PRE=d54cbbf8951c595fb2f1e9cbed56e43a63681606 
++(eval):10> cd ../seed
++(eval):10> echo more
++(eval):10> git add b
++(eval):10> git commit -qm main2
++(eval):10> git push -q origin main
++(eval):11> git clone -q ../origin.git ../pipeline
++(eval):11> cd ../pipeline
++(eval):11> git fetch -q origin refs/pull/1/head
++(eval):11> git checkout -qb feat FETCH_HEAD
++(eval):11> git rebase -q origin/main
++(eval):11> git push -q -f origin feat:refs/pull/1/head
++(eval):12> HEADSHA=+(eval):12> git rev-parse HEAD
++(eval):12> HEADSHA=9787c3392d3945605813e42e5a71fe18699b49ea 
++(eval):12> url=https://github.com/o/r/pull/1 
++(eval):13> set +x
+=== Scenario A: worker local branch at pre-rebase head d54cbbf8951c595fb2f1e9cbed56e43a63681606, PR head 9787c3392d3945605813e42e5a71fe18699b49ea
++(eval):14> cd ../worker
++(eval):14> echo dirty-untracked
++(eval):15> git rev-parse HEAD
++(eval):15> [ d54cbbf8951c595fb2f1e9cbed56e43a63681606 '!=' 9787c3392d3945605813e42e5a71fe18699b49ea ']'
++(eval):15> echo 'HEAD differs from PR head -> sync needed'
+HEAD differs from PR head -> sync needed
++(eval):16> git fetch -q origin refs/pull/1/head
++(eval):17> git cherry 9787c3392d3945605813e42e5a71fe18699b49ea HEAD
+- d54cbbf8951c595fb2f1e9cbed56e43a63681606
++(eval):18> git cherry 9787c3392d3945605813e42e5a71fe18699b49ea HEAD
++(eval):18> grep -q '^+'
++grep:1> local _cc_a
++grep:2> _cc_a=-q
++grep:3> case -q (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _cc_a=^+
++grep:3> case ^+ (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> local _cc_bin=/Users/studio2/.local/share/claude/versions/2.1.288
++grep:6> [[ -x /Users/studio2/.local/share/claude/versions/2.1.288 ]]
++grep:7> [[ ! -x /Users/studio2/.local/share/claude/versions/2.1.288 ]]
++grep:8> [[ -n 5.9 ]]
++grep:9> ARGV0=ugrep ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -q '^+'
++(eval):18> git reset --keep 9787c3392d3945605813e42e5a71fe18699b49ea
++(eval):19> git rev-parse HEAD
+9787c3392d3945605813e42e5a71fe18699b49ea
++(eval):19> git rev-parse HEAD
++(eval):19> [ 9787c3392d3945605813e42e5a71fe18699b49ea '=' 9787c3392d3945605813e42e5a71fe18699b49ea ']'
++(eval):19> cat notes.txt
++(eval):19> echo 'SCENARIO A PASS: local branch now at PR head; untracked file kept: dirty-untracked'
+SCENARIO A PASS: local branch now at PR head; untracked file kept: dirty-untracked
++(eval):20> git log --oneline -3
+9787c33 feature
+299c05b main2
+09bdd3d base
++(eval):21> set +x
+=== Scenario B: worker has an extra local commit not in the PR head
++(eval):22> cd ../worker2
++(eval):22> git clone -q ../origin.git ../worker2
++(eval):22> cd ../worker2
++(eval):23> git checkout -q -b feat d54cbbf8951c595fb2f1e9cbed56e43a63681606
++(eval):23> echo local-only
++(eval):23> git add extra.txt
++(eval):23> git commit -qm unpushed-local-work
++(eval):24> BEFORE=+(eval):24> git rev-parse HEAD
++(eval):24> BEFORE=e10c5410e83ebf27daac149f2edd3cecf2e3ba87 
++(eval):25> git fetch -q origin refs/pull/1/head
++(eval):26> git cherry 9787c3392d3945605813e42e5a71fe18699b49ea HEAD
+- d54cbbf8951c595fb2f1e9cbed56e43a63681606
++ e10c5410e83ebf27daac149f2edd3cecf2e3ba87
++(eval):27> grep -q '^+'
++(eval):27> git cherry 9787c3392d3945605813e42e5a71fe18699b49ea HEAD
++grep:1> local _cc_a
++grep:2> _cc_a=-q
++grep:3> case -q (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _cc_a=^+
++grep:3> case ^+ (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> local _cc_bin=/Users/studio2/.local/share/claude/versions/2.1.288
++grep:6> [[ -x /Users/studio2/.local/share/claude/versions/2.1.288 ]]
++grep:7> [[ ! -x /Users/studio2/.local/share/claude/versions/2.1.288 ]]
++grep:8> [[ -n 5.9 ]]
++grep:9> ARGV0=ugrep ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -q '^+'
++(eval):27> echo 'BLOCKED: local commit missing from PR head; no reset performed'
+BLOCKED: local commit missing from PR head; no reset performed
++(eval):28> git rev-parse HEAD
++(eval):28> [ e10c5410e83ebf27daac149f2edd3cecf2e3ba87 '=' e10c5410e83ebf27daac149f2edd3cecf2e3ba87 ']'
++(eval):28> echo 'SCENARIO B PASS: local work preserved at e10c5410e83ebf27daac149f2edd3cecf2e3ba87'
+SCENARIO B PASS: local work preserved at e10c5410e83ebf27daac149f2edd3cecf2e3ba87
++(eval):29> set +x
+=== Scenario C: tracked uncommitted edit conflicting with reset is refused by --keep
++(eval):30> cd ../worker3
++(eval):30> git clone -q ../origin.git ../worker3
++(eval):30> cd ../worker3
++(eval):31> git checkout -q -b feat d54cbbf8951c595fb2f1e9cbed56e43a63681606
++(eval):31> echo edited
++(eval):32> git fetch -q origin refs/pull/1/head
++(eval):33> git cherry 9787c3392d3945605813e42e5a71fe18699b49ea HEAD
+- d54cbbf8951c595fb2f1e9cbed56e43a63681606
++(eval):34> git reset --keep 9787c3392d3945605813e42e5a71fe18699b49ea
++(eval):34> echo 'reset rc=0'
+reset rc=0
++(eval):34> git rev-parse HEAD
+9787c3392d3945605813e42e5a71fe18699b49ea
++(eval):34> cat a
+edited
++(eval):35> set +x
