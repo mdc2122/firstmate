@@ -1,0 +1,75 @@
+=== S1: answered call archived by real retention (repo default .tasks.toml) ===
+complete: sample-scout captain-call inventory reviewed (sample-call)
+answered: sample-call
+--- tasks-axi show sample-call (live backlog):
+error: "Task \"sample-call\" not found in this backlog"
+code: NOT_FOUND
+help[1]: Run `tasks-axi list --file=/tmp/fm-j7l-drive.bTVz6A/s1/data/backlog.md` to see existing tasks
+--- archived row in data/done-archive.md:
+3:- [x] sample-call - Captain call sample-call (repo: sample) (kind: captain) (done 2026-10-09) (hold: captain choice pending) (hold-kind: captain)
+4-  Resolution recorded by fm-captain-hold.
+5-  Decision digest: 0a2d3627ad27e6cd00109930f1a94bd8f694752628f83eb2756be8d3e40a61d8
+6-  Resolution mode: answered
+7-
+8-  Captain decision:
+9-  Captain chose option B.
+10-
+11-
+--- BASE verify:
+fm-captain-hold: no captain-held task sample-call and no migrated hold for it in this home's configured backlog (data directory /tmp/fm-j7l-drive.bTVz6A/s1/data); the nearest legacy identity sample-scout-decision-sample-call also resolves to nothing
+exit=1
+--- FIXED verify:
+verified: sample-scout captain-call inventory
+exit=0
+--- FIXED complete (re-attest):
+complete: sample-scout captain-call inventory reviewed (sample-call)
+exit=0
+
+=== S2: non-default [markdown] path, no archive key -> default <data>/done-archive.md ===
+complete: s2-scout captain-call inventory reviewed (s2-call)
+answered: s2-call
+--- live show:
+error: "Task \"s2-call\" not found in this backlog"
+--- archived row:
+/tmp/fm-j7l-drive.bTVz6A/s2/data/done-archive.md
+--- BASE verify:
+fm-captain-hold: no captain-held task s2-call and no migrated hold for it in this home's configured backlog (data directory /tmp/fm-j7l-drive.bTVz6A/s2/data); the nearest legacy identity s2-scout-decision-s2-call also resolves to nothing
+exit=1
+--- FIXED verify:
+verified: s2-scout captain-call inventory
+exit=0
+
+=== S3: explicit custom archive key wins ===
+complete: s3-scout captain-call inventory reviewed (s3-call)
+answered: s3-call
+--- live show:
+error: "Task \"s3-call\" not found in this backlog"
+--- archived row in:
+/tmp/fm-j7l-drive.bTVz6A/s3/retired/old.md
+--- decoy: copy the row into data/done-archive.md stripped of its resolution record must not matter; remove from configured archive -> must fail:
+--- FIXED verify with answer only in the UNconfigured default file:
+fm-captain-hold: no captain-held task s3-call and no migrated hold for it in this home's configured backlog (data directory /tmp/fm-j7l-drive.bTVz6A/s3/data); the nearest legacy identity s3-scout-decision-s3-call also resolves to nothing
+exit=1
+--- FIXED verify:
+verified: s3-scout captain-call inventory
+exit=0
+
+=== S4 (adversarial): archived plain done row without resolution record fails closed ===
+1
+--- FIXED verify:
+fm-captain-hold: no captain-held task s4-call and no migrated hold for it in this home's configured backlog (data directory /tmp/fm-j7l-drive.bTVz6A/s4/data); the nearest legacy identity s4-scout-decision-s4-call also resolves to nothing
+exit=1
+
+=== S5 (adversarial): substring-colliding archived id must not satisfy a shorter key ===
+complete: s5-scout captain-call inventory reviewed (s5-call-extra)
+answered: s5-call-extra
+--- FIXED verify of key s5-call (only s5-call-extra archived):
+fm-captain-hold: no captain-held task s5-call and no migrated hold for it in this home's configured backlog (data directory /tmp/fm-j7l-drive.bTVz6A/s5/data); the nearest legacy identity s5b-scout-decision-s5-call also resolves to nothing
+exit=1
+
+=== S6: live task wins over an archived namesake ===
+complete: s6-scout captain-call inventory reviewed (s6-call)
+answered: s6-call
+--- FIXED verify (live unheld row s6-call must be checked, not the archive):
+fm-captain-hold: captain-held task s6-call is neither held for the captain nor closed with a recorded captain answer
+exit=1
