@@ -1,8 +1,8 @@
-[target-holder-outlives-cleanup-bound] watcher pid=41973 holds .watch.lock pid=41973; marker lock held by pid=41792 (alive: yes)
+[target-holder-outlives-cleanup-bound] watcher pid=<pid-7> holds .watch.lock pid=<pid-7>; marker lock held by pid=<pid-8> (alive: yes)
 [target-holder-outlives-cleanup-bound] watcher in marker wait (still blocked, no poll loop yet): ps=SN  
 [target-holder-outlives-cleanup-bound] sent TERM to watcher; releasing marker holder after 5s
 [target-holder-outlives-cleanup-bound] watcher exit status=143
-[target-holder-outlives-cleanup-bound] .watch.lock PRESENT (pid=41973 alive: no)
+[target-holder-outlives-cleanup-bound] .watch.lock PRESENT (pid=<pid-7> alive: no)
 [target-holder-outlives-cleanup-bound] watcher stderr/stdout:
 [target-holder-outlives-cleanup-bound] next arm against the leftover lock:
-    watcher: started pid=47317 (beacon fresh)
+    watcher: started pid=<pid-9> (beacon fresh)

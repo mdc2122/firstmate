@@ -1,4 +1,4 @@
-[target-release-0.5s] watcher pid=96348 holds .watch.lock pid=96348; marker lock held by pid=96144 (alive: yes)
+[target-release-0.5s] watcher pid=<pid-10> holds .watch.lock pid=<pid-10>; marker lock held by pid=<pid-11> (alive: yes)
 [target-release-0.5s] watcher in marker wait (still blocked, no poll loop yet): ps=SN  
 [target-release-0.5s] sent TERM to watcher; releasing marker holder after 0.5s
 [target-release-0.5s] watcher exit status=143

@@ -1,5 +1,5 @@
 [base] cpu load: 64 busy loops on 32 cpus
-[base] marker lock held by pid 58478: 58478
+[base] marker lock held by pid <pid-1>: <pid-1>
 [base] arm status after 11.51s: watcher: FAILED - no live watcher with a fresh beacon
 [base] stop: watcher: none running
 [base] arm output:

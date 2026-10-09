@@ -1,2 +1,2 @@
-[base/zombie] watcher pid=9389 SIGKILLed under a non-reaping parent; ps stat=Z; kill -0: alive; recorded owner-identity: <none>
-    contender pid=10946 did NOT acquire; lock pid still 9389; contender said: watcher: already running pid 9389 
+[base/zombie] watcher pid=<pid-12> SIGKILLed under a non-reaping parent; ps stat=Z; kill -0: alive; recorded owner-identity: <none>
+    contender pid=<pid-13> did NOT acquire; lock pid still <pid-12>; contender said: watcher: already running pid <pid-12> 
