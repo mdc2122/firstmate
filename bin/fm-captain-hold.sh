@@ -574,20 +574,20 @@ CAPTAIN_MIGRATION_SCAN_LOADED=0
 CAPTAIN_MIGRATION_SCAN_JSON=
 NL_SEP=$'\n'
 
-# Section-aware [beads] extraction from a .tasks.toml: only keys inside the
-# [beads] section, comments stripped. Prints "<key> <value>" lines.
-captain_beads_toml_entries() {  # <toml-file>
+# Section-aware extraction from a .tasks.toml: only keys inside the named
+# section, comments stripped. Prints "<key> <value>" lines.
+captain_toml_section_entries() {  # <toml-file> <section>
   [ -f "$1" ] || return 0
-  LC_ALL=C awk '
+  LC_ALL=C awk -v section="[$2]" '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
-    BEGIN { inbeads = 0 }
+    BEGIN { insection = 0 }
     {
       line = $0
       sub(/[[:space:]]*#.*/, "", line)
       line = trim(line)
-      if (line ~ /^\[[^]]+\]$/) { inbeads = (line == "[beads]"); next }
-      if (!inbeads) next
-      if (line ~ /^(prefix|path|binary)[[:space:]]*=/) {
+      if (line ~ /^\[[^]]+\]$/) { insection = (line == section); next }
+      if (!insection) next
+      if (line ~ /^[A-Za-z_]+[[:space:]]*=/) {
         key = line
         sub(/[[:space:]]*=.*/, "", key)
         sub(/^[^=]*=[[:space:]]*/, "", line)
@@ -620,7 +620,7 @@ captain_migration_scan_load() {  # <resolved-data-dir>
     CAPTAIN_MIGRATION_SCAN_LOADED=1
     return 0
   fi
-  entries=$(captain_beads_toml_entries "$root/.tasks.toml")
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" beads)
   bd_bin=$(captain_beads_setting "$entries" binary)
   bd_path=$(captain_beads_setting "$entries" path)
   bd_bin=${bd_bin:-bd}
@@ -718,7 +718,7 @@ resolve_migrated_entry() {  # <origin-or-empty> <entry>
   # No marker line anywhere: a mechanical migration keeps the legacy id under
   # the configured prefix, but that name alone is evidence of nothing, so only
   # a row still held for the captain - and only one of them - is accepted.
-  entries=$(captain_beads_toml_entries "$root/.tasks.toml")
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" beads)
   prefix=$(captain_beads_setting "$entries" prefix)
   [ -n "$prefix" ] || return 1
   prefixed_matches=
@@ -756,50 +756,21 @@ resolve_migrated_entry() {  # <origin-or-empty> <entry>
 # body follows as continuation lines until the next `- [` row or `## ` header.
 # The archive path is read from the backlog root's own .tasks.toml [markdown]
 # section, the configuration tasks-axi itself reads when it runs from that
-# root; an unconfigured home keeps tasks-axi's built-in default, done-archive.md
-# beside the configured backlog file.
-
-# Section-aware [markdown] extraction from a .tasks.toml: only keys inside the
-# [markdown] section, comments stripped. Prints "<key> <value>" lines.
-captain_markdown_toml_entries() {  # <toml-file>
-  [ -f "$1" ] || return 0
-  LC_ALL=C awk '
-    function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
-    BEGIN { insection = 0 }
-    {
-      line = $0
-      sub(/[[:space:]]*#.*/, "", line)
-      line = trim(line)
-      if (line ~ /^\[[^]]+\]$/) { insection = (line == "[markdown]"); next }
-      if (!insection) next
-      if (line ~ /^[A-Za-z_]+[[:space:]]*=/) {
-        key = line
-        sub(/[[:space:]]*=.*/, "", key)
-        sub(/^[^=]*=[[:space:]]*/, "", line)
-        gsub(/^"|"$/, "", line); gsub(/^'\''|'\''$/, "", line)
-        printf "%s %s\n", key, line
-      }
-    }
-  ' "$1"
-}
+# root; with no archive key tasks-axi defaults to done-archive.md beside the
+# backlog file firstmate passes it with --file, which is <data>/backlog.md.
 
 # The done-archive tasks-axi writes retired rows into: the [markdown] archive
-# path when one is configured, else done-archive.md beside the configured (or
-# default) backlog file. Relative values resolve against the backlog root, the
+# path when one is configured, else done-archive.md in the data directory.
+# A relative archive path resolves against the backlog root, the
 # same rule every other .tasks.toml path consumer uses. Prints nothing and
 # returns 1 when the data directory cannot be resolved.
 captain_done_archive_file() {  # <resolved-data-dir>
-  local data=$1 root entries archive path
+  local data=$1 root entries archive
   root=$(fm_backlog_root "$data") || return 1
-  entries=$(captain_markdown_toml_entries "$root/.tasks.toml")
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" markdown)
   archive=$(printf '%s\n' "$entries" | sed -n 's/^archive //p' | head -1)
   if [ -z "$archive" ]; then
-    path=$(printf '%s\n' "$entries" | sed -n 's/^path //p' | head -1)
-    case "$path" in
-      /*) archive="${path%/*}/done-archive.md" ;;
-      '') archive="$data/done-archive.md" ;;
-      *) archive="$root/${path%/*}/done-archive.md" ;;
-    esac
+    archive="$data/done-archive.md"
   elif [ "${archive#/}" = "$archive" ]; then
     archive="$root/$archive"
   fi

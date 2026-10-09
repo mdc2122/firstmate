@@ -690,6 +690,39 @@ EOF
   pass "the completion gate attests an inventory resolved through the done-archive"
 }
 
+test_verify_resolves_an_archived_legacy_identity() {
+  local home scout key
+  home=$(make_home archived-legacy)
+  scout=sample-archived-legacy-scout
+  key=sample-legacy-call
+  write_archived_answered_row "$home/data/done-archive.md" "$scout-decision-$key" "$scout"
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify refused a pre-collapse key whose answered legacy row sits in the done-archive"
+  pass "verify resolves an archived answered call under its legacy derived identity"
+}
+
+test_archive_default_follows_the_data_directory_backlog() {
+  local home scout key
+  home=$(make_home archived-default-path)
+  scout=sample-archived-default-scout
+  key=sample-archived-default-call
+  cat > "$home/.tasks.toml" <<'EOF'
+backend = "markdown"
+
+[markdown]
+path = "elsewhere/backlog.md"
+done_keep = 10
+EOF
+  write_archived_answered_row "$home/data/done-archive.md" "$key" "$scout"
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify missed the default done-archive beside the data-directory backlog"
+  pass "with no archive key the done-archive is read beside the data-directory backlog"
+}
+
 test_archived_done_row_without_an_answer_still_fails_closed() {
   local home scout key archive err rc
   home=$(make_home archived-plain-done)
@@ -4119,4 +4152,6 @@ test_verify_names_the_unresolvable_legacy_id_once
 test_verify_resolves_a_pre_collapse_key_through_its_derived_marker
 test_captain_hold_mutations_address_the_beads_backend
 test_verify_resolves_an_answered_call_archived_out_of_the_backlog
+test_verify_resolves_an_archived_legacy_identity
+test_archive_default_follows_the_data_directory_backlog
 test_archived_done_row_without_an_answer_still_fails_closed
