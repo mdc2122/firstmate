@@ -144,7 +144,12 @@
 # keyed status decision is transferred to its durable owner with a
 # `captain-held [key=...]` status close naming the inventory. Later review
 # passes may add ids. A post-teardown visual review can complete against the
-# surviving report and tasks without recreating task state.
+# surviving report and tasks without recreating task state. When the task a
+# recorded entry named is itself gone from the live backlog, the entry is last
+# resolved against the configured done-archive: an archived `- [x]` done row
+# under the entry's exact id, or under its legacy derived identity, resolves
+# the entry when the row's body carries a recorded answer - the archive keeps
+# an answered call durable after retention moves its row out of the live file.
 # `verify` is read-only and is called by scout teardown, so teardown cannot
 # erase a source before this gate has succeeded: every recorded inventory
 # entry must still be durable and no keyed status decision may be open.
@@ -569,20 +574,20 @@ CAPTAIN_MIGRATION_SCAN_LOADED=0
 CAPTAIN_MIGRATION_SCAN_JSON=
 NL_SEP=$'\n'
 
-# Section-aware [beads] extraction from a .tasks.toml: only keys inside the
-# [beads] section, comments stripped. Prints "<key> <value>" lines.
-captain_beads_toml_entries() {  # <toml-file>
+# Section-aware extraction from a .tasks.toml: only keys inside the named
+# section, comments stripped. Prints "<key> <value>" lines.
+captain_toml_section_entries() {  # <toml-file> <section>
   [ -f "$1" ] || return 0
-  LC_ALL=C awk '
+  LC_ALL=C awk -v section="[$2]" '
     function trim(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v); return v }
-    BEGIN { inbeads = 0 }
+    BEGIN { insection = 0 }
     {
       line = $0
       sub(/[[:space:]]*#.*/, "", line)
       line = trim(line)
-      if (line ~ /^\[[^]]+\]$/) { inbeads = (line == "[beads]"); next }
-      if (!inbeads) next
-      if (line ~ /^(prefix|path|binary)[[:space:]]*=/) {
+      if (line ~ /^\[[^]]+\]$/) { insection = (line == section); next }
+      if (!insection) next
+      if (line ~ /^[A-Za-z_]+[[:space:]]*=/) {
         key = line
         sub(/[[:space:]]*=.*/, "", key)
         sub(/^[^=]*=[[:space:]]*/, "", line)
@@ -615,7 +620,7 @@ captain_migration_scan_load() {  # <resolved-data-dir>
     CAPTAIN_MIGRATION_SCAN_LOADED=1
     return 0
   fi
-  entries=$(captain_beads_toml_entries "$root/.tasks.toml")
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" beads)
   bd_bin=$(captain_beads_setting "$entries" binary)
   bd_path=$(captain_beads_setting "$entries" path)
   bd_bin=${bd_bin:-bd}
@@ -713,7 +718,7 @@ resolve_migrated_entry() {  # <origin-or-empty> <entry>
   # No marker line anywhere: a mechanical migration keeps the legacy id under
   # the configured prefix, but that name alone is evidence of nothing, so only
   # a row still held for the captain - and only one of them - is accepted.
-  entries=$(captain_beads_toml_entries "$root/.tasks.toml")
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" beads)
   prefix=$(captain_beads_setting "$entries" prefix)
   [ -n "$prefix" ] || return 1
   prefixed_matches=
@@ -742,11 +747,81 @@ resolve_migrated_entry() {  # <origin-or-empty> <entry>
   return 2
 }
 
+# --- answered rows archived out of the live backlog --------------------------
+#
+# An answered captain call stays durable after retention moves its done row
+# from the live backlog into the home's configured done-archive: the answer is
+# already recorded, so the archive IS the durable record. tasks-axi's markdown
+# backend appends each retired row there as a `- [x] <id> - <title>` line whose
+# body follows as continuation lines until the next `- [` row or `## ` header.
+# The archive path is read from the backlog root's own .tasks.toml [markdown]
+# section, the configuration tasks-axi itself reads when it runs from that
+# root; with no archive key tasks-axi defaults to done-archive.md beside the
+# backlog file firstmate passes it with --file, which is <data>/backlog.md.
+
+# The done-archive tasks-axi writes retired rows into: the [markdown] archive
+# path when one is configured, else done-archive.md in the data directory.
+# A relative archive path resolves against the backlog root, the
+# same rule every other .tasks.toml path consumer uses. Prints nothing and
+# returns 1 when the data directory cannot be resolved.
+captain_done_archive_file() {  # <resolved-data-dir>
+  local data=$1 root entries archive
+  root=$(fm_backlog_root "$data") || return 1
+  entries=$(captain_toml_section_entries "$root/.tasks.toml" markdown)
+  archive=$(printf '%s\n' "$entries" | sed -n 's/^archive //p' | head -1)
+  if [ -z "$archive" ]; then
+    archive="$data/done-archive.md"
+  elif [ "${archive#/}" = "$archive" ]; then
+    archive="$root/$archive"
+  fi
+  printf '%s\n' "$archive"
+}
+
+# The body lines of the archived `- [x] <id> - ...` row: every line that is
+# neither a task row nor a section header, from the exact-id row to the next
+# one. The id match is anchored at the line start and bounded by " - " so an
+# id can never match a substring of another id.
+archived_done_entry_body() {  # <archive-file> <id>
+  [ -f "$1" ] || return 1
+  LC_ALL=C awk -v id="$2" '
+    index($0, "- [x] " id " - ") == 1 { found = 1; next }
+    found && ($0 ~ /^- \[/ || $0 ~ /^## /) { exit }
+    found { print }
+    END { if (!found) exit 1 }
+  ' "$1"
+}
+
+# Resolve one inventory entry to an answered row in the configured
+# done-archive. Prints "<id> archived" and returns 0 when an archived done row
+# under the entry's exact id - or, for a pre-collapse key, under its legacy
+# derived identity - carries a resolution record; an archived done row without
+# one is an ordinary finished task, not a captain answer, so it resolves
+# nothing. Returns 1 when no identity resolves.
+resolve_archived_entry() {  # <origin-or-empty> <entry>
+  local origin=$1 entry=$2 data archive candidate body
+  data=$(fm_backlog_data_absolute "$DATA") || return 1
+  archive=$(captain_done_archive_file "$data") || return 1
+  for candidate in "$entry" \
+    "$(if [ -n "$origin" ] && [ "$origin" != "$BINDING_ANY" ]; then
+       legacy_hold_id "$origin" "$entry"
+     fi)"; do
+    [ -n "$candidate" ] || continue
+    body=$(archived_done_entry_body "$archive" "$candidate") || continue
+    if body_has_resolution_record "$body"; then
+      printf '%s archived' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Resolve one inventory entry or channel key to the task that carries it: the
 # exact task id when it exists, else the legacy derived identity, else - on the
-# beads backend - the migrated row the markdown-to-beads hold migration wrote.
-# Prints "<resolved id> <how>", where <how> is exact, legacy, migrated-note or
-# migrated-prefix, so a caller can record which evidence carried the attestation.
+# beads backend - the migrated row the markdown-to-beads hold migration wrote,
+# else an archived done row carrying a recorded answer in the configured
+# done-archive. Prints "<resolved id> <how>", where <how> is exact, legacy,
+# migrated-note, migrated-prefix or archived, so a caller can record which
+# evidence carried the attestation.
 resolve_entry() {  # <origin-or-empty> <entry>; prints "<id> <how>" or fails
   local origin=$1 entry=$2 legacy migrated rc
   if task_show "$entry"; then
@@ -767,6 +842,9 @@ resolve_entry() {  # <origin-or-empty> <entry>; prints "<id> <how>" or fails
     2) return 2 ;;
     124) return 124 ;;
   esac
+  if resolve_archived_entry "$origin" "$entry"; then
+    return 0
+  fi
   if [ -n "$origin" ] && [ "$origin" != "$BINDING_ANY" ]; then
     legacy=$(legacy_hold_id "$origin" "$entry")
     fail "no captain-held task $entry and no migrated hold for it in this home's configured backlog (data directory $DATA); the nearest legacy identity $legacy also resolves to nothing"
@@ -819,7 +897,9 @@ write_hold_set_stamp() {  # <task-id> <shown-body> <timestamp> <preserve-existin
 # status - its stderr already named the entry; 124 means the backend never
 # answered, which is not the same as an unknown entry and must not be spent
 # as absence. On success prints "<id> <how>" so the caller can keep the
-# attestation evidence.
+# attestation evidence. An archived resolution is already durable - the
+# archive itself is the durable record, so there is no live row left to
+# re-check.
 verify_entry_durable() {  # <origin-or-empty> <entry>; prints "<id> <how>"
   local origin=$1 entry=$2 resolved resolve_status=0
   resolved=$(resolve_entry "$origin" "$entry") || resolve_status=$?
@@ -829,6 +909,9 @@ verify_entry_durable() {  # <origin-or-empty> <entry>; prints "<id> <how>"
     exit "$resolve_status"
   fi
   printf '%s\n' "$resolved"
+  case "${resolved##* }" in
+    archived) return 0 ;;
+  esac
   verify_hold_durable "${resolved%% *}"
 }
 

@@ -626,6 +626,125 @@ SH
   pass "captain-hold mutations address the beads backend without a markdown override"
 }
 
+# An answered captain call stays verifiable after retention archives its done
+# row out of the live backlog: the archive keeps the recorded answer, so the
+# attested inventory still resolves. A plain archived done row without a
+# resolution record is an ordinary finished task, not a captain answer.
+write_archived_answered_row() {  # <archive-file> <id> <origin>
+  cat >> "$1" <<EOF
+## Archived 2026-10-09
+- [x] $2 - Sample archived captain call (repo: sample) (kind: captain) (done 2026-10-09) (hold-kind: captain)
+  Resolution recorded by fm-captain-hold.
+  Decision digest: 11d9595bed3d0a6b6417f7b53e7528863e3c04a899e030e704c984b8fbae5f70
+  Resolution mode: answered
+
+  Captain decision:
+  Captain 2026-10-09: "proceed with the archived plan".
+
+  Origin: $3
+
+EOF
+}
+
+test_verify_resolves_an_answered_call_archived_out_of_the_backlog() {
+  local home scout key archive out
+  home=$(make_home archived-answered)
+  scout=sample-archived-scout
+  key=sample-archived-call
+  archive="$home/data/done-archive.md"
+  # The backlog never held the decision row; retention already moved it. The
+  # archive is written in tasks-axi's own retention shape, with a substring-
+  # colliding neighbour id the exact match must not accept instead.
+  cat > "$archive" <<EOF
+## Archived 2026-10-09
+- [x] $key-extra - Unrelated longer id carrying no answer (repo: sample) (kind: task) (done 2026-10-09)
+  verify: nothing about $key lives here.
+
+EOF
+  write_archived_answered_row "$archive" "$key" "$scout"
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify refused an attested call whose answered row sits in the done-archive"
+  pass "verify resolves an answered captain call archived out of the live backlog"
+
+  home=$(make_home archived-complete)
+  scout=sample-archived-complete-scout
+  key=sample-archived-complete-call
+  archive="$home/data/done-archive.md"
+  : > "$archive"
+  write_archived_answered_row "$archive" "$key" "$scout"
+  write_origin_meta "$home" "$scout"
+  printf 'done: report complete\n' > "$home/state/$scout.status"
+  mkdir -p "$home/data/$scout"
+  printf '# Report\n\nThe investigation finished.\n' > "$home/data/$scout/report.md"
+
+  out=$(run_captain "$home" complete "$scout" "$key") \
+    || fail "the completion gate refused an inventory resolved through the done-archive"
+  assert_contains "$out" "complete: $scout captain-call inventory reviewed ($key)" \
+    "the archived attestation was not recorded under its own key"
+  assert_grep "decision_keys=$key" "$home/state/$scout.meta" \
+    "the attestation did not record the archived key"
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify did not re-resolve the archived key after completion"
+  pass "the completion gate attests an inventory resolved through the done-archive"
+}
+
+test_verify_resolves_an_archived_legacy_identity() {
+  local home scout key
+  home=$(make_home archived-legacy)
+  scout=sample-archived-legacy-scout
+  key=sample-legacy-call
+  write_archived_answered_row "$home/data/done-archive.md" "$scout-decision-$key" "$scout"
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify refused a pre-collapse key whose answered legacy row sits in the done-archive"
+  pass "verify resolves an archived answered call under its legacy derived identity"
+}
+
+test_archive_default_follows_the_data_directory_backlog() {
+  local home scout key
+  home=$(make_home archived-default-path)
+  scout=sample-archived-default-scout
+  key=sample-archived-default-call
+  cat > "$home/.tasks.toml" <<'EOF'
+backend = "markdown"
+
+[markdown]
+path = "elsewhere/backlog.md"
+done_keep = 10
+EOF
+  write_archived_answered_row "$home/data/done-archive.md" "$key" "$scout"
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  run_captain "$home" verify "$scout" >/dev/null \
+    || fail "verify missed the default done-archive beside the data-directory backlog"
+  pass "with no archive key the done-archive is read beside the data-directory backlog"
+}
+
+test_archived_done_row_without_an_answer_still_fails_closed() {
+  local home scout key archive err rc
+  home=$(make_home archived-plain-done)
+  scout=sample-plain-archived-scout
+  key=sample-plain-archived-call
+  archive="$home/data/done-archive.md"
+  cat > "$archive" <<EOF
+## Archived 2026-10-09
+- [x] $key - Sample finished task with no recorded answer (repo: sample) (kind: task) (done 2026-10-09)
+  verify: the work landed.
+
+EOF
+  write_scout_with_attested_inventory "$home" "$scout" "$key"
+
+  rc=0
+  err=$(run_captain "$home" verify "$scout" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "verify accepted an archived done row carrying no captain answer"
+  assert_contains "$err" "no captain-held task $key" \
+    "the refusal did not keep the absent-entry wording"
+  pass "an archived done row without a resolution record still fails closed"
+}
+
 # Reproduces the loss exactly with privacy-safe synthetic names: the investigation
 # and visual review have ended, the only genuine unresolved captain call is report
 # prose, no held backlog item or open status exists, and the authoritative
@@ -4032,3 +4151,7 @@ test_complete_accepts_a_migrated_inventory_on_beads
 test_verify_names_the_unresolvable_legacy_id_once
 test_verify_resolves_a_pre_collapse_key_through_its_derived_marker
 test_captain_hold_mutations_address_the_beads_backend
+test_verify_resolves_an_answered_call_archived_out_of_the_backlog
+test_verify_resolves_an_archived_legacy_identity
+test_archive_default_follows_the_data_directory_backlog
+test_archived_done_row_without_an_answer_still_fails_closed
