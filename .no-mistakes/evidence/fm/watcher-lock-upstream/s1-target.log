@@ -1,0 +1,8 @@
+[target] cpu load: 64 busy loops on 32 cpus
+[target] marker lock held by pid 11858: 11858
+[target] arm status after 0.58s: watcher: started pid=12095 (beacon fresh)
+[target] stop: watcher: stopped pid=12095
+[target] arm output:
+    watcher: started pid=12095 (beacon fresh)
+    watcher: FAILED - watcher cycle exited 143 without an actionable reason
+[target] .watch.lock after stop: absent

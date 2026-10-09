@@ -1,0 +1,11 @@
+[target/zombie] watcher pid=93131 SIGKILLed under a non-reaping parent; ps stat=Z; kill -0: alive; recorded owner-identity: 93131 lstart=Fri Oct  9 21:51:20 2026
+    contender pid=93940 ACQUIRED .watch.lock (reclaimed); owner-identity: 93940 lstart=Fri Oct  9 21:51:21 2026
+[target/live] live watcher pid=95012 owner-identity: 95012 lstart=Fri Oct  9 21:51:22 2026
+    contender pid=95388 did NOT acquire; lock pid still 95012; contender said: watcher: already running pid 95012 
+    original holder still alive: yes; lock pid=95012
+[target/live-tz] live watcher pid=96177 (TZ=America/Los_Angeles; contender TZ=Asia/Tokyo) owner-identity: 96177 lstart=Fri Oct  9 21:51:23 2026
+    contender pid=96650 did NOT acquire; lock pid still 96177; contender said: watcher: already running pid 96177 
+    original holder still alive: yes; lock pid=96177
+[target/recycled] watcher pid=2894 SIGKILLed and reaped (lock left behind, owner-identity: 2894 lstart=Fri Oct  9 21:51:29 2026); cycling pids until 2894 is reused...
+    pid 2894 now belongs to unrelated live process:  2894 Fri Oct  9 16:54:06 2026     sleep 600
+    contender pid=2915 ACQUIRED .watch.lock (reclaimed); owner-identity: 2915 lstart=Fri Oct  9 21:54:06 2026

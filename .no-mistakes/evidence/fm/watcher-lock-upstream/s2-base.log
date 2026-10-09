@@ -1,0 +1,8 @@
+[base-release-0.5s] watcher pid=82277 holds .watch.lock pid=82277; marker lock held by pid=82230 (alive: yes)
+[base-release-0.5s] watcher in marker wait (still blocked, no poll loop yet): ps=SN  
+[base-release-0.5s] sent TERM to watcher; releasing marker holder after 0.5s
+[base-release-0.5s] watcher exit status=143
+[base-release-0.5s] .watch.lock PRESENT (pid=82277 alive: no)
+[base-release-0.5s] watcher stderr/stdout:
+[base-release-0.5s] next arm against the leftover lock:
+    watcher: started pid=13020 (beacon fresh)
