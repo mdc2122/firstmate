@@ -52,7 +52,9 @@
 # without the captain's words is still a strike. A date that carries the captain's
 # own deferral record (bin/fm-captain-hold.sh --captain-words-file) is never
 # counted. Every observed re-date is appended to state/.queue-zero-redates.jsonl
-# (kept seven days), with kind progress, none, captain, or refused.
+# (kept seven days), with kind progress, none, captain, or refused, or unknown
+# when the crew read is unknown and the row has no other owner: that re-date
+# neither adds nor clears a strike.
 #
 # Rows from this home's backlog (source "queue"):
 #   ready    queued, every blocker done, no active hold or its date has passed
@@ -325,9 +327,12 @@ build_model() {
         | ((if $prev == null then {entry:{until:$until, fp:$fp, strikes:0}, event:null}
            elif $until != "" and ($prev.until // "") != "" and $until != $prev.until then
              (if any(($r.body_lines // [])[]; . == "Captain deferral until \($until):") then "captain"
-              elif $fp != $prev.fp then "progress" else "none" end) as $kind
+              elif $fp != $prev.fp then "progress"
+              elif $owner == null and ($crew_state.known | not) then "unknown"
+              else "none" end) as $kind
              | {entry:{until:$until, fp:$fp,
-                       strikes:(if $kind == "none" then ($prev.strikes // 0) + 1 else 0 end)},
+                       strikes:(if $kind == "none" then ($prev.strikes // 0) + 1
+                                elif $kind == "unknown" then ($prev.strikes // 0) else 0 end)},
                 event:{at:$now, id:$r.id, from:$prev.until, to:$until, kind:$kind}}
            elif $until != "" and ($prev.until // "") == "" then
              {entry:{until:$until, fp:$fp, strikes:($prev.strikes // 0)}, event:null}
@@ -338,7 +343,7 @@ build_model() {
         | {id:$r.id, row:$r, owner:$owner, cur_fp:$fp, event:$step.event,
            entry:($step.entry + {unowned_since:(
              if $owner != null then null
-             elif ($crew_state.known | not) then ($prev.unowned_since // null)
+             elif ($crew_state.known | not) and $prev != null then ($prev.unowned_since // null)
              elif $prev == null then (($r.since | day_epoch) // $now_epoch)
              else ($prev.unowned_since // $now_epoch) end)})} ] as $folded
     | ([$folded[] | .event | select(. != null)]) as $new_events

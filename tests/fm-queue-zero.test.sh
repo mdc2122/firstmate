@@ -300,6 +300,44 @@ test_failed_crew_read_is_unknown_not_ownerless() {
   pass "a failed or timed-out crew read is unknown: kept read used, else no unowned rows and one error row"
 }
 
+# While the crew is unknown, a re-date of a row with no other owner can
+# neither convict nor clear: no strike, no `none` event, and the gate still
+# allows the next re-date of a crew row. A row first seen then is still dated
+# unowned from its filed day once the crew is known.
+test_unknown_crew_redate_neither_convicts_nor_clears() {
+  local home out rc
+  home=$(make_home crew-unknown-redate)
+  axi "$home" add crew-row "work the beads crew owns"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-02
+  axi "$home" add bare-row "work nobody owns"
+  set_since "$home" bare-row 2026-09-25
+  fake_br "$home"
+  echo fail > "$home/br.mode"
+
+  qz "$home" observe || fail "first fold failed"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-03
+  qz "$home" observe || fail "second fold failed"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-04
+  qz "$home" observe || fail "third fold failed"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "redated crew-row" "re-dates under an unknown crew convicted a crew row"
+  jq -e '.rows["crew-row"].strikes == 0' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "an unknown crew read added strikes: $(cat "$home/state/.queue-zero-holds.json")"
+  jq -se '[.[] | .kind] | (index("none") == null) and (map(select(. == "unknown")) | length) == 2' \
+    "$home/state/.queue-zero-redates.jsonl" >/dev/null \
+    || fail "re-dates under an unknown crew were not logged as unknown: $(cat "$home/state/.queue-zero-redates.jsonl")"
+  rc=0
+  out=$(qz "$home" hold-gate crew-row 2099-10-05 2>&1) || rc=$?
+  [ "$rc" = 0 ] || fail "the gate refused a crew row re-dated under an unknown crew (exit $rc): $out"
+
+  echo ok > "$home/br.mode"
+  qz "$home" observe || fail "known fold failed"
+  jq -e --argjson s "$(jq -n '"2026-09-25T00:00:00Z" | fromdateiso8601')" \
+    '.rows["bare-row"].unowned_since == $s' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "a row first seen under an unknown crew lost its filed day: $(cat "$home/state/.queue-zero-holds.json")"
+  pass "an unknown crew read neither adds nor clears strikes, and a new row keeps its filed day"
+}
+
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {
   local home out
   home=$(make_home empty)
@@ -794,6 +832,7 @@ test_inflight_row_without_a_live_task_is_named_orphan
 test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not
 test_empty_queue_is_silent_and_unpaired_state_is_silent
 test_failed_crew_read_is_unknown_not_ownerless
+test_unknown_crew_redate_neither_convicts_nor_clears
 test_second_redate_without_evidence_is_refused
 test_captain_deferral_is_never_refused
 test_redate_around_the_gate_is_listed_redated
