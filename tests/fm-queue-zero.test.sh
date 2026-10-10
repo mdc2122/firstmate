@@ -235,6 +235,109 @@ test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not() {
   pass "genuine captain calls get the far-holds window; owner: captain holds are unowned work"
 }
 
+# A beads crew read that fails or times out is unknown, never "no crew": the
+# 2026-10-10 storms came from a loaded host where every crew-mirrored row
+# read as ownerless. The stub br answers from a mode file, so one home can
+# drive a good read, a hang past the bound, and a failure in turn.
+fake_br() {  # <home>
+  local home=$1
+  mkdir -p "$home/data/beads/.beads"
+  : > "$home/data/beads/.beads/beads.db"
+  cat > "$home/fakebin/br" <<EOF
+#!/usr/bin/env bash
+case "\$(cat "$home/br.mode")" in
+  ok) printf '%s\n' '{"issues":[{"id":"fm-1","status":"open","labels":["mirror:crew-row"]}],"total":1}' ;;
+  hang) sleep 30 ;;
+  *) exit 1 ;;
+esac
+EOF
+  chmod +x "$home/fakebin/br"
+}
+
+test_failed_crew_read_is_unknown_not_ownerless() {
+  local home out mode
+  home=$(make_home crew-timeout)
+  axi "$home" add crew-row "work the beads crew owns"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-03
+  axi "$home" add bare-row "work nobody owns"
+  axi "$home" hold bare-row --reason "later" --until 2099-10-03
+  set_since "$home" crew-row 2026-09-25
+  set_since "$home" bare-row 2026-09-25
+  fake_br "$home"
+
+  # No good read ever kept: a hang past the bound names no row unowned.
+  echo hang > "$home/br.mode"
+  out=$(FM_QUEUE_ZERO_BR_TIMEOUT=1 qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "unowned crew-row" "a timed-out crew read made a crew row ownerless"
+  assert_not_contains "$out" "unowned bare-row" "a timed-out crew read still named rows unowned"
+  assert_contains "$out" "queue error beads-crew" "a timed-out crew read was not reported"
+  echo fail > "$home/br.mode"
+  if qz "$home" load >/dev/null 2>&1; then
+    fail "load reported numbers while crew ownership was unknown"
+  fi
+
+  # A good read is kept; a later failure uses it, so the real ownerless row
+  # is still named and the crew row is not.
+  echo ok > "$home/br.mode"
+  qz "$home" observe || fail "observe failed"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue unowned bare-row" "a real ownerless row was not named"
+  assert_not_contains "$out" "crew-row" "a crew-mirrored row was named"
+  for mode in fail hang; do
+    echo "$mode" > "$home/br.mode"
+    out=$(FM_QUEUE_ZERO_BR_TIMEOUT=1 qz "$home" scan --local) || fail "scan failed: $out"
+    assert_contains "$out" "queue unowned bare-row" "a real ownerless row was dropped on a $mode crew read"
+    assert_not_contains "$out" "crew-row" "a $mode crew read made a crew row ownerless despite a kept read"
+    assert_not_contains "$out" "beads-crew" "a $mode crew read with a kept read was reported as unknown"
+  done
+
+  # A kept read older than a day is not trusted.
+  echo fail > "$home/br.mode"
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_QUEUE_ZERO_NOW=2026-10-02T12:00:01Z "$QZ" scan --local) \
+    || fail "scan failed: $out"
+  assert_not_contains "$out" "queue unowned" "a day-old kept crew read was trusted"
+  assert_contains "$out" "queue error beads-crew" "a stale kept crew read was not reported"
+  pass "a failed or timed-out crew read is unknown: kept read used, else no unowned rows and one error row"
+}
+
+# While the crew is unknown, a re-date of a row with no other owner can
+# neither convict nor clear: no strike, no `none` event, and the gate still
+# allows the next re-date of a crew row. A row first seen then is still dated
+# unowned from its filed day once the crew is known.
+test_unknown_crew_redate_neither_convicts_nor_clears() {
+  local home out rc
+  home=$(make_home crew-unknown-redate)
+  axi "$home" add crew-row "work the beads crew owns"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-02
+  axi "$home" add bare-row "work nobody owns"
+  set_since "$home" bare-row 2026-09-25
+  fake_br "$home"
+  echo fail > "$home/br.mode"
+
+  qz "$home" observe || fail "first fold failed"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-03
+  qz "$home" observe || fail "second fold failed"
+  axi "$home" hold crew-row --reason "owner: beads crew" --until 2099-10-04
+  qz "$home" observe || fail "third fold failed"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_not_contains "$out" "redated crew-row" "re-dates under an unknown crew convicted a crew row"
+  jq -e '.rows["crew-row"].strikes == 0' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "an unknown crew read added strikes: $(cat "$home/state/.queue-zero-holds.json")"
+  jq -se '[.[] | .kind] | (index("none") == null) and (map(select(. == "unknown")) | length) == 2' \
+    "$home/state/.queue-zero-redates.jsonl" >/dev/null \
+    || fail "re-dates under an unknown crew were not logged as unknown: $(cat "$home/state/.queue-zero-redates.jsonl")"
+  rc=0
+  out=$(qz "$home" hold-gate crew-row 2099-10-05 2>&1) || rc=$?
+  [ "$rc" = 0 ] || fail "the gate refused a crew row re-dated under an unknown crew (exit $rc): $out"
+
+  echo ok > "$home/br.mode"
+  qz "$home" observe || fail "known fold failed"
+  jq -e --argjson s "$(jq -n '"2026-09-25T00:00:00Z" | fromdateiso8601')" \
+    '.rows["bare-row"].unowned_since == $s' "$home/state/.queue-zero-holds.json" >/dev/null \
+    || fail "a row first seen under an unknown crew lost its filed day: $(cat "$home/state/.queue-zero-holds.json")"
+  pass "an unknown crew read neither adds nor clears strikes, and a new row keeps its filed day"
+}
+
 test_empty_queue_is_silent_and_unpaired_state_is_silent() {
   local home out
   home=$(make_home empty)
@@ -728,6 +831,8 @@ test_unowned_row_flagged_and_each_running_owner_clears_it
 test_inflight_row_without_a_live_task_is_named_orphan
 test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not
 test_empty_queue_is_silent_and_unpaired_state_is_silent
+test_failed_crew_read_is_unknown_not_ownerless
+test_unknown_crew_redate_neither_convicts_nor_clears
 test_second_redate_without_evidence_is_refused
 test_captain_deferral_is_never_refused
 test_redate_around_the_gate_is_listed_redated
