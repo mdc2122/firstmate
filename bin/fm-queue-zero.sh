@@ -22,7 +22,12 @@
 #   worker      a live task record (state/<id>.meta) for the row
 #   crew        an open beads (br) item in this home's crew queue
 #               (data/beads/.beads/beads.db) labelled mirror:<id>, read with one
-#               bounded read-only call (FM_QUEUE_ZERO_BR_TIMEOUT, default 5 s)
+#               bounded read-only call (FM_QUEUE_ZERO_BR_TIMEOUT, default 5 s).
+#               A failed or timed-out read is never an empty crew: the fold
+#               uses the crew ids from the last successful read (kept in the
+#               ledger, at most 24 h old); with none, the pass lists no
+#               `unowned` row and names one `error` row (ref beads-crew) instead
+#               of calling every crew row ownerless.
 #   secondmate  a hold reason beginning "owner: <secondmate-id>" naming a
 #               secondmate registered in data/secondmates.md
 #   watch       a registered condition watch (bin/fm-procevent-when.sh) named
@@ -105,8 +110,9 @@
 # with no owner (ready rows and orphans included); unowned_over_day those the
 # ledger has seen unowned for 24 h or more; median_open_age_days is the median
 # filed age of open rows (null when none); redates_no_progress counts ledger
-# events of kind none or refused in the trailing 24 h. Read-only.
-# bin/fm-attention-check.sh renders it per home.
+# events of kind none or refused in the trailing 24 h. Read-only. It exits 1
+# when the crew is unknown (a failed crew read with no kept read), so
+# bin/fm-attention-check.sh renders that home's load as unknown.
 #
 # A home whose state directory is overridden without a matching data
 # directory (FM_STATE_OVERRIDE set, FM_DATA_OVERRIDE unset) cannot pair its
@@ -179,7 +185,8 @@ json_lines() {  # stdin lines -> JSON string array
 # --- running owners -------------------------------------------------------------
 
 # Row ids this home's beads crew queue mirrors through an open item's
-# mirror:<id> label; [] when br or the queue is absent or unreadable in time.
+# mirror:<id> label; [] when br or the queue is absent, null when the bounded
+# read failed, timed out, or printed something unparseable (unknown, not none).
 crew_ids() {
   local db="$DATA/beads/.beads/beads.db" out
   if ! command -v br >/dev/null 2>&1 || [ ! -f "$db" ]; then
@@ -189,10 +196,10 @@ crew_ids() {
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$SCRIPT_DIR/fm-timeout-lib.sh"
   out=$(fm_run_timed "$BR_TIMEOUT" br --db "$db" --no-auto-import --no-auto-flush \
-    list --json -s all --limit 0 2>/dev/null) || { printf '[]'; return 0; }
-  printf '%s' "$out" | jq -c '[.issues[]? | select(.status != "closed" and .status != "tombstone")
+    list --json -s all --limit 0 2>/dev/null) || { printf 'null'; return 0; }
+  printf '%s' "$out" | jq -ce '[.issues[] | select(.status != "closed" and .status != "tombstone")
     | .labels[]? | select(startswith("mirror:")) | ltrimstr("mirror:")] | unique' 2>/dev/null \
-    || printf '[]'
+    || printf 'null'
 }
 
 # Secondmate ids registered in data/secondmates.md.
@@ -241,7 +248,7 @@ evidence_json() {  # <snapshot>
 MODEL=
 MODEL_ERROR=
 build_model() {
-  local input ready_out ready_ids prev_ledger='{}' events='[]'
+  local input ready_out ready_ids prev_ledger='{}' prev_crew=null events='[]'
   MODEL=
   MODEL_ERROR=
   if [ ! -f "$DATA/backlog.md" ]; then
@@ -260,17 +267,27 @@ build_model() {
   fi
   if [ -f "$LEDGER" ] && jq -e --arg s "$LEDGER_SCHEMA" '.schema == $s' "$LEDGER" >/dev/null 2>&1; then
     prev_ledger=$(jq -c '.rows // {}' "$LEDGER")
+    prev_crew=$(jq -c '.crew // null' "$LEDGER")
   fi
   if [ -f "$EVENTS" ]; then
     events=$(jq -sc '.' "$EVENTS" 2>/dev/null) || events='[]'
   fi
   MODEL=$(printf '%s' "$input" | jq -c \
     --argjson ready "$ready_ids" --argjson ledger "$prev_ledger" --argjson events "$events" \
-    --argjson evidence "$(evidence_json "$input")" --argjson crew "$(crew_ids)" \
+    --argjson evidence "$(evidence_json "$input")" --argjson crew_read "$(crew_ids)" \
+    --argjson prev_crew "$prev_crew" \
     --argjson mates "$(secondmate_ids)" --argjson watches "$(watch_names)" \
     --arg today "$TODAY" --arg now "$NOW" --argjson now_epoch "$NOW_EPOCH" \
     --argjson age_days "$AGE_DAYS" --argjson captain_days "$CAPTAIN_DAYS" '
-    def day_epoch: try ((. // "") + "T00:00:00Z" | fromdateiso8601) catch null;
+    # A failed crew read is unknown, never empty: fall back to the last good
+    # read while it is under a day old, else mark the crew unknown so this
+    # pass names no row unowned.
+    (if $crew_read != null then {ids:$crew_read, known:true, at:$now_epoch}
+     elif $prev_crew != null and ($now_epoch - ($prev_crew.at // 0)) < 86400
+       then {ids:($prev_crew.ids // []), known:true, at:$prev_crew.at, cached:true}
+     else {ids:[], known:false} end) as $crew_state
+    | $crew_state.ids as $crew
+    | def day_epoch: try ((. // "") + "T00:00:00Z" | fromdateiso8601) catch null;
     def owner_word: (.hold_reason // "") | (capture("^owner:[[:space:]]*(?<w>[A-Za-z0-9._-]+)").w // null);
     def direct($live):
       . as $r
@@ -321,6 +338,7 @@ build_model() {
         | {id:$r.id, row:$r, owner:$owner, cur_fp:$fp, event:$step.event,
            entry:($step.entry + {unowned_since:(
              if $owner != null then null
+             elif ($crew_state.known | not) then ($prev.unowned_since // null)
              elif $prev == null then (($r.since | day_epoch) // $now_epoch)
              else ($prev.unowned_since // $now_epoch) end)})} ] as $folded
     | ([$folded[] | .event | select(. != null)]) as $new_events
@@ -337,7 +355,8 @@ build_model() {
               {class:"redated",
                detail:("re-dated \($f.entry.strikes) times running with no new evidence, now until "
                        + ($r.hold_until // "-"))}
-            elif $r.state == "queued" and $f.owner == null and $aged and $is_ready == null then
+            elif $r.state == "queued" and $f.owner == null and $aged and $is_ready == null
+                 and $crew_state.known then
               {class:"unowned",
                detail:("no running owner"
                        + (if $r.hold_reason != null then "; held: " + $r.hold_reason else "" end)
@@ -357,13 +376,20 @@ build_model() {
             elif $r.state == "in_flight" and $r.requires_child_metadata == true and ($live | index($r.id)) == null then
               {class:"orphan", detail:"in flight with no live task record"}
             else empty end ]
+    | if $crew_state.known then . else
+        . + [{source:"queue", class:"error", ref:"beads-crew", title:"could not read",
+              detail:"the beads crew queue read failed or timed out and no read from the last 24 h is"
+                     + " kept, so no row is named unowned this pass"}] end
     | map(.title |= (gsub("\\s+"; " ") | if length > 70 then .[:69] + "…" else . end)) as $rows
     | ([$folded[] | select(.owner == null)]) as $unowned
-    | ([$unowned[] | select(($now_epoch - .entry.unowned_since) >= 86400)]) as $unowned_day
+    | ([$unowned[] | select(.entry.unowned_since != null
+                            and ($now_epoch - .entry.unowned_since) >= 86400)]) as $unowned_day
     | ([$open[] | .since | day_epoch | select(. != null) | ($t - .) / 86400 | floor] | sort) as $ages
     | ($ages | length) as $n
     | {rows:$rows,
+       crew_known:$crew_state.known,
        ledger:([$folded[] | {key:.id, value:.entry}] | from_entries),
+       crew:(if $crew_state.known then {ids:$crew_state.ids, at:$crew_state.at} else $prev_crew end),
        new_events:$new_events,
        folded:[$folded[] | {id, owner, until:.entry.until, fp:.entry.fp, cur_fp, strikes:.entry.strikes}],
        load:{open:($open | length),
@@ -417,7 +443,8 @@ append_events() {  # <json-array>
 
 persist_model() {
   local new
-  write_atomic "$LEDGER" "$(printf '%s' "$MODEL" | jq -c --arg s "$LEDGER_SCHEMA" '{schema:$s, rows:.ledger}')" \
+  write_atomic "$LEDGER" "$(printf '%s' "$MODEL" | jq -c --arg s "$LEDGER_SCHEMA" '{schema:$s, rows:.ledger}
+    + (if .crew != null then {crew:.crew} else {} end)')" \
     || return 1
   new=$(printf '%s' "$MODEL" | jq -c '.new_events')
   [ "$new" = '[]' ] || append_events "$new"
@@ -572,6 +599,8 @@ action_load() {
     return 0
   fi
   build_model || die "$MODEL_ERROR" 1
+  printf '%s' "$MODEL" | jq -e '.crew_known' >/dev/null \
+    || die "the beads crew queue could not be read, so row ownership is unknown" 1
   printf '%s\n' "$MODEL" | jq -c '.load'
 }
 
