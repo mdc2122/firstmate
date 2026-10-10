@@ -1,0 +1,32 @@
+== [fix] br=hang (no kept read): scan --local
+queue error beads-crew - could not read [the beads crew queue read failed or timed out and no read from the last 24 h is kept, so no row is named unowned this pass]
+exit=0
+== [fix] br=hang: load
+fm-queue-zero: the beads crew queue could not be read, so row ownership is unknown
+exit=1
+== [fix] br=fail (no kept read): scan --local
+queue error beads-crew - could not read [the beads crew queue read failed or timed out and no read from the last 24 h is kept, so no row is named unowned this pass]
+exit=0
+== [fix] br=fail: load
+fm-queue-zero: the beads crew queue could not be read, so row ownership is unknown
+exit=1
+== [fix] br=garbage (no kept read): scan --local
+queue error beads-crew - could not read [the beads crew queue read failed or timed out and no read from the last 24 h is kept, so no row is named unowned this pass]
+exit=0
+== [fix] br=garbage: load
+fm-queue-zero: the beads crew queue could not be read, so row ownership is unknown
+exit=1
+== [fix] br=ok: observe + scan --local
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [fix] br=ok: load
+{"open":5,"unowned":1,"unowned_ids":["orphan-row"],"unowned_over_day":1,"unowned_over_day_ids":["orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [fix] br=hang after a kept good read: scan --local
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [fix] br=hang after kept read: load
+{"open":5,"unowned":1,"unowned_ids":["orphan-row"],"unowned_over_day":1,"unowned_over_day_ids":["orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [fix] ledger .crew
+{"ids":["crew-1","crew-2","crew-3","crew-4"],"at":1791633600}

@@ -1,0 +1,48 @@
+== [main] br=hang (no kept read): scan --local
+queue unowned crew-1 - crew mirrored work 1 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-2 - crew mirrored work 2 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-3 - crew mirrored work 3 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-4 - crew mirrored work 4 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [main] br=hang: load
+{"open":5,"unowned":5,"unowned_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"unowned_over_day":5,"unowned_over_day_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [main] br=fail (no kept read): scan --local
+queue unowned crew-1 - crew mirrored work 1 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-2 - crew mirrored work 2 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-3 - crew mirrored work 3 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-4 - crew mirrored work 4 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [main] br=fail: load
+{"open":5,"unowned":5,"unowned_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"unowned_over_day":5,"unowned_over_day_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [main] br=garbage (no kept read): scan --local
+queue unowned crew-1 - crew mirrored work 1 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-2 - crew mirrored work 2 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-3 - crew mirrored work 3 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-4 - crew mirrored work 4 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [main] br=garbage: load
+{"open":5,"unowned":5,"unowned_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"unowned_over_day":5,"unowned_over_day_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [main] br=ok: observe + scan --local
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [main] br=ok: load
+{"open":5,"unowned":1,"unowned_ids":["orphan-row"],"unowned_over_day":1,"unowned_over_day_ids":["orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [main] br=hang after a kept good read: scan --local
+queue unowned crew-1 - crew mirrored work 1 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-2 - crew mirrored work 2 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-3 - crew mirrored work 3 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned crew-4 - crew mirrored work 4 [no running owner; held: owner: beads crew; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+queue unowned orphan-row - genuinely ownerless [no running owner; held: later; a date is not an owner (until 2099-10-20); filed 2026-10-01]
+exit=0
+== [main] br=hang after kept read: load
+{"open":5,"unowned":5,"unowned_ids":["crew-1","crew-2","crew-3","crew-4","orphan-row"],"unowned_over_day":1,"unowned_over_day_ids":["orphan-row"],"median_open_age_days":9,"redates_no_progress":0}
+exit=0
+== [main] ledger .crew
+null

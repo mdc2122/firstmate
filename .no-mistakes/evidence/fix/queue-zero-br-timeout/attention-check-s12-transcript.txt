@@ -1,0 +1,11 @@
+== [main] attention-check scan, br=hang — S12 segment:
+attention 10-10 12:00Z AMBER (S12): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 12:00Z) [green] 
+ S12 load home unowned 5 (5 >24h: crew-1, crew-2, crew-3 +2), median age 9d, re-dates without progress 0 [red] 
+== [main] attention-check scan, br=ok — S12 segment:
+attention 10-10 12:00Z AMBER (S12): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 12:00Z) [green] 
+ S12 load home unowned 1 (1 >24h: orphan-row), median age 9d, re-dates without progress 0 [red] 
+== [fix] attention-check scan, br=hang — S12 segment:
+ S12 load home load unknown [unknown] 
+== [fix] attention-check scan, br=ok — S12 segment:
+attention 10-10 12:00Z AMBER (S12): S1 decisions>30m 0 (0.0 wh, max 0m; sampled since 12:00Z) [green] 
+ S12 load home unowned 1 (1 >24h: orphan-row), median age 9d, re-dates without progress 0 [red] 

@@ -1,0 +1,18 @@
+== [main] failing br, two re-dates of a crew row: strikes in ledger
+{"until":"2099-10-04","fp":{"status":0,"worker":false,"blockers":"","deferrals":0},"strikes":2,"unowned_since":1790812800}
+== [main] redate event kinds
+"none" "none" 
+== [main] scan --local
+queue redated crew-row - crew owned [re-dated 2 times running with no new evidence, now until 2099-10-04]
+== [main] hold-gate crew-row 2099-10-05
+fm-queue-zero: refused: crew-row was already re-dated once with no new evidence, and nothing has changed since its last hold (no status line, linked worker, blocker change, or captain words); moving its date from 2099-10-04 to 2099-10-05 again is not an answer.
+fm-queue-zero: the only answers: start it (give it a running owner - dispatch a worker, hand it to the beads crew or a secondmate, or arm a condition watch named crew-row), close it with a reason, or hold it for the captain's own decision (bin/fm-captain-hold.sh hold crew-row --reason "<the question>", or record his deferral with --until <date> --captain-words-file <file>).
+exit=3
+== [fix] failing br, two re-dates of a crew row: strikes in ledger
+{"until":"2099-10-04","fp":{"status":0,"worker":false,"blockers":"","deferrals":0},"strikes":0,"unowned_since":1790812800}
+== [fix] redate event kinds
+"unknown" "unknown" 
+== [fix] scan --local
+queue error beads-crew - could not read [the beads crew queue read failed or timed out and no read from the last 24 h is kept, so no row is named unowned this pass]
+== [fix] hold-gate crew-row 2099-10-05
+exit=0
