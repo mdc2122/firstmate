@@ -126,9 +126,44 @@ test_quoted_args_reach_job_verbatim() {
   pass "arguments and paths with quotes, \$ and ; reach the job verbatim"
 }
 
+# 2026-10-12 (prod-20261012-2): a deploy run through the helper recorded its
+# release tickets under another task, because the detached session inherited
+# the tmux SERVER's global FM_TASK_ID, set by whichever task started the
+# server. The job must carry the caller's FM_TASK_ID and VIRAL_RELEASE_OWNER,
+# and neither when the caller has none.
+test_job_carries_the_callers_task_identity_not_the_servers() {
+  local dir="$TMP_ROOT/identity" verdict
+  mkdir -p "$dir"
+  # A long-lived seed session keeps the server up so the globals below stick.
+  tmux new-session -d -s identity-seed 'sleep 120' || fail "could not start the seed tmux session"
+  tmux set-environment -g FM_TASK_ID server-task || fail "could not set the server's FM_TASK_ID"
+  tmux set-environment -g VIRAL_RELEASE_OWNER server-owner || fail "could not set the server's VIRAL_RELEASE_OWNER"
+  [ "$(tmux show-environment -g FM_TASK_ID)" = 'FM_TASK_ID=server-task' ] \
+    || fail "control: the tmux server does not carry the stale FM_TASK_ID, so the test proves nothing"
+  # shellcheck disable=SC2016 # Expanded inside the job, not here.
+  (cd "$dir" && FM_TASK_ID=caller-task VIRAL_RELEASE_OWNER=caller-owner \
+    "$HELPER" ident-set verdict-set.txt -- /bin/sh -c 'printf "%s|%s\n" "${FM_TASK_ID-<unset>}" "${VIRAL_RELEASE_OWNER-<unset>}"' >/dev/null) \
+    || fail "launcher failed for the identity job"
+  wait_for "$dir/verdict-set.txt" 100 || fail "no verdict for the identity job"
+  [ "$(cat "$dir/verdict-set.txt.stdout")" = 'caller-task|caller-owner' ] \
+    || fail "job did not carry the caller's identity: $(cat "$dir/verdict-set.txt.stdout")"
+  # shellcheck disable=SC2016 # Expanded inside the job, not here.
+  (cd "$dir" && env -u FM_TASK_ID -u VIRAL_RELEASE_OWNER \
+    "$HELPER" ident-unset verdict-unset.txt -- /bin/sh -c 'printf "%s|%s\n" "${FM_TASK_ID-<unset>}" "${VIRAL_RELEASE_OWNER-<unset>}"' >/dev/null) \
+    || fail "launcher failed for the unset-identity job"
+  wait_for "$dir/verdict-unset.txt" 100 || fail "no verdict for the unset-identity job"
+  [ "$(cat "$dir/verdict-unset.txt.stdout")" = '<unset>|<unset>' ] \
+    || fail "job inherited the tmux server's identity: $(cat "$dir/verdict-unset.txt.stdout")"
+  tmux set-environment -gu FM_TASK_ID
+  tmux set-environment -gu VIRAL_RELEASE_OWNER
+  tmux kill-session -t "=identity-seed" 2>/dev/null || true
+  pass "a job carries its caller's task identity, never the tmux server's"
+}
+
 test_vulnerable_shape_loses_verdict
 test_helper_verdict_survives_dropped_tool_call
 test_failure_records_exit_and_stderr_tail
 test_killed_session_still_writes_verdict
 test_refuses_existing_result
 test_quoted_args_reach_job_verbatim
+test_job_carries_the_callers_task_identity_not_the_servers
