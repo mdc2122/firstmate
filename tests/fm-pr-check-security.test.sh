@@ -3052,6 +3052,22 @@ test_merge_line_front_reorders() {
   pass "front moves a PR to the head of its merge line in one command"
 }
 
+# An attended merge of a PR no poll arms yet: `front` lists it at the head, and
+# the merge's own arming makes it the effective head, so the gate lets it land.
+test_merge_line_front_lands_an_unarmed_attended_merge() {
+  local dir
+  dir=$(make_case merge-line-front-unarmed)
+  seed_two_yolo_prs "$dir" 1
+  write_task_meta "$dir" task-c
+  merge_line "$dir" front https://github.com/o/r/pull/3 >/dev/null || fail "front refused"
+  : > "$dir/gh.log"
+  run_merge_entry "$dir" task-c https://github.com/o/r/pull/3 > "$dir/merge.out" 2> "$dir/merge.err" \
+    || fail "an attended merge of the fronted unarmed PR was refused: $(cat "$dir/merge.err")"
+  [ "$(forge_merges "$dir")" = '3 ' ] \
+    || fail "the fronted PR did not land alone: $(forge_merges "$dir")"
+  pass "an attended merge of a fronted, not yet armed PR passes its merge line's gate"
+}
+
 test_merge_line_holds_behind_rerun_for_non_head() {
   local dir state
   dir=$(make_case merge-line-behind)
@@ -3259,6 +3275,7 @@ test_merged_poll_leaves_no_green_blocked_record
 test_merged_poll_reregistration_after_notification_is_absorbed
 test_merge_line_lands_only_the_head_in_order
 test_merge_line_front_reorders
+test_merge_line_front_lands_an_unarmed_attended_merge
 test_merge_line_holds_behind_rerun_for_non_head
 test_repo_without_merge_line_is_unchanged
 test_merged_poll_retries_a_failed_upward_report

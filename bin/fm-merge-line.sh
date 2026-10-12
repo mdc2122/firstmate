@@ -27,8 +27,8 @@
 # at the tail of its repository's line (a no-op without a line, and for a PR
 # already listed, so a re-arm keeps its place). `declare` seeds a new line with
 # the repository's already-armed PRs in arming order (each task's
-# state/<id>.pr-poll-registration mtime). `front` and `move` reorder in one
-# command, adding the PR when it is not listed yet.
+# state/<id>.pr-poll-registration mtime). `front` moves a PR to the head in one
+# command, adding it when it is not listed yet.
 #
 # HEAD. The effective head is the first listed PR that some task's merge poll
 # currently arms (state/<id>.pr-poll names it). Entries no poll arms, such as a
@@ -49,7 +49,6 @@
 #   fm-merge-line.sh undeclare <repo-or-pr-url> drop the line; the repository merges as before
 #   fm-merge-line.sh show [<repo-or-pr-url>]    print line(s): position, URL, task, armed state
 #   fm-merge-line.sh front <pr-url>             move (or add) the PR to the head
-#   fm-merge-line.sh move <pr-url> <position>   move (or add) the PR to 1-based position
 #   fm-merge-line.sh enqueue <pr-url>           append at the tail if lined and not listed
 #   fm-merge-line.sh remove <pr-url>            drop the PR from its line
 #   fm-merge-line.sh gate <pr-url>              exit 0 when the PR may merge now (no line,
@@ -246,12 +245,11 @@ cmd_undeclare() {
   printf 'removed merge line for %s; its PRs merge as without a line\n' "$(repo_label)"
 }
 
-cmd_move() {  # <pr-url> <position>
-  local url=${1-} pos=${2-} rc=0
-  case "$pos" in ''|0|*[!0-9]*) die "position must be a positive integer" 2 ;; esac
+cmd_front() {  # <pr-url>
+  local url=${1-} rc=0
   begin_mutation "$url" 1 || rc=$?
   [ "$rc" -eq 0 ] || die "no merge line is declared for $(repo_label); declare one first"
-  place "$url" "$pos"
+  place "$url" 1
   write_line || die "could not write the merge line"
   cmd_show_one
 }
@@ -295,7 +293,7 @@ cmd_gate() {
     *) printf 'held: the merge line for %s is unreadable; nothing in it merges until it is fixed\n' "$(repo_label)"; return 1 ;;
   esac
   if ! listed "$url"; then
-    printf 'held: %s is not in the merge line for %s; add it with fm-merge-line.sh front or move\n' "$url" "$(repo_label)"
+    printf 'held: %s is not in the merge line for %s; add it with fm-merge-line.sh front\n' "$url" "$(repo_label)"
     return "$FM_MERGE_LINE_HELD"
   fi
   load_armed
@@ -352,7 +350,6 @@ main() {
   case "$cmd" in
     declare|undeclare|front|enqueue|remove|gate)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
-    move) [ "$#" -eq 2 ] || { usage >&2; exit 2; } ;;
     show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
@@ -360,8 +357,7 @@ main() {
   case "$cmd" in
     declare) cmd_declare "$@" ;;
     undeclare) cmd_undeclare "$@" ;;
-    front) cmd_move "$1" 1 ;;
-    move) cmd_move "$@" ;;
+    front) cmd_front "$@" ;;
     enqueue) cmd_enqueue "$@" ;;
     remove) cmd_remove "$@" ;;
     gate) cmd_gate "$@" ;;
