@@ -867,6 +867,16 @@ test_late_owner_keeps_failure_episode_suppressed() {
     || fail 'the first owner did not count its second failure'
   jq -e --arg error "$error" '.records[0].error == $error and .records[0].fail_streak == 1' "$home/data/duplicate/contributions.json" >/dev/null \
     || fail 'the late owner did not start at its own first miss'
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T10:30:00Z "$ROOT/bin/fm-contributions.sh" poll) \
+    || fail 'late-owner second failing poll failed'
+  [ "$out" = "$line" ] || fail "the late owner's second miss did not wake the shared URL: $out"
+  jq -e '.records[0].fail_streak == 3' "$home/data/delivery/contributions.json" >/dev/null \
+    || fail 'the first owner did not count its third failure'
+  jq -e '.records[0].fail_streak == 2' "$home/data/duplicate/contributions.json" >/dev/null \
+    || fail 'the late owner did not count its second failure'
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T10:45:00Z "$ROOT/bin/fm-contributions.sh" poll) \
+    || fail 'late-owner third failing poll failed'
+  [ -z "$out" ] || fail "the shared episode woke again after its wake: $out"
   : > "$home/forge/fault"
   out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T11:00:00Z "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'successful shared poll failed'

@@ -301,7 +301,7 @@ settle_final() { # canonical-url task... : settle every owner onto the URL's fin
 
 poll() {
   local task url old kind error observed fail_wake
-  local -a row
+  local -a row owners
   acquire
   get_input
   read_saved
@@ -335,12 +335,16 @@ poll() {
     # prior misses across owners is exactly one. A successful read ends the
     # episode.
     fail_wake=0
-    if [ "$observed" -ne 0 ]; then
+    owners=()
+    for task in "${row[@]:1}"; do
+      if fm_pr_task_id_valid "$task"; then owners+=("$task"); fi
+    done
+    if [ "$observed" -ne 0 ] && [ "${#owners[@]}" -gt 0 ]; then
       fail_wake=$(jq -n --slurpfile saved "$TMP/saved.json" --arg url "$url" --args '
         [$ARGS.positional[] as $task
          | [$saved[0][] | select(.task == $task) | .records[]
             | select(.url == $url)] | first // {fail_streak:0}
-         | (.fail_streak // 0)] | min' "${row[@]:1}") || fail_wake=0
+         | (.fail_streak // 0)] | min' "${owners[@]}") || fail_wake=0
       [ "$fail_wake" -eq 1 ] || fail_wake=0
     fi
     case "$url" in */issues/*) kind=issue ;; *) kind="pr" ;; esac
