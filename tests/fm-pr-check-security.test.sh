@@ -2961,6 +2961,125 @@ test_yolo_merge_attempt_is_bounded() {
   pass "a stalled forge read during a yolo merge is bounded and keeps the watcher live"
 }
 
+# --- per-repository merge line ------------------------------------------------
+
+MERGE_LINE="$ROOT/bin/fm-merge-line.sh"
+
+merge_line() {  # <dir> <args...>
+  local dir=$1
+  shift
+  FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$MERGE_LINE" "$@"
+}
+
+# Two yolo tasks on one repository, armed through the real ready path in the
+# order task-z (pull/1) then task-a (pull/2). The watcher visits task-a's poll
+# first, so a line that did not hold it would merge pull/2 ahead of pull/1.
+seed_two_yolo_prs() {  # <dir> <declare-line: 0|1>
+  local dir=$1 declare=$2 id url state
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  [ "$declare" = 0 ] || merge_line "$dir" declare https://github.com/o/r >/dev/null \
+    || fail "could not declare the merge line"
+  for id in task-z task-a; do
+    url=https://github.com/o/r/pull/1
+    [ "$id" = task-z ] || url=https://github.com/o/r/pull/2
+    write_task_meta "$dir" "$id"
+    printf 'yolo=on\n' >> "$state/$id.meta"
+    run_check_entry "$dir" "$id" "$url" >/dev/null 2> "$dir/arm-$id.err" \
+      || fail "could not arm $id: $(cat "$dir/arm-$id.err")"
+  done
+  add_stop_custom_check "$dir"
+}
+
+merge_line_cycle() {  # <dir> <label>
+  local dir=$1 label=$2 rc
+  rm -f "$dir/home/state/.last-check"
+  set +e
+  FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
+    FM_TEST_GLAB_LOG="$dir/glab.log" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "$label watcher failed: $(cat "$dir/$label.err")"
+  ack_watcher_cycle "$dir/home/state" || fail "$label acknowledgement failed"
+}
+
+forge_merges() {  # <dir>: merged PR numbers in order
+  awk '$1 == "pr" && $2 == "merge" { print $3 }' "$1/gh.log" | tr '\n' ' '
+}
+
+test_merge_line_lands_only_the_head_in_order() {
+  local dir state rc
+  dir=$(make_case merge-line-order)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '1 ' ] \
+    || fail "the line did not land only its head first: $(forge_merges "$dir")"
+  case "$(cat "$dir/c1.out")" in check:*task-z.check.sh:*merged) ;; *) fail "the head's landing was not reported: $(cat "$dir/c1.out")" ;; esac
+  assert_grep 'merge line holds task-a' "$state/.watch-triage.log" "the held PR left no triage record"
+  [ -f "$state/task-a.check.sh" ] || fail "the held PR's poll was retired"
+
+  # An attended merge of a PR behind the head is refused by the same gate.
+  merge_line "$dir" enqueue https://github.com/o/r/pull/3 || fail "could not enqueue a third PR"
+  write_task_meta "$dir" task-c
+  set +e
+  run_merge_entry "$dir" task-c https://github.com/o/r/pull/3 > "$dir/held.out" 2> "$dir/held.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "an attended merge of a held PR succeeded"
+  assert_grep 'waits behind https://github.com/o/r/pull/2' "$dir/held.err" "the attended refusal did not name the head"
+  merge_line "$dir" remove https://github.com/o/r/pull/3 || fail "could not remove the third PR"
+
+  merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '1 2 ' ] \
+    || fail "the next PR did not land once the head had: $(forge_merges "$dir")"
+  case "$(cat "$dir/c2.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the second landing was not reported: $(cat "$dir/c2.out")" ;; esac
+  [ "$(sed -n '3,$p' "$state/merge-lines/github@github.com@o%2Fr")" = '' ] \
+    || fail "landed PRs were left in the line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  pass "a declared merge line lands its armed green yolo PRs one at a time, head first"
+}
+
+test_merge_line_front_reorders() {
+  local dir
+  dir=$(make_case merge-line-front)
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front https://github.com/o/r/pull/2 >/dev/null || fail "front refused"
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "the PR moved to the head did not land first: $(forge_merges "$dir")"
+  pass "front moves a PR to the head of its merge line in one command"
+}
+
+test_merge_line_holds_behind_rerun_for_non_head() {
+  local dir state
+  dir=$(make_case merge-line-behind)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false
+  green_blocked_cycle "$dir" "$dir/b1.out" BEHIND SUCCESS 0
+  unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED
+  [ -n "$(find "$state/task-z.inbox" -name '*.msg' 2>/dev/null)" ] \
+    || fail "the behind head was not rerun-steered"
+  [ -z "$(find "$state/task-a.inbox" -name '*.msg' 2>/dev/null)" ] \
+    || fail "a PR behind the line's head was rerun-steered"
+  [ ! -e "$state/task-a.pr-green-blocked" ] || fail "a held PR started a green-unmergeable episode"
+  pass "only the merge line's head gets the behind-base rerun steer"
+}
+
+test_repo_without_merge_line_is_unchanged() {
+  local dir
+  dir=$(make_case merge-line-absent)
+  seed_two_yolo_prs "$dir" 0
+  merge_line "$dir" declare https://github.com/o/other >/dev/null || fail "could not declare another repo's line"
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "an unlined repository did not merge the first green yolo PR the watcher reached: $(forge_merges "$dir")"
+  [ ! -e "$dir/home/state/merge-lines/github@github.com@o%2Fr" ] || fail "arming created a line for an unlined repository"
+  pass "a repository without a declared merge line merges exactly as before"
+}
+
 
 test_authority_persistence_refuses_rebound_metadata() {
   local dir state url_a url_b rc
@@ -3138,6 +3257,10 @@ test_green_pr_with_unreported_required_check_does_not_alert
 test_green_pr_in_merge_queue_does_not_alert
 test_merged_poll_leaves_no_green_blocked_record
 test_merged_poll_reregistration_after_notification_is_absorbed
+test_merge_line_lands_only_the_head_in_order
+test_merge_line_front_reorders
+test_merge_line_holds_behind_rerun_for_non_head
+test_repo_without_merge_line_is_unchanged
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
