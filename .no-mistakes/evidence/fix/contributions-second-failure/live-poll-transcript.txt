@@ -1,0 +1,52 @@
+### BASE (9e48c8ad) single-owner, forge down then recovers
+2026-09-20T09:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T09:10:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":null}
+2026-09-20T09:20:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":null}
+2026-09-20T09:30:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":null}
+2026-09-20T09:40:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":null}
+2026-09-20T09:50:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T10:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":null}
+
+### TARGET (187206c9) single-owner, forge down then recovers
+2026-09-20T09:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T09:10:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":2}
+2026-09-20T09:20:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":3}
+2026-09-20T09:30:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":4}
+2026-09-20T09:40:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0}
+2026-09-20T09:50:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T10:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":2}
+
+### BASE flapping forge (one miss, then good read, repeated)
+2026-09-20T10:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T10:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":null}
+2026-09-20T11:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T11:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":null}
+2026-09-20T12:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T12:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":null}
+2026-09-20T13:00:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":null}
+2026-09-20T13:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":null}
+
+### TARGET flapping forge (one miss, then good read, repeated)
+2026-09-20T10:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T10:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0}
+2026-09-20T11:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T11:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0}
+2026-09-20T12:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T12:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0}
+2026-09-20T13:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+2026-09-20T13:30:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0}
+
+### TARGET late owner joins mid-episode
+2026-09-20T09:00:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":1}
+# late owner 'duplicate' added
+2026-09-20T09:10:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":2} duplicate:{"error":true,"fail_streak":1}
+2026-09-20T09:20:00Z forge=down rc=0 stdout=[contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":3} duplicate:{"error":true,"fail_streak":2}
+2026-09-20T09:30:00Z forge=down rc=0 stdout=[] delivery:{"error":true,"fail_streak":4} duplicate:{"error":true,"fail_streak":3}
+2026-09-20T09:40:00Z forge=ok   rc=0 stdout=[] delivery:{"error":false,"fail_streak":0} duplicate:{"error":false,"fail_streak":0}
+
+### TARGET shared URL with an invalid owner id
+# shared owner with invalid id 'bad@id' added
+2026-09-20T09:00:00Z forge=down rc=0 stdout=[contributions: invalid durable task id] delivery:{"error":true,"fail_streak":1}
+2026-09-20T09:10:00Z forge=down rc=0 stdout=[contributions: invalid durable task id
+contributions: observation unavailable for https://github.com/o/r/pull/8] delivery:{"error":true,"fail_streak":2}
+2026-09-20T09:20:00Z forge=down rc=0 stdout=[contributions: invalid durable task id] delivery:{"error":true,"fail_streak":3}
