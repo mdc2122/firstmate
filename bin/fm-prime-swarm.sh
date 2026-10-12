@@ -165,6 +165,8 @@ kickoff_text() {
 
 Model and effort: you are the root on $PROVIDER/$MODEL at thinking "$EFFORT"; spawn every child with model "$MODEL" and thinking "$EFFORT". RLM max depth $DEPTH.
 Concurrency: at most $MAX_AGENTS agents at once, root included.
+Threads: no roles or topics are pre-assigned to children; you, the root, discover and choose your own threads of work from the brief.
+No A/B tests, trials, pilots or lotteries; actions only.
 
 Prepend this rule verbatim to every child prompt, with that child's own evidence file path:
 "Rule: every reply you send must contain at least one tool call until your evidence file is written. Never reply with only a plan or status sentence. Your final step is writing <evidence file path>; only after it exists may you reply without a tool call."
@@ -204,20 +206,29 @@ EOF
 SAMPLER_TEXT=$(sampler_text)
 PASTE_LINE="Use your read tool on $KICKOFF and execute it fully now."
 PRIME_CMD="$PRIME --cwd $CWD --provider $PROVIDER --model $MODEL --thinking $EFFORT --session-dir $SWARM/sessions"
+BODY="verify: data/$ID/report.md exists with a Swarm method section and state/$ID.status has a done line; brief $BRIEF"
+bracketed() { printf '\033[200~%s\033[201~' "$1"; }
+CR=$(printf '\r')
 
 if [ "$DRY" -eq 1 ]; then
+  dry_paste() {  # the two sends paste() makes; the handle comes from terminal create
+    printf '+ %s terminal send --terminal <tab handle> --text %q --json\n' "$ORCA" "$(bracketed "$1")"
+    printf '+ %s terminal send --terminal <tab handle> --text %q --json\n' "$ORCA" "$CR"
+  }
   note "DRY RUN - nothing will be changed"
   printf 'swarm=%s provider=%s model=%s effort=%s depth=%s max_agents=%s cwd=%s\n' \
     "$ID" "$PROVIDER" "$MODEL" "$EFFORT" "$DEPTH" "$MAX_AGENTS" "$CWD"
   [ -z "$SESSION_KEY" ] || printf 'models.json: set providers.%s.headers["x-session-id"]=%s (backup %s.bak-%s)\n' \
     "$PROVIDER" "$SESSION_KEY" "$MODELS_JSON" "$ID"
   printf 'mkdir -p %s/{sessions,evidence,wt}\n' "$SWARM"
-  printf '+ %s/fm-tasks-axi.sh add %s %q --kind scout --start --report data/%s/report.md --body <verify line>\n' \
-    "$SCRIPT_DIR" "$ID" "$TITLE" "$ID"
+  printf '+ %s/fm-tasks-axi.sh add %s %q --kind scout --start --report data/%s/report.md --body %q\n' \
+    "$SCRIPT_DIR" "$ID" "$TITLE" "$ID" "$BODY"
   printf '+ %s terminal create --worktree path:%s --title %s --command %q --json\n' "$ORCA" "$CWD" "$ID" "$PRIME_CMD"
-  printf '+ paste /rlm-max-depth %s ; expect "RLM max depth set: %s"\n' "$DEPTH" "$DEPTH"
+  dry_paste "/rlm-max-depth $DEPTH"
+  printf 'expect "RLM max depth set: %s"\n' "$DEPTH"
   printf -- '--- %s ---\n%s\n--- end ---\n' "$KICKOFF" "$KICKOFF_TEXT"
-  printf '+ paste %q ; expect token count > 0 within %ss\n' "$PASTE_LINE" "$START_TIMEOUT_S"
+  dry_paste "$PASTE_LINE"
+  printf 'expect token count > 0 within %ss\n' "$START_TIMEOUT_S"
   printf -- '--- %s ---\n%s\n--- end ---\n' "$SAMPLER" "$SAMPLER_TEXT"
   printf '+ %s/fm-durable-job.sh %s-sampler %s/gateway-sampler.result -- %s\n' "$SCRIPT_DIR" "$ID" "$SWARM" "$SAMPLER"
   exit 0
@@ -243,8 +254,7 @@ mkdir -p "$SWARM/sessions" "$SWARM/evidence" "$SWARM/wt" "$STATE" || die "could 
 # --- 3. backlog item ----------------------------------------------------------
 FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-tasks-axi.sh" add "$ID" "$TITLE" --kind scout --start \
   --report "data/$ID/report.md" \
-  --body "verify: data/$ID/report.md exists with a Swarm method section and state/$ID.status has a done line; brief $BRIEF" \
-  >/dev/null || die "could not add backlog item $ID"
+  --body "$BODY" >/dev/null || die "could not add backlog item $ID"
 note "backlog item $ID added (In flight)"
 
 # --- 4. Orca tab --------------------------------------------------------------
@@ -256,10 +266,10 @@ note "tab $TERM_HANDLE"
 
 screen() { "$ORCA" terminal read --terminal "$TERM_HANDLE" --screen 2>/dev/null; }
 paste() {  # bracketed paste of one line, then a separate CR
-  "$ORCA" terminal send --terminal "$TERM_HANDLE" --text "$(printf '\033[200~%s\033[201~' "$1")" --json >/dev/null \
+  "$ORCA" terminal send --terminal "$TERM_HANDLE" --text "$(bracketed "$1")" --json >/dev/null \
     || die "could not paste into $TERM_HANDLE"
   sleep 0.5
-  "$ORCA" terminal send --terminal "$TERM_HANDLE" --text "$(printf '\r')" --json >/dev/null \
+  "$ORCA" terminal send --terminal "$TERM_HANDLE" --text "$CR" --json >/dev/null \
     || die "could not submit in $TERM_HANDLE"
 }
 

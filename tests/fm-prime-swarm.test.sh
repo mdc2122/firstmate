@@ -147,6 +147,8 @@ test_launch_pastes_bracketed_and_starts_sampler() {
     "$CASE/orca/sent" "kickoff line is pasted bracketed"
   assert_equals 2 "$(grep -c "^$(printf '\r')$" "$CASE/orca/sent")" "each paste is submitted by its own CR"
   assert_grep "Read $CASE/brief.md and execute it fully." "$CASE/home/data/s1/kickoff.md" "kickoff names the brief"
+  assert_grep 'No A/B tests, trials, pilots or lotteries; actions only.' "$CASE/home/data/s1/kickoff.md" "kickoff carries the settled rule"
+  assert_grep 'discover and choose your own threads of work from the brief' "$CASE/home/data/s1/kickoff.md" "kickoff leaves threads to the root"
   local i=0
   while [ ! -f "$CASE/home/data/s1/gateway-sampler.result" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
   assert_regex '^result=ok exit=0' "$CASE/home/data/s1/gateway-sampler.result" "sampler stops cleanly once the report exists and nothing works"
@@ -221,6 +223,14 @@ test_dry_run_changes_nothing() {
   assert_grep 'x-session-id' "$CASE/out" "prints the session key change"
   assert_grep 'fm-durable-job.sh s7-sampler' "$CASE/out" "prints the sampler command"
   assert_grep "Read $CASE/brief.md and execute it fully." "$CASE/out" "prints the kickoff file"
+  local body
+  body="verify: data/s7/report.md exists with a Swarm method section and state/s7.status has a done line; brief $CASE/brief.md"
+  assert_grep "--report data/s7/report.md --body $(printf %q "$body")" "$CASE/out" "prints the exact backlog body"
+  assert_grep "+ orca terminal send --terminal <tab handle> --text \$'\\E[200~/rlm-max-depth 3\\E[201~' --json" \
+    "$CASE/out" "prints the bracketed depth send"
+  assert_grep "+ orca terminal send --terminal <tab handle> --text \$'\\E[200~Use your read tool on $CASE/home/data/s7/kickoff.md and execute it fully now.\\E[201~' --json" \
+    "$CASE/out" "prints the bracketed kickoff send"
+  assert_equals 2 "$(grep -cF "+ orca terminal send --terminal <tab handle> --text \$'\\r' --json" "$CASE/out")" "prints a separate CR send per paste"
   pass "--dry-run prints the launch and changes nothing"
 }
 
