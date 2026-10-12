@@ -18,7 +18,8 @@
 #
 # This script owns fm-contributions.v1: one atomic file per durable task with
 # task and records[]. Each record contains url, kind, checked_at, error,
-# observation, verdict, seen event tokens, pending events, and notified tokens.
+# fail_streak (consecutive failed reads), observation, verdict, seen event
+# tokens, pending events, and notified tokens.
 # observation is one coherent forge read (a PR head is rechecked after fetching
 # checks/reviews). Checks are normalized by name, id, started_at, status and
 # conclusion; projection picks the newest attempt per distinct name. The last
@@ -43,8 +44,10 @@
 # A URL whose last good observation is merged or closed is final: it is
 # never re-read, stays fresh, and a stale error or divergent observation
 # beside it settles once.
-# A genuine failure prints its unavailable line only when it starts an episode
-# (no prior owner has an error); a successful read ends the episode.
+# A genuine failure records its error and advances every owner's fail_streak.
+# The first miss is silent; the unavailable line prints once per episode, on
+# the second consecutive failure, when the fewest prior misses across owners
+# is exactly one. A successful read resets fail_streak and ends the episode.
 # FM_CONTRIBUTIONS_NOW supplies an ISO UTC clock for tests, otherwise UTC now.
 # FM_CONTRIBUTIONS_READY_LABEL selects the equivalent triage label, default
 # ready-for-pr. Labels are matched case-insensitively and exactly.
@@ -297,8 +300,8 @@ settle_final() { # canonical-url task... : settle every owner onto the URL's fin
 }
 
 poll() {
-  local task url old kind error observed
-  local -a row
+  local task url old kind error observed fail_wake
+  local -a row owners
   acquire
   get_input
   read_saved
@@ -326,11 +329,21 @@ poll() {
     # An observation the budget cut short is unmeasured, not unavailable: keep
     # every owner's prior record so the URL is observed first next poll.
     [ "$BUDGET_EXHAUSTED" -eq 0 ] || break
-    # Wake once per failure episode: only when no owner has a prior error.
-    if [ "$observed" -ne 0 ] && jq -ne --slurpfile saved "$TMP/saved.json" --arg url "$url" --args \
-      'all($ARGS.positional[] as $task | [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first;
-        .error == null)' "${row[@]:1}" >/dev/null; then
-      printf 'contributions: observation unavailable for %s\n' "$url"
+    # A single failed read is usually transient, so wake only on the second
+    # consecutive failure: when the fewest prior misses across valid owners
+    # is exactly one (owners with invalid ids never get a record).
+    fail_wake=0
+    owners=()
+    for task in "${row[@]:1}"; do
+      if fm_pr_task_id_valid "$task"; then owners+=("$task"); fi
+    done
+    if [ "$observed" -ne 0 ] && [ "${#owners[@]}" -gt 0 ]; then
+      fail_wake=$(jq -n --slurpfile saved "$TMP/saved.json" --arg url "$url" --args '
+        [$ARGS.positional[] as $task
+         | [$saved[0][] | select(.task == $task) | .records[]
+            | select(.url == $url)] | first // {fail_streak:0}
+         | (.fail_streak // 0)] | min' "${owners[@]}") || fail_wake=0
+      [ "$fail_wake" -eq 1 ] || fail_wake=0
     fi
     case "$url" in */issues/*) kind=issue ;; *) kind="pr" ;; esac
     for task in "${row[@]:1}"; do
@@ -338,24 +351,29 @@ poll() {
       old="$TMP/old.json"
       jq -n --slurpfile saved "$TMP/saved.json" --arg task "$task" --arg url "$url" --arg kind "$kind" '
         ([$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first)
-        // {url:$url,kind:$kind,checked_at:null,observation:null,verdict:null,seen:[],pending:[],notified:[]}' > "$old"
+        // {url:$url,kind:$kind,checked_at:null,observation:null,verdict:null,seen:[],pending:[],notified:[],fail_streak:0}' > "$old"
       if [ "$observed" -eq 0 ]; then
         jq -n --arg now "$NOW" --slurpfile old "$old" --slurpfile observation "$TMP/observation.json" '
           $old[0] as $old | $observation[0] as $o
           | ($o.events + (if $o.ready == true and $old.observation.ready != true and (any($o.events[]; .type == "ready-for-pr") | not) then
               [{token:("ready-for-pr:" + $now),type:"ready-for-pr",source:$old.url,head:null,body:"filed issue reached ready-for-pr"}]
               else [] end)) as $events
-          | $old + {checked_at:$now,error:null,
+          | $old + {checked_at:$now,error:null,fail_streak:0,
             observation:($o + {absent_checks:((($old.observation.absent_checks // []) + [($old.observation.checks // [])[] | .name]) - [$o.checks[].name] | unique)}),
             seen:($events | map(.token)),
             pending:(($old.pending // []) + [$events[] | select(.token as $t | ($old.seen // [] | index($t)) == null)] | unique_by(.token))}' > "$TMP/row.json"
       else
         error='forge observation unavailable or changed during read'
-        jq --arg now "$NOW" --arg error "$error" '.checked_at=$now | .error=$error' "$old" > "$TMP/row.json"
+        jq --arg now "$NOW" --arg error "$error" \
+          '.checked_at=$now | .error=$error
+           | .fail_streak=((.fail_streak // 0) + 1)' "$old" > "$TMP/row.json"
       fi
       write_record "$task" "$TMP/row.json"
       publish_pending "$task" "$url" "$TMP/row.json"
     done
+    [ "$fail_wake" -eq 1 ] && \
+      printf 'contributions: observation unavailable for %s\n' "$url"
+    fail_wake=0
   done < "$TMP/known.tsv"
 }
 
