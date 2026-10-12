@@ -17,6 +17,9 @@
 #   (UTC), wrapper pid, job pid once launched, session, and the command.
 # - <cmd> runs with the caller's working directory and PATH, stdin from
 #   /dev/null, stdout to <result-file>.stdout and stderr to <result-file>.stderr.
+#   It carries the caller's FM_TASK_ID and VIRAL_RELEASE_OWNER exactly (unset
+#   when the caller has none), never the values in the tmux server's global
+#   environment, so a job's task identity is always its launcher's.
 # - When <cmd> ends, or the session is killed (HUP/TERM/INT), the wrapper writes
 #   <result-file> atomically: a `result=ok|error exit=<code>` line with start,
 #   end, name and command, the stdout/stderr paths, and the stderr tail; it then
@@ -153,7 +156,18 @@ SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE
 SESSION="fm-job-$NAME-$(date +%s)-$$"
 ! tmux has-session -t "=$SESSION" 2>/dev/null || die "tmux session already exists: $SESSION"
 
-JOB_CMD="exec /bin/bash $(sq "$SELF") --run $(sq "$NAME") $(sq "$SESSION") $(sq "$RESULT") --"
+# Task identity follows the CALLER, never the tmux server. A detached session
+# inherits the server's global environment, which holds whatever FM_TASK_ID the
+# shell that first started the server carried; viral-moment's release queue
+# names a ticket's owner from VIRAL_RELEASE_OWNER, else FM_TASK_ID, so a deploy
+# run through this helper was recorded under another task (prod-20261012-2).
+# Clear both in the job, then set each one the caller has.
+IDENTITY="env -u FM_TASK_ID -u VIRAL_RELEASE_OWNER"
+for var in FM_TASK_ID VIRAL_RELEASE_OWNER; do
+  [ -z "${!var:-}" ] || IDENTITY="$IDENTITY $(sq "$var=${!var}")"
+done
+
+JOB_CMD="exec $IDENTITY /bin/bash $(sq "$SELF") --run $(sq "$NAME") $(sq "$SESSION") $(sq "$RESULT") --"
 for word in "$@"; do
   JOB_CMD="$JOB_CMD $(sq "$word")"
 done
