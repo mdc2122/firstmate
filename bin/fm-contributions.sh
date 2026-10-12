@@ -18,7 +18,8 @@
 #
 # This script owns fm-contributions.v1: one atomic file per durable task with
 # task and records[]. Each record contains url, kind, checked_at, error,
-# observation, verdict, seen event tokens, pending events, and notified tokens.
+# fail_streak (consecutive failed reads), observation, verdict, seen event
+# tokens, pending events, and notified tokens.
 # observation is one coherent forge read (a PR head is rechecked after fetching
 # checks/reviews). Checks are normalized by name, id, started_at, status and
 # conclusion; projection picks the newest attempt per distinct name. The last
@@ -43,8 +44,10 @@
 # A URL whose last good observation is merged or closed is final: it is
 # never re-read, stays fresh, and a stale error or divergent observation
 # beside it settles once.
-# A genuine failure prints its unavailable line only when it starts an episode
-# (no prior owner has an error); a successful read ends the episode.
+# A genuine failure records its error and advances every owner's fail_streak.
+# The first miss is silent; the unavailable line prints once per episode, on
+# the second consecutive failure, when the fewest prior misses across owners
+# is exactly one. A successful read resets fail_streak and ends the episode.
 # FM_CONTRIBUTIONS_NOW supplies an ISO UTC clock for tests, otherwise UTC now.
 # FM_CONTRIBUTIONS_READY_LABEL selects the equivalent triage label, default
 # ready-for-pr. Labels are matched case-insensitively and exactly.
