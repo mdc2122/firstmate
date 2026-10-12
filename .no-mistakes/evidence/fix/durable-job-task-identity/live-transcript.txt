@@ -1,0 +1,32 @@
+## tmux server started by a stale task shell (env inherited into server globals)
+FM_TASK_ID=finishing-unshippable-seat-hours
+VIRAL_RELEASE_OWNER=finishing-unshippable-seat-hours
+
+## S1 caller FM_TASK_ID=prod-20261012-2, no VIRAL_RELEASE_OWNER
+due-check: s1 verdict=/private/tmp/fmdj-live.yvR3WG/v1.txt partial=/private/tmp/fmdj-live.yvR3WG/v1.txt.partial session=fm-job-s1-1791838766-90876; done when the verdict file exists, failed when tmux session fm-job-s1-1791838766-90876 is gone and the verdict file is absent
+
+## S2 caller with neither variable
+due-check: s2 verdict=/private/tmp/fmdj-live.yvR3WG/v2.txt partial=/private/tmp/fmdj-live.yvR3WG/v2.txt.partial session=fm-job-s2-1791838766-91121; done when the verdict file exists, failed when tmux session fm-job-s2-1791838766-91121 is gone and the verdict file is absent
+
+## S3 caller with hostile values (quotes, spaces, $, ;)
+due-check: s3 verdict=/private/tmp/fmdj-live.yvR3WG/v3.txt partial=/private/tmp/fmdj-live.yvR3WG/v3.txt.partial session=fm-job-s3-1791838766-91332; done when the verdict file exists, failed when tmux session fm-job-s3-1791838766-91332 is gone and the verdict file is absent
+
+## S4 caller sets only VIRAL_RELEASE_OWNER
+due-check: s4 verdict=/private/tmp/fmdj-live.yvR3WG/v4.txt partial=/private/tmp/fmdj-live.yvR3WG/v4.txt.partial session=fm-job-s4-1791838767-91637; done when the verdict file exists, failed when tmux session fm-job-s4-1791838767-91637 is gone and the verdict file is absent
+
+--- v1.txt (verdict head) / stdout
+result=ok exit=0 start=2026-10-12T20:59:26Z end=2026-10-12T20:59:26Z name=s1 session=fm-job-s1-1791838766-90876
+owner=prod-20261012-2
+
+--- v2.txt (verdict head) / stdout
+result=ok exit=0 start=2026-10-12T20:59:26Z end=2026-10-12T20:59:26Z name=s2 session=fm-job-s2-1791838766-91121
+owner=<none>
+
+--- v3.txt (verdict head) / stdout
+result=ok exit=0 start=2026-10-12T20:59:26Z end=2026-10-12T20:59:26Z name=s3 session=fm-job-s3-1791838766-91332
+FM_TASK_ID=[it's a $HOME; task]
+VIRAL_RELEASE_OWNER=[o"wn er`x`]
+
+--- v4.txt (verdict head) / stdout
+result=ok exit=0 start=2026-10-12T20:59:27Z end=2026-10-12T20:59:27Z name=s4 session=fm-job-s4-1791838767-91637
+<unset>|alice
