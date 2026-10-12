@@ -1,0 +1,6 @@
+ok - launch pastes bracketed, confirms depth and turn, starts the sampler
+ok - an unconfirmed depth stops the launch before the kickoff
+ok - a turn that never starts fails the launch
+ok - refusals create no tab and no backlog item
+ok - a Muse launch writes a fresh session key and keeps the rest of models.json
+ok - --dry-run prints the launch and changes nothing

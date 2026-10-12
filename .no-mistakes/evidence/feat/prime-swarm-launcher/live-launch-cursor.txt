@@ -1,0 +1,10 @@
+$ bin/fm-prime-swarm.sh cur1 --brief brief.md --model omniroute-cursor --depth 2 --max-agents 4 --cwd cwd
+fm-prime-swarm: backlog item cur1 added (In flight)
+fm-prime-swarm: tab term_live1
+fm-prime-swarm: RLM max depth set: 2
+fm-prime-swarm: turn started
+tab: term_live1
+backlog: cur1
+sampler: due-check: cur1-sampler verdict=/private/tmp/fmps-live.3tWm/home/data/cur1/gateway-sampler.result partial=/private/tmp/fmps-live.3tWm/home/data/cur1/gateway-sampler.result.partial session=fm-job-cur1-sampler-1791842347-92684; done when the verdict file exists, failed when tmux session fm-job-cur1-sampler-1791842347-92684 is gone and the verdict file is absent
+kickoff: /private/tmp/fmps-live.3tWm/home/data/cur1/kickoff.md
+exit=0

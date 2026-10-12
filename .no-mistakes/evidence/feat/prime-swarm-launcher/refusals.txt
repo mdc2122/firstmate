@@ -1,0 +1,24 @@
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh cur1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor --cwd /private/tmp/fmps-live.3tWm/cwd --dry-run
+fm-prime-swarm: swarm cur1 already has a kickoff at /private/tmp/fmps-live.3tWm/home/data/cur1/kickoff.md; pick a new id
+exit=2
+
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh cur1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: backlog item cur1 already exists; pick a new swarm id
+exit=2
+
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh new1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor/cursor-api/not-in-catalog-9 --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: prime-agent model list does not show omniroute-cursor/cursor-api/not-in-catalog-9
+exit=2
+
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh new1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor/cursor-api/nope --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: unknown model omniroute-cursor/cursor-api/nope in /private/tmp/fmps-live.3tWm/models.json
+exit=2
+
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh new1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor --effort high --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: omniroute-cursor/cursor-api/grok-4.7 does not support thinking; --effort must be off
+exit=2
+
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh new1 --brief /private/tmp/fmps-live.3tWm/nobrief.md --model omniroute-cursor --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: brief not found: /private/tmp/fmps-live.3tWm/nobrief.md
+exit=2
+

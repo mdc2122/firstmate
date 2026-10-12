@@ -1,0 +1,54 @@
+$ bin/fm-prime-swarm.sh muse1 --brief brief.md --model omniroute-muse --cwd cwd --dry-run
+fm-prime-swarm: DRY RUN - nothing will be changed
+swarm=muse1 provider=omniroute-muse model=muse-code/muse-wonder-full-1.0 effort=max depth=3 max_agents=6 cwd=/private/tmp/fmps-live.3tWm/cwd
+models.json: set providers.omniroute-muse.headers["x-session-id"]=fm-prime-muse1-20261012T215856Z (backup /private/tmp/fmps-live.3tWm/models.json.bak-muse1)
+mkdir -p /private/tmp/fmps-live.3tWm/home/data/muse1/{sessions,evidence,wt}
++ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-tasks-axi.sh add muse1 Prime\ swarm\ muse1\ \(muse-code/muse-wonder-full-1.0\,\ max\) --kind scout --start --report data/muse1/report.md --body verify:\ data/muse1/report.md\ exists\ with\ a\ Swarm\ method\ section\ and\ state/muse1.status\ has\ a\ done\ line\;\ brief\ /private/tmp/fmps-live.3tWm/brief.md
++ orca terminal create --worktree path:/private/tmp/fmps-live.3tWm/cwd --title muse1 --command prime-agent\ --cwd\ /private/tmp/fmps-live.3tWm/cwd\ --provider\ omniroute-muse\ --model\ muse-code/muse-wonder-full-1.0\ --thinking\ max\ --session-dir\ /private/tmp/fmps-live.3tWm/home/data/muse1/sessions --json
++ orca terminal send --terminal <tab handle> --text $'\E[200~/rlm-max-depth 3\E[201~' --json
++ orca terminal send --terminal <tab handle> --text $'\r' --json
+expect "RLM max depth set: 3"
+--- /private/tmp/fmps-live.3tWm/home/data/muse1/kickoff.md ---
+# Prime swarm kickoff: muse1 (mechanics; the mission is in the brief)
+
+Model and effort: you are the root on omniroute-muse/muse-code/muse-wonder-full-1.0 at thinking "max"; spawn every child with model "muse-code/muse-wonder-full-1.0" and thinking "max". RLM max depth 3.
+Concurrency: at most 6 agents at once, root included.
+Threads: no roles or topics are pre-assigned to children; you, the root, discover and choose your own threads of work from the brief.
+No A/B tests, trials, pilots or lotteries; actions only.
+
+Prepend this rule verbatim to every child prompt, with that child's own evidence file path:
+"Rule: every reply you send must contain at least one tool call until your evidence file is written. Never reply with only a plan or status sentence. Your final step is writing <evidence file path>; only after it exists may you reply without a tool call."
+
+Child evidence files go under /private/tmp/fmps-live.3tWm/home/data/muse1/evidence/. Supervise with a retry loop: after rlm.collect, re-spawn any thread whose evidence file is missing or under 3 KB as <thread>-r2, -r3 ... up to 4 attempts in all. Log every retry as one JSON line {"ts","event":"child_retry","thread","attempt","reason"} and every non-200 / 429 / quota or rate-limit reply as one JSON line, both to /private/tmp/fmps-live.3tWm/home/data/muse1/rate-limits.jsonl. On a quota exhausted / session owner unavailable reply: stop spawning, write report.md from what exists, record the stop and reset times, and end.
+
+Write report.md progressively at /private/tmp/fmps-live.3tWm/home/data/muse1/report.md. It must contain a "Swarm method" section: model, effort, children spawned, depth used, attempts per thread, early stops, peak concurrency, limit replies, and seconds per model call where measurable.
+Write only under /private/tmp/fmps-live.3tWm/home/data/muse1/. When done, append one line `done: <one-line conclusion>` to /private/tmp/fmps-live.3tWm/home/state/muse1.status.
+
+Read /private/tmp/fmps-live.3tWm/brief.md and execute it fully.
+--- end ---
++ orca terminal send --terminal <tab handle> --text $'\E[200~Use your read tool on /private/tmp/fmps-live.3tWm/home/data/muse1/kickoff.md and execute it fully now.\E[201~' --json
++ orca terminal send --terminal <tab handle> --text $'\r' --json
+expect token count > 0 within 120s
+--- /private/tmp/fmps-live.3tWm/home/data/muse1/gateway-sampler.sh ---
+#!/bin/bash
+# Gateway sampler for swarm muse1, written by fm-prime-swarm.sh.
+GATEWAY_HOST=studio1 GATEWAY_DB=.omniroute/storage.sqlite FAMILY=muse-code
+OUT=/private/tmp/fmps-live.3tWm/home/data/muse1/gateway-by-model.tsv REPORT=/private/tmp/fmps-live.3tWm/home/data/muse1/report.md PRIME=prime-agent
+# Every 30 s: the last 60 s of the gateway's OmniRoute call_logs for this
+# swarm's provider family, per requested model: calls, status histogram, mean
+# duration (ms). Read-only (sqlite3 -readonly, SQL on stdin). Stops once the
+# report exists and no prime agent is working; 12 h cap.
+END=$(( $(date +%s) + 43200 ))
+while [ "$(date +%s)" -lt "$END" ]; do
+  SINCE=$(date -u -v-60S +%Y-%m-%dT%H:%M:%S)
+  ROW=$(printf "select group_concat(m || ' calls=' || n || ' ' || st || ' avg_ms=' || av, ' | ') from (select requested_model m, sum(c) n, group_concat(status || ':' || c) st, cast(sum(d) / sum(c) as int) av from (select requested_model, status, count(*) c, sum(duration) d from call_logs where timestamp >= '%s' and requested_model like '%s/%%' group by 1, 2) group by 1);\n" "$SINCE" "$FAMILY" \
+    | ssh -o ConnectTimeout=5 -o BatchMode=yes "$GATEWAY_HOST" "sqlite3 -readonly '$GATEWAY_DB'" 2>&1 | tr '\n' ' ')
+  KIDS=$("$PRIME" list 2>/dev/null | grep -c working)
+  printf '%s\t%s\tworking_agents=%s\n' "$(date -u +%FT%TZ)" "$ROW" "$KIDS" >> "$OUT"
+  if [ -s "$REPORT" ] && [ "$KIDS" = 0 ]; then break; fi
+  sleep 30
+done
+echo "sampler done $(date -u +%FT%TZ)"
+--- end ---
++ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-durable-job.sh muse1-sampler /private/tmp/fmps-live.3tWm/home/data/muse1/gateway-sampler.result -- /private/tmp/fmps-live.3tWm/home/data/muse1/gateway-sampler.sh
+exit=0

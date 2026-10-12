@@ -1,0 +1,24 @@
+# bytes the launcher sent to the Orca terminal (cat -v: ^[ = ESC, ^M = CR; <send> separates calls)
+^[[200~/rlm-max-depth 2^[[201~
+<send>
+^M
+<send>
+^[[200~Use your read tool on /private/tmp/fmps-live.3tWm/home/data/cur1/kickoff.md and execute it fully now.^[[201~
+<send>
+^M
+<send>
+
+# tab command
+prime-agent --cwd /private/tmp/fmps-live.3tWm/cwd --provider omniroute-cursor --model cursor-api/grok-4.7 --thinking off --session-dir /private/tmp/fmps-live.3tWm/home/data/cur1/sessions
+
+# gateway sampler: ssh invocation + SQL (stdin)
+ARGS: -o ConnectTimeout=5 -o BatchMode=yes studio1 sqlite3 -readonly '.omniroute/storage.sqlite'
+SQL: select group_concat(m || ' calls=' || n || ' ' || st || ' avg_ms=' || av, ' | ') from (select requested_model m, sum(c) n, group_concat(status || ':' || c) st, cast(sum(d) / sum(c) as int) av from (select requested_model, status, count(*) c, sum(duration) d from call_logs where timestamp >= '2026-10-12T21:58:07' and requested_model like 'cursor-api/%' group by 1, 2) group by 1);
+# gateway-by-model.tsv
+2026-10-12T21:59:08Z	cursor-api/grok-4.7 calls=5 200:4,429:1 avg_ms=1200 	working_agents=0
+# sampler verdict
+result=ok exit=0 start=2026-10-12T21:59:07Z end=2026-10-12T21:59:08Z name=cur1-sampler session=fm-job-cur1-sampler-1791842347-92684
+command=/private/tmp/fmps-live.3tWm/home/data/cur1/gateway-sampler.sh
+stdout=/private/tmp/fmps-live.3tWm/home/data/cur1/gateway-sampler.result.stdout
+stderr=/private/tmp/fmps-live.3tWm/home/data/cur1/gateway-sampler.result.stderr
+--- stderr tail ---

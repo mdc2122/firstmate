@@ -1,0 +1,23 @@
+# Orca screen never shows 'RLM max depth set'
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh dep1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor --depth 4 --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: backlog item dep1 added (In flight)
+fm-prime-swarm: tab term_live1
+fm-prime-swarm: RLM max depth 4 not confirmed in term_live1
+exit=1
+
+# sends made:
+^[[200~/rlm-max-depth 4^[[201~
+<send>
+^M
+<send>
+# kickoff written? ls: /private/tmp/fmps-live.3tWm/home/data/dep1/kickoff.md: No such file or directory
+
+# token count stays 0 (start timeout lowered to 10s via FM_PRIME_START_TIMEOUT_S)
+$ /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M4S1F19ZG1FD28GZ98AHHBY1/bin/fm-prime-swarm.sh turn1 --brief /private/tmp/fmps-live.3tWm/brief.md --model omniroute-cursor --cwd /private/tmp/fmps-live.3tWm/cwd
+fm-prime-swarm: backlog item turn1 added (In flight)
+fm-prime-swarm: tab term_live1
+fm-prime-swarm: RLM max depth set: 3
+fm-prime-swarm: the agent in term_live1 did not start a turn within 10s (token count still 0)
+exit=1
+
+# sampler started? ls: /private/tmp/fmps-live.3tWm/home/data/turn1/gateway-sampler.sh: No such file or directory

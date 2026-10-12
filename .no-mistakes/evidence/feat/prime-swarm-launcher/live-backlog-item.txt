@@ -1,0 +1,28 @@
+$ bin/fm-tasks-axi.sh show cur1
+task:
+  id: cur1
+  title: "Prime swarm cur1 (cursor-api/grok-4.7, off) data/cur1/report.md"
+  state: in_flight
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: scout
+  repo: "-"
+  priority: "-"
+  created: 2026-10-12
+  closed: "-"
+  deps: none
+  links: "report:data/cur1/report.md"
+  body: "verify: data/cur1/report.md exists with a Swarm method section and state/cur1.status has a done line; brief /private/tmp/fmps-live.3tWm/brief.md"
+
+--- data/backlog.md
+# Backlog
+
+## In flight
+- [ ] cur1 - Prime swarm cur1 (cursor-api/grok-4.7, off) data/cur1/report.md (kind: scout) (since 2026-10-12)
+  verify: data/cur1/report.md exists with a Swarm method section and state/cur1.status has a done line; brief /private/tmp/fmps-live.3tWm/brief.md
+## Queued
+## Done
