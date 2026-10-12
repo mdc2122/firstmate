@@ -329,11 +329,9 @@ poll() {
     # An observation the budget cut short is unmeasured, not unavailable: keep
     # every owner's prior record so the URL is observed first next poll.
     [ "$BUDGET_EXHAUSTED" -eq 0 ] || break
-    # A single failed read is usually transient (6 false wakes in 2 days on
-    # Paperclip PRs that read fine minutes later): count consecutive failures
-    # per record and wake once per episode: on the second, when the fewest
-    # prior misses across owners is exactly one. A successful read ends the
-    # episode.
+    # A single failed read is usually transient, so wake only on the second
+    # consecutive failure: when the fewest prior misses across valid owners
+    # is exactly one (owners with invalid ids never get a record).
     fail_wake=0
     owners=()
     for task in "${row[@]:1}"; do
