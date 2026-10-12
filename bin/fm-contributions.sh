@@ -297,7 +297,7 @@ settle_final() { # canonical-url task... : settle every owner onto the URL's fin
 }
 
 poll() {
-  local task url old kind error observed
+  local task url old kind error observed fail_wake
   local -a row
   acquire
   get_input
@@ -328,8 +328,9 @@ poll() {
     [ "$BUDGET_EXHAUSTED" -eq 0 ] || break
     # A single failed read is usually transient (6 false wakes in 2 days on
     # Paperclip PRs that read fine minutes later): count consecutive failures
-    # per record and wake only on the second, when every owner has a prior
-    # error. A successful read ends the episode.
+    # per record and wake once per episode: on the second, when the fewest
+    # prior misses across owners is exactly one. A successful read ends the
+    # episode.
     fail_wake=0
     if [ "$observed" -ne 0 ]; then
       fail_wake=$(jq -n --slurpfile saved "$TMP/saved.json" --arg url "$url" --args '
@@ -337,7 +338,7 @@ poll() {
          | [$saved[0][] | select(.task == $task) | .records[]
             | select(.url == $url)] | first // {fail_streak:0}
          | (.fail_streak // 0)] | min' "${row[@]:1}") || fail_wake=0
-      [ "$fail_wake" -ge 1 ] && fail_wake=1
+      [ "$fail_wake" -eq 1 ] || fail_wake=0
     fi
     case "$url" in */issues/*) kind=issue ;; *) kind="pr" ;; esac
     for task in "${row[@]:1}"; do

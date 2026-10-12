@@ -792,6 +792,10 @@ test_first_failure_is_silent_second_wakes_and_success_resets() {
   [ "$out" = "$line" ] || fail "the second consecutive failed read did not wake: $out"
   jq -e '.records[0].fail_streak == 2' "$home/data/watched/contributions.json" >/dev/null \
     || fail 'the second failed read did not advance the streak'
+  out=$(poll_at 2026-09-20T10:30:00Z)
+  [ -z "$out" ] || fail "the third consecutive failed read woke again: $out"
+  jq -e '.records[0].fail_streak == 3' "$home/data/watched/contributions.json" >/dev/null \
+    || fail 'the third failed read did not advance the streak'
 
   : > "$home/forge/fault"
   out=$(poll_at 2026-09-20T11:00:00Z)
@@ -823,7 +827,11 @@ test_failure_wakes_once_per_episode() {
   [ "$out" = "$line" ] || fail "the second consecutive read failure did not wake: $out"
   jq -e --argjson error "$error" '.records[0] | .checked_at == "2026-09-16T10:00:00Z" and .error == $error and .fail_streak == 2' \
     "$home/data/delivery/contributions.json" >/dev/null || fail 'a repeated read failure stopped counting its streak'
-  [ "$(grep -cFx 'api repos/o/r/pulls/8' "$home/forge/calls")" = 2 ] || fail 'a failing open PR stopped being observed'
+  out=$(poll_at 2026-09-16T10:30:00Z)
+  [ -z "$out" ] || fail "an unchanged read failure woke again on the next cycle: $out"
+  jq -e '.records[0].fail_streak == 3' "$home/data/delivery/contributions.json" >/dev/null \
+    || fail 'a third read failure stopped counting its streak'
+  [ "$(grep -cFx 'api repos/o/r/pulls/8' "$home/forge/calls")" = 3 ] || fail 'a failing open PR stopped being observed'
   : > "$home/forge/fault"
   out=$(poll_at 2026-09-16T11:00:00Z)
   [ -z "$out" ] || fail "a successful read printed: $out"
