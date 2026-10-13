@@ -147,6 +147,10 @@ case "${1:-} ${2:-}" in
     ;;
   "pr view")
     case " $* " in
+      *autoMergeRequest*)
+        cat "$FM_TEST_GH_AUTO_JSON"
+        exit 0
+        ;;
       *statusCheckRollup*)
         [ -z "${FM_TEST_GH_VIEW_STALL:-}" ] || sleep "$FM_TEST_GH_VIEW_STALL"
         if [ -n "${FM_TEST_GH_ROLLUP_JSON:-}" ]; then
@@ -182,7 +186,10 @@ case " $* " in
   *" api --paginate repos/"*"/rules/branches/"*merge_queue*)
     ;;
   *" api --paginate repos/"*"/rules/branches/"*)
-    printf '%s\n' '[]'
+    if [ -n "${FM_TEST_GH_RULES_JSON:-}" ]; then cat "$FM_TEST_GH_RULES_JSON"; else printf '%s\n' '[]'; fi
+    ;;
+  *" api --paginate repos/"*"/commits/"*"/check-runs "*)
+    [ -z "${FM_TEST_GH_CHECK_RUNS_JSON:-}" ] || cat "$FM_TEST_GH_CHECK_RUNS_JSON"
     ;;
   *" api repos/"*"/branches/"*)
     branch_json=${FM_TEST_GH_BRANCH_JSON:-'{"name":"main","protected":false}'}
@@ -2894,6 +2901,110 @@ test_yolo_poll_queued_merge_keeps_polling() {
   pass "a queued yolo merge persists its authority and keeps the poll armed"
 }
 
+# A base branch whose rules require a merge-queue app's own check is merged
+# through GitHub auto-merge: the yolo poll hands the head to the queue once,
+# keeps polling while the queue holds it, and records the landing only once
+# the forge reads MERGED. An ejection (auto-merge cancelled, PR still open at
+# that head) wakes firstmate exactly once and is not re-queued.
+queue_app_case() {  # <name>; echoes the case dir
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(make_case "$1")
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1 yolo=on
+  seed_canonical_poll "$dir" task-a https://github.com/o/r/pull/1
+  add_stop_custom_check "$dir"
+  cat > "$dir/rules.json" <<'JSON'
+[{"type":"required_status_checks","ruleset_id":202,"parameters":{"required_status_checks":[{"context":"queue-mq","integration_id":5293819}]}},
+ {"type":"pull_request","ruleset_id":101,"parameters":{}},
+ {"type":"required_status_checks","ruleset_id":101,"parameters":{"required_status_checks":[{"context":"ci","integration_id":15368}]}}]
+JSON
+  printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}]}\n' \
+    "$head" > "$dir/view.json"
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":{"mergeMethod":"SQUASH"},"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}]}\n' \
+    "$head" > "$dir/auto.json"
+  printf '%s\n' "$dir"
+}
+
+queue_app_cycle() {  # <dir> <label> [gh-state]
+  local dir=$1 label=$2 rc
+  # The previous cycle's wakes are acknowledged here, after its caller read them.
+  [ ! -s "$dir/home/state/.wake-queue" ] || ack_watcher_cycle "$dir/home/state" \
+    || fail "$label: acknowledging the previous cycle failed"
+  rm -f "$dir/home/state/.last-check"
+  set +e
+  FM_TEST_GH_STATE=${3:-OPEN} FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false \
+    FM_TEST_GH_VIEW_JSON="$dir/view.json" FM_TEST_GH_AUTO_JSON="$dir/auto.json" \
+    FM_TEST_GH_RULES_JSON="$dir/rules.json" FM_TEST_GH_CHECK_RUNS_JSON="$dir/check-runs.json" \
+    FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "$label: watcher cycle failed: $(cat "$dir/$label.err")"
+}
+
+queue_app_merge_requests() {  # <dir>
+  grep -c '^pr merge ' "$1/gh.log" || true
+}
+
+test_yolo_poll_hands_queue_app_branch_to_auto_merge_until_merged() {
+  local dir state url=https://github.com/o/r/pull/1
+  dir=$(queue_app_case yolo-queue-app)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+
+  queue_app_cycle "$dir" requested
+  case "$(cat "$dir/requested.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "an accepted auto-merge request woke firstmate: $(cat "$dir/requested.out")" ;; esac
+  assert_grep "pr merge 1 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto" "$dir/gh.log" \
+    "the yolo poll did not request auto-merge for the merge-queue branch"
+  [ -f "$state/task-a.check.sh" ] || fail "an auto-merge request retired the merge poll"
+  [ ! -e "$state/task-a.pr-poll-merge-notified" ] || fail "an auto-merge request was recorded as landed"
+  [ -z "$(merged_ledger_row "$state" task-a)" ] || fail "an auto-merge request queued a landed row"
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  queue_app_cycle "$dir" waiting
+  case "$(cat "$dir/waiting.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a pull request waiting in the queue woke firstmate: $(cat "$dir/waiting.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 1 ] \
+    || fail "a pull request already in the queue was handed to it again: $(queue_app_merge_requests "$dir")"
+  [ -f "$state/task-a.check.sh" ] || fail "a queued pull request lost its merge poll"
+
+  queue_app_cycle "$dir" landed MERGED
+  case "$(cat "$dir/landed.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the queue's landing was not reported: $(cat "$dir/landed.out")" ;; esac
+  [ "$(merged_ledger_row "$state" task-a)" = "check: merge landed: task-a $url yolo" ] \
+    || fail "the queue's landing was not recorded with its yolo authority: $(merged_ledger_row "$state" task-a)"
+  assert_poll_absent "$state" task-a
+  [ ! -e "$state/task-a.queue-merge" ] || fail "the landed poll left its queue record"
+  [ ! -e "$state/task-a.merge-authority" ] || fail "the landed poll left its merge authority"
+  pass "a merge-queue branch is handed to auto-merge once and recorded as landed only once the forge reads MERGED"
+}
+
+test_queue_ejection_wakes_once_and_is_not_requeued() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case queue-ejected)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    "$head" > "$dir/auto.json"
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"output":{"title":"check timed out on the merge branch"}}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  queue_app_cycle "$dir" ejected
+  case "$(cat "$dir/ejected.out")" in
+    *"task-a.check.sh: merge-queue ejected $url at $head: queue-mq failure: check timed out on the merge branch") ;;
+    *) fail "an ejection did not wake firstmate with the queue's reason: $(cat "$dir/ejected.out")" ;;
+  esac
+  [ -f "$state/task-a.check.sh" ] || fail "an ejection retired the merge poll"
+
+  queue_app_cycle "$dir" after
+  case "$(cat "$dir/after.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one ejection woke firstmate twice: $(cat "$dir/after.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 1 ] \
+    || fail "the ejected head was handed to the queue again: $(queue_app_merge_requests "$dir")"
+  [ ! -e "$state/task-a.pr-poll-merge-notified" ] || fail "an ejection was recorded as landed"
+  pass "a queue ejection wakes firstmate once with its reason and the ejected head is not re-queued"
+}
+
 test_yolo_poll_keeps_a_rebound_poll_armed() {
   local dir state url_a url_b rc
   url_a=https://github.com/o/r/pull/1
@@ -3366,6 +3477,8 @@ test_yolo_poll_merges_a_green_pr
 test_yolo_poll_reports_only_for_non_yolo_and_red
 test_yolo_poll_queued_merge_keeps_polling
 test_yolo_poll_keeps_a_rebound_poll_armed
+test_yolo_poll_hands_queue_app_branch_to_auto_merge_until_merged
+test_queue_ejection_wakes_once_and_is_not_requeued
 test_yolo_merge_attempt_is_bounded
 test_authority_persistence_refuses_rebound_metadata
 test_authority_persists_before_control_unlock
