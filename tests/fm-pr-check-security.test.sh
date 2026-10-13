@@ -2995,12 +2995,14 @@ merge_line_cycle() {  # <dir> <label>
   local dir=$1 label=$2 rc
   rm -f "$dir/home/state/.last-check"
   set +e
-  FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
+  # These cycles run a full guarded merge inside the watcher; give loaded CI runners room.
+  FM_TEST_WATCH_ALARM=${FM_TEST_WATCH_ALARM:-120} \
+    FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
     FM_TEST_GLAB_LOG="$dir/glab.log" \
     run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
   rc=$?
   set -e
-  [ "$rc" -eq 0 ] || fail "$label watcher failed: $(cat "$dir/$label.err")"
+  [ "$rc" -eq 0 ] || fail "$label watcher failed (rc=$rc): $(cat "$dir/$label.err")"
   ack_watcher_cycle "$dir/home/state" || fail "$label acknowledgement failed"
 }
 
@@ -3052,8 +3054,9 @@ test_merge_line_front_reorders() {
   pass "front moves a PR to the head of its merge line in one command"
 }
 
-# An attended merge of a PR no poll arms yet: `front` lists it at the head, and
-# the merge's own arming makes it the effective head, so the gate lets it land.
+# An attended merge of a PR no poll arms yet: `front` lists it at the head as a
+# sticky entry, so it is the head before and after the merge's own arming, and
+# the gate lets it land.
 test_merge_line_front_lands_an_unarmed_attended_merge() {
   local dir
   dir=$(make_case merge-line-front-unarmed)
@@ -3074,14 +3077,83 @@ test_merge_line_holds_behind_rerun_for_non_head() {
   state="$dir/home/state"
   seed_two_yolo_prs "$dir" 1
   export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false
-  green_blocked_cycle "$dir" "$dir/b1.out" BEHIND SUCCESS 0
+  # Two yolo merge attempts run inside this cycle; give loaded runners room.
+  FM_TEST_WATCH_ALARM=120 green_blocked_cycle "$dir" "$dir/b1.out" BEHIND SUCCESS 1800
   unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED
   [ -n "$(find "$state/task-z.inbox" -name '*.msg' 2>/dev/null)" ] \
     || fail "the behind head was not rerun-steered"
   [ -z "$(find "$state/task-a.inbox" -name '*.msg' 2>/dev/null)" ] \
     || fail "a PR behind the line's head was rerun-steered"
-  [ ! -e "$state/task-a.pr-green-blocked" ] || fail "a held PR started a green-unmergeable episode"
-  pass "only the merge line's head gets the behind-base rerun steer"
+  [ -e "$state/task-a.pr-green-blocked" ] || fail "a held PR's own green-unmergeable episode was suppressed"
+  pass "only the merge line's head gets the behind-base rerun steer; a held PR keeps its green-unmergeable episode"
+}
+
+# The forge reads a fronted head that no poll arms from this fixture file, so
+# the head can read closed or red while the held PRs read open and green.
+fake_line_head() {  # <dir> <head-url> <state> <conclusion>
+  local dir=$1 url=$2 state=$3 conclusion=$4
+  [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
+  printf '{"state":"%s","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"%s"}]}\n' \
+    "$state" "$conclusion" > "$dir/fakebin/head.json"
+  cat > "$dir/fakebin/gh" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${3:-}" = "$url" ]; then
+  cat "$dir/fakebin/head.json"
+  exit 0
+fi
+exec "$dir/fakebin/gh.real" "\$@"
+SH
+  chmod +x "$dir/fakebin/gh"
+}
+
+# The 2026-10-12 incident: a constraint PR fronted during a freeze, still being
+# worked on so no poll arms it, while armed green yolo PRs sit behind it. The
+# fronted entry is sticky, so nothing behind it merges or is rerun-steered,
+# and once that same head has held a green PR for the stall threshold
+# firstmate is woken exactly once for the episode.
+test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall() {
+  local dir state head=https://github.com/o/r/pull/679
+  dir=$(make_case merge-line-incident)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" OPEN FAILURE
+
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c1
+  [ -z "$(forge_merges "$dir")" ] \
+    || fail "an armed green yolo PR merged ahead of the fronted unarmed constraint PR: $(forge_merges "$dir")"
+  case "$(cat "$dir/c1.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a fresh stall woke before its threshold: $(cat "$dir/c1.out")" ;; esac
+  [ -e "$state/task-a.merge-line-stall" ] || fail "a green held PR started no stall episode"
+
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c2
+  case "$(cat "$dir/c2.out")" in
+    *"merge-line stalled: green https://github.com/o/r/pull/2 has waited "*"m behind unchanged head $head") ;;
+    *) fail "a line stalled behind an unchanged head did not wake: $(cat "$dir/c2.out")" ;;
+  esac
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c3
+  case "$(cat "$dir/c3.out")" in *"merge-line stalled: green https://github.com/o/r/pull/2 "*) fail "one stall episode woke twice" ;; esac
+  [ -z "$(forge_merges "$dir")" ] || fail "a held PR merged during the stall: $(forge_merges "$dir")"
+  pass "a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode"
+}
+
+test_merge_line_closed_head_is_dropped_and_wakes() {
+  local dir state head=https://github.com/o/r/pull/679
+  dir=$(make_case merge-line-closed-head)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" CLOSED SUCCESS
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c1
+  case "$(cat "$dir/c1.out")" in
+    *"merge-line head $head closed unmerged; dropped from its line"*) ;;
+    *) fail "a closed head did not wake at once: $(cat "$dir/c1.out")" ;;
+  esac
+  ! grep -qF "$head" "$state/merge-lines/github@github.com@o%2Fr" \
+    || fail "the closed head stayed in its line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '1 ' ] \
+    || fail "the next PR did not become the head after the closed head left: $(forge_merges "$dir")"
+  pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
 }
 
 test_repo_without_merge_line_is_unchanged() {
@@ -3278,6 +3350,8 @@ test_merge_line_front_reorders
 test_merge_line_front_lands_an_unarmed_attended_merge
 test_merge_line_holds_behind_rerun_for_non_head
 test_repo_without_merge_line_is_unchanged
+test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
+test_merge_line_closed_head_is_dropped_and_wakes
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority

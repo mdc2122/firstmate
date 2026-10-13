@@ -19,7 +19,8 @@
 # mode 0600, single-link, atomically replaced; written only by this script):
 #   fm-merge-line-v1
 #   <provider> <host> <path>
-#   <canonical PR URL>          one per line, head first, no duplicates
+#   <canonical PR URL>[ front]  one per line, head first, no duplicates;
+#                               " front" marks an entry placed by `front`
 # A record that does not parse exactly, or whose entries do not belong to its
 # repository, refuses every gate for that repository rather than opening it.
 #
@@ -30,12 +31,22 @@
 # state/<id>.pr-poll-registration mtime). `front` moves a PR to the head in one
 # command, adding it when it is not listed yet.
 #
-# HEAD. The effective head is the first listed PR that some task's merge poll
-# currently arms (state/<id>.pr-poll names it). Entries no poll arms, such as a
-# PR whose task was cleaned up unmerged, are skipped rather than blocking the
-# line, and `show` marks them. The watcher removes a PR from its line when its
-# poll retires on a landed merge, so the next PR becomes the head. A PR of a
-# lined repository that is not listed is held, never merged out of order.
+# HEAD. The effective head is the first listed PR that is either fronted or
+# armed by some task's merge poll (state/<id>.pr-poll names it). A fronted
+# entry is sticky: it holds the line even before any poll arms it, so a
+# constraint PR fronted during a freeze is never overtaken by an armed green PR
+# behind it. An ordinary arming-order entry no poll arms, such as a PR whose
+# task was cleaned up unmerged, is skipped rather than blocking the line, and
+# `show` marks it. A PR of a lined repository that is not listed is held, never
+# merged out of order.
+#
+# LEAVING. A PR leaves its line, sticky or not, when it merges (the watcher
+# removes it when its poll retires on a landed merge, or when `probe` reads the
+# head merged), when it closes unmerged (the watcher drops a closed head and
+# wakes firstmate at once), or by `remove`. The next listed entry becomes the
+# head. bin/fm-watch.sh's merge_line_stall_tick owns the stall wake: once per
+# episode when a PR held behind the head is green and that head has not
+# changed for FM_MERGE_LINE_STALL_SECS (default 30 minutes).
 #
 # LOCK. Every mutation holds the away-posture record's cross-subsystem
 # authority lock (bin/fm-afk-contract.sh owns it). bin/fm-pr-merge.sh already
@@ -54,6 +65,11 @@
 #   fm-merge-line.sh gate <pr-url>              exit 0 when the PR may merge now (no line,
 #                                               or it is the head); exit 3 and print why
 #                                               when it is held; exit 1 on an unreadable line
+#   fm-merge-line.sh head <pr-or-repo-url>      print the effective head URL (empty when none);
+#                                               exit 2 without a line, 1 on an unreadable line
+#   fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
+#                                               merged, closed, green (open, every check
+#                                               green), or open; nothing when unknown
 set -u
 
 FM_MERGE_LINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,11 +123,13 @@ pr_in_repo() {  # <url>
 }
 
 ENTRIES=()
-# Read LINE_FILE into ENTRIES. Returns 2 when the line is absent, 1 when it is
+FRONTED=' '
+# Read LINE_FILE into ENTRIES and the fronted (sticky) set into FRONTED. Returns 2 when the line is absent, 1 when it is
 # present but unreadable or malformed.
 read_line() {
-  local version repo url state_device seen=' '
+  local version repo line url flag state_device seen=' '
   ENTRIES=()
+  FRONTED=' '
   [ -e "$LINE_FILE" ] || [ -L "$LINE_FILE" ] || return 2
   state_device=$(fm_pr_file_device "$STATE") || return 1
   fm_pr_private_file_valid "$LINE_FILE" 600 "$state_device" || return 1
@@ -120,7 +138,14 @@ read_line() {
   IFS= read -r repo <&9 || { exec 9<&-; return 1; }
   [ "$version" = fm-merge-line-v1 ] \
     && [ "$repo" = "$REPO_PROVIDER $REPO_HOST $REPO_PATH" ] || { exec 9<&-; return 1; }
-  while IFS= read -r url <&9; do
+  while IFS= read -r line <&9; do
+    url=${line%% *}
+    flag=${line#"$url"}
+    case "$flag" in
+      '') ;;
+      ' front') FRONTED="$FRONTED$url " ;;
+      *) exec 9<&-; return 1 ;;
+    esac
     pr_in_repo "$url" || { exec 9<&-; return 1; }
     case "$seen" in *" $url "*) exec 9<&-; return 1 ;; esac
     seen="$seen$url "
@@ -141,7 +166,9 @@ write_line() {
   tmp=$(mktemp "$LINES/.line.XXXXXX") || return 1
   if ! {
       printf 'fm-merge-line-v1\n%s %s %s\n' "$REPO_PROVIDER" "$REPO_HOST" "$REPO_PATH"
-      for url in ${ENTRIES[@]+"${ENTRIES[@]}"}; do printf '%s\n' "$url"; done
+      for url in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+        if fronted "$url"; then printf '%s front\n' "$url"; else printf '%s\n' "$url"; fi
+      done
     } > "$tmp" \
     || ! chmod 0600 "$tmp" \
     || ! fm_pr_private_file_valid "$tmp" 600 "$state_device" \
@@ -213,6 +240,11 @@ place() {  # <url> <1-based position>
   ENTRIES=(${out[@]+"${out[@]}"})
 }
 
+fronted() {  # <url>
+  case "$FRONTED" in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
 listed() {  # <url>
   local e
   for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do [ "$e" != "$1" ] || return 0; done
@@ -250,6 +282,7 @@ cmd_front() {  # <pr-url>
   begin_mutation "$url" 1 || rc=$?
   [ "$rc" -eq 0 ] || die "no merge line is declared for $(repo_label); declare one first"
   place "$url" 1
+  fronted "$url" || FRONTED="$FRONTED$url "
   write_line || die "could not write the merge line"
   cmd_show_one
 }
@@ -270,14 +303,18 @@ cmd_remove() {
   listed "$url" || return 0
   for e in "${ENTRIES[@]}"; do [ "$e" = "$url" ] || out+=("$e"); done
   ENTRIES=(${out[@]+"${out[@]}"})
+  FRONTED=${FRONTED/ $url / }
   write_line || die "could not write the merge line"
 }
 
-# First listed PR some task's poll currently arms.
+# First listed PR that is fronted (sticky) or that some task's poll arms.
 effective_head() {
   local e
   for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
-    [ -z "$(armed_task "$e")" ] || { printf '%s' "$e"; return 0; }
+    if fronted "$e" || [ -n "$(armed_task "$e")" ]; then
+      printf '%s' "$e"
+      return 0
+    fi
   done
   return 1
 }
@@ -303,6 +340,55 @@ cmd_gate() {
   return "$FM_MERGE_LINE_HELD"
 }
 
+cmd_head() {
+  local rc=0
+  resolve_repo "${1-}" || die "not a canonical PR or repository URL: ${1-}" 2
+  read_line || rc=$?
+  [ "$rc" -eq 0 ] || return "$rc"
+  load_armed
+  effective_head || true
+  printf '\n'
+}
+
+# Read-only: one forge read classifying a PR for the watcher's stall tick.
+# Silent on any failed or unreadable read, so an unknown never drops a head or
+# opens a stall episode.
+cmd_probe() {
+  local url=${1-} json fields state red pipeline
+  fm_pr_url_parse "$url" || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  case "$FM_PR_PROVIDER" in
+    github)
+      command -v gh >/dev/null 2>&1 || return 0
+      json=$(gh pr view "$FM_PR_URL" --json state,statusCheckRollup 2>/dev/null) || return 0
+      state=$(printf '%s' "$json" | jq -r 'if type == "object" then (.state // "") else "" end' 2>/dev/null) || return 0
+      case "$state" in
+        MERGED) echo merged ;;
+        CLOSED) echo closed ;;
+        OPEN)
+          red=$(fm_pr_github_checks_not_green "$json") || return 0
+          if [ -z "$red" ]; then echo green; else echo open; fi
+          ;;
+      esac
+      ;;
+    gitlab)
+      command -v glab >/dev/null 2>&1 || return 0
+      json=$(GITLAB_HOST="$FM_PR_HOST" glab mr view "$FM_PR_NUMBER" \
+        -R "https://$FM_PR_HOST/$FM_PR_PATH" -F json 2>/dev/null) || return 0
+      fields=$(printf '%s' "$json" | jq -r \
+        'if type == "object" then ((.state // "") + " " + (.head_pipeline.status // "none")) else error("x") end' \
+        2>/dev/null) || return 0
+      state=${fields%% *}
+      pipeline=${fields#* }
+      case "$state" in
+        merged) echo merged ;;
+        closed) echo closed ;;
+        opened) if [ "$pipeline" = success ]; then echo green; else echo open; fi ;;
+      esac
+      ;;
+  esac
+}
+
 cmd_show_one() {
   local e i=1 task head
   load_armed
@@ -311,9 +397,9 @@ cmd_show_one() {
   for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
     task=$(armed_task "$e")
     if [ "$e" = "$head" ]; then
-      printf '  %s. %s task=%s head\n' "$i" "$e" "$task"
-    elif [ -n "$task" ]; then
-      printf '  %s. %s task=%s held\n' "$i" "$e" "$task"
+      printf '  %s. %s task=%s head%s\n' "$i" "$e" "${task:--}" "$(fronted "$e" && printf ' fronted')"
+    elif [ -n "$task" ] || fronted "$e"; then
+      printf '  %s. %s task=%s held\n' "$i" "$e" "${task:--}"
     else
       printf '  %s. %s not-armed (skipped)\n' "$i" "$e"
     fi
@@ -348,7 +434,7 @@ main() {
   [ -n "$cmd" ] || { usage >&2; exit 2; }
   shift
   case "$cmd" in
-    declare|undeclare|front|enqueue|remove|gate)
+    declare|undeclare|front|enqueue|remove|gate|head|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
     show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
@@ -361,6 +447,8 @@ main() {
     enqueue) cmd_enqueue "$@" ;;
     remove) cmd_remove "$@" ;;
     gate) cmd_gate "$@" ;;
+    head) cmd_head "$@" ;;
+    probe) cmd_probe "$@" ;;
     show) cmd_show "$@" ;;
   esac
 }
