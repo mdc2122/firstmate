@@ -1,0 +1,85 @@
+$ fm-merge-line.sh gate https://github.com/o/r/pull/726
+[exit 0]
+$ fm-merge-line.sh head https://github.com/o/r
+[exit 2]
+$ fm-merge-line.sh declare https://github.com/o/r
+declared merge line for github.com/o/r with 0 armed PR(s)
+[exit 0]
+$ fm-merge-line.sh enqueue https://github.com/o/r/pull/726
+[exit 0]
+$ fm-merge-line.sh enqueue https://github.com/o/r/pull/729
+[exit 0]
+$ fm-merge-line.sh enqueue https://github.com/o/r/pull/726
+[exit 0]
+$ fm-merge-line.sh front https://github.com/o/r/pull/679
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/679 task=- head fronted
+  2. https://github.com/o/r/pull/726 not-armed (skipped)
+  3. https://github.com/o/r/pull/729 not-armed (skipped)
+[exit 0]
+$ fm-merge-line.sh show https://github.com/o/r
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/679 task=- head fronted
+  2. https://github.com/o/r/pull/726 not-armed (skipped)
+  3. https://github.com/o/r/pull/729 not-armed (skipped)
+[exit 0]
+$ fm-merge-line.sh head https://github.com/o/r
+https://github.com/o/r/pull/679
+[exit 0]
+$ fm-merge-line.sh gate https://github.com/o/r/pull/726
+held: https://github.com/o/r/pull/726 waits behind https://github.com/o/r/pull/679 in the merge line for github.com/o/r
+[exit 3]
+$ fm-merge-line.sh gate https://github.com/o/r/pull/679
+[exit 0]
+$ fm-merge-line.sh gate https://github.com/o/r/pull/999
+held: https://github.com/o/r/pull/999 is not in the merge line for github.com/o/r; add it with fm-merge-line.sh front
+[exit 3]
+$ fm-merge-line.sh gate https://github.com/o/other/pull/5
+[exit 0]
+$ fm-merge-line.sh move https://github.com/o/r/pull/726 1
+Usage:
+  fm-merge-line.sh declare <repo-or-pr-url>   start a line (seeded with armed PRs)
+  fm-merge-line.sh undeclare <repo-or-pr-url> drop the line; the repository merges as before
+  fm-merge-line.sh show [<repo-or-pr-url>]    print line(s): position, URL, task, armed state
+  fm-merge-line.sh front <pr-url>             move (or add) the PR to the head
+  fm-merge-line.sh enqueue <pr-url>           append at the tail if lined and not listed
+  fm-merge-line.sh remove <pr-url>            drop the PR from its line
+  fm-merge-line.sh gate <pr-url>              exit 0 when the PR may merge now (no line,
+                                              or it is the head); exit 3 and print why
+                                              when it is held; exit 1 on an unreadable line
+  fm-merge-line.sh head <pr-or-repo-url>      print the effective head URL (empty when none);
+                                              exit 2 without a line, 1 on an unreadable line
+  fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
+                                              merged, closed, green (open, every check
+                                              green), or open; nothing when unknown
+[exit 2]
+$ fm-merge-line.sh front https://github.com/o/r/pull/1;rm -rf /
+fm-merge-line: not a canonical PR URL: https://github.com/o/r/pull/1;rm -rf / 2
+[exit 2]
+--- record:
+fm-merge-line-v1
+github github.com o/r
+https://github.com/o/r/pull/679 front
+https://github.com/o/r/pull/726
+https://github.com/o/r/pull/729
+-rw-------
+$ fm-merge-line.sh remove https://github.com/o/r/pull/679
+[exit 0]
+$ fm-merge-line.sh head https://github.com/o/r
+
+[exit 0]
+--- corrupt the record
+$ fm-merge-line.sh gate https://github.com/o/r/pull/726
+held: the merge line for github.com/o/r is unreadable; nothing in it merges until it is fixed
+[exit 1]
+$ fm-merge-line.sh head https://github.com/o/r
+[exit 1]
+$ fm-merge-line.sh gate https://github.com/o/r/pull/726
+held: the merge line for github.com/o/r is unreadable; nothing in it merges until it is fixed
+[exit 1]
+$ fm-merge-line.sh undeclare https://github.com/o/r
+fm-merge-line: the merge line at /tmp/mlcli.7omv/state/merge-lines/github@github.com@o%2Fr is unreadable; nothing was changed
+[exit 1]
+$ fm-merge-line.sh gate https://github.com/o/r/pull/726
+held: the merge line for github.com/o/r is unreadable; nothing in it merges until it is fixed
+[exit 1]

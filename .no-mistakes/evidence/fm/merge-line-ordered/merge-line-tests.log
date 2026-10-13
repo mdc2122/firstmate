@@ -1,0 +1,7 @@
+ok - a declared merge line lands its armed green yolo PRs one at a time, head first
+ok - front moves a PR to the head of its merge line in one command
+ok - an attended merge of a fronted, not yet armed PR passes its merge line's gate
+ok - only the merge line's head gets the behind-base rerun steer; a held PR keeps its green-unmergeable episode
+ok - a repository without a declared merge line merges exactly as before
+ok - a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode
+ok - a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands
