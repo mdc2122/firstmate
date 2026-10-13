@@ -15,13 +15,18 @@
 #                     conclusion or status and, when the forge reports one, the
 #                     check's own title, which is where a queue app states why
 #                     it ejected the pull request
-#   merged            the pull request has merged
+#   merged <head-sha> the pull request has merged at that head
 #   closed            the pull request was closed without merging
 # and nothing when the answer is unknown: a failed read, an unreadable payload,
 # or a missing jq. The caller changes nothing on silence.
 # It never merges, enables or disables auto-merge, or writes anything.
 #
+# With --disable-auto it instead disables GitHub auto-merge on the pull
+# request, which the watcher does when the queue holds a head other than the
+# one bin/fm-pr-merge.sh verified, and exits nonzero when that fails.
+#
 # Usage: fm-pr-queue-state.sh <github-pull-request-url> <queue-check-names-json>
+#        fm-pr-queue-state.sh --disable-auto <github-pull-request-url>
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,6 +37,11 @@ if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
   sed -n '2,/^set -u$/s/^# \{0,1\}//p' "$0"
   exit 0
 fi
+if [ "${1:-}" = --disable-auto ]; then
+  [ "$#" -eq 2 ] && fm_pr_url_parse "$2" && [ "$FM_PR_PROVIDER" = github ] || exit 2
+  gh pr merge "$FM_PR_URL" --disable-auto >/dev/null || exit 1
+  exit 0
+fi
 [ "$#" -eq 2 ] || exit 0
 fm_pr_url_parse "$1" && [ "$FM_PR_PROVIDER" = github ] || exit 0
 command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || exit 0
@@ -40,7 +50,7 @@ printf '%s' "$names" | jq -e 'type == "array" and all(.[]; type == "string")' >/
 
 fm_pr_github_read_auto_merge "$FM_PR_URL" "$names" || exit 0
 case "$FM_PR_GITHUB_AUTO_STATE" in
-  MERGED) echo merged; exit 0 ;;
+  MERGED) echo "merged $FM_PR_GITHUB_AUTO_HEAD"; exit 0 ;;
   CLOSED) echo closed; exit 0 ;;
 esac
 if [ "$FM_PR_GITHUB_AUTO_ENABLED" = true ]; then

@@ -57,8 +57,9 @@
 #
 # A GitHub base branch whose effective rules require a check that only a
 # merge-queue app posts (bin/fm-pr-lib.sh's fm_pr_github_read_queue_app_checks
-# owns that reading: a required check bound to an integration in a ruleset
-# other than the main protection) cannot be merged directly: the app posts its
+# owns that reading: a required check bound to an integration other than
+# GitHub Actions in a ruleset other than the main protection, whose name no
+# workflow produces) cannot be merged directly: the app posts its
 # check only for a pull request handed to it through GitHub auto-merge, then
 # lets auto-merge land its tested merge result. On such a branch the verified
 # head is merged with --auto (plus --squash unless the caller named a method)
@@ -72,7 +73,8 @@
 # through the poll, and one wake if the queue ejects the pull request, while
 # its yolo merge poll does not hand that same head to the queue again. While
 # the away-posture record exists such a branch is refused like any other
-# asynchronous merge. A branch whose rules cannot be read keeps the direct
+# asynchronous merge, with an "error: merge-queue auto-merge refused while
+# away: <url> at <head>;" line bin/fm-watch.sh wakes on once per head. A branch whose rules cannot be read keeps the direct
 # merge and says so, because GitHub refuses a direct merge that a required
 # check still blocks.
 #
@@ -575,7 +577,7 @@ FIELDS
   # request is handed to the queue, so it is the one check allowed to be
   # pending here; every other check must already be green.
   FM_PR_GITHUB_QUEUE_APP_STATUS=unreadable
-  if fm_pr_github_read_queue_app_checks "$PR_OWNER" "$PR_REPO" "$base"; then
+  if fm_pr_github_read_queue_app_checks "$PR_OWNER" "$PR_REPO" "$base" "$json"; then
     FM_PR_GITHUB_QUEUE_APP_STATUS=none
     [ "$FM_PR_GITHUB_QUEUE_APP_CHECKS" = '[]' ] || FM_PR_GITHUB_QUEUE_APP_STATUS=present
   fi
@@ -1088,7 +1090,8 @@ case "$PROVIDER" in
     # and the forge command below share one live-owner critical section.
     hold_away_record_for_merge || exit 1
     if [ "$queue_app" = true ] && fm_afk_contract_present "$STATE"; then
-      echo "error: base branch $FM_PR_GITHUB_BASE merges only through its merge-queue app, an asynchronous auto-merge refused while the away-posture record exists; nothing was handed to the forge" >&2
+      printf 'error: merge-queue auto-merge refused while away: %s at %s; base branch %s merges only through its merge-queue app, which requires GitHub auto-merge, an asynchronous merge refused while the away-posture record exists; nothing was handed to the forge\n' \
+        "$URL" "$FM_PR_MERGE_HEAD" "$FM_PR_GITHUB_BASE" >&2
       exit 2
     fi
     away_status=0

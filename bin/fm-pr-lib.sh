@@ -457,9 +457,12 @@ fm_pr_github_required_checks_missing() {  # <pull-request-json> <required-json> 
 # check passes on its tested merge result. Read from the branch's effective
 # rules: the main protection is every ruleset carrying the pull_request rule,
 # and a merge-queue app check is a required_status_checks entry bound to an
-# integration in any other ruleset, unless the main protection requires that
-# same check name itself. A branch with no pull_request rule has no
-# identifiable main protection, so no check on it is classified this way.
+# integration other than GitHub Actions (integration 15368) in any other
+# ruleset, unless the main protection requires that same check name itself or
+# a workflow produces a check run of that name in the pull request's rollup.
+# So an ordinary required CI check, an organization ruleset's included, is
+# never left pending. A branch with no pull_request rule has no identifiable
+# main protection, so no check on it is classified this way.
 #
 # Sets FM_PR_GITHUB_QUEUE_APP_CHECKS to a compact JSON array of check names
 # ("[]" when there are none) and returns 0 when the rules were read. Returns 1,
@@ -469,9 +472,13 @@ fm_pr_github_required_checks_missing() {  # <pull-request-json> <required-json> 
 # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
 FM_PR_GITHUB_QUEUE_APP_CHECKS='[]'
 # shellcheck disable=SC2034  # Results consumed by bin/fm-pr-merge.sh.
-fm_pr_github_read_queue_app_checks() {  # <owner> <repo> <base-branch>
-  local owner=$1 repo=$2 base=$3 branch_path rules_json api_err api_err_text checks
+fm_pr_github_read_queue_app_checks() {  # <owner> <repo> <base-branch> <pull-request-json>
+  local owner=$1 repo=$2 base=$3 pr_json=$4 branch_path rules_json api_err api_err_text checks workflow_checks
   FM_PR_GITHUB_QUEUE_APP_CHECKS='[]'
+  workflow_checks=$(printf '%s' "$pr_json" | jq -c '
+    if (.statusCheckRollup | type) != "array" then error("no check rollup") else . end
+    | [.statusCheckRollup[] | select(.__typename == "CheckRun" and ((.workflowName // "") != "")) | .name]' \
+    2>/dev/null) || return 1
   branch_path=$(fm_pr_github_urlencode_path_segment "$base")
   api_err=$(mktemp "${TMPDIR:-/tmp}/fm-pr-queue-app-rules.XXXXXX") || return 1
   if ! rules_json=$(gh api --paginate "repos/$owner/$repo/rules/branches/$branch_path" 2>"$api_err"); then
@@ -482,7 +489,7 @@ fm_pr_github_read_queue_app_checks() {  # <owner> <repo> <base-branch>
   fi
   rm -f "$api_err"
   [ -n "$rules_json" ] || return 1
-  checks=$(printf '%s' "$rules_json" | jq -sc '
+  checks=$(printf '%s' "$rules_json" | jq -sc --argjson workflow_checks "$workflow_checks" '
     map(if type == "array" then .[] else error("rules payload is unreadable") end)
     | map(if type == "object" and (.type | type) == "string" then . else error("invalid rule") end)
     | [.[] | select(.type == "pull_request") | .ruleset_id] as $main
@@ -492,10 +499,10 @@ fm_pr_github_read_queue_app_checks() {  # <owner> <repo> <base-branch>
         [.[] | select(.type == "required_status_checks" and (.ruleset_id as $r | any($main[]; . == $r) | not))
           | if (.parameters.required_status_checks | type) == "array"
             then .parameters.required_status_checks[] else error("invalid required check rule") end
-          | select(type == "object" and (.integration_id | type) == "number"
+          | select(type == "object" and (.integration_id | type) == "number" and .integration_id != 15368
               and (.context | type) == "string" and (.context | length) > 0)
           | .context
-          | select(. as $c | any($main_checks[]; . == $c) | not)]
+          | select(. as $c | any($main_checks[], $workflow_checks[]; . == $c) | not)]
         | unique
       end' 2>/dev/null) || return 1
   [ -n "$checks" ] || return 1

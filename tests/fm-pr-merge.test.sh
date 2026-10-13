@@ -2170,6 +2170,8 @@ test_queue_app_branch_keeps_every_other_gate() {
   expect_code 2 "$rc" "queue-app-away: the merge-queue path must refuse while away"
   assert_grep 'refused while the away-posture record exists' "$case_dir/stderr" \
     "queue-app-away: the refusal did not name the away posture"
+  assert_grep "merge-queue auto-merge refused while away: $url at $head;" "$case_dir/stderr" \
+    "queue-app-away: the refusal did not name the pull request and its head"
   assert_no_grep 'pr merge' "$case_dir/gh.log" "queue-app-away: an away auto-merge reached the forge"
   [ ! -e "$case_dir/state/task-x1.queue-merge" ] || fail "queue-app-away: a refused merge recorded a hand-off"
   pass "a merge-queue app branch still refuses other pending or failed checks and the away posture"
@@ -2196,6 +2198,60 @@ test_branch_without_queue_app_merges_directly() {
       || fail "no-queue-app-$shape: a direct merge recorded a queue hand-off"
   done
   pass "a branch with no merge-queue app check keeps the direct merge"
+}
+
+# An organization ruleset (no pull_request rule of its own) requiring a GitHub
+# Actions check, and a non-Actions integration's required check whose name a
+# workflow produces, are ordinary required CI checks: neither may be left
+# pending as a merge-queue app check, and a branch with only those merges
+# directly once they are green.
+test_ordinary_ci_checks_outside_main_protection_stay_required() {
+  local case_dir url head shape rc
+  url=https://github.com/example/repo/pull/94
+  head=9494949494949494949494949494949494949494
+  for shape in org-actions workflow-named; do
+    case_dir=$(make_case "ordinary-ci-$shape-pending")
+    mkdir -p "$case_dir/wt"
+    add_gh_mocks "$case_dir" "$head"
+    write_ordinary_ci_rules "$case_dir" "$shape"
+    write_github_rollup_json "$case_dir" "$head" \
+      "$(check_run ci COMPLETED SUCCESS)" \
+      '{"__typename":"CheckRun","name":"org-ci","workflowName":"Org CI","status":"IN_PROGRESS","conclusion":null}'
+    set +e
+    run_pr_merge "$case_dir" task-x1 "$url" > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+    expect_code 1 "$rc" "ordinary-ci-$shape-pending: a pending required CI check must refuse"
+    assert_grep "check 'org-ci' is not green" "$case_dir/stderr" \
+      "ordinary-ci-$shape-pending: the refusal did not name the pending CI check"
+    assert_no_grep 'pr merge' "$case_dir/gh.log" \
+      "ordinary-ci-$shape-pending: a pending CI check reached the forge"
+
+    case_dir=$(make_home_case "ordinary-ci-$shape-green")
+    add_gh_mocks "$case_dir" "$head"
+    write_ordinary_ci_rules "$case_dir" "$shape"
+    write_github_rollup_json "$case_dir" "$head" \
+      "$(check_run ci COMPLETED SUCCESS)" \
+      '{"__typename":"CheckRun","name":"org-ci","workflowName":"Org CI","status":"COMPLETED","conclusion":"SUCCESS"}'
+    : >"$case_dir/gh-axi.log"
+    FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
+      >"$case_dir/stdout" 2>"$case_dir/stderr" \
+      || fail "ordinary-ci-$shape-green: direct merge failed: $(cat "$case_dir/stderr")"
+    assert_logged_gh_merge "$case_dir" 94 example/repo --squash
+    [ ! -e "$case_dir/state/task-x1.queue-merge" ] \
+      || fail "ordinary-ci-$shape-green: an ordinary CI check was treated as a merge-queue app check"
+  done
+  pass "an organization's Actions check and a workflow-produced check stay ordinary required checks"
+}
+
+write_ordinary_ci_rules() {  # <case_dir> <org-actions|workflow-named>
+  local integration=15368
+  [ "$2" = org-actions ] || integration=4242
+  cat > "$1/github-rules.json" <<JSON
+[{"type":"required_status_checks","ruleset_id":303,"parameters":{"required_status_checks":[{"context":"org-ci","integration_id":$integration}]}},
+ {"type":"pull_request","ruleset_id":101,"parameters":{}},
+ {"type":"required_status_checks","ruleset_id":101,"parameters":{"required_status_checks":[{"context":"ci","integration_id":15368}]}}]
+JSON
 }
 
 test_distinct_merged_prs_keep_distinct_wakes() {
@@ -3254,6 +3310,7 @@ test_queue_app_branch_requests_auto_merge_and_stays_armed
 test_queue_app_branch_landed_on_readback_records_the_merge
 test_queue_app_branch_keeps_every_other_gate
 test_branch_without_queue_app_merges_directly
+test_ordinary_ci_checks_outside_main_protection_stay_required
 test_late_finishing_old_cancellation_is_superseded
 test_unfinished_rerun_keeps_a_check_red
 test_supersession_never_crosses_check_names
