@@ -2758,8 +2758,8 @@ while :; do
           out=$FM_CHECK_RESULT
           # A repository with a declared merge line lands one PR at a time:
           # bin/fm-merge-line.sh's gate holds every PR but the line's head, so
-          # a held PR is neither merged, rerun-steered, nor reported
-          # green-unmergeable until it reaches the head. No line, no hold.
+          # a held PR is neither merged nor rerun-steered until it reaches the
+          # head; it keeps its own green-unmergeable episode. No line, no hold.
           if [ -z "$out" ] \
             && ! line_gate_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
               "$SCRIPT_DIR/fm-merge-line.sh" gate "$url" 2>&1); then

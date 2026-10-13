@@ -7,9 +7,9 @@
 # and its behind-base rerun steer act only on the head, and bin/fm-pr-merge.sh
 # refuses any other PR of that repository (so an attended merge goes through
 # the same order; move the PR to the head first with `front`). A PR behind the
-# head stays armed and green but neither merges, gets rerun-steered, nor raises
-# a green-unmergeable wake until it reaches the head. A repository with no
-# declared line behaves exactly as if this script did not exist.
+# head stays armed and green but neither merges nor gets rerun-steered until it
+# reaches the head; it keeps its own green-unmergeable episode. A repository
+# with no declared line behaves exactly as if this script did not exist.
 #
 # Repository identity is bin/fm-pr-lib.sh's provider-tagged identity
 # (provider, host, path), derived from a canonical PR URL or a repository URL
