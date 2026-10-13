@@ -1280,7 +1280,7 @@ remove_pr_poll_artifacts() {
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" \
     "$state_dir/$id.pr-green-blocked" "$state_dir/$id.pr-behind-rerun" \
     "$state_dir/$id.merge-line-stall" "$state_dir/$id.queue-merge" \
-    "$state_dir/$id.queue-away-refused" || return 1
+    "$state_dir/$id.queue-away-refused" "$state_dir/$id.queue-stall" || return 1
 }
 
 # Resolve the PR number for a worktree branch via gh-axi. Echoes the number on a
