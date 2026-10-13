@@ -131,7 +131,18 @@
 #                          the supported no-mistakes rerun, at most
 #                          FM_PR_BEHIND_RERUN_PER_HOUR (default 3) per pull
 #                          request per hour (pr_behind_rerun_steer); the wake
-#                          stays the backstop when the rerun does not clear it
+#                          stays the backstop when the rerun does not clear it.
+#                          A PR held behind its repository's merge-line head
+#                          (bin/fm-merge-line.sh) is not yolo-merged and gets no
+#                          steer until it is head; this wake still runs for it
+#   check: <check>: merge-line stalled: green <url> has waited <m>m behind unchanged head <head>
+#                          a PR held by its merge line has been green while the
+#                          same head held it for FM_MERGE_LINE_STALL_SECS
+#                          (default 30 minutes); one wake per episode
+#                          (merge_line_stall_tick)
+#   check: <check>: merge-line head <head> closed unmerged; ...
+#                          the head of a held PR's merge line closed without
+#                          merging; it was dropped from the line at once
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: queue-zero: ... queued rows or Paperclip items that must leave the
@@ -293,6 +304,8 @@ PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base r
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
 PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
+MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head age before its one wake
+case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
   ''|*[!0-9]*|0) HOME_SUMMARY_INTERVAL=300 ;;
@@ -2393,15 +2406,19 @@ fi
 # unmergeable episode record (pr_green_blocked_tick below) retires with the
 # poll: a merged pull request never reaches the tick's clear reading, so
 # nothing else would end its episode before task teardown.
-retire_merged_pr_poll() {  # <id>
-  local id=$1
+retire_merged_pr_poll() {  # <id> <url>
+  local id=$1 url=$2
   if fm_pr_poll_retirement_publish "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" merged; then
     fm_pr_poll_retirement_recover_one "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" \
       || triage_log "merged PR poll retirement remains recoverable for $id"
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun"
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.merge-line-stall"
+  # A landed PR leaves its repository's merge line so the next PR becomes the
+  # head (bin/fm-merge-line.sh; a no-op without a line).
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$url" \
+    >/dev/null 2>&1 || triage_log "merged PR $url could not leave its merge line"
 }
 
 # A green pull request that cannot merge raises no merge poll output, so an
@@ -2498,8 +2515,11 @@ pr_behind_rerun_steer() {  # <id> <url> <head>
   rm -f "$tmp"
 }
 
-pr_green_blocked_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file probe verdict head code detail now age reason
+# <held> 1 marks a PR held behind its merge-line head (bin/fm-merge-line.sh):
+# its own green-unmergeable episode still runs, but it gets no behind-base
+# rerun steer, which only the head may receive.
+pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
+  local id=$1 c=$2 url=$3 held=${4:-0} file probe verdict head code detail now age reason
   local rec_url='' rec_head='' first='' alerted=''
   file="$STATE/$id.pr-green-blocked"
   probe="$SCRIPT_DIR/fm-pr-green-blocked.sh"
@@ -2517,7 +2537,7 @@ pr_green_blocked_tick() {  # <id> <check-path> <url>
       ;;
     *) return 0 ;;
   esac
-  [ "$code" != behind ] || pr_behind_rerun_steer "$id" "$url" "$head"
+  [ "$code" != behind ] || [ "$held" = 1 ] || pr_behind_rerun_steer "$id" "$url" "$head"
   now=$(date +%s)
   if [ -f "$file" ] && [ ! -L "$file" ]; then
     read -r rec_url rec_head first alerted < "$file" || true
@@ -2534,6 +2554,70 @@ pr_green_blocked_tick() {  # <id> <check-path> <url>
   reason="check: $c: green-unmergeable $url for $((age / 60))m: $detail"
   fm_wake_append check "$c" "$reason" || exit 1
   pr_green_blocked_record "$file" "$url" "$head" "$first" 1 || exit 1
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
+}
+
+# A merge line must not stall silently behind its head. For a PR the line
+# holds (bin/fm-merge-line.sh owns the line, its head, and the read-only forge
+# probe), this reads the head first: a head closed unmerged is dropped from
+# the line and wakes firstmate at once, and a head that merged outside its poll
+# is dropped silently so the next PR becomes the head. Otherwise, while the
+# held PR reads green, state/<id>.merge-line-stall records "<held-url>
+# <head-url> <first-seen-epoch> <alerted>" and one wake fires per episode once
+# that same head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR
+# that is no longer green, or its landing starts over. An unknown read changes
+# nothing. Retired with the merged poll and at teardown.
+merge_line_stall_tick() {  # <id> <check-path> <url>
+  local id=$1 c=$2 url=$3 file line_head verdict now age reason
+  local rec_url='' rec_head='' first='' alerted=''
+  file="$STATE/$id.merge-line-stall"
+  line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null) || return 0
+  [ -n "$line_head" ] && [ "$line_head" != "$url" ] || return 0
+  run_check_capture "$SCRIPT_DIR/fm-merge-line.sh" probe "$line_head" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    closed|merged)
+      if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+          "$SCRIPT_DIR/fm-merge-line.sh" remove "$line_head" >/dev/null 2>&1; then
+        triage_log "merge line head $line_head reads $verdict but could not be dropped"
+        return 0
+      fi
+      rm -f "$file"
+      triage_log "merge line head $line_head reads $verdict; dropped from its line"
+      [ "$verdict" = closed ] || return 0
+      reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
+      fm_wake_append check "$c" "$reason" || exit 1
+      pr_poll_control_release || exit 1
+      touch "$STATE/.last-check"
+      wake "$reason"
+      ;;
+  esac
+  run_check_capture "$SCRIPT_DIR/fm-merge-line.sh" probe "$url" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    green) ;;
+    open|closed|merged) rm -f "$file"; return 0 ;;
+    *) return 0 ;;
+  esac
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    read -r rec_url rec_head first alerted < "$file" || true
+  fi
+  case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
+  if [ "$rec_url" != "$url" ] || [ "$rec_head" != "$line_head" ]; then
+    first=$now
+    alerted=0
+    pr_green_blocked_record "$file" "$url" "$line_head" "$first" 0 || return 0
+  fi
+  [ "$alerted" = 1 ] && return 0
+  age=$((now - first))
+  [ "$age" -ge "$MERGE_LINE_STALL_SECS" ] || return 0
+  reason="check: $c: merge-line stalled: green $url has waited $((age / 60))m behind unchanged head $line_head"
+  fm_wake_append check "$c" "$reason" || exit 1
+  pr_green_blocked_record "$file" "$url" "$line_head" "$first" 1 || exit 1
   pr_poll_control_release || exit 1
   touch "$STATE/.last-check"
   wake "$reason"
@@ -2643,6 +2727,7 @@ while :; do
       [ -e "$c" ] || continue
       is_pr_poll=0
       pr_poll_self_merged=0
+      pr_line_held=0
       if [ "$(basename "$c")" = x-watch.check.sh ]; then
         if fmx_poll_shim_valid "$c" "$FM_HOME" "$FM_ROOT" \
           && [ -f "$FM_ROOT/bin/fm-x-poll.sh" ] && [ ! -L "$FM_ROOT/bin/fm-x-poll.sh" ]; then
@@ -2671,6 +2756,16 @@ while :; do
           run_check_capture "$SCRIPT_DIR/fm-pr-poll.sh" --validated \
             "$provider" "$url" "$host" "$path" "$number" || exit 1
           out=$FM_CHECK_RESULT
+          # A repository with a declared merge line lands one PR at a time:
+          # bin/fm-merge-line.sh's gate holds every PR but the line's head, so
+          # a held PR is neither merged nor rerun-steered until it reaches the
+          # head; it keeps its own green-unmergeable episode. No line, no hold.
+          if [ -z "$out" ] \
+            && ! line_gate_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+              "$SCRIPT_DIR/fm-merge-line.sh" gate "$url" 2>&1); then
+            pr_line_held=1
+            triage_log "merge line holds $id: $(printf '%s' "$line_gate_out" | tr '\r\n' '  ')"
+          fi
           # A still-open poll on a task whose recorded merge posture is yolo=on
           # invokes the same guarded merge path firstmate runs by hand
           # (bin/fm-pr-merge.sh): its own live verification is what decides the
@@ -2681,7 +2776,7 @@ while :; do
           # landing is recognized by the merge-notified marker the merge path
           # commits with its durable outcome, which also covers a queued or
           # unconfirmed acceptance that must keep polling.
-          if [ -z "$out" ] \
+          if [ -z "$out" ] && [ "$pr_line_held" -eq 0 ] \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
             pr_poll_control_release || exit 1
             FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
@@ -2768,7 +2863,7 @@ EOF
             triage_log "published merge outcome for $id but could not retire its authority record"
             exit 1
           fi
-          retire_merged_pr_poll "$id"
+          retire_merged_pr_poll "$id" "$url"
           pr_poll_control_release || exit 1
           touch "$STATE/.last-check"
           if [ "$FM_MERGE_OUTCOME_ALREADY_RECORDED" = true ] \
@@ -2783,8 +2878,11 @@ EOF
         touch "$STATE/.last-check"
         wake "$reason"
       fi
+      if [ "$is_pr_poll" -eq 1 ] && [ "$pr_line_held" -eq 1 ]; then
+        merge_line_stall_tick "$id" "$c" "$url"
+      fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
-        pr_green_blocked_tick "$id" "$c" "$url"
+        pr_green_blocked_tick "$id" "$c" "$url" "$pr_line_held"
       fi
       pr_poll_control_release || exit 1
     done

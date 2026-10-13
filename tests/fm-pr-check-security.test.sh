@@ -2961,6 +2961,213 @@ test_yolo_merge_attempt_is_bounded() {
   pass "a stalled forge read during a yolo merge is bounded and keeps the watcher live"
 }
 
+# --- per-repository merge line ------------------------------------------------
+
+MERGE_LINE="$ROOT/bin/fm-merge-line.sh"
+
+merge_line() {  # <dir> <args...>
+  local dir=$1
+  shift
+  FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$MERGE_LINE" "$@"
+}
+
+# Two yolo tasks on one repository, armed through the real ready path in the
+# order task-z (pull/1) then task-a (pull/2). The watcher visits task-a's poll
+# first, so a line that did not hold it would merge pull/2 ahead of pull/1.
+seed_two_yolo_prs() {  # <dir> <declare-line: 0|1>
+  local dir=$1 declare=$2 id url state
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  [ "$declare" = 0 ] || merge_line "$dir" declare https://github.com/o/r >/dev/null \
+    || fail "could not declare the merge line"
+  for id in task-z task-a; do
+    url=https://github.com/o/r/pull/1
+    [ "$id" = task-z ] || url=https://github.com/o/r/pull/2
+    write_task_meta "$dir" "$id"
+    printf 'yolo=on\n' >> "$state/$id.meta"
+    run_check_entry "$dir" "$id" "$url" >/dev/null 2> "$dir/arm-$id.err" \
+      || fail "could not arm $id: $(cat "$dir/arm-$id.err")"
+  done
+  add_stop_custom_check "$dir"
+}
+
+merge_line_cycle() {  # <dir> <label>
+  local dir=$1 label=$2 rc
+  rm -f "$dir/home/state/.last-check"
+  set +e
+  # These cycles run a full guarded merge inside the watcher; give loaded CI runners room.
+  FM_TEST_WATCH_ALARM=${FM_TEST_WATCH_ALARM:-120} \
+    FM_TEST_GH_STATE=OPEN FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" \
+    FM_TEST_GLAB_LOG="$dir/glab.log" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "$label watcher failed (rc=$rc): $(cat "$dir/$label.err")"
+  ack_watcher_cycle "$dir/home/state" || fail "$label acknowledgement failed"
+}
+
+forge_merges() {  # <dir>: merged PR numbers in order
+  awk '$1 == "pr" && $2 == "merge" { print $3 }' "$1/gh.log" | tr '\n' ' '
+}
+
+test_merge_line_lands_only_the_head_in_order() {
+  local dir state rc
+  dir=$(make_case merge-line-order)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '1 ' ] \
+    || fail "the line did not land only its head first: $(forge_merges "$dir")"
+  case "$(cat "$dir/c1.out")" in check:*task-z.check.sh:*merged) ;; *) fail "the head's landing was not reported: $(cat "$dir/c1.out")" ;; esac
+  assert_grep 'merge line holds task-a' "$state/.watch-triage.log" "the held PR left no triage record"
+  [ -f "$state/task-a.check.sh" ] || fail "the held PR's poll was retired"
+
+  # An attended merge of a PR behind the head is refused by the same gate.
+  merge_line "$dir" enqueue https://github.com/o/r/pull/3 || fail "could not enqueue a third PR"
+  write_task_meta "$dir" task-c
+  set +e
+  run_merge_entry "$dir" task-c https://github.com/o/r/pull/3 > "$dir/held.out" 2> "$dir/held.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "an attended merge of a held PR succeeded"
+  assert_grep 'waits behind https://github.com/o/r/pull/2' "$dir/held.err" "the attended refusal did not name the head"
+  merge_line "$dir" remove https://github.com/o/r/pull/3 || fail "could not remove the third PR"
+
+  merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '1 2 ' ] \
+    || fail "the next PR did not land once the head had: $(forge_merges "$dir")"
+  case "$(cat "$dir/c2.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the second landing was not reported: $(cat "$dir/c2.out")" ;; esac
+  [ "$(sed -n '3,$p' "$state/merge-lines/github@github.com@o%2Fr")" = '' ] \
+    || fail "landed PRs were left in the line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  pass "a declared merge line lands its armed green yolo PRs one at a time, head first"
+}
+
+test_merge_line_front_reorders() {
+  local dir
+  dir=$(make_case merge-line-front)
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front https://github.com/o/r/pull/2 >/dev/null || fail "front refused"
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "the PR moved to the head did not land first: $(forge_merges "$dir")"
+  pass "front moves a PR to the head of its merge line in one command"
+}
+
+# An attended merge of a PR no poll arms yet: `front` lists it at the head as a
+# sticky entry, so it is the head before and after the merge's own arming, and
+# the gate lets it land.
+test_merge_line_front_lands_an_unarmed_attended_merge() {
+  local dir
+  dir=$(make_case merge-line-front-unarmed)
+  seed_two_yolo_prs "$dir" 1
+  write_task_meta "$dir" task-c
+  merge_line "$dir" front https://github.com/o/r/pull/3 >/dev/null || fail "front refused"
+  : > "$dir/gh.log"
+  run_merge_entry "$dir" task-c https://github.com/o/r/pull/3 > "$dir/merge.out" 2> "$dir/merge.err" \
+    || fail "an attended merge of the fronted unarmed PR was refused: $(cat "$dir/merge.err")"
+  [ "$(forge_merges "$dir")" = '3 ' ] \
+    || fail "the fronted PR did not land alone: $(forge_merges "$dir")"
+  pass "an attended merge of a fronted, not yet armed PR passes its merge line's gate"
+}
+
+test_merge_line_holds_behind_rerun_for_non_head() {
+  local dir state
+  dir=$(make_case merge-line-behind)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  export FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false
+  # Two yolo merge attempts run inside this cycle; give loaded runners room.
+  FM_TEST_WATCH_ALARM=120 green_blocked_cycle "$dir" "$dir/b1.out" BEHIND SUCCESS 1800
+  unset FM_TEST_GH_GRAPHQL_STATE FM_TEST_GH_GRAPHQL_MERGED
+  [ -n "$(find "$state/task-z.inbox" -name '*.msg' 2>/dev/null)" ] \
+    || fail "the behind head was not rerun-steered"
+  [ -z "$(find "$state/task-a.inbox" -name '*.msg' 2>/dev/null)" ] \
+    || fail "a PR behind the line's head was rerun-steered"
+  [ -e "$state/task-a.pr-green-blocked" ] || fail "a held PR's own green-unmergeable episode was suppressed"
+  pass "only the merge line's head gets the behind-base rerun steer; a held PR keeps its green-unmergeable episode"
+}
+
+# The forge reads a fronted head that no poll arms from this fixture file, so
+# the head can read closed or red while the held PRs read open and green.
+fake_line_head() {  # <dir> <head-url> <state> <conclusion>
+  local dir=$1 url=$2 state=$3 conclusion=$4
+  [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
+  printf '{"state":"%s","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"%s"}]}\n' \
+    "$state" "$conclusion" > "$dir/fakebin/head.json"
+  cat > "$dir/fakebin/gh" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${3:-}" = "$url" ]; then
+  cat "$dir/fakebin/head.json"
+  exit 0
+fi
+exec "$dir/fakebin/gh.real" "\$@"
+SH
+  chmod +x "$dir/fakebin/gh"
+}
+
+# The 2026-10-12 incident: a constraint PR fronted during a freeze, still being
+# worked on so no poll arms it, while armed green yolo PRs sit behind it. The
+# fronted entry is sticky, so nothing behind it merges or is rerun-steered,
+# and once that same head has held a green PR for the stall threshold
+# firstmate is woken exactly once for the episode.
+test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall() {
+  local dir state head=https://github.com/o/r/pull/679
+  dir=$(make_case merge-line-incident)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" OPEN FAILURE
+
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c1
+  [ -z "$(forge_merges "$dir")" ] \
+    || fail "an armed green yolo PR merged ahead of the fronted unarmed constraint PR: $(forge_merges "$dir")"
+  case "$(cat "$dir/c1.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a fresh stall woke before its threshold: $(cat "$dir/c1.out")" ;; esac
+  [ -e "$state/task-a.merge-line-stall" ] || fail "a green held PR started no stall episode"
+
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c2
+  case "$(cat "$dir/c2.out")" in
+    *"merge-line stalled: green https://github.com/o/r/pull/2 has waited "*"m behind unchanged head $head") ;;
+    *) fail "a line stalled behind an unchanged head did not wake: $(cat "$dir/c2.out")" ;;
+  esac
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c3
+  case "$(cat "$dir/c3.out")" in *"merge-line stalled: green https://github.com/o/r/pull/2 "*) fail "one stall episode woke twice" ;; esac
+  [ -z "$(forge_merges "$dir")" ] || fail "a held PR merged during the stall: $(forge_merges "$dir")"
+  pass "a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode"
+}
+
+test_merge_line_closed_head_is_dropped_and_wakes() {
+  local dir state head=https://github.com/o/r/pull/679
+  dir=$(make_case merge-line-closed-head)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" CLOSED SUCCESS
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c1
+  case "$(cat "$dir/c1.out")" in
+    *"merge-line head $head closed unmerged; dropped from its line"*) ;;
+    *) fail "a closed head did not wake at once: $(cat "$dir/c1.out")" ;;
+  esac
+  ! grep -qF "$head" "$state/merge-lines/github@github.com@o%2Fr" \
+    || fail "the closed head stayed in its line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '1 ' ] \
+    || fail "the next PR did not become the head after the closed head left: $(forge_merges "$dir")"
+  pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
+}
+
+test_repo_without_merge_line_is_unchanged() {
+  local dir
+  dir=$(make_case merge-line-absent)
+  seed_two_yolo_prs "$dir" 0
+  merge_line "$dir" declare https://github.com/o/other >/dev/null || fail "could not declare another repo's line"
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "an unlined repository did not merge the first green yolo PR the watcher reached: $(forge_merges "$dir")"
+  [ ! -e "$dir/home/state/merge-lines/github@github.com@o%2Fr" ] || fail "arming created a line for an unlined repository"
+  pass "a repository without a declared merge line merges exactly as before"
+}
+
 
 test_authority_persistence_refuses_rebound_metadata() {
   local dir state url_a url_b rc
@@ -3138,6 +3345,13 @@ test_green_pr_with_unreported_required_check_does_not_alert
 test_green_pr_in_merge_queue_does_not_alert
 test_merged_poll_leaves_no_green_blocked_record
 test_merged_poll_reregistration_after_notification_is_absorbed
+test_merge_line_lands_only_the_head_in_order
+test_merge_line_front_reorders
+test_merge_line_front_lands_an_unarmed_attended_merge
+test_merge_line_holds_behind_rerun_for_non_head
+test_repo_without_merge_line_is_unchanged
+test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
+test_merge_line_closed_head_is_dropped_and_wakes
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority

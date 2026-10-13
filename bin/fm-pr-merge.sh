@@ -861,6 +861,22 @@ require_recorded_pr_identity() {
   return 1
 }
 
+# A repository with a declared merge line lands its PRs one at a time, in
+# order: bin/fm-merge-line.sh owns the line and its gate, and a PR that is not
+# the head is refused here whichever caller asked. The gate runs once after
+# the PR is recorded and armed (arming enqueues it, so a PR not yet armed can
+# reach the head) and again inside the merge authority lock just before
+# the forge command, the same lock every line mutation takes, so a reorder
+# cannot land between that last gate and the merge it allowed.
+require_merge_line_head() {
+  local out rc=0
+  out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-merge-line.sh" gate "$URL" 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  printf 'error: PR merge refused - %s\n' "${out:-the merge line gate failed (rc=$rc)}" >&2
+  return 1
+}
+
 FM_PR_GITHUB_MERGE_ACCEPTED=false
 FM_PR_GITHUB_CALLER_METHOD=
 
@@ -997,6 +1013,7 @@ require_current_away_authority || away_status=$?
 [ "$away_status" -eq 0 ] || exit "$away_status"
 require_recorded_pr_identity || exit 1
 record_pr_metadata || exit 1
+require_merge_line_head || exit 1
 require_released_captain_hold || exit 1
 
 # Accepted confused-agent-grade limitation, as in bin/fm-lease-lib.sh, not an
@@ -1019,6 +1036,7 @@ case "$PROVIDER" in
     require_current_away_authority || away_status=$?
     [ "$away_status" -eq 0 ] || exit "$away_status"
     refuse_github_queue_while_away || exit 2
+    require_merge_line_head || exit 1
     merge_status=0
     merge_output=$(gh pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
       --match-head-commit "$FM_PR_MERGE_HEAD" \
@@ -1073,6 +1091,7 @@ case "$PROVIDER" in
     away_status=0
     require_current_away_authority || away_status=$?
     [ "$away_status" -eq 0 ] || exit "$away_status"
+    require_merge_line_head || exit 1
     merge_status=0
     gitlab_merge_args=()
     if [ "$FM_PR_AWAY_POSTURE" = true ]; then

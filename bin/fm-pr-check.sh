@@ -134,6 +134,12 @@ fm_pr_poll_publish_prepared || {
   echo "error: could not publish PR poll" >&2
   exit 1
 }
+# Arming order is merge-line order: when the PR's repository has a declared
+# merge line, bin/fm-merge-line.sh appends it at the tail (a no-op without a
+# line or for a PR already listed). A failed append leaves the PR held rather
+# than merged out of order, so it is reported, not fatal.
+FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" enqueue "$URL" \
+  || printf 'actionable: PR %s is armed but could not join its merge line; it stays held until it is added\n' "$URL" >&2
 # The contribution observer uses the same authenticated check mechanism and
 # owns verdict freshness, required actors and external feedback separately from
 # the exact merged-state poll. Registration is local and performs no forge read.
