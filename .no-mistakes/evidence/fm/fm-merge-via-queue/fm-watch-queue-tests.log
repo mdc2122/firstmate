@@ -1,0 +1,10 @@
+ok - a merge-queue branch is handed to auto-merge once and recorded as landed only once the forge reads MERGED
+ok - a queue ejection wakes firstmate once with its reason and the ejected head is not re-queued
+ok - a head pushed while queued has auto-merge disabled and is re-verified from scratch
+ok - a cancelled queue hand-off wakes a non-yolo task once per new head
+ok - a queue landing whose head cannot be confirmed is deferred, not credited
+ok - a pull request the queue holds past the stall window wakes firstmate once per head
+ok - a queue landing at a head other than the verified one is not credited to its authority
+ok - a merge-queue branch refused while away wakes firstmate once per head
+ok - teardown removes safe poll artifacts and refuses directory-shaped check files without traversal
+ALL-SELECTED-PASSED

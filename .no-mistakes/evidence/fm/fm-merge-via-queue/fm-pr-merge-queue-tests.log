@@ -1,0 +1,7 @@
+ok - a merge-queue app branch gets an auto-merge request that keeps the poll armed and claims no landing
+ok - a merge-queue auto-merge that reads back merged is recorded like a direct merge
+ok - a merge-queue app branch still refuses other pending or failed checks and the away posture
+ok - a branch with no merge-queue app check keeps the direct merge
+ok - an organization's Actions check and a workflow-produced check stay ordinary required checks
+ok - away posture permits immediate merges but refuses every asynchronous path
+ALL-SELECTED-PASSED

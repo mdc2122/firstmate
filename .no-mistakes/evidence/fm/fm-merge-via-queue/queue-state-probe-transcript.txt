@@ -1,0 +1,35 @@
+$ # 1. queued: open, auto-merge on
+$ bin/fm-pr-queue-state.sh https://github.com/o/r/pull/1 '["gitea-mq"]'
+waiting 0123456789abcdef0123456789abcdef01234567
+rc=0
+$ # 2. ejected: queue failed its check and cancelled auto-merge
+$ bin/fm-pr-queue-state.sh https://github.com/o/r/pull/1 '["gitea-mq"]'
+off 0123456789abcdef0123456789abcdef01234567 gitea-mq failure: PR fell behind main; check timed out after 15m
+rc=0
+$ # 3. landed by the queue
+$ bin/fm-pr-queue-state.sh https://github.com/o/r/pull/1 '["gitea-mq"]'
+merged 0123456789abcdef0123456789abcdef01234567
+rc=0
+$ # 4. closed
+closed
+rc=0
+$ # 5. adversarial: forge read fails -> prints nothing (unknown)
+[] rc=0
+$ # 6. adversarial: garbage payload -> nothing
+[] rc=0
+$ # 7. adversarial: non-github url / bad names -> nothing
+[] rc=0
+[] rc=0
+$ # 8. --disable-auto: success, then forge refusal
+rc=0
+rc=1 (forge refused)
+--- gh calls made:
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh api --paginate repos/o/r/commits/0123456789abcdef0123456789abcdef01234567/check-runs
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh pr view https://github.com/o/r/pull/1 --json state,headRefOid,autoMergeRequest,statusCheckRollup
+gh pr merge https://github.com/o/r/pull/1 --disable-auto
+gh pr merge https://github.com/o/r/pull/1 --disable-auto
