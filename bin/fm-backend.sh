@@ -803,6 +803,14 @@ fm_backend_kill() {  # <backend> <target>
   esac
 }
 
+# fm_backend_remove_worktree: release a backend-owned task worktree. Returns 0
+# on success, FM_BACKEND_WORKTREE_UNKNOWN when the backend positively answered
+# that it knows no worktree by that id (Orca's selector_not_found), and 1 for
+# every other failure. Unknown is not proof the copy is gone: the caller must
+# confirm that from the filesystem and git before treating it as removed
+# (bin/fm-teardown.sh's teardown_orca_remove_worktree).
+# shellcheck disable=SC2034 # Consumed by adapters and sourcing callers.
+FM_BACKEND_WORKTREE_UNKNOWN=4
 fm_backend_remove_worktree() {  # <backend> <worktree-id>
   local backend=$1
   shift

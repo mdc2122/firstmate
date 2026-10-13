@@ -48,10 +48,10 @@ if [ "${1:-}" = status ] && [ "${FM_ORCA_STATUS_RESPONSE:-ready}" != sequence ];
 fi
 n=$next
 echo "$n" > "$COUNT_FILE"
+[ -f "$RESP/$n.out" ] && cat "$RESP/$n.out"
 if [ -f "$RESP/$n.exit" ]; then
   exit "$(cat "$RESP/$n.exit")"
 fi
-[ -f "$RESP/$n.out" ] && cat "$RESP/$n.out"
 exit 0
 SH
   chmod +x "$fb/orca"
@@ -1133,6 +1133,106 @@ test_teardown_preserves_metadata_when_orca_remove_error_json() {
   pass "fm-teardown.sh backend=orca: preserves metadata on remove ok:false JSON"
 }
 
+# A cleanup interrupted after the copy and its branch were removed leaves a
+# record whose Orca id Orca no longer knows. That answer finishes cleanup only
+# when the recorded path is gone and git lists no worktree there; a path that
+# still exists, or a git entry that still names it, keeps refusing with a reason.
+orca_selector_not_found_json() {  # <worktree-id>
+  printf '{"ok":false,"error":{"code":"selector_not_found","message":"selector_not_found","data":{"selector":"id:%s"}}}\n' "$1"
+}
+
+run_selector_not_found_teardown() {  # <case> <id> <proj> <wt> <state> <data> <config> -> sets out rc
+  local case_name=$1 id=$2 proj=$3 wt=$4 state=$5 data=$6 config=$7 neutral n=1
+  orca_case "$case_name"
+  # Orca calls in order: the path-match show (only while the path exists),
+  # the terminal close, then the worktree rm that answers selector_not_found.
+  if [ -e "$wt" ]; then
+    printf '{"ok":true,"result":{"worktree":{"id":"22ec401f-7dac-404b-b795-9594ac95aba0::%s","path":"%s"}}}\n' "$wt" "$wt" > "$RESP/$n.out"
+    n=$((n + 1))
+  fi
+  printf '{"ok":true,"result":{}}\n' > "$RESP/$n.out"
+  orca_selector_not_found_json "22ec401f-7dac-404b-b795-9594ac95aba0::$wt" > "$RESP/$((n + 1)).out"
+  printf '1\n' > "$RESP/$((n + 1)).exit"
+  neutral=$(neutral_fm_root "$CASE_DIR/neutral")
+  set +e
+  out=$( PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
+    FM_ROOT_OVERRIDE="$neutral" FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
+    "$ROOT/bin/fm-teardown.sh" "$id" 2>&1 )
+  rc=$?
+  set -e
+}
+
+seed_selector_not_found_scout() {  # <id> <proj> <wt> <state> <data> <config>
+  local id=$1 proj=$2 wt=$3 state=$4 data=$5 config=$6
+  mkdir -p "$data/$id" "$state" "$config"
+  printf 'report\n' > "$data/$id/report.md"
+  touch "$state/.last-watcher-beat"
+  fm_write_meta "$state/$id.meta" \
+    "window=fm-$id" "endpoint_task_id=$id" "terminal=term-$id" "worktree=$wt" "project=$proj" \
+    "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
+    "backend=orca" "orca_worktree_id=22ec401f-7dac-404b-b795-9594ac95aba0::$wt" \
+    "decisions_reviewed=1" "decision_keys="
+}
+
+test_teardown_completes_when_orca_worktree_already_removed() {
+  local proj wt data state config id out rc
+  id="orcagonewtz1"
+  proj="$TMP_ROOT/gone-wt-project"
+  wt="$TMP_ROOT/gone-wt-wt"
+  data="$TMP_ROOT/gone-wt-data"
+  state="$TMP_ROOT/gone-wt-state"
+  config="$TMP_ROOT/gone-wt-config"
+  # The earlier attempt removed the directory and branch through git.
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  git -C "$proj" worktree remove --force "$wt"
+  git -C "$proj" branch -D "fm/$id" >/dev/null
+  seed_selector_not_found_scout "$id" "$proj" "$wt" "$state" "$data" "$config"
+  run_selector_not_found_teardown gone-wt "$id" "$proj" "$wt" "$state" "$data" "$config"
+  expect_code 0 "$rc" "cleanup of an Orca copy that is already gone should complete"$'\n'"$out"
+  assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''close'$'\x1f''--terminal'$'\x1f'"term-$id"$'\x1f''--json' \
+    "cleanup did not close the recorded Orca terminal"
+  assert_contains "$out" "already removed" "cleanup did not say why it treated the copy as removed"
+  assert_absent "$state/$id.meta" "cleanup of an already-removed copy should retire the task record"
+  pass "fm-teardown.sh backend=orca: selector_not_found with the path and git entry gone finishes cleanup"
+}
+
+test_teardown_refuses_selector_not_found_while_orca_path_exists() {
+  local proj wt data state config id out rc
+  id="orcagonewtz2"
+  proj="$TMP_ROOT/present-wt-project"
+  wt="$TMP_ROOT/present-wt-wt"
+  data="$TMP_ROOT/present-wt-data"
+  state="$TMP_ROOT/present-wt-state"
+  config="$TMP_ROOT/present-wt-config"
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  seed_selector_not_found_scout "$id" "$proj" "$wt" "$state" "$data" "$config"
+  run_selector_not_found_teardown present-wt "$id" "$proj" "$wt" "$state" "$data" "$config"
+  [ "$rc" -ne 0 ] || fail "selector_not_found must not finish cleanup while the recorded path exists"$'\n'"$out"
+  assert_contains "$out" "still exists" "the refusal did not name the surviving path"
+  assert_present "$state/$id.meta" "the refusal removed the task record"
+  [ -d "$wt" ] || fail "the refusal removed the surviving copy"
+  pass "fm-teardown.sh backend=orca: selector_not_found refuses while the recorded path still exists"
+}
+
+test_teardown_refuses_selector_not_found_while_git_lists_orca_path() {
+  local proj wt data state config id out rc
+  id="orcagonewtz3"
+  proj="$TMP_ROOT/listed-wt-project"
+  wt="$TMP_ROOT/listed-wt-wt"
+  data="$TMP_ROOT/listed-wt-data"
+  state="$TMP_ROOT/listed-wt-state"
+  config="$TMP_ROOT/listed-wt-config"
+  # The directory vanished outside git, so the clone still lists the worktree.
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  rm -rf "$wt"
+  seed_selector_not_found_scout "$id" "$proj" "$wt" "$state" "$data" "$config"
+  run_selector_not_found_teardown listed-wt "$id" "$proj" "$wt" "$state" "$data" "$config"
+  [ "$rc" -ne 0 ] || fail "selector_not_found must not finish cleanup while git still lists the path"$'\n'"$out"
+  assert_contains "$out" "still lists" "the refusal did not name the surviving git worktree entry"
+  assert_present "$state/$id.meta" "the refusal removed the task record"
+  pass "fm-teardown.sh backend=orca: selector_not_found refuses while git still lists the recorded path"
+}
+
 test_scout_teardown_refuses_orca_missing_report_when_path_missing() {
   local proj wt data state config id out rc neutral
   id="orcanoreportz4"
@@ -1618,6 +1718,9 @@ test_scout_teardown_removes_orca_worktree_via_helper
 test_scout_teardown_refuses_orca_id_path_mismatch
 test_teardown_removes_orca_worktree_when_path_missing
 test_teardown_preserves_metadata_when_orca_remove_error_json
+test_teardown_completes_when_orca_worktree_already_removed
+test_teardown_refuses_selector_not_found_while_orca_path_exists
+test_teardown_refuses_selector_not_found_while_git_lists_orca_path
 test_scout_teardown_refuses_orca_missing_report_when_path_missing
 test_ship_teardown_refuses_orca_missing_worktree_path
 test_ship_teardown_removes_orca_worktree_when_id_path_matches

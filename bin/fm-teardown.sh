@@ -159,7 +159,10 @@
 # require_orca_worktree_path_match instead.
 # Orca tasks use the same safety checks, then close the recorded terminal and
 # remove the recorded worktree through `orca worktree rm`; teardown never guesses
-# an Orca target from ambient CLI state.
+# an Orca target from ambient CLI state. A worktree Orca no longer knows
+# (selector_not_found) counts as already removed only when its recorded path is
+# gone and the project clone lists no git worktree there
+# (teardown_orca_remove_worktree); every other Orca error refuses with its reason.
 # A Herdr presentation journal never authorizes cleanup. Teardown still closes
 # only the exact task pane from ordinary endpoint metadata and never calls
 # `workspace close`. It retires the non-authoritative journal only when a
@@ -2425,6 +2428,66 @@ require_orca_worktree_path_match_if_present() {
   require_orca_worktree_path_match "$worktree_id" "$inspected"
 }
 
+# Whether <project>'s git worktree list still has an entry for <target>,
+# compared both verbatim and canonicalized. Returns 0 listed, 1 not listed,
+# and 2 when the list cannot be read, which proves nothing.
+project_worktree_list_has() {  # <project> <target>
+  local project=$1 target=$2 listed line entry abs_target
+  [ -n "$project" ] && [ -d "$project" ] || return 2
+  listed=$(git -C "$project" -c core.quotePath=false worktree list --porcelain 2>/dev/null) || return 2
+  abs_target=$(removal_target_abs_path "$target" 2>/dev/null) || abs_target=
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *)
+        entry=${line#worktree }
+        if [ "$entry" = "$target" ]; then
+          return 0
+        fi
+        if [ -n "$abs_target" ] \
+           && [ "$(removal_target_abs_path "$entry" 2>/dev/null || true)" = "$abs_target" ]; then
+          return 0
+        fi
+        ;;
+    esac
+  done <<EOF
+$listed
+EOF
+  return 1
+}
+
+# Release the recorded Orca worktree. When Orca no longer knows the id
+# (selector_not_found), the copy counts as already removed only if the recorded
+# path is absent AND the project clone's git worktree list has no entry for it;
+# an earlier interrupted cleanup leaves exactly that shape. Any other Orca
+# error, a path that still exists, or a list that cannot be read refuses, and
+# every refusal names its reason.
+teardown_orca_remove_worktree() {  # <worktree-id> <worktree-path> <project> <label>
+  local worktree_id=$1 wt=$2 project=$3 label=$4 rc=0 listed_rc=0
+  fm_backend_remove_worktree orca "$worktree_id" || rc=$?
+  [ "$rc" -ne 0 ] || return 0
+  if [ "$rc" -ne "$FM_BACKEND_WORKTREE_UNKNOWN" ]; then
+    echo "REFUSED: could not release the Orca worktree for $label; preserving metadata so a rerun can retry." >&2
+    return 1
+  fi
+  if [ -z "$wt" ] || [ -e "$wt" ] || [ -L "$wt" ]; then
+    echo "REFUSED: Orca does not know worktree id $worktree_id for $label, but its recorded path ${wt:-<missing>} still exists; preserving metadata." >&2
+    return 1
+  fi
+  project_worktree_list_has "$project" "$wt" || listed_rc=$?
+  case "$listed_rc" in
+    0)
+      echo "REFUSED: Orca does not know worktree id $worktree_id for $label, but ${project:-<missing project>} still lists $wt as a git worktree; preserving metadata." >&2
+      return 1
+      ;;
+    1) ;;
+    *)
+      echo "REFUSED: Orca does not know worktree id $worktree_id for $label, and the git worktree list of ${project:-<missing project>} could not be read to confirm $wt is gone; preserving metadata." >&2
+      return 1
+      ;;
+  esac
+  echo "note: the Orca worktree for $label is already removed ($wt is gone, Orca no longer knows its id, and git lists no worktree there); continuing cleanup." >&2
+}
+
 # The task's own live slot, canonicalized, or empty when this record has no slot
 # to release (a secondmate home, a record with no worktree=, or a path that is
 # already gone). Every slot-ownership check below is scoped to that value, so a
@@ -3373,7 +3436,7 @@ cleanup_firstmate_home_children() {
         rm -f "$child_wt/.claude/settings.local.json" "$child_wt/.opencode/plugins/fm-turn-end.js" \
           "$child_wt/.fm-grok-turnend" "$child_wt/.fm-kimi-turnend"
       fi
-      fm_backend_remove_worktree "$child_backend" "$child_orca_worktree_id" || return 1
+      teardown_orca_remove_worktree "$child_orca_worktree_id" "$child_wt" "$child_proj" "child $child_id" || return 1
     elif [ -n "$child_wt" ] && [ -d "$child_wt" ]; then
       # The same ownership determination as the parent's own slot: a child
       # slot reassigned to another task is not this child's to kill, reset,
@@ -3715,7 +3778,7 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
     fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
   fi
-  fm_backend_remove_worktree "$BACKEND" "$ORCA_WORKTREE_ID"
+  teardown_orca_remove_worktree "$ORCA_WORKTREE_ID" "$WT" "$PROJ" "task $ID" || exit 1
 elif [ "$KIND" != secondmate ] && ! teardown_owns_worktree; then
   :
 elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
