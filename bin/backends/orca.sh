@@ -181,11 +181,44 @@ fm_backend_orca_send_literal() {  # <terminal-id> <text>
   fm_backend_orca_run_json orca terminal send --terminal "$terminal" --text "$text" --json
 }
 
+# fm_backend_orca_remove_worktree: release one Orca worktree by its recorded
+# id. Every failure names its reason on stderr. Orca answering
+# selector_not_found (it no longer knows the id at all) returns
+# FM_BACKEND_WORKTREE_UNKNOWN (bin/fm-backend.sh) so a caller can decide,
+# from its own evidence, whether the copy is already gone; that answer alone
+# never proves it, and every other failure returns 1.
 fm_backend_orca_remove_worktree() {  # <worktree-id>
-  local worktree_id=${1:-}
+  local worktree_id=${1:-} out rc err code msg
   [ -n "$worktree_id" ] || { echo "error: missing Orca worktree id; cannot remove worktree" >&2; return 1; }
   fm_backend_orca_tool_check || return 1
-  fm_backend_orca_run_json orca worktree rm --worktree "id:$worktree_id" --force --json
+  out=$(orca worktree rm --worktree "id:$worktree_id" --force --json) && rc=0 || rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | fm_backend_orca_json_ok 2>/dev/null; then
+    return 0
+  fi
+  err=$(printf '%s' "$out" | fm_backend_orca_json_error 2>/dev/null) || err=
+  code=${err%%$'\t'*}
+  msg=${err#*$'\t'}
+  if [ "$code" = selector_not_found ]; then
+    echo "error: Orca has no worktree matching id $worktree_id (selector_not_found)" >&2
+    return "$FM_BACKEND_WORKTREE_UNKNOWN"
+  fi
+  echo "error: orca worktree rm failed for $worktree_id: ${msg:-unreadable Orca answer (exit $rc)}" >&2
+  return 1
+}
+
+# fm_backend_orca_json_error: print "<code>\t<message>" for an ok:false Orca
+# answer and return 0; return 1 for anything else, including unparseable input.
+fm_backend_orca_json_error() {
+  node -e '
+const fs = require("fs");
+let data;
+try { data = JSON.parse(fs.readFileSync(0, "utf8")); } catch { process.exit(1); }
+if (!data || data.ok !== false) process.exit(1);
+const e = data.error || {};
+const code = typeof e.code === "string" ? e.code : "";
+const msg = typeof e.message === "string" ? e.message : code;
+process.stdout.write(code + "\t" + msg);
+'
 }
 
 fm_backend_orca_worktree_path() {
