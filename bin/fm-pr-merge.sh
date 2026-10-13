@@ -55,6 +55,30 @@
 # setting, which the merge API applies, and imposing squash there would override
 # that convention rather than mirror the GitHub default.
 #
+# A GitHub base branch whose effective rules require a check that only a
+# merge-queue app posts (bin/fm-pr-lib.sh's fm_pr_github_read_queue_app_checks
+# owns that reading: a required check bound to an integration other than
+# GitHub Actions in a ruleset other than the main protection, whose name no
+# workflow produces) cannot be merged directly: the app posts its
+# check only for a pull request handed to it through GitHub auto-merge, then
+# lets auto-merge land its tested merge result. On such a branch the verified
+# head is merged with --auto (plus --squash unless the caller named a method)
+# and --match-head-commit, after every pre-merge check above, of which only the
+# queue app's own checks may still be pending. An accepted request persists the
+# merge authority and records state/<id>.queue-merge (format owned by
+# bin/fm-pr-lib.sh), then is read back: a pull request already merged is
+# recorded as landed exactly like a direct merge, one still open with
+# auto-merge enabled exits 0 with no landed outcome and its merge poll armed,
+# and anything else refuses. bin/fm-watch.sh owns what follows: the landing
+# through the poll and, in pr_queue_merge_tick, the queue's ejection,
+# head-move, and stall wakes and keeping its yolo merge poll from handing that
+# same head to the queue again. While the away-posture record exists such a
+# branch is refused like any other asynchronous merge, with an "error: merge-queue
+# auto-merge refused while away: <url> at <head>;" line bin/fm-watch.sh wakes
+# on once per head. A branch whose rules cannot be read keeps the direct merge
+# and says so, because GitHub refuses a direct merge that a required check
+# still blocks.
+#
 # A GitLab merge is refused unless every pre-merge condition holds, each read
 # live at merge time rather than taken from recorded metadata: the merge request
 # is open, detailed_merge_status is mergeable, has_conflicts is false,
@@ -494,9 +518,12 @@ FIELDS
 }
 
 # Pre-merge conditions for a GitHub pull request, read from one live view.
-# Sets FM_PR_MERGE_HEAD to the verified head on success.
+# Sets FM_PR_MERGE_HEAD to the verified head on success, and
+# FM_PR_GITHUB_QUEUE_APP_STATUS to present, none, or unreadable for the base
+# branch's merge-queue app checks.
+FM_PR_GITHUB_QUEUE_APP_STATUS=unreadable
 github_verify_mergeable() {
-  local json fields line red name covered
+  local json fields line red name covered queue_pending
   local total=0 named=0 refusals=''
   local state='' draft='' mergeable='' merge_state='' live_head='' base=''
 
@@ -546,6 +573,23 @@ FIELDS
   if ! red=$(fm_pr_github_checks_not_green "$json"); then
     echo "error: could not read the GitHub pull request state before merging" >&2
     return 1
+  fi
+  # A merge-queue app's own required check is posted only once the pull
+  # request is handed to the queue, so it is the one check allowed to be
+  # pending here; every other check must already be green.
+  FM_PR_GITHUB_QUEUE_APP_STATUS=unreadable
+  if fm_pr_github_read_queue_app_checks "$PR_OWNER" "$PR_REPO" "$base" "$json"; then
+    FM_PR_GITHUB_QUEUE_APP_STATUS=none
+    [ "$FM_PR_GITHUB_QUEUE_APP_CHECKS" = '[]' ] || FM_PR_GITHUB_QUEUE_APP_STATUS=present
+  fi
+  if [ "$FM_PR_GITHUB_QUEUE_APP_STATUS" = present ] && [ -n "$red" ]; then
+    if ! queue_pending=$(fm_pr_github_checks_pending "$json" "$FM_PR_GITHUB_QUEUE_APP_CHECKS"); then
+      echo "error: could not read the GitHub pull request state before merging" >&2
+      return 1
+    fi
+    red=$(printf '%s\n' "$red" | awk -v pending="$queue_pending" '
+      BEGIN { n = split(pending, p, "\n"); for (i = 1; i <= n; i++) skip[p[i]] = 1 }
+      !($0 in skip)')
   fi
 
   case "$state" in
@@ -1029,9 +1073,28 @@ case "$PROVIDER" in
     fi
     FM_PR_GITHUB_CALLER_METHOD=$(caller_merge_method "$@")
     github_verify_mergeable || exit 1
+    queue_app=false
+    case "$FM_PR_GITHUB_QUEUE_APP_STATUS" in
+      present)
+        queue_app=true
+        caller_requested_auto_merge "$@" || merge_args+=(--auto)
+        FM_PR_GITHUB_AUTO_REQUESTED=true
+        printf 'notice: base branch %s requires %s, which only its merge-queue app posts; requesting auto-merge so the queue lands %s\n' \
+          "$FM_PR_GITHUB_BASE" "$FM_PR_GITHUB_QUEUE_APP_CHECKS" "$URL" >&2
+        ;;
+      unreadable)
+        printf 'notice: the branch rules for base branch %s could not be read, so a merge-queue app check can be neither confirmed nor ruled out; merging directly\n' \
+          "$FM_PR_GITHUB_BASE" >&2
+        ;;
+    esac
     # The away record is locked first, so this last presence and authority read
     # and the forge command below share one live-owner critical section.
     hold_away_record_for_merge || exit 1
+    if [ "$queue_app" = true ] && fm_afk_contract_present "$STATE"; then
+      printf 'error: merge-queue auto-merge refused while away: %s at %s; base branch %s merges only through its merge-queue app, which requires GitHub auto-merge, an asynchronous merge refused while the away-posture record exists; nothing was handed to the forge\n' \
+        "$URL" "$FM_PR_MERGE_HEAD" "$FM_PR_GITHUB_BASE" >&2
+      exit 2
+    fi
     away_status=0
     require_current_away_authority || away_status=$?
     [ "$away_status" -eq 0 ] || exit "$away_status"
@@ -1044,6 +1107,12 @@ case "$PROVIDER" in
     if [ "$merge_status" -eq 0 ]; then
       FM_PR_GITHUB_MERGE_ACCEPTED=true
       persist_accepted_merge_authority || exit 1
+      if [ "$queue_app" = true ] \
+        && ! fm_pr_queue_merge_record_write "$STATE" "$ID" "$URL" "$FM_PR_MERGE_HEAD" \
+          requested "$FM_PR_GITHUB_QUEUE_APP_CHECKS"; then
+        printf 'actionable: auto-merge was requested for %s but its queue hand-off could not be recorded, so an ejection would go unreported; the merge poll remains armed\n' \
+          "$URL" >&2
+      fi
       fm_afk_contract_lock_release || true
       fm_lock_release "$MERGE_CONTROL_LOCK" || true
       MERGE_CONTROL_LOCK=
@@ -1062,11 +1131,33 @@ case "$PROVIDER" in
       fi
       exit "$merge_status"
     fi
-    if ! github_read_outcome; then
+    # An accepted auto-merge request is not a landed merge: only a pull request
+    # that already reads back merged falls through to the landed outcome below.
+    if [ "$queue_app" = true ]; then
+      if ! fm_pr_github_read_auto_merge "$URL" "$FM_PR_GITHUB_QUEUE_APP_CHECKS"; then
+        github_report_forge_output "$merge_output"
+        printf 'error: auto-merge was requested for %s but its state could not be read back; PR metadata and merge poll remain recorded\n' \
+          "$URL" >&2
+        exit 1
+      fi
+      if [ "$FM_PR_GITHUB_AUTO_STATE" = OPEN ] && [ "$FM_PR_GITHUB_AUTO_ENABLED" = true ]; then
+        printf 'verified: %s has auto-merge enabled at head %s and waits for its merge-queue app (%s); nothing has landed yet and the merge poll stays armed\n' \
+          "$URL" "$FM_PR_GITHUB_AUTO_HEAD" "$FM_PR_GITHUB_AUTO_DETAIL"
+        exit 0
+      fi
+      if [ "$FM_PR_GITHUB_AUTO_STATE" != MERGED ]; then
+        github_report_forge_output "$merge_output"
+        printf 'error: auto-merge was requested for %s but it reads back as state=%s with auto-merge %s (%s), so nothing is landed or waiting in the queue\n' \
+          "$URL" "$FM_PR_GITHUB_AUTO_STATE" \
+          "$([ "$FM_PR_GITHUB_AUTO_ENABLED" = true ] && echo enabled || echo disabled)" \
+          "$FM_PR_GITHUB_AUTO_DETAIL" >&2
+        exit 1
+      fi
+      printf 'verified: %s is merged through its merge-queue app\n' "$URL"
+    elif ! github_read_outcome; then
       github_report_forge_output "$merge_output"
       exit 1
-    fi
-    if [ "$FM_PR_GITHUB_MERGED" = true ]; then
+    elif [ "$FM_PR_GITHUB_MERGED" = true ]; then
       printf 'verified: %s is merged (state=%s, merged=%s, isInMergeQueue=%s)\n' \
         "$URL" "$FM_PR_GITHUB_STATE" "$FM_PR_GITHUB_MERGED" "$FM_PR_GITHUB_QUEUED"
     elif [ "$FM_PR_GITHUB_QUEUED" = true ]; then

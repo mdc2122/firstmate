@@ -142,6 +142,10 @@ printf '%s\n' "$*" >> "$FM_TEST_GH_LOG"
 case "${1:-} ${2:-}" in
   "pr view")
     case " $* " in
+      *autoMergeRequest*)
+        cat "$FM_TEST_GH_AUTO_JSON"
+        exit 0
+        ;;
       *statusCheckRollup*)
         cat "$FM_TEST_GH_VIEW_JSON"
         if [ -f "${FM_TEST_AWAY_RECORD_AFTER_VIEW:-}" ]; then
@@ -197,7 +201,12 @@ case "${1:-} ${2:-}" in
     if [ -f "${FM_TEST_GH_RULES_FAIL:-}" ]; then
       exit 1
     fi
-    cat "$FM_TEST_GH_RULES"
+    # The merge-queue method read filters with --jq; the merge-queue app read
+    # takes the raw rules array.
+    case " $* " in
+      *" --jq "*) cat "$FM_TEST_GH_RULES" ;;
+      *) cat "$FM_TEST_GH_RULES_JSON" 2>/dev/null || printf '[]\n' ;;
+    esac
     exit 0
     ;;
 esac
@@ -379,6 +388,8 @@ run_pr_merge() {
   FM_TEST_GH_LOG="$case_dir/gh.log" \
   FM_TEST_GH_OUTCOME="$case_dir/github-outcome" \
   FM_TEST_GH_RULES="$case_dir/github-rules" \
+  FM_TEST_GH_RULES_JSON="$case_dir/github-rules.json" \
+  FM_TEST_GH_AUTO_JSON="$case_dir/github-auto.json" \
   FM_TEST_GH_VIEW_JSON="$case_dir/github-view.json" \
   FM_TEST_GH_HEAD="$case_dir/github-head" \
   FM_TEST_GH_MERGE_RC_FILE="$case_dir/github-merge-rc" \
@@ -2039,6 +2050,210 @@ test_queued_github_merge_leaves_the_poll_armed() {
   pass "a queued GitHub merge stays silent and leaves confirmation to the armed poll"
 }
 
+# Branch rules shaped like a repository whose main protection (the ruleset
+# carrying the pull_request rule) requires CI, beside a second ruleset in which
+# a merge-queue app requires its own check. Args: case_dir [queue-ruleset-id]
+write_queue_app_rules() {
+  local case_dir=$1 queue_ruleset=${2:-202}
+  cat > "$case_dir/github-rules.json" <<JSON
+[{"type":"required_status_checks","ruleset_id":$queue_ruleset,"parameters":{"required_status_checks":[{"context":"queue-mq","integration_id":5293819}]}},
+ {"type":"pull_request","ruleset_id":101,"parameters":{}},
+ {"type":"required_status_checks","ruleset_id":101,"parameters":{"strict_required_status_checks_policy":false,"required_status_checks":[{"context":"ci","integration_id":15368}]}}]
+JSON
+}
+
+write_auto_json() {  # <case_dir> <state> <auto-enabled true|false> <head>
+  local merge_request=null
+  [ "$3" = true ] && merge_request='{"enabledAt":"2026-10-13T01:37:44Z","mergeMethod":"SQUASH"}'
+  printf '{"state":"%s","headRefOid":"%s","autoMergeRequest":%s,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}]}\n' \
+    "$2" "$4" "$merge_request" > "$1/github-auto.json"
+}
+
+test_queue_app_branch_requests_auto_merge_and_stays_armed() {
+  local case_dir url head
+  url=https://github.com/example/repo/pull/90
+  head=9090909090909090909090909090909090909090
+  case_dir=$(make_home_case queue-app-auto)
+  add_gh_mocks "$case_dir" "$head"
+  write_github_rollup_json "$case_dir" "$head" \
+    "$(check_run ci COMPLETED SUCCESS)" "$(check_run queue-mq IN_PROGRESS -)"
+  write_queue_app_rules "$case_dir"
+  write_auto_json "$case_dir" OPEN true "$head"
+  printf 'yolo=on\n' >> "$case_dir/state/task-x1.meta"
+  : >"$case_dir/gh-axi.log"
+
+  FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
+    >"$case_dir/stdout" 2>"$case_dir/stderr" \
+    || fail "queue-app-auto: the auto-merge request failed: $(cat "$case_dir/stderr")"
+
+  assert_logged_gh_merge "$case_dir" 90 example/repo --squash --auto
+  assert_grep 'waits for its merge-queue app' "$case_dir/stdout" \
+    "queue-app-auto: the run did not report the pull request as waiting for the queue"
+  assert_absent "$case_dir/state/.wake-queue" \
+    "queue-app-auto: an accepted auto-merge request was reported as landed"
+  [ ! -e "$case_dir/state/task-x1.pr-poll-merge-notified" ] \
+    || fail "queue-app-auto: an accepted auto-merge request was marked landed"
+  [ -f "$case_dir/state/task-x1.check.sh" ] \
+    || fail "queue-app-auto: the merge poll was not left armed"
+  [ -f "$case_dir/state/task-x1.merge-authority" ] \
+    || fail "queue-app-auto: the accepted request did not persist its merge authority"
+  [ "$(cat "$case_dir/state/task-x1.queue-merge")" = "$url $head requested [\"queue-mq\"]" ] \
+    || fail "queue-app-auto: the queue hand-off was not recorded: $(cat "$case_dir/state/task-x1.queue-merge" 2>/dev/null)"
+  pass "a merge-queue app branch gets an auto-merge request that keeps the poll armed and claims no landing"
+}
+
+test_queue_app_branch_landed_on_readback_records_the_merge() {
+  local case_dir url head
+  url=https://github.com/example/repo/pull/91
+  head=9191919191919191919191919191919191919191
+  case_dir=$(make_home_case queue-app-landed)
+  add_gh_mocks "$case_dir" "$head"
+  write_queue_app_rules "$case_dir"
+  write_auto_json "$case_dir" MERGED false "$head"
+  : >"$case_dir/gh-axi.log"
+
+  FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
+    >"$case_dir/stdout" 2>"$case_dir/stderr" \
+    || fail "queue-app-landed: merge failed: $(cat "$case_dir/stderr")"
+  assert_logged_gh_merge "$case_dir" 91 example/repo --squash --auto
+  assert_grep "check: merge landed: task-x1 $url" "$case_dir/state/.wake-queue" \
+    "queue-app-landed: a pull request that already merged was not recorded as landed"
+  pass "a merge-queue auto-merge that reads back merged is recorded like a direct merge"
+}
+
+test_queue_app_branch_keeps_every_other_gate() {
+  local case_dir url head rc
+  url=https://github.com/example/repo/pull/92
+  head=9292929292929292929292929292929292929292
+
+  case_dir=$(make_case queue-app-red)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" "$head"
+  write_github_rollup_json "$case_dir" "$head" \
+    "$(check_run ci IN_PROGRESS -)" "$(check_run queue-mq IN_PROGRESS -)"
+  write_queue_app_rules "$case_dir"
+  set +e
+  run_pr_merge "$case_dir" task-x1 "$url" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "queue-app-red: a pending CI check must still refuse"
+  assert_grep "check 'ci' is not green" "$case_dir/stderr" \
+    "queue-app-red: the refusal did not name the pending CI check"
+  assert_no_grep "check 'queue-mq'" "$case_dir/stderr" \
+    "queue-app-red: the queue app's own pending check was counted against the merge"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "queue-app-red: a pending CI check reached the forge"
+
+  case_dir=$(make_case queue-app-failed-queue-check)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" "$head"
+  write_github_rollup_json "$case_dir" "$head" \
+    "$(check_run ci COMPLETED SUCCESS)" "$(check_run queue-mq COMPLETED FAILURE)"
+  write_queue_app_rules "$case_dir"
+  set +e
+  run_pr_merge "$case_dir" task-x1 "$url" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "queue-app-failed-queue-check: a settled queue failure must refuse"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" \
+    "queue-app-failed-queue-check: a failed queue check reached the forge"
+
+  case_dir=$(make_case queue-app-away)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" "$head"
+  write_queue_app_rules "$case_dir"
+  printf 'yolo=on\n' >> "$case_dir/state/task-x1.meta"
+  write_away_record "$case_dir"
+  set +e
+  run_pr_merge "$case_dir" task-x1 "$url" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 2 "$rc" "queue-app-away: the merge-queue path must refuse while away"
+  assert_grep 'refused while the away-posture record exists' "$case_dir/stderr" \
+    "queue-app-away: the refusal did not name the away posture"
+  assert_grep "merge-queue auto-merge refused while away: $url at $head;" "$case_dir/stderr" \
+    "queue-app-away: the refusal did not name the pull request and its head"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "queue-app-away: an away auto-merge reached the forge"
+  [ ! -e "$case_dir/state/task-x1.queue-merge" ] || fail "queue-app-away: a refused merge recorded a hand-off"
+  pass "a merge-queue app branch still refuses other pending or failed checks and the away posture"
+}
+
+test_branch_without_queue_app_merges_directly() {
+  local case_dir url head shape
+  url=https://github.com/example/repo/pull/93
+  head=9393939393939393939393939393939393939393
+  for shape in none main-only; do
+    case_dir=$(make_home_case "no-queue-app-$shape")
+    add_gh_mocks "$case_dir" "$head"
+    # main-only: the integration-bound check sits in the main protection
+    # itself, which is ordinary CI rather than a merge-queue app.
+    [ "$shape" = none ] || write_queue_app_rules "$case_dir" 101
+    : >"$case_dir/gh-axi.log"
+    FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
+      >"$case_dir/stdout" 2>"$case_dir/stderr" \
+      || fail "no-queue-app-$shape: direct merge failed: $(cat "$case_dir/stderr")"
+    assert_logged_gh_merge "$case_dir" 93 example/repo --squash
+    assert_grep "check: merge landed: task-x1 $url" "$case_dir/state/.wake-queue" \
+      "no-queue-app-$shape: the direct merge was not recorded as landed"
+    [ ! -e "$case_dir/state/task-x1.queue-merge" ] \
+      || fail "no-queue-app-$shape: a direct merge recorded a queue hand-off"
+  done
+  pass "a branch with no merge-queue app check keeps the direct merge"
+}
+
+# An organization ruleset (no pull_request rule of its own) requiring a GitHub
+# Actions check, and a non-Actions integration's required check whose name a
+# workflow produces, are ordinary required CI checks: neither may be left
+# pending as a merge-queue app check, and a branch with only those merges
+# directly once they are green.
+test_ordinary_ci_checks_outside_main_protection_stay_required() {
+  local case_dir url head shape rc
+  url=https://github.com/example/repo/pull/94
+  head=9494949494949494949494949494949494949494
+  for shape in org-actions workflow-named; do
+    case_dir=$(make_case "ordinary-ci-$shape-pending")
+    mkdir -p "$case_dir/wt"
+    add_gh_mocks "$case_dir" "$head"
+    write_ordinary_ci_rules "$case_dir" "$shape"
+    write_github_rollup_json "$case_dir" "$head" \
+      "$(check_run ci COMPLETED SUCCESS)" \
+      '{"__typename":"CheckRun","name":"org-ci","workflowName":"Org CI","status":"IN_PROGRESS","conclusion":null}'
+    set +e
+    run_pr_merge "$case_dir" task-x1 "$url" > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+    expect_code 1 "$rc" "ordinary-ci-$shape-pending: a pending required CI check must refuse"
+    assert_grep "check 'org-ci' is not green" "$case_dir/stderr" \
+      "ordinary-ci-$shape-pending: the refusal did not name the pending CI check"
+    assert_no_grep 'pr merge' "$case_dir/gh.log" \
+      "ordinary-ci-$shape-pending: a pending CI check reached the forge"
+
+    case_dir=$(make_home_case "ordinary-ci-$shape-green")
+    add_gh_mocks "$case_dir" "$head"
+    write_ordinary_ci_rules "$case_dir" "$shape"
+    write_github_rollup_json "$case_dir" "$head" \
+      "$(check_run ci COMPLETED SUCCESS)" \
+      '{"__typename":"CheckRun","name":"org-ci","workflowName":"Org CI","status":"COMPLETED","conclusion":"SUCCESS"}'
+    : >"$case_dir/gh-axi.log"
+    FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
+      >"$case_dir/stdout" 2>"$case_dir/stderr" \
+      || fail "ordinary-ci-$shape-green: direct merge failed: $(cat "$case_dir/stderr")"
+    assert_logged_gh_merge "$case_dir" 94 example/repo --squash
+    [ ! -e "$case_dir/state/task-x1.queue-merge" ] \
+      || fail "ordinary-ci-$shape-green: an ordinary CI check was treated as a merge-queue app check"
+  done
+  pass "an organization's Actions check and a workflow-produced check stay ordinary required checks"
+}
+
+write_ordinary_ci_rules() {  # <case_dir> <org-actions|workflow-named>
+  local integration=15368
+  [ "$2" = org-actions ] || integration=4242
+  cat > "$1/github-rules.json" <<JSON
+[{"type":"required_status_checks","ruleset_id":303,"parameters":{"required_status_checks":[{"context":"org-ci","integration_id":$integration}]}},
+ {"type":"pull_request","ruleset_id":101,"parameters":{}},
+ {"type":"required_status_checks","ruleset_id":101,"parameters":{"required_status_checks":[{"context":"ci","integration_id":15368}]}}]
+JSON
+}
+
 test_distinct_merged_prs_keep_distinct_wakes() {
   local case_dir first_url second_url
   first_url=https://github.com/example/repo/pull/68
@@ -3091,6 +3306,11 @@ test_superseded_failed_check_run_no_longer_refuses
 test_check_runs_never_supersede_status_contexts
 test_current_failed_check_run_still_refuses
 test_late_finishing_old_success_does_not_hide_current_failure
+test_queue_app_branch_requests_auto_merge_and_stays_armed
+test_queue_app_branch_landed_on_readback_records_the_merge
+test_queue_app_branch_keeps_every_other_gate
+test_branch_without_queue_app_merges_directly
+test_ordinary_ci_checks_outside_main_protection_stay_required
 test_late_finishing_old_cancellation_is_superseded
 test_unfinished_rerun_keeps_a_check_red
 test_supersession_never_crosses_check_names

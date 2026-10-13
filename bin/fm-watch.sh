@@ -135,6 +135,28 @@
 #                          A PR held behind its repository's merge-line head
 #                          (bin/fm-merge-line.sh) is not yolo-merged and gets no
 #                          steer until it is head; this wake still runs for it
+#   check: <check>: merge-queue ejected <url> at <head>: <detail>
+#                          bin/fm-pr-merge.sh handed the PR to its base branch's
+#                          merge-queue app through GitHub auto-merge, and the
+#                          queue cancelled auto-merge while the PR stayed open
+#                          at that head; <detail> carries the queue check's
+#                          conclusion and reason. One wake per handed-over head,
+#                          and the yolo poll does not re-queue that head
+#                          (pr_queue_merge_tick)
+#   check: <check>: merge-queue hand-off cancelled: <url> moved from verified head <old> to <new>, ...
+#                          a PR handed to its merge-queue app read at another
+#                          head: its merge authority was revoked and auto-merge
+#                          disabled. Once per PR and new head, for every task;
+#                          a yolo poll re-verifies the new head next cycle
+#   check: <check>: merge-queue stalled: merge queue has not picked up or finished <url> after <n> min at head <head>
+#                          the queue has held the same head for
+#                          FM_MERGE_LINE_STALL_SECS; once per PR and head
+#   check: <check>: merge-queue refused while away <url> at <head>: <detail>
+#                          the yolo poll's merge of a green head-of-line PR was
+#                          refused because its base branch merges only through
+#                          a merge-queue app, which requires GitHub auto-merge,
+#                          and auto-merge is refused while away. One wake per
+#                          PR head (pr_queue_away_refused_tick)
 #   check: <check>: merge-line stalled: green <url> has waited <m>m behind unchanged head <head>
 #                          a PR held by its merge line has been green while the
 #                          same head held it for FM_MERGE_LINE_STALL_SECS
@@ -304,7 +326,7 @@ PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base r
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
 PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
-MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head age before its one wake
+MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head or queue-held-head age before its one wake
 case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
@@ -2414,7 +2436,8 @@ retire_merged_pr_poll() {  # <id> <url>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.merge-line-stall"
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.merge-line-stall" \
+    "$STATE/$id.queue-merge" "$STATE/$id.queue-away-refused" "$STATE/$id.queue-stall"
   # A landed PR leaves its repository's merge line so the next PR becomes the
   # head (bin/fm-merge-line.sh; a no-op without a line).
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$url" \
@@ -2554,6 +2577,156 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
   reason="check: $c: green-unmergeable $url for $((age / 60))m: $detail"
   fm_wake_append check "$c" "$reason" || exit 1
   pr_green_blocked_record "$file" "$url" "$head" "$first" 1 || exit 1
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
+}
+
+# A pull request bin/fm-pr-merge.sh handed to a merge-queue app through GitHub
+# auto-merge (state/<id>.queue-merge, format owned by bin/fm-pr-lib.sh) has
+# not landed: its merge poll stays armed and lands it through the ordinary
+# merged handling once the forge reads MERGED. Until then this reads
+# bin/fm-pr-queue-state.sh and sets PR_QUEUE_HOLD=1 whenever the yolo merge
+# must not run again: while the queue still holds the pull request, while its
+# state is unknown, and once the queue has ejected that same head. An
+# ejection - auto-merge cancelled while the pull request stays open at the
+# head that was handed over - queues one wake naming the queue's reason and
+# marks the record ejected, so it never wakes or re-queues twice. A new head
+# pushed after that, or a closed pull request, retires the record, so a fixed
+# pull request goes back through the guarded merge. Merge authority was
+# granted for the handed-over head only: once the pull request reads at any
+# other head, that authority is revoked, so a landing there is recorded as
+# external, and an auto-merge still enabled on the new head is disabled before
+# the hold drops; that retirement wakes once (the record it retires is the
+# per-head guard), and a yolo poll re-verifies the new head from scratch on its
+# next cycle. While the queue holds the same head past MERGE_LINE_STALL_SECS,
+# one wake per pull request and head says the queue has not picked it up or
+# finished; state/<id>.queue-stall keeps that episode as "<url> <head>
+# <first-seen-epoch> <alerted>" and retires with the merged poll and at
+# teardown. The record retires with the merged poll and at teardown. Called
+# with the poll's merged verdict too: PR_QUEUE_HOLD stays 1 then unless the
+# landing is confirmed at the handed-over head or its authority was revoked,
+# and the caller defers that landing rather than credit it.
+PR_QUEUE_HOLD=0
+pr_queue_merge_tick() {  # <id> <check-path> <url>
+  local id=$1 c=$2 url=$3 file verdict head detail reason stall now age
+  local rec_url='' rec_head='' first='' alerted=''
+
+  PR_QUEUE_HOLD=0
+  file="$STATE/$id.queue-merge"
+  [ -e "$file" ] || [ -L "$file" ] || return 0
+  if ! fm_pr_queue_merge_record_read "$STATE" "$id" \
+    || [ "$FM_PR_QUEUE_MERGE_URL" != "$url" ]; then
+    rm -f "$file"
+    triage_log "dropped a merge-queue record for $id that does not name its polled PR $url"
+    return 0
+  fi
+  PR_QUEUE_HOLD=1
+  run_check_capture "$SCRIPT_DIR/fm-pr-queue-state.sh" "$url" "$FM_PR_QUEUE_MERGE_CHECKS" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    waiting\ *|merged\ *|off\ *) ;;
+    closed)
+      rm -f "$file"
+      PR_QUEUE_HOLD=0
+      return 0
+      ;;
+    *) return 0 ;;
+  esac
+  detail=${verdict#* }
+  head=${detail%% *}
+  detail=${detail#* }
+  if [ "$head" != "$FM_PR_QUEUE_MERGE_HEAD" ]; then
+    pr_queue_merge_revoke_authority "$id" "$url" || return 0
+    if [ "${verdict%% *}" = waiting ]; then
+      run_action_capture "$YOLO_MERGE_TIMEOUT" "$SCRIPT_DIR/fm-pr-queue-state.sh" --disable-auto "$url" \
+        || exit 1
+      if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+        triage_log "merge-queue record for $id held: disabling auto-merge on $url at unverified head $head failed (rc=$FM_ACTION_STATUS)"
+        return 0
+      fi
+    fi
+    rm -f "$file"
+    PR_QUEUE_HOLD=0
+    triage_log "merge-queue record for $id retired: $url moved from $FM_PR_QUEUE_MERGE_HEAD to $head"
+    [ "${verdict%% *}" != merged ] || return 0
+    reason="check: $c: merge-queue hand-off cancelled: $url moved from verified head $FM_PR_QUEUE_MERGE_HEAD to $head, so its merge authority was revoked and auto-merge is off; the new head needs a fresh guarded merge"
+    fm_wake_append check "$c" "$reason" || exit 1
+    pr_poll_control_release || exit 1
+    touch "$STATE/.last-check"
+    wake "$reason"
+  fi
+  case "$verdict" in
+    waiting\ *)
+      [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] \
+        || fm_pr_queue_merge_record_write "$STATE" "$id" "$url" "$FM_PR_QUEUE_MERGE_HEAD" \
+          requested "$FM_PR_QUEUE_MERGE_CHECKS" || true
+      stall="$STATE/$id.queue-stall"
+      now=$(date +%s)
+      if [ -f "$stall" ] && [ ! -L "$stall" ]; then
+        read -r rec_url rec_head first alerted < "$stall" || true
+      fi
+      case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
+      if [ "$rec_url" != "$url" ] || [ "$rec_head" != "$head" ]; then
+        first=$now
+        alerted=0
+        pr_green_blocked_record "$stall" "$url" "$head" "$first" 0 || return 0
+      fi
+      [ "$alerted" = 1 ] && return 0
+      age=$((now - first))
+      [ "$age" -ge "$MERGE_LINE_STALL_SECS" ] || return 0
+      reason="check: $c: merge-queue stalled: merge queue has not picked up or finished $url after $((age / 60)) min at head $head"
+      fm_wake_append check "$c" "$reason" || exit 1
+      pr_green_blocked_record "$stall" "$url" "$head" "$first" 1 || exit 1
+      pr_poll_control_release || exit 1
+      touch "$STATE/.last-check"
+      wake "$reason"
+      ;;
+    merged\ *)
+      PR_QUEUE_HOLD=0
+      return 0
+      ;;
+  esac
+  [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] || return 0
+  reason="check: $c: merge-queue ejected $url at $head: $detail"
+  fm_wake_append check "$c" "$reason" || exit 1
+  fm_pr_queue_merge_record_write "$STATE" "$id" "$url" "$head" ejected "$FM_PR_QUEUE_MERGE_CHECKS" || exit 1
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
+}
+
+pr_queue_merge_revoke_authority() {  # <id> <url>
+  local id=$1 url=$2
+  fm_pr_url_parse "$url" || return 1
+  fm_merge_authority_read "$STATE" "$id" github "$FM_PR_HOST" "$FM_PR_PATH" "$FM_PR_NUMBER" \
+    || return 0
+  if ! fm_merge_authority_remove_if_matches "$STATE" "$id" github "$FM_PR_HOST" "$FM_PR_PATH" \
+    "$FM_PR_NUMBER" "$FM_MERGE_AUTHORITY" "$FM_MERGE_AUTHORITY_RECORD_IDENTITY"; then
+    triage_log "merge-queue record for $id held: revoking the merge authority granted for its verified head failed"
+    return 1
+  fi
+}
+
+# The yolo merge of a green head-of-line pull request whose base branch merges
+# only through a merge-queue app is refused while away (bin/fm-pr-merge.sh's
+# "merge-queue auto-merge refused while away: <url> at <head>;" line), because
+# away mode never grants an asynchronous merge, so it cannot land until the
+# captain returns. That refusal wakes once per pull-request head:
+# state/<id>.queue-away-refused keeps the "<url> <head>" last woken for, and
+# retires with the merged poll and at teardown.
+pr_queue_away_refused_tick() {  # <id> <check-path> <url> <merge-output>
+  local id=$1 c=$2 url=$3 out=$4 file head reason
+  head=$(printf '%s\n' "$out" | awk -v p="error: merge-queue auto-merge refused while away: $url at " '
+    index($0, p) == 1 { s = substr($0, length(p) + 1); sub(/;.*/, "", s); print s; exit }')
+  fm_pr_head_valid "$head" || return 0
+  file="$STATE/$id.queue-away-refused"
+  if [ -f "$file" ] && [ ! -L "$file" ] && [ "$(cat "$file")" = "$url $head" ]; then
+    return 0
+  fi
+  reason="check: $c: merge-queue refused while away $url at $head: its base branch merges only through a merge-queue app, which requires auto-merge, and auto-merge is refused while away"
+  fm_wake_append check "$c" "$reason" || exit 1
+  printf '%s %s\n' "$url" "$head" > "$file" || exit 1
   pr_poll_control_release || exit 1
   touch "$STATE/.last-check"
   wake "$reason"
@@ -2756,6 +2929,16 @@ while :; do
           run_check_capture "$SCRIPT_DIR/fm-pr-poll.sh" --validated \
             "$provider" "$url" "$host" "$path" "$number" || exit 1
           out=$FM_CHECK_RESULT
+          # A pull request already handed to its merge-queue app waits for the
+          # queue, not for another merge request (pr_queue_merge_tick).
+          PR_QUEUE_HOLD=0
+          if { [ -z "$out" ] || [ "$out" = merged ]; } && [ "$provider" = github ]; then
+            pr_queue_merge_tick "$id" "$c" "$url"
+            if [ "$out" = merged ] && [ "$PR_QUEUE_HOLD" -eq 1 ]; then
+              out=
+              triage_log "merged reading for $id deferred: its landed head could not be confirmed as the head handed to the merge queue"
+            fi
+          fi
           # A repository with a declared merge line lands one PR at a time:
           # bin/fm-merge-line.sh's gate holds every PR but the line's head, so
           # a held PR is neither merged nor rerun-steered until it reaches the
@@ -2776,7 +2959,7 @@ while :; do
           # landing is recognized by the merge-notified marker the merge path
           # commits with its durable outcome, which also covers a queued or
           # unconfirmed acceptance that must keep polling.
-          if [ -z "$out" ] && [ "$pr_line_held" -eq 0 ] \
+          if [ -z "$out" ] && [ "$pr_line_held" -eq 0 ] && [ "$PR_QUEUE_HOLD" -eq 0 ] \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
             pr_poll_control_release || exit 1
             FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
@@ -2808,6 +2991,8 @@ while :; do
               fi
             elif [ "$merge_attempt_rc" -ne 0 ]; then
               triage_log "yolo merge attempt for $id refused or failed (rc=$merge_attempt_rc): $merge_attempt_out"
+              [ "$provider" != github ] \
+                || pr_queue_away_refused_tick "$id" "$c" "$url" "$merge_attempt_out"
             fi
           fi
         elif fm_custom_check_snapshot_prepare "$STATE" "$id"; then

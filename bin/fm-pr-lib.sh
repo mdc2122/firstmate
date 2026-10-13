@@ -448,6 +448,191 @@ fm_pr_github_required_checks_missing() {  # <pull-request-json> <required-json> 
       | .context) | unique[]
   ' 2>/dev/null || return 1
 }
+
+# Which required checks on a GitHub base branch only a merge-queue app posts.
+# A self-hosted merge queue running as a GitHub App (gitea-mq, for one) gates
+# merging with a required status check of its own, kept in a ruleset beside the
+# repository's main protection, posts it only for a pull request handed to it
+# through GitHub auto-merge, and lets auto-merge land the pull request once that
+# check passes on its tested merge result. Read from the branch's effective
+# rules: the main protection is every ruleset carrying the pull_request rule,
+# and a merge-queue app check is a required_status_checks entry bound to an
+# integration other than GitHub Actions (integration 15368) in any other
+# ruleset, unless the main protection requires that same check name itself or
+# a workflow produces a check run of that name in the pull request's rollup.
+# So an ordinary required CI check, an organization ruleset's included, is
+# never left pending. A branch with no pull_request rule has no identifiable
+# main protection, so no check on it is classified this way.
+#
+# Sets FM_PR_GITHUB_QUEUE_APP_CHECKS to a compact JSON array of check names
+# ("[]" when there are none) and returns 0 when the rules were read. Returns 1,
+# with the array "[]", when they could not be read.
+# fm_pr_github_branch_rules_unavailable_on_plan owns the one exception: a plan
+# that cannot expose branch rules has none.
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh.
+FM_PR_GITHUB_QUEUE_APP_CHECKS='[]'
+# shellcheck disable=SC2034  # Results consumed by bin/fm-pr-merge.sh.
+fm_pr_github_read_queue_app_checks() {  # <owner> <repo> <base-branch> <pull-request-json>
+  local owner=$1 repo=$2 base=$3 pr_json=$4 branch_path rules_json api_err api_err_text checks workflow_checks
+  FM_PR_GITHUB_QUEUE_APP_CHECKS='[]'
+  workflow_checks=$(printf '%s' "$pr_json" | jq -c '
+    if (.statusCheckRollup | type) != "array" then error("no check rollup") else . end
+    | [.statusCheckRollup[] | select(.__typename == "CheckRun" and ((.workflowName // "") != "")) | .name]' \
+    2>/dev/null) || return 1
+  branch_path=$(fm_pr_github_urlencode_path_segment "$base")
+  api_err=$(mktemp "${TMPDIR:-/tmp}/fm-pr-queue-app-rules.XXXXXX") || return 1
+  if ! rules_json=$(gh api --paginate "repos/$owner/$repo/rules/branches/$branch_path" 2>"$api_err"); then
+    api_err_text=$(cat "$api_err" 2>/dev/null)
+    rm -f "$api_err"
+    fm_pr_github_branch_rules_unavailable_on_plan "$api_err_text" && return 0
+    return 1
+  fi
+  rm -f "$api_err"
+  [ -n "$rules_json" ] || return 1
+  checks=$(printf '%s' "$rules_json" | jq -sc --argjson workflow_checks "$workflow_checks" '
+    map(if type == "array" then .[] else error("rules payload is unreadable") end)
+    | map(if type == "object" and (.type | type) == "string" then . else error("invalid rule") end)
+    | [.[] | select(.type == "pull_request") | .ruleset_id] as $main
+    | [.[] | select(.type == "required_status_checks" and (.ruleset_id as $r | any($main[]; . == $r)))
+        | .parameters.required_status_checks[]? | .context] as $main_checks
+    | if ($main | length) == 0 then [] else
+        [.[] | select(.type == "required_status_checks" and (.ruleset_id as $r | any($main[]; . == $r) | not))
+          | if (.parameters.required_status_checks | type) == "array"
+            then .parameters.required_status_checks[] else error("invalid required check rule") end
+          | select(type == "object" and (.integration_id | type) == "number" and .integration_id != 15368
+              and (.context | type) == "string" and (.context | length) > 0)
+          | .context
+          | select(. as $c | any($main_checks[], $workflow_checks[]; . == $c) | not)]
+        | unique
+      end' 2>/dev/null) || return 1
+  [ -n "$checks" ] || return 1
+  FM_PR_GITHUB_QUEUE_APP_CHECKS=$checks
+}
+
+# Of the given check names, those whose every entry in a pull request's check
+# rollup is still pending - a check run not yet completed, or a status context
+# still PENDING or EXPECTED - one per line. A name the rollup does not mention
+# is not listed, and a name with any settled entry, green or not, is not
+# pending. Exits nonzero when the rollup cannot be read.
+fm_pr_github_checks_pending() {  # <pull-request-json> <check-names-json>
+  local json=$1 names=$2
+  printf '%s' "$json" | jq -r --argjson names "$names" '
+    if (.statusCheckRollup | type) != "array" then error("no check rollup") else . end
+    | .statusCheckRollup as $reported
+    | $names[]
+    | . as $name
+    | [$reported[] | select((if .__typename == "CheckRun" then .name else .context end) == $name)]
+    | select(length > 0 and all(.[];
+        if .__typename == "CheckRun" then .status != "COMPLETED"
+        else .state == "PENDING" or .state == "EXPECTED" end))
+    | $name
+  ' 2>/dev/null || return 1
+}
+
+# One live read of a GitHub pull request's auto-merge state, shared by
+# bin/fm-pr-merge.sh after it requests auto-merge and by
+# bin/fm-pr-queue-state.sh. Sets FM_PR_GITHUB_AUTO_STATE (OPEN, MERGED, or
+# CLOSED), FM_PR_GITHUB_AUTO_HEAD, FM_PR_GITHUB_AUTO_ENABLED (true or false),
+# and FM_PR_GITHUB_AUTO_DETAIL, which names each given check with the
+# conclusion, state, or status of its latest rollup entry, or "not reported".
+# Returns 1 when the read failed or the payload was unreadable.
+# shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh and bin/fm-pr-queue-state.sh.
+{
+FM_PR_GITHUB_AUTO_STATE=
+FM_PR_GITHUB_AUTO_HEAD=
+FM_PR_GITHUB_AUTO_ENABLED=
+FM_PR_GITHUB_AUTO_DETAIL=
+}
+# shellcheck disable=SC2034  # Results consumed by bin/fm-pr-merge.sh and bin/fm-pr-queue-state.sh.
+fm_pr_github_read_auto_merge() {  # <pr-url> <check-names-json>
+  local url=$1 names=$2 json fields line
+  local total=0 named=0 state='' head='' enabled='' detail=''
+  FM_PR_GITHUB_AUTO_STATE=
+  FM_PR_GITHUB_AUTO_HEAD=
+  FM_PR_GITHUB_AUTO_ENABLED=
+  FM_PR_GITHUB_AUTO_DETAIL=
+  json=$(gh pr view "$url" --json state,headRefOid,autoMergeRequest,statusCheckRollup 2>/dev/null) || return 1
+  [ -n "$json" ] || return 1
+  fields=$(printf '%s' "$json" | jq -r --argjson names "$names" '
+    if type != "object" or (.statusCheckRollup | type) != "array" then error("unreadable") else . end
+    | .statusCheckRollup as $reported
+    | "state=" + ((.state // "") | tostring),
+      "head=" + ((.headRefOid // "") | tostring),
+      "enabled=" + (if (.autoMergeRequest | type) == "object" then "true" else "false" end),
+      "detail=" + ([$names[] | . as $name
+        | ([$reported[] | select((if .__typename == "CheckRun" then .name else .context end) == $name)] | last) as $entry
+        | $name + " " + (if $entry == null then "not reported"
+            elif $entry.__typename == "CheckRun" then ($entry.conclusion // $entry.status // "unknown")
+            else ($entry.state // "unknown") end)
+        ] | join(", ") | gsub("[\r\n]"; " "))
+    ' 2>/dev/null) || return 1
+  while IFS= read -r line; do
+    total=$((total + 1))
+    case "$line" in
+      state=*) state=${line#state=} ;;
+      head=*) head=${line#head=} ;;
+      enabled=*) enabled=${line#enabled=} ;;
+      detail=*) detail=${line#detail=} ;;
+      *) continue ;;
+    esac
+    named=$((named + 1))
+  done <<FIELDS
+$fields
+FIELDS
+  [ "$named" -eq 4 ] && [ "$total" -eq 4 ] || return 1
+  case "$state" in OPEN|MERGED|CLOSED) ;; *) return 1 ;; esac
+  fm_pr_head_valid "$head" || return 1
+  FM_PR_GITHUB_AUTO_STATE=$state
+  FM_PR_GITHUB_AUTO_HEAD=$head
+  FM_PR_GITHUB_AUTO_ENABLED=$enabled
+  FM_PR_GITHUB_AUTO_DETAIL=$detail
+}
+
+# state/<id>.queue-merge records the pull request bin/fm-pr-merge.sh handed to
+# a merge-queue app through GitHub auto-merge, as one line
+# "<url> <head> <status> <check-names-json>": <status> is requested when
+# auto-merge was accepted for <head>, and ejected once bin/fm-watch.sh has seen
+# the queue cancel it while the pull request stayed open at that head. The
+# watcher owns ejection, its one wake, and retirement with the merged poll;
+# teardown removes it with the other poll artifacts.
+# shellcheck disable=SC2034  # Consumed by bin/fm-watch.sh.
+{
+FM_PR_QUEUE_MERGE_URL=
+FM_PR_QUEUE_MERGE_HEAD=
+FM_PR_QUEUE_MERGE_STATUS=
+FM_PR_QUEUE_MERGE_CHECKS=
+}
+fm_pr_queue_merge_record_write() {  # <state> <id> <url> <head> <status> <check-names-json>
+  local state=$1 id=$2 url=$3 head=$4 status=$5 checks=$6 tmp
+  fm_pr_task_id_valid "$id" && fm_pr_head_valid "$head" || return 1
+  case "$status" in requested|ejected) ;; *) return 1 ;; esac
+  case "$checks" in *$'\n'*) return 1 ;; esac
+  tmp=$(mktemp "$state/.queue-merge.XXXXXX") || return 1
+  if printf '%s %s %s %s\n' "$url" "$head" "$status" "$checks" > "$tmp" \
+    && mv -f -- "$tmp" "$state/$id.queue-merge"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+# shellcheck disable=SC2034  # Results consumed by bin/fm-watch.sh.
+fm_pr_queue_merge_record_read() {  # <state> <id>
+  local file="$1/$2.queue-merge" url='' head='' status='' checks=''
+  FM_PR_QUEUE_MERGE_URL=
+  FM_PR_QUEUE_MERGE_HEAD=
+  FM_PR_QUEUE_MERGE_STATUS=
+  FM_PR_QUEUE_MERGE_CHECKS=
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  read -r url head status checks < "$file" || return 1
+  fm_pr_head_valid "$head" || return 1
+  case "$status" in requested|ejected) ;; *) return 1 ;; esac
+  [ -n "$url" ] && [ -n "$checks" ] || return 1
+  FM_PR_QUEUE_MERGE_URL=$url
+  FM_PR_QUEUE_MERGE_HEAD=$head
+  FM_PR_QUEUE_MERGE_STATUS=$status
+  FM_PR_QUEUE_MERGE_CHECKS=$checks
+}
 fm_pr_file_mode() {
   if [ "$(uname)" = Darwin ]; then
     /usr/bin/stat -f %Lp "$1" 2>/dev/null
