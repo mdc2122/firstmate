@@ -326,7 +326,7 @@ PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base r
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
 PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
-MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head age before its one wake
+MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head or queue-held-head age before its one wake
 case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in

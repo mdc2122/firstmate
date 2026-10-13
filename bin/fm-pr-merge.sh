@@ -70,13 +70,14 @@
 # recorded as landed exactly like a direct merge, one still open with
 # auto-merge enabled exits 0 with no landed outcome and its merge poll armed,
 # and anything else refuses. bin/fm-watch.sh owns what follows: the landing
-# through the poll, and one wake if the queue ejects the pull request, while
-# its yolo merge poll does not hand that same head to the queue again. While
-# the away-posture record exists such a branch is refused like any other
-# asynchronous merge, with an "error: merge-queue auto-merge refused while
-# away: <url> at <head>;" line bin/fm-watch.sh wakes on once per head. A branch whose rules cannot be read keeps the direct
-# merge and says so, because GitHub refuses a direct merge that a required
-# check still blocks.
+# through the poll and, in pr_queue_merge_tick, the queue's ejection,
+# head-move, and stall wakes and keeping its yolo merge poll from handing that
+# same head to the queue again. While the away-posture record exists such a
+# branch is refused like any other asynchronous merge, with an "error: merge-queue
+# auto-merge refused while away: <url> at <head>;" line bin/fm-watch.sh wakes
+# on once per head. A branch whose rules cannot be read keeps the direct merge
+# and says so, because GitHub refuses a direct merge that a required check
+# still blocks.
 #
 # A GitLab merge is refused unless every pre-merge condition holds, each read
 # live at merge time rather than taken from recorded metadata: the merge request
