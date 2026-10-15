@@ -775,6 +775,24 @@ JSON
   pass "the newest valid fm-next-check comment marker with an owner hides a blocked issue through later acknowledgments until the date passes; malformed markers and stale edges do not"
 }
 
+test_paperclip_backlog_comment_marker_dates_the_next_check() {
+  local home out
+  home=$(make_home pc-backlog-marker)
+  install_fake_paperclip "$home"
+  cat > "$home/pc/issues.json" <<'JSON'
+[
+ {"id":"b1","identifier":"FIR-342","title":"re-key follow-up","status":"backlog","blockedBy":[]},
+ {"id":"b2","identifier":"FIR-343","title":"no marker","status":"backlog","blockedBy":[]}
+]
+JSON
+  printf '%s' '[{"body":"fm-next-check: 2026-10-16T12:00:00Z owner=supply-secondmate"}]' > "$home/pc/comments-b1.json"
+  printf '%s' '[]' > "$home/pc/comments-b2.json"
+  out=$(sweep "$home" scan) || fail "sweep scan failed: $out"
+  assert_not_contains "$out" "FIR-342 " "a backlog issue with a future comment marker was named"
+  assert_contains "$out" "no-blocker FIR-343" "a backlog issue with no marker and no monitor was not named"
+  pass "backlog issues honor fm-next-check comment markers when monitorNextCheckAt cannot be set"
+}
+
 # A board that stops answering after the issue list must not stretch the scan
 # by one curl timeout per blocked issue: the first transport failure ends the
 # comment reads, and every unread issue stays listed.
@@ -844,6 +862,7 @@ test_row_that_leaves_and_returns_is_a_new_episode
 test_failed_append_does_not_suppress_the_episode
 test_paperclip_scan_classifies_stuck_items
 test_paperclip_blocked_comment_marker_dates_the_next_check
+test_paperclip_backlog_comment_marker_dates_the_next_check
 test_paperclip_comment_transport_failure_stops_comment_reads
 test_paperclip_rows_join_the_queue_wake_and_failure_is_visible
 test_paperclip_release_is_guarded

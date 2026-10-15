@@ -637,7 +637,7 @@ FM_PAPERCLIP_COMPANY=    # optional company id; discovered from the key when it 
 
 `FM_PAPERCLIP_APPROVAL_AGE_MINUTES` (default 0) is how old a pending approval must be, in whole minutes, before the sweep surfaces it; 0 lists every pending approval on the next sweep, so a fresh approval reaches firstmate on the next queue inbox-zero check instead of after a built-in wait.
 It reads like the instance settings above (the environment wins over `.env`), while `FM_PAPERCLIP_STALE_HOURS` (default 6, whole hours, how long an in-progress issue with no run and no dated next check may sit idle) reads only the environment.
-Paperclip refuses a monitor (`monitorNextCheckAt`) on a blocked issue, and its `unblockDescriptor` carries no date, so a blocked issue's owner dates the next check with one line in an issue comment:
+Paperclip refuses a monitor (`monitorNextCheckAt`) on a blocked issue, and backlog issues cannot carry one until released, so a blocked or backlog issue's owner dates the next check with one line in an issue comment:
 
 ```text
 fm-next-check: 2026-10-02T09:00:00Z owner=coordinator
@@ -647,7 +647,7 @@ The line must be exactly `fm-next-check: YYYY-MM-DDTHH:MM:SSZ owner=<name>`, sta
 Paperclip wakes the assignee on any board comment, so an acknowledgment posted after the marker does not clear it: the sweep reads the issue's comments newest-first and honors the marker on the newest comment that carries a valid one, looking back over at most the last 20 comments.
 Within one comment the last valid `fm-next-check:` line wins; across comments the newest comment carrying a valid line wins.
 A newer valid marker supersedes an older one.
-While that newest time is in the future the sweep does not list the blocked issue as `stalled` or `no-blocker`; once it passes, or no comment in the window carries a valid line (a malformed marker, for example a time without seconds or a leading space, carries no date), the issue is listed again.
+While that newest time is in the future the sweep does not list the blocked issue as `stalled` or `no-blocker`, and does not list a backlog issue as `no-blocker`; once it passes, or no comment in the window carries a valid line (a malformed marker, for example a time without seconds or a leading space, carries no date), the issue is listed again.
 A blocked issue whose every blocker is done is always listed as `stale-edge`, whatever its comments say.
 This section owns the schema; [`bin/fm-paperclip-sweep.sh`](../bin/fm-paperclip-sweep.sh) owns the row classes, the read-only scan, and the guarded `release` command, and [`bin/fm-queue-zero.sh`](../bin/fm-queue-zero.sh) owns how its rows reach firstmate.
 The scan uses only Paperclip's supported board API and never touches its database.
