@@ -15,9 +15,10 @@
 # `scan` is read-only. It makes its GET calls through Paperclip's supported
 # board API: company discovery when FM_PAPERCLIP_COMPANY is unset, the
 # open-issue list with includeBlockedBy, the pending-approval list, and the
-# newest 20 comments of each blocked issue with no dated monitor (Paperclip
-# wakes the assignee on any board comment, so a later non-marker comment never
-# invalidates a marker). It prints one row per item that needs action:
+# newest 20 comments of each blocked issue and each backlog issue with no
+# blocker that has no dated monitor (Paperclip wakes the assignee on any board
+# comment, so a later non-marker comment never invalidates a marker). It prints
+# one row per item that needs action:
 #
 #   release             a backlog issue with at least one blocker, every one done
 #   stale-edge          a blocked issue whose every blocker is done
@@ -33,22 +34,24 @@
 #                       old (default 0: every pending approval, next sweep)
 #
 # A "dated next check" is the issue's monitor (monitorNextCheckAt) still in the
-# future. Paperclip refuses a monitor on a blocked issue (HTTP 422) and its
-# unblockDescriptor carries no date, so a blocked issue's owner records one as
-# a line of an issue comment:
+# future, or for backlog and blocked issues a valid fm-next-check comment marker
+# (backlog cannot carry a board monitor until released). Paperclip refuses a
+# monitor on a blocked issue (HTTP 422) and its unblockDescriptor carries no
+# date, so a blocked or backlog issue's owner records one as a line of an issue
+# comment:
 #
 #   fm-next-check: <YYYY-MM-DDTHH:MM:SSZ, e.g. 2026-10-02T09:00:00Z> owner=<name>
 #
 # The line must be exactly that shape, starting at column 0 of a comment line,
-# and owner= must name someone. The scan reads each blocked issue's comments
-# newest-first and honors the marker on the newest comment that carries a valid
-# one (within one comment the last valid line wins), looking back over at most
-# the last 20 comments; later non-marker comments (an assignee's
-# acknowledgment) do not clear it. A newer valid marker
-# supersedes an older one, and once that newest time passes, or no comment in
-# the window carries a valid line, the issue is listed again. A stale-edge
-# issue is listed whatever its comments say. A backlog issue with an open
-# blocker is not listed: it is released by the `release` row the moment its
+# and owner= must name someone. The scan reads the comments of each blocked
+# issue and each backlog issue with no blocker newest-first and honors the
+# marker on the newest comment that carries a valid one (within one comment the
+# last valid line wins), looking back over at most the last 20 comments; later
+# non-marker comments (an assignee's acknowledgment) do not clear it. A newer
+# valid marker supersedes an older one, and once that newest time passes, or no
+# comment in the window carries a valid line, the issue is listed again. A
+# stale-edge issue is listed whatever its comments say. A backlog issue with an
+# open blocker is not listed: it is released by the `release` row the moment its
 # blockers are done. A blocked issue that Paperclip's own blockerAttention
 # reports as covered is waiting on live work.
 # The scan prints nothing when nothing needs action, and prints one `error`
@@ -171,7 +174,7 @@ DEFS='
 '
 
 # The classifier, over the open-issue list, the pending-approval list, and
-# $latest (blocked issue id -> latest comment body). Rows: {class, ref, title, detail}.
+# $latest (issue id -> latest comment body). Rows: {class, ref, title, detail}.
 # shellcheck disable=SC2016  # jq program text, not shell expansions.
 CLASSIFY='
   def marker_next:
@@ -191,7 +194,7 @@ CLASSIFY='
      | if .status == "backlog" then
          if ($bb | length) > 0 and ($open | length) == 0 then
            $row + {class:"release", detail:("blockers done: " + refs($bb))}
-         elif ($open | length) > 0 or dated_next then empty
+         elif ($open | length) > 0 or dated_next or marker_next then empty
          else $row + {class:"no-blocker", detail:"backlog with no blocker and no dated next check"} end
        elif .status == "blocked" then
          if dated_next then empty
@@ -244,7 +247,7 @@ scan_rows() {
     || ! printf '%s' "$API_BODY" > "$tmp/approvals.json"; then
     rc=1
   elif ! jq -r --argjson now "$now_epoch" \
-      "$DEFS .[] | select(.status == \"blocked\" and (dated_next | not)) | .id | strings" \
+      "$DEFS .[] | select((.status == \"blocked\" or (.status == \"backlog\" and ((.blockedBy // []) | length) == 0)) and (dated_next | not)) | .id | strings" \
       "$tmp/issues.json" > "$tmp/blocked-ids" 2>/dev/null; then
     API_ERROR="unexpected response shape"
     rc=1
