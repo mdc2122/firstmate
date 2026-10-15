@@ -1,0 +1,14 @@
+[
+ {"id":"i342","identifier":"FIR-342","title":"re-key follow-up (future marker)","status":"backlog","assigneeAgentId":null,"blockedBy":[],"monitorNextCheckAt":null},
+ {"id":"i343","identifier":"FIR-343","title":"backlog no marker","status":"backlog","blockedBy":[]},
+ {"id":"i344","identifier":"FIR-344","title":"backlog expired marker","status":"backlog","blockedBy":[]},
+ {"id":"i345","identifier":"FIR-345","title":"backlog marker without owner","status":"backlog","blockedBy":[]},
+ {"id":"i346","identifier":"FIR-346","title":"backlog marker not at column 0","status":"backlog","blockedBy":[]},
+ {"id":"i347","identifier":"FIR-347","title":"backlog marker then later ack","status":"backlog","blockedBy":[]},
+ {"id":"i348","identifier":"FIR-348","title":"backlog with future monitor","status":"backlog","blockedBy":[],"monitorNextCheckAt":"2026-10-20T00:00:00Z"},
+ {"id":"i349","identifier":"FIR-349","title":"backlog all blockers done","status":"backlog","blockedBy":[{"id":"x1","identifier":"FIR-1","status":"done"}]},
+ {"id":"i350","identifier":"FIR-350","title":"backlog open blocker","status":"backlog","blockedBy":[{"id":"x2","identifier":"FIR-2","status":"in_progress"}]},
+ {"id":"i351","identifier":"FIR-351","title":"blocked with future marker","status":"blocked","blockedBy":[{"id":"x3","identifier":"FIR-3","status":"in_progress"}]},
+ {"id":"i352","identifier":"FIR-352","title":"blocked no marker","status":"blocked","blockedBy":[{"id":"x4","identifier":"FIR-4","status":"in_progress"}]},
+ {"id":"i353","identifier":"FIR-353","title":"blocked stale edge with marker","status":"blocked","blockedBy":[{"id":"x5","identifier":"FIR-5","status":"done"}]}
+]

@@ -1,0 +1,7 @@
+paperclip no-blocker FIR-343 - backlog no marker [backlog with no blocker and no dated next check]
+paperclip no-blocker FIR-344 - backlog expired marker [backlog with no blocker and no dated next check]
+paperclip no-blocker FIR-345 - backlog marker without owner [backlog with no blocker and no dated next check]
+paperclip no-blocker FIR-346 - backlog marker not at column 0 [backlog with no blocker and no dated next check]
+paperclip release FIR-349 - backlog all blockers done [blockers done: FIR-1]
+paperclip stalled FIR-352 - blocked no marker [blocker attention unknown; waiting on FIR-4; no dated next check]
+paperclip stale-edge FIR-353 - blocked stale edge with marker [blocked but blockers done: FIR-5]
