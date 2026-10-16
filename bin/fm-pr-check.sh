@@ -17,6 +17,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+. "$SCRIPT_DIR/fm-wip-caps-lib.sh"
 # shellcheck source=bin/fm-parent-channel-lib.sh
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
 
@@ -88,6 +89,8 @@ fi
 META_TMP=
 META_LOCK=
 META_LOCK_HELD=0
+TASK_SET_LOCK=
+TASK_SET_LOCK_HELD=0
 pr_check_cleanup() {
   fm_pr_poll_cleanup
   [ -z "$META_TMP" ] || rm -f -- "$META_TMP"
@@ -95,12 +98,18 @@ pr_check_cleanup() {
     fm_lock_release "$META_LOCK" || true
     META_LOCK_HELD=0
   fi
+  if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+    fm_lock_release "$TASK_SET_LOCK" || true
+  fi
 }
 trap pr_check_cleanup EXIT
 trap 'exit 1' HUP INT TERM
 fm_pr_poll_prepare "$STATE" "$ID" "$PROVIDER" "$URL" "$HOST" "$PROJECT_PATH" "$NUMBER" "$SCRIPT_DIR/fm-pr-poll.sh" \
   || { echo "error: could not prepare PR poll" >&2; exit 1; }
 
+TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
+fm_lock_try_acquire "$TASK_SET_LOCK" || { echo "error: another task-set action is running" >&2; exit 1; }
+TASK_SET_LOCK_HELD=1
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"
 META_LOCK_HELD=1
@@ -109,6 +118,16 @@ META_LOCK_HELD=1
 META_DEVICE=$(fm_pr_file_device "$META") || exit 1
 STATE_DEVICE=$(fm_pr_file_device "$STATE") || exit 1
 [ "$META_DEVICE" = "$STATE_DEVICE" ] || { echo "error: task metadata is unavailable" >&2; exit 1; }
+IFS='|' read -r WIP_KIND WIP_PR WIP_LANE <<EOF
+$(fm_wip_meta_fields "$META")
+EOF
+WIP_STATUS=0
+fm_wip_transition_admit "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" "$STATE" "$ID" "$WIP_KIND" "$URL" "$WIP_LANE" || WIP_STATUS=$?
+case "$WIP_STATUS" in
+  0) ;;
+  1) echo "refused: $FM_WIP_REFUSAL" >&2; exit 5 ;;
+  *) echo "error: $FM_WIP_ERROR" >&2; exit 1 ;;
+esac
 META_TMP=$(mktemp "$STATE/.fm-pr-meta.XXXXXX") || exit 1
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
@@ -134,6 +153,8 @@ fm_pr_metadata_identity_parse "$META" || exit 1
   && [ "$FM_PR_META_NUMBER" = "$NUMBER" ] || exit 1
 fm_lock_release "$META_LOCK"
 META_LOCK_HELD=0
+fm_lock_release "$TASK_SET_LOCK"
+TASK_SET_LOCK_HELD=0
 
 fm_pr_poll_publish_prepared || {
   echo "error: could not publish PR poll" >&2

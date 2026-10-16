@@ -11,6 +11,7 @@ set -u
 # shellcheck source=tests/fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-wip-caps-lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-wake-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-wip-caps)
 mkdir -p "$TMP_ROOT"
@@ -158,6 +159,55 @@ test_merge_notification_is_scoped_to_the_current_pr() {
   pass "merge slots release only for a matching current GitHub or GitLab PR identity"
 }
 
+run_transition() {
+  local home=$1 command=$2
+  shift 2
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_CONFIG_OVERRIDE="$home/config" HOME="$home/user-home" \
+    PATH="$home/fake/fakebin:$PATH" "$ROOT/bin/$command" "$@" 2>&1
+}
+
+test_lane_transitions_require_capacity() {
+  local home out rc
+  home=$(new_home transitions)
+  printf 'validations=1\nmerges=1\n' > "$home/config/wip-caps"
+  occupy "$home" merging "pr=https://github.com/example/repo/pull/1"
+  occupy "$home" validating
+  occupy "$home" scouting kind=scout
+  fm_test_spawn_brief "$home" scouting
+
+  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
+  expect_code 5 "$rc" "PR registration into a full merges lane"$'\n'"$out"
+  assert_not_contains "$(fm_wip_meta_fields "$home/state/validating.meta")" "https://" "refusal must not register the PR"
+  assert_absent "$home/state/validating.check.sh" "refusal must not arm a poll"
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  expect_code 5 "$rc" "promotion into a full validations lane"$'\n'"$out"
+  assert_grep 'kind=scout' "$home/state/scouting.meta" "refused promotion must retain scout kind"
+
+  occupy "$home" waiting
+  local lock
+  lock=$(fm_task_set_lock_path "$home/state")
+  fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
+  out=$(run_transition "$home" fm-pr-check.sh waiting https://github.com/example/repo/pull/3); rc=$?
+  expect_code 1 "$rc" "registration must serialize with spawn's task-set lock"
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  expect_code 1 "$rc" "promotion must serialize with spawn's task-set lock"
+  fm_lock_release "$lock"
+  rm "$home/state/waiting.meta"
+  rm "$home/state/merging.meta"
+  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
+  expect_code 0 "$rc" "PR registration after a merge slot frees"$'\n'"$out"
+  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
+  expect_code 0 "$rc" "re-registration in the same full lane"$'\n'"$out"
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  expect_code 5 "$rc" "promotion must also respect a full downstream merge lane"$'\n'"$out"
+  rm "$home/state/validating.meta"
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  expect_code 0 "$rc" "promotion after destination capacity frees"$'\n'"$out"
+  assert_grep 'kind=ship' "$home/state/scouting.meta" "successful promotion must publish ship kind"
+  pass "PR registration and promotion require capacity without blocking same-lane registration"
+}
+
 test_lanes_are_independent() {
   local home out rc
   home=$(new_home independent)
@@ -297,6 +347,7 @@ test_at_cap_refusal_names_lane_cap_and_occupants_and_creates_nothing
 test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_merge_notification_is_scoped_to_the_current_pr
+test_lane_transitions_require_capacity
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_needs_a_known_class_and_a_reason
