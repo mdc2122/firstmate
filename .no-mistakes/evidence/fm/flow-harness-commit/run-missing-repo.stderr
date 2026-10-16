@@ -1,0 +1,6 @@
+scanning worker transcripts ...
+  313 launch-brief sessions
+scanning supervisor transcripts ...
+warning: no first-parent origin/main commits in /Users/studio2/.no-mistakes/evidence/01M51GABP76WT6ADZHJX6XZFAC/does-not-exist since 2026-09-16T03:44:44Z (fatal: cannot change to '/Users/studio2/.no-mistakes/evidence/01M51GABP76WT6ADZHJX6XZFAC/does-not-exist': No such file or directory); every merged mdc2122/viral-moment ship stays in-flight
+warning: 2 owned PR(s) of 2 task(s) did not resolve (gh error, uncached under --no-github, or created after --as-of); see summary coverage.owned_prs_unresolved
+flash: 422 ambiguous records

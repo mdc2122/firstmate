@@ -1,0 +1,980 @@
+task,cls,start,end,hours,ref
+catalog-gate-winner-recall,ci,2026-10-09T01:53:28Z,2026-10-09T02:33:58Z,0.68,https://github.com/mdc2122/viral-moment/pull/620 validation+checks
+catalog-gate-winner-recall,merge_queue,2026-10-09T02:33:58Z,2026-10-09T03:06:17Z,0.54,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/620 passed review/test/document/
+catalog-gate-winner-recall,merge_queue,2026-10-09T03:06:17Z,2026-10-09T03:13:49Z,0.13,https://github.com/mdc2122/viral-moment/pull/620 green->merged
+catalog-gate-winner-recall,human_answer,2026-10-09T03:13:49Z,2026-10-09T03:15:47Z,0.03,needs-decision -> steer 2026-10-09T03:15:47Z
+catalog-gate-winner-recall,merge_queue,2026-10-09T03:15:47Z,2026-10-09T04:54:33Z,1.65,https://github.com/mdc2122/viral-moment/pull/620 green->merged
+catalog-gate-winner-recall,human_answer,2026-10-09T04:54:33Z,2026-10-09T04:55:50Z,0.02,needs-decision -> steer 2026-10-09T04:55:50Z
+catalog-gate-winner-recall,merge_queue,2026-10-09T04:55:50Z,2026-10-09T05:44:10Z,0.81,https://github.com/mdc2122/viral-moment/pull/620 green->merged
+catalog-gate-winner-recall,human_answer,2026-10-09T05:44:10Z,2026-10-09T05:45:49Z,0.03,needs-decision -> steer 2026-10-09T05:45:49Z
+catalog-gate-winner-recall,merge_queue,2026-10-09T05:45:49Z,2026-10-09T06:09:04Z,0.39,https://github.com/mdc2122/viral-moment/pull/620 green->merged
+catalog-gate-winner-recall,human_answer,2026-10-09T06:09:04Z,2026-10-09T06:10:20Z,0.02,needs-decision -> steer 2026-10-09T06:10:20Z
+catalog-gate-winner-recall,merge_queue,2026-10-09T06:10:20Z,2026-10-09T07:23:49Z,1.22,https://github.com/mdc2122/viral-moment/pull/620 green->merged
+catalog-gate-winner-recall,release,2026-10-09T07:23:49Z,2026-10-16T03:44:44Z,164.35,"https://github.com/mdc2122/viral-moment/pull/620 merged, not yet live"
+supply-rebuild-list-response,ci,2026-10-09T01:10:52Z,2026-10-09T01:55:55Z,0.75,https://github.com/mdc2122/viral-moment/pull/617 validation+checks
+supply-rebuild-list-response,merge_queue,2026-10-09T01:55:55Z,2026-10-09T02:11:09Z,0.25,https://github.com/mdc2122/viral-moment/pull/617 green->merged
+supply-rebuild-list-response,human_answer,2026-10-09T02:11:09Z,2026-10-09T02:11:52Z,0.01,needs-decision -> steer 2026-10-09T02:11:52Z
+supply-rebuild-list-response,merge_queue,2026-10-09T02:11:52Z,2026-10-09T08:02:40Z,5.85,https://github.com/mdc2122/viral-moment/pull/617 green->merged
+supply-rebuild-list-response,release,2026-10-09T08:02:40Z,2026-10-09T09:29:25Z,1.45,"https://github.com/mdc2122/viral-moment/pull/617 merged, not yet live"
+supply-rebuild-list-response,human_answer,2026-10-09T09:29:25Z,2026-10-09T09:30:36Z,0.02,needs-decision -> steer 2026-10-09T09:30:36Z
+supply-rebuild-list-response,release,2026-10-09T09:30:36Z,2026-10-16T03:44:44Z,162.24,"https://github.com/mdc2122/viral-moment/pull/617 merged, not yet live"
+goal-pool-policy,ci,2026-10-09T12:42:08Z,2026-10-09T12:45:08Z,0.05,https://github.com/mdc2122/viral-moment/pull/636 validation+checks
+goal-pool-policy,human_answer,2026-10-09T12:45:08Z,2026-10-09T12:46:37Z,0.02,needs-decision -> steer 2026-10-09T12:46:37Z
+goal-pool-policy,ci,2026-10-09T12:46:37Z,2026-10-09T13:16:19Z,0.5,https://github.com/mdc2122/viral-moment/pull/636 validation+checks
+goal-pool-policy,merge_queue,2026-10-09T13:16:19Z,2026-10-09T14:56:45Z,1.67,https://github.com/mdc2122/viral-moment/pull/636 green->merged
+goal-pool-policy,release,2026-10-09T14:56:45Z,2026-10-16T03:44:44Z,156.8,"https://github.com/mdc2122/viral-moment/pull/636 merged, not yet live"
+opus-burn-alarm,ci,2026-10-09T12:15:12Z,2026-10-09T12:16:54Z,0.03,https://github.com/mdc2122/viral-moment/pull/635 validation+checks
+opus-burn-alarm,human_answer,2026-10-09T12:16:54Z,2026-10-09T12:18:24Z,0.02,needs-decision -> steer 2026-10-09T12:18:24Z
+opus-burn-alarm,ci,2026-10-09T12:18:24Z,2026-10-09T12:18:54Z,0.01,https://github.com/mdc2122/viral-moment/pull/635 validation+checks
+opus-burn-alarm,human_answer,2026-10-09T12:18:54Z,2026-10-09T12:20:35Z,0.03,needs-decision self-cleared
+opus-burn-alarm,ci,2026-10-09T12:20:35Z,2026-10-09T12:54:35Z,0.57,https://github.com/mdc2122/viral-moment/pull/635 validation+checks
+opus-burn-alarm,merge_queue,2026-10-09T12:54:35Z,2026-10-09T13:56:12Z,1.03,https://github.com/mdc2122/viral-moment/pull/635 green->merged
+opus-burn-alarm,release,2026-10-09T13:56:12Z,2026-10-09T14:32:51Z,0.61,"https://github.com/mdc2122/viral-moment/pull/635 merged, not yet live"
+opus-burn-alarm,human_answer,2026-10-09T14:32:51Z,2026-10-09T14:33:51Z,0.02,blocked -> steer 2026-10-09T14:33:51Z
+opus-burn-alarm,release,2026-10-09T14:33:51Z,2026-10-16T03:44:44Z,157.18,"https://github.com/mdc2122/viral-moment/pull/635 merged, not yet live"
+paperclip-14479-rebase,ci,2026-10-09T12:10:25Z,2026-10-09T12:52:09Z,0.7,https://github.com/paperclipai/paperclip/pull/14479 validation+checks
+paperclip-14479-rebase,merge_queue,2026-10-09T12:52:09Z,2026-10-09T12:52:49Z,0.01,"https://github.com/paperclipai/paperclip/pull/14479 green, still open"
+firstmate-6636-rebase,human_answer,2026-10-09T14:36:39Z,2026-10-09T14:37:51Z,0.02,blocked -> steer 2026-10-09T14:37:51Z
+python-org-venv,human_answer,2026-10-09T14:13:40Z,2026-10-09T14:14:31Z,0.01,needs-decision -> steer 2026-10-09T14:14:31Z
+python-org-venv,human_answer,2026-10-09T14:28:31Z,2026-10-09T14:34:02Z,0.09,needs-decision -> steer 2026-10-09T14:34:02Z
+python-org-venv,human_answer,2026-10-09T16:16:53Z,2026-10-09T16:20:03Z,0.05,needs-decision -> steer 2026-10-09T16:20:03Z
+python-org-venv,human_answer,2026-10-09T16:36:24Z,2026-10-09T16:37:04Z,0.01,blocked -> steer 2026-10-09T16:37:04Z
+python-org-venv,ci,2026-10-09T16:37:19Z,2026-10-09T17:09:10Z,0.53,https://github.com/mdc2122/viral-moment/pull/639 validation+checks
+python-org-venv,merge_queue,2026-10-09T17:09:10Z,2026-10-09T17:17:34Z,0.14,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T17:17:34Z,2026-10-09T17:18:52Z,0.02,needs-decision -> steer 2026-10-09T17:18:52Z
+python-org-venv,merge_queue,2026-10-09T17:18:52Z,2026-10-09T17:55:52Z,0.62,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T17:55:52Z,2026-10-09T18:00:54Z,0.08,needs-decision -> steer 2026-10-09T18:00:54Z
+python-org-venv,merge_queue,2026-10-09T18:00:54Z,2026-10-09T19:00:35Z,0.99,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T19:00:35Z,2026-10-09T19:02:35Z,0.03,needs-decision -> steer 2026-10-09T19:02:35Z
+python-org-venv,merge_queue,2026-10-09T19:02:35Z,2026-10-09T19:11:32Z,0.15,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T19:11:32Z,2026-10-09T19:11:44Z,0.0,needs-decision self-cleared
+python-org-venv,merge_queue,2026-10-09T19:11:44Z,2026-10-09T19:20:13Z,0.14,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T19:20:13Z,2026-10-09T19:24:10Z,0.07,needs-decision -> steer 2026-10-09T19:24:10Z
+python-org-venv,merge_queue,2026-10-09T19:24:10Z,2026-10-09T19:32:42Z,0.14,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,human_answer,2026-10-09T19:32:42Z,2026-10-09T19:37:16Z,0.08,needs-decision -> steer 2026-10-09T19:37:16Z
+python-org-venv,merge_queue,2026-10-09T19:37:16Z,2026-10-09T20:34:41Z,0.96,https://github.com/mdc2122/viral-moment/pull/639 green->merged
+python-org-venv,release,2026-10-09T20:34:41Z,2026-10-09T21:16:15Z,0.69,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-09T21:16:15Z,2026-10-09T21:16:57Z,0.01,needs-decision -> steer 2026-10-09T21:16:57Z
+python-org-venv,release,2026-10-09T21:16:57Z,2026-10-09T21:17:02Z,0.0,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-09T21:17:02Z,2026-10-09T21:19:38Z,0.04,blocked -> steer 2026-10-09T21:19:38Z
+python-org-venv,release,2026-10-09T21:19:38Z,2026-10-09T21:20:29Z,0.01,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-09T21:20:29Z,2026-10-09T21:23:21Z,0.05,needs-decision -> steer 2026-10-09T21:23:21Z
+python-org-venv,release,2026-10-09T21:23:21Z,2026-10-10T01:42:07Z,4.31,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-10T01:42:07Z,2026-10-10T01:44:40Z,0.04,blocked -> steer 2026-10-10T01:44:40Z
+python-org-venv,release,2026-10-10T01:44:40Z,2026-10-10T03:22:09Z,1.62,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,release,2026-10-10T03:22:09Z,2026-10-10T05:08:00Z,1.76,blocked self-cleared
+python-org-venv,decision_park,2026-10-10T05:08:00Z,2026-10-10T06:37:09Z,1.49,blocked -> steer 2026-10-10T06:37:09Z
+python-org-venv,release,2026-10-10T06:37:09Z,2026-10-10T06:39:39Z,0.04,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-10T06:39:39Z,2026-10-10T06:43:09Z,0.06,blocked -> steer 2026-10-10T06:43:09Z
+python-org-venv,release,2026-10-10T06:43:09Z,2026-10-10T08:00:52Z,1.3,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+python-org-venv,human_answer,2026-10-10T08:00:52Z,2026-10-10T08:00:58Z,0.0,blocked -> steer 2026-10-10T08:00:58Z
+python-org-venv,release,2026-10-10T08:00:58Z,2026-10-16T03:44:44Z,139.73,"https://github.com/mdc2122/viral-moment/pull/639 merged, not yet live"
+goldratt-check-v2,ci,2026-10-09T17:40:53Z,2026-10-09T17:43:11Z,0.04,https://github.com/mdc2122/viral-moment/pull/642 validation+checks
+goldratt-check-v2,human_answer,2026-10-09T17:43:11Z,2026-10-09T17:45:04Z,0.03,needs-decision -> steer 2026-10-09T17:45:04Z
+goldratt-check-v2,ci,2026-10-09T17:45:04Z,2026-10-09T18:03:21Z,0.3,https://github.com/mdc2122/viral-moment/pull/642 validation+checks
+goldratt-check-v2,human_answer,2026-10-09T18:03:21Z,2026-10-09T18:06:12Z,0.05,needs-decision -> steer 2026-10-09T18:06:12Z
+goldratt-check-v2,ci,2026-10-09T18:06:12Z,2026-10-09T18:21:40Z,0.26,https://github.com/mdc2122/viral-moment/pull/642 validation+checks
+goldratt-check-v2,merge_queue,2026-10-09T18:21:40Z,2026-10-09T18:41:50Z,0.34,https://github.com/mdc2122/viral-moment/pull/642 green->merged
+goldratt-check-v2,human_answer,2026-10-09T18:41:50Z,2026-10-09T18:45:55Z,0.07,needs-decision -> steer 2026-10-09T18:45:55Z
+goldratt-check-v2,merge_queue,2026-10-09T18:45:55Z,2026-10-09T19:07:59Z,0.37,https://github.com/mdc2122/viral-moment/pull/642 green->merged
+goldratt-check-v2,release,2026-10-09T19:07:59Z,2026-10-16T03:44:44Z,152.61,"https://github.com/mdc2122/viral-moment/pull/642 merged, not yet live"
+cliproxy-mgmt-key-quota,decision_park,2026-10-09T17:12:51Z,2026-10-09T17:16:19Z,0.06,blocked self-cleared
+cliproxy-mgmt-key-quota,ci,2026-10-09T17:26:23Z,2026-10-09T17:54:47Z,0.47,https://github.com/mdc2122/viral-moment/pull/641 validation+checks
+cliproxy-mgmt-key-quota,merge_queue,2026-10-09T17:54:47Z,2026-10-09T18:26:57Z,0.54,https://github.com/mdc2122/viral-moment/pull/641 green->merged
+cliproxy-mgmt-key-quota,release,2026-10-09T18:26:57Z,2026-10-16T03:44:44Z,153.3,"https://github.com/mdc2122/viral-moment/pull/641 merged, not yet live"
+render-lock-wait-metric,ci,2026-10-09T18:20:07Z,2026-10-09T18:23:14Z,0.05,https://github.com/mdc2122/viral-moment/pull/644 validation+checks
+render-lock-wait-metric,human_answer,2026-10-09T18:23:14Z,2026-10-09T18:25:39Z,0.04,needs-decision -> steer 2026-10-09T18:25:39Z
+render-lock-wait-metric,ci,2026-10-09T18:25:39Z,2026-10-09T18:31:13Z,0.09,https://github.com/mdc2122/viral-moment/pull/644 validation+checks
+render-lock-wait-metric,human_answer,2026-10-09T18:31:13Z,2026-10-09T18:32:27Z,0.02,needs-decision -> steer 2026-10-09T18:32:27Z
+render-lock-wait-metric,ci,2026-10-09T18:32:27Z,2026-10-09T18:36:58Z,0.08,https://github.com/mdc2122/viral-moment/pull/644 validation+checks
+render-lock-wait-metric,human_answer,2026-10-09T18:36:58Z,2026-10-09T18:37:46Z,0.01,needs-decision -> steer 2026-10-09T18:37:46Z
+render-lock-wait-metric,ci,2026-10-09T18:37:46Z,2026-10-09T19:11:34Z,0.56,https://github.com/mdc2122/viral-moment/pull/644 validation+checks
+render-lock-wait-metric,merge_queue,2026-10-09T19:11:34Z,2026-10-09T19:25:01Z,0.22,https://github.com/mdc2122/viral-moment/pull/644 green->merged
+render-lock-wait-metric,human_answer,2026-10-09T19:25:01Z,2026-10-09T19:26:08Z,0.02,needs-decision -> steer 2026-10-09T19:26:08Z
+render-lock-wait-metric,merge_queue,2026-10-09T19:26:08Z,2026-10-09T19:59:50Z,0.56,https://github.com/mdc2122/viral-moment/pull/644 green->merged
+render-lock-wait-metric,release,2026-10-09T19:59:50Z,2026-10-09T20:34:55Z,0.58,paused (rule): https://github.com/mdc2122/viral-moment/pull/644 drafted by firstmate; waiting f
+render-lock-wait-metric,merge_queue,2026-10-09T20:34:55Z,2026-10-09T21:41:54Z,1.12,https://github.com/mdc2122/viral-moment/pull/644 green->merged
+render-lock-wait-metric,release,2026-10-09T21:41:54Z,2026-10-16T03:44:44Z,150.05,"https://github.com/mdc2122/viral-moment/pull/644 merged, not yet live"
+intake-gate-launch-boundary,ci,2026-10-09T18:24:56Z,2026-10-09T18:27:48Z,0.05,https://github.com/mdc2122/viral-moment/pull/643 validation+checks
+intake-gate-launch-boundary,human_answer,2026-10-09T18:27:48Z,2026-10-09T18:30:24Z,0.04,needs-decision -> steer 2026-10-09T18:30:24Z
+intake-gate-launch-boundary,ci,2026-10-09T18:30:24Z,2026-10-09T18:51:42Z,0.35,https://github.com/mdc2122/viral-moment/pull/643 validation+checks
+intake-gate-launch-boundary,merge_queue,2026-10-09T18:51:42Z,2026-10-09T19:00:21Z,0.14,https://github.com/mdc2122/viral-moment/pull/643 green->merged
+intake-gate-launch-boundary,human_answer,2026-10-09T19:00:21Z,2026-10-09T19:02:22Z,0.03,needs-decision -> steer 2026-10-09T19:02:22Z
+intake-gate-launch-boundary,merge_queue,2026-10-09T19:02:22Z,2026-10-09T19:24:41Z,0.37,https://github.com/mdc2122/viral-moment/pull/643 green->merged
+intake-gate-launch-boundary,human_answer,2026-10-09T19:24:41Z,2026-10-09T19:25:55Z,0.02,blocked -> steer 2026-10-09T19:25:55Z
+intake-gate-launch-boundary,merge_queue,2026-10-09T19:25:55Z,2026-10-09T19:30:33Z,0.08,https://github.com/mdc2122/viral-moment/pull/643 green->merged
+intake-gate-launch-boundary,human_answer,2026-10-09T19:30:33Z,2026-10-09T19:32:48Z,0.04,blocked -> steer 2026-10-09T19:32:48Z
+intake-gate-launch-boundary,merge_queue,2026-10-09T19:32:48Z,2026-10-09T19:36:09Z,0.06,https://github.com/mdc2122/viral-moment/pull/643 green->merged
+intake-gate-launch-boundary,human_answer,2026-10-09T19:36:09Z,2026-10-09T19:37:03Z,0.01,needs-decision -> steer 2026-10-09T19:37:03Z
+intake-gate-launch-boundary,merge_queue,2026-10-09T19:37:03Z,2026-10-09T20:09:16Z,0.54,https://github.com/mdc2122/viral-moment/pull/643 green->merged
+intake-gate-launch-boundary,release,2026-10-09T20:09:16Z,2026-10-09T21:32:45Z,1.39,"https://github.com/mdc2122/viral-moment/pull/643 merged, not yet live"
+intake-gate-launch-boundary,decision_park,2026-10-09T21:32:45Z,2026-10-10T01:44:28Z,4.2,paused (flash): re-pin done; waiting for jZqn9Pu2vB0 (acquired 21:28Z) to reach a ballot card; w
+intake-gate-launch-boundary,release,2026-10-10T01:44:28Z,2026-10-10T16:09:52Z,14.42,"https://github.com/mdc2122/viral-moment/pull/643 merged, not yet live"
+intake-gate-launch-boundary,decision_park,2026-10-10T16:09:52Z,2026-10-10T16:12:57Z,0.05,needs-decision -> steer 2026-10-10T16:12:57Z
+intake-gate-launch-boundary,release,2026-10-10T16:12:57Z,2026-10-10T16:40:59Z,0.47,"https://github.com/mdc2122/viral-moment/pull/643 merged, not yet live"
+intake-gate-launch-boundary,human_answer,2026-10-10T16:40:59Z,2026-10-10T16:42:31Z,0.03,needs-decision -> steer 2026-10-10T16:42:31Z
+intake-gate-launch-boundary,release,2026-10-10T16:42:31Z,2026-10-16T03:44:44Z,131.04,"https://github.com/mdc2122/viral-moment/pull/643 merged, not yet live"
+analytics-readouts,ci,2026-10-09T20:25:40Z,2026-10-09T20:30:03Z,0.07,https://github.com/mdc2122/viral-moment/pull/646 validation+checks
+analytics-readouts,human_answer,2026-10-09T20:30:03Z,2026-10-09T20:30:49Z,0.01,needs-decision -> steer 2026-10-09T20:30:49Z
+analytics-readouts,ci,2026-10-09T20:30:49Z,2026-10-09T21:06:08Z,0.59,https://github.com/mdc2122/viral-moment/pull/646 validation+checks
+analytics-readouts,merge_queue,2026-10-09T21:06:08Z,2026-10-09T23:58:32Z,2.87,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,human_answer,2026-10-09T23:58:32Z,2026-10-10T00:02:45Z,0.07,blocked -> steer 2026-10-10T00:02:45Z
+analytics-readouts,merge_queue,2026-10-10T00:02:45Z,2026-10-10T00:43:09Z,0.67,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,human_answer,2026-10-10T00:43:09Z,2026-10-10T00:48:58Z,0.1,needs-decision -> steer 2026-10-10T00:48:58Z
+analytics-readouts,merge_queue,2026-10-10T00:48:58Z,2026-10-10T07:07:35Z,6.31,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,human_answer,2026-10-10T07:07:35Z,2026-10-10T07:09:00Z,0.02,needs-decision -> steer 2026-10-10T07:09:00Z
+analytics-readouts,merge_queue,2026-10-10T07:09:00Z,2026-10-10T07:51:36Z,0.71,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,human_answer,2026-10-10T07:51:36Z,2026-10-10T07:52:59Z,0.02,needs-decision -> steer 2026-10-10T07:52:59Z
+analytics-readouts,merge_queue,2026-10-10T07:52:59Z,2026-10-10T11:20:10Z,3.45,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,human_answer,2026-10-10T11:20:10Z,2026-10-10T11:37:54Z,0.3,needs-decision -> steer 2026-10-10T11:37:54Z
+analytics-readouts,merge_queue,2026-10-10T11:37:54Z,2026-10-10T17:33:05Z,5.92,https://github.com/mdc2122/viral-moment/pull/646 green->merged
+analytics-readouts,release,2026-10-10T17:33:05Z,2026-10-16T03:44:44Z,130.19,"https://github.com/mdc2122/viral-moment/pull/646 merged, not yet live"
+first-cut-rung-and-regret,ci,2026-10-09T21:32:57Z,2026-10-09T21:36:10Z,0.05,https://github.com/mdc2122/viral-moment/pull/650 validation+checks
+first-cut-rung-and-regret,human_answer,2026-10-09T21:36:10Z,2026-10-09T21:37:07Z,0.02,needs-decision -> steer 2026-10-09T21:37:07Z
+first-cut-rung-and-regret,ci,2026-10-09T21:37:07Z,2026-10-09T21:41:00Z,0.06,https://github.com/mdc2122/viral-moment/pull/650 validation+checks
+first-cut-rung-and-regret,human_answer,2026-10-09T21:41:00Z,2026-10-09T21:44:45Z,0.06,needs-decision -> steer 2026-10-09T21:44:45Z
+first-cut-rung-and-regret,ci,2026-10-09T21:44:45Z,2026-10-09T23:05:59Z,1.35,https://github.com/mdc2122/viral-moment/pull/650 validation+checks
+first-cut-rung-and-regret,human_answer,2026-10-09T23:05:59Z,2026-10-09T23:09:06Z,0.05,needs-decision -> steer 2026-10-09T23:09:06Z
+first-cut-rung-and-regret,ci,2026-10-09T23:09:06Z,2026-10-09T23:57:13Z,0.8,https://github.com/mdc2122/viral-moment/pull/650 validation+checks
+first-cut-rung-and-regret,merge_queue,2026-10-09T23:57:13Z,2026-10-10T02:49:43Z,2.88,https://github.com/mdc2122/viral-moment/pull/650 green->merged
+first-cut-rung-and-regret,human_answer,2026-10-10T02:49:43Z,2026-10-10T02:55:33Z,0.1,needs-decision -> steer 2026-10-10T02:55:33Z
+first-cut-rung-and-regret,merge_queue,2026-10-10T02:55:33Z,2026-10-10T03:41:46Z,0.77,https://github.com/mdc2122/viral-moment/pull/650 green->merged
+first-cut-rung-and-regret,release,2026-10-10T03:41:46Z,2026-10-16T03:44:44Z,144.05,"https://github.com/mdc2122/viral-moment/pull/650 merged, not yet live"
+pr6636-nm-raise,human_answer,2026-10-09T22:03:05Z,2026-10-09T22:04:07Z,0.02,needs-decision -> steer 2026-10-09T22:04:07Z
+fresh-upload-backfill,ci,2026-10-09T21:53:43Z,2026-10-09T21:56:10Z,0.04,https://github.com/mdc2122/viral-moment/pull/652 validation+checks
+fresh-upload-backfill,human_answer,2026-10-09T21:56:10Z,2026-10-09T21:58:04Z,0.03,needs-decision -> steer 2026-10-09T21:58:04Z
+fresh-upload-backfill,ci,2026-10-09T21:58:04Z,2026-10-09T22:49:02Z,0.85,https://github.com/mdc2122/viral-moment/pull/652 validation+checks
+fresh-upload-backfill,merge_queue,2026-10-09T22:49:02Z,2026-10-09T23:36:00Z,0.78,https://github.com/mdc2122/viral-moment/pull/652 green->merged
+fresh-upload-backfill,release,2026-10-09T23:36:00Z,2026-10-09T23:40:35Z,0.08,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/652 green at 1f746ce0 but GitHub
+fresh-upload-backfill,merge_queue,2026-10-09T23:40:35Z,2026-10-10T01:18:12Z,1.63,https://github.com/mdc2122/viral-moment/pull/652 green->merged
+fresh-upload-backfill,human_answer,2026-10-10T01:18:12Z,2026-10-10T01:22:12Z,0.07,needs-decision -> steer 2026-10-10T01:22:12Z
+fresh-upload-backfill,merge_queue,2026-10-10T01:22:12Z,2026-10-10T08:24:20Z,7.04,https://github.com/mdc2122/viral-moment/pull/652 green->merged
+fresh-upload-backfill,human_answer,2026-10-10T08:24:20Z,2026-10-10T08:25:29Z,0.02,needs-decision -> steer 2026-10-10T08:25:29Z
+fresh-upload-backfill,merge_queue,2026-10-10T08:25:29Z,2026-10-10T08:48:44Z,0.39,https://github.com/mdc2122/viral-moment/pull/652 green->merged
+fresh-upload-backfill,release,2026-10-10T08:48:44Z,2026-10-10T10:31:19Z,1.71,"https://github.com/mdc2122/viral-moment/pull/652 merged, not yet live"
+fresh-upload-backfill,human_answer,2026-10-10T10:31:19Z,2026-10-10T10:34:43Z,0.06,needs-decision -> steer 2026-10-10T10:34:43Z
+fresh-upload-backfill,release,2026-10-10T10:34:43Z,2026-10-16T03:44:44Z,137.17,"https://github.com/mdc2122/viral-moment/pull/652 merged, not yet live"
+outlier-shadow-profile,human_answer,2026-10-09T23:11:12Z,2026-10-09T23:18:13Z,0.12,needs-decision -> steer 2026-10-09T23:18:13Z
+outlier-shadow-profile,handoff_idle,2026-10-09T23:18:13Z,2026-10-09T23:18:20Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-09T23:31:19Z,2026-10-09T23:39:25Z,0.13,needs-decision -> steer 2026-10-09T23:39:25Z
+outlier-shadow-profile,handoff_idle,2026-10-09T23:39:25Z,2026-10-09T23:39:27Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-09T23:53:32Z,2026-10-09T23:56:30Z,0.05,needs-decision -> steer 2026-10-09T23:56:30Z
+outlier-shadow-profile,worker_stall,2026-10-10T00:11:01Z,2026-10-10T00:15:59Z,0.08,idle until assistant (error stop)
+outlier-shadow-profile,worker_stall,2026-10-10T00:20:42Z,2026-10-10T00:25:35Z,0.08,idle until assistant (error stop)
+outlier-shadow-profile,worker_stall,2026-10-10T00:26:52Z,2026-10-10T00:30:20Z,0.06,idle until assistant (error stop)
+outlier-shadow-profile,handoff_idle,2026-10-10T00:38:51Z,2026-10-10T00:49:08Z,0.17,idle until firstmate steer (handoff)
+outlier-shadow-profile,ci,2026-10-10T01:02:49Z,2026-10-10T02:28:18Z,1.42,https://github.com/mdc2122/viral-moment/pull/664 validation+checks
+outlier-shadow-profile,human_answer,2026-10-10T02:28:18Z,2026-10-10T02:51:34Z,0.39,needs-decision -> steer 2026-10-10T02:51:34Z
+outlier-shadow-profile,ci,2026-10-10T02:51:34Z,2026-10-10T02:52:13Z,0.01,https://github.com/mdc2122/viral-moment/pull/664 validation+checks
+outlier-shadow-profile,merge_queue,2026-10-10T02:52:13Z,2026-10-10T09:52:40Z,7.01,paused (rule): waiting for firstmate to say the vm-suite-flakes cloud_scout flake fix merged; t
+outlier-shadow-profile,ci,2026-10-10T09:52:40Z,2026-10-10T10:04:16Z,0.19,https://github.com/mdc2122/viral-moment/pull/664 validation+checks
+outlier-shadow-profile,human_answer,2026-10-10T10:04:16Z,2026-10-10T10:06:37Z,0.04,needs-decision -> steer 2026-10-10T10:06:37Z
+outlier-shadow-profile,ci,2026-10-10T10:06:37Z,2026-10-10T10:55:29Z,0.81,https://github.com/mdc2122/viral-moment/pull/664 validation+checks
+outlier-shadow-profile,merge_queue,2026-10-10T10:55:29Z,2026-10-10T10:59:28Z,0.07,https://github.com/mdc2122/viral-moment/pull/664 green->merged
+outlier-shadow-profile,release,2026-10-10T10:59:28Z,2026-10-10T12:30:04Z,1.51,paused (rule): https://github.com/mdc2122/viral-moment/pull/664 stays draft until https://githu
+outlier-shadow-profile,merge_queue,2026-10-10T12:30:04Z,2026-10-10T12:30:18Z,0.0,https://github.com/mdc2122/viral-moment/pull/664 green->merged
+outlier-shadow-profile,human_answer,2026-10-10T12:30:18Z,2026-10-10T15:19:35Z,2.82,paused (flash): ack 012 (watcher rerun notices ignored); https://github.com/mdc2122/viral-moment
+outlier-shadow-profile,merge_queue,2026-10-10T15:19:35Z,2026-10-10T19:48:45Z,4.49,https://github.com/mdc2122/viral-moment/pull/664 green->merged
+outlier-shadow-profile,human_answer,2026-10-10T19:48:45Z,2026-10-10T19:50:37Z,0.03,needs-decision -> steer 2026-10-10T19:50:37Z
+outlier-shadow-profile,merge_queue,2026-10-10T19:50:37Z,2026-10-10T20:29:43Z,0.65,https://github.com/mdc2122/viral-moment/pull/664 green->merged
+outlier-shadow-profile,release,2026-10-10T20:29:43Z,2026-10-16T03:44:44Z,127.25,"https://github.com/mdc2122/viral-moment/pull/664 merged, not yet live"
+goal-skill-outlier-profile,ci,2026-10-09T21:56:30Z,2026-10-09T22:01:40Z,0.09,https://github.com/mdc2122/viral-moment/pull/651 validation+checks
+goal-skill-outlier-profile,human_answer,2026-10-09T22:01:40Z,2026-10-09T22:04:02Z,0.04,needs-decision -> steer 2026-10-09T22:04:02Z
+goal-skill-outlier-profile,ci,2026-10-09T22:04:02Z,2026-10-09T22:25:03Z,0.35,https://github.com/mdc2122/viral-moment/pull/651 validation+checks
+goal-skill-outlier-profile,merge_queue,2026-10-09T22:25:03Z,2026-10-10T03:29:20Z,5.07,https://github.com/mdc2122/viral-moment/pull/651 green->merged
+goal-skill-outlier-profile,release,2026-10-10T03:29:20Z,2026-10-10T03:50:43Z,0.36,paused (rule): https://github.com/mdc2122/viral-moment/pull/651 still draft; https://github.com
+goal-skill-outlier-profile,human_answer,2026-10-10T03:50:43Z,2026-10-10T03:55:37Z,0.08,needs-decision self-cleared
+goal-skill-outlier-profile,human_answer,2026-10-10T03:55:37Z,2026-10-10T03:58:34Z,0.05,blocked -> steer 2026-10-10T03:58:34Z
+goal-skill-outlier-profile,merge_queue,2026-10-10T03:58:34Z,2026-10-10T04:08:01Z,0.16,https://github.com/mdc2122/viral-moment/pull/651 green->merged
+goal-skill-outlier-profile,human_answer,2026-10-10T04:08:01Z,2026-10-10T04:10:07Z,0.04,needs-decision self-cleared
+goal-skill-outlier-profile,merge_queue,2026-10-10T04:10:07Z,2026-10-10T04:30:15Z,0.34,https://github.com/mdc2122/viral-moment/pull/651 green->merged
+goal-skill-outlier-profile,release,2026-10-10T04:30:15Z,2026-10-16T03:44:44Z,143.24,"https://github.com/mdc2122/viral-moment/pull/651 merged, not yet live"
+goal-panel-backup-dead,human_answer,2026-10-09T22:01:07Z,2026-10-09T22:04:05Z,0.05,needs-decision -> steer 2026-10-09T22:04:05Z
+goal-panel-backup-dead,ci,2026-10-09T22:05:04Z,2026-10-09T22:44:45Z,0.66,https://github.com/mdc2122/viral-moment/pull/653 validation+checks
+goal-panel-backup-dead,human_answer,2026-10-09T22:44:45Z,2026-10-09T22:45:16Z,0.01,needs-decision -> steer 2026-10-09T22:45:16Z
+goal-panel-backup-dead,ci,2026-10-09T22:45:16Z,2026-10-09T23:11:01Z,0.43,https://github.com/mdc2122/viral-moment/pull/653 validation+checks
+goal-panel-backup-dead,merge_queue,2026-10-09T23:11:01Z,2026-10-10T00:08:19Z,0.95,https://github.com/mdc2122/viral-moment/pull/653 green->merged
+goal-panel-backup-dead,release,2026-10-10T00:08:19Z,2026-10-10T04:33:58Z,4.43,"https://github.com/mdc2122/viral-moment/pull/653 merged, not yet live"
+goal-panel-backup-dead,human_answer,2026-10-10T04:33:58Z,2026-10-10T04:41:32Z,0.13,needs-decision -> steer 2026-10-10T04:41:32Z
+goal-panel-backup-dead,release,2026-10-10T04:41:32Z,2026-10-10T05:29:46Z,0.8,"https://github.com/mdc2122/viral-moment/pull/653 merged, not yet live"
+goal-panel-backup-dead,human_answer,2026-10-10T05:29:46Z,2026-10-10T05:36:09Z,0.11,needs-decision -> steer 2026-10-10T05:36:09Z
+goal-panel-backup-dead,release,2026-10-10T05:36:09Z,2026-10-16T03:44:44Z,142.14,"https://github.com/mdc2122/viral-moment/pull/653 merged, not yet live"
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T00:06:57Z,2026-10-10T00:49:20Z,0.71,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,human_answer,2026-10-10T00:53:04Z,2026-10-10T01:05:44Z,0.21,needs-decision -> steer 2026-10-10T01:05:44Z
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T01:05:44Z,2026-10-10T01:05:53Z,0.0,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,ci,2026-10-10T01:23:17Z,2026-10-10T01:28:41Z,0.09,https://github.com/mdc2122/viral-moment/pull/665 validation+checks
+review-model-bakeoff-wiring,human_answer,2026-10-10T01:28:41Z,2026-10-10T01:30:43Z,0.03,needs-decision -> steer 2026-10-10T01:30:43Z
+review-model-bakeoff-wiring,ci,2026-10-10T01:30:43Z,2026-10-10T01:35:20Z,0.08,https://github.com/mdc2122/viral-moment/pull/665 validation+checks
+review-model-bakeoff-wiring,human_answer,2026-10-10T01:35:20Z,2026-10-10T01:39:49Z,0.07,needs-decision -> steer 2026-10-10T01:39:49Z
+review-model-bakeoff-wiring,ci,2026-10-10T01:39:49Z,2026-10-10T02:31:05Z,0.85,https://github.com/mdc2122/viral-moment/pull/665 validation+checks
+review-model-bakeoff-wiring,merge_queue,2026-10-10T02:31:05Z,2026-10-10T10:03:56Z,7.55,https://github.com/mdc2122/viral-moment/pull/665 green->merged
+review-model-bakeoff-wiring,human_answer,2026-10-10T10:03:56Z,2026-10-10T10:06:34Z,0.04,needs-decision -> steer 2026-10-10T10:06:34Z
+review-model-bakeoff-wiring,merge_queue,2026-10-10T10:06:34Z,2026-10-10T11:52:18Z,1.76,https://github.com/mdc2122/viral-moment/pull/665 green->merged
+review-model-bakeoff-wiring,human_answer,2026-10-10T11:52:18Z,2026-10-10T11:54:40Z,0.04,needs-decision -> steer 2026-10-10T11:54:40Z
+review-model-bakeoff-wiring,merge_queue,2026-10-10T11:54:40Z,2026-10-10T12:27:37Z,0.55,https://github.com/mdc2122/viral-moment/pull/665 green->merged
+review-model-bakeoff-wiring,human_answer,2026-10-10T12:27:37Z,2026-10-10T12:29:07Z,0.02,needs-decision -> steer 2026-10-10T12:29:07Z
+review-model-bakeoff-wiring,merge_queue,2026-10-10T12:29:07Z,2026-10-10T21:01:39Z,8.54,https://github.com/mdc2122/viral-moment/pull/665 green->merged
+review-model-bakeoff-wiring,release,2026-10-10T21:01:39Z,2026-10-16T03:44:44Z,126.72,"https://github.com/mdc2122/viral-moment/pull/665 merged, not yet live"
+goal-render-speed,ci,2026-10-09T23:46:13Z,2026-10-10T00:51:26Z,1.09,https://github.com/mdc2122/viral-moment/pull/663 validation+checks
+goal-render-speed,human_answer,2026-10-10T00:51:26Z,2026-10-10T00:54:59Z,0.06,needs-decision -> steer 2026-10-10T00:54:59Z
+goal-render-speed,ci,2026-10-10T00:54:59Z,2026-10-10T01:13:46Z,0.31,https://github.com/mdc2122/viral-moment/pull/663 validation+checks
+goal-render-speed,merge_queue,2026-10-10T01:13:46Z,2026-10-10T01:42:58Z,0.49,https://github.com/mdc2122/viral-moment/pull/663 green->merged
+goal-render-speed,human_answer,2026-10-10T01:42:58Z,2026-10-10T01:46:51Z,0.06,needs-decision -> steer 2026-10-10T01:46:51Z
+goal-render-speed,merge_queue,2026-10-10T01:46:51Z,2026-10-10T02:02:48Z,0.27,https://github.com/mdc2122/viral-moment/pull/663 green->merged
+goal-render-speed,release,2026-10-10T02:02:48Z,2026-10-16T03:44:44Z,145.7,"https://github.com/mdc2122/viral-moment/pull/663 merged, not yet live"
+judge-input-cache,ci,2026-10-09T23:20:16Z,2026-10-09T23:22:24Z,0.04,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,human_answer,2026-10-09T23:22:24Z,2026-10-09T23:31:02Z,0.14,needs-decision -> steer 2026-10-09T23:31:02Z
+judge-input-cache,ci,2026-10-09T23:31:02Z,2026-10-09T23:34:33Z,0.06,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,human_answer,2026-10-09T23:34:33Z,2026-10-09T23:40:19Z,0.1,needs-decision -> steer 2026-10-09T23:40:19Z
+judge-input-cache,ci,2026-10-09T23:40:19Z,2026-10-10T00:34:23Z,0.9,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,human_answer,2026-10-10T00:34:23Z,2026-10-10T00:55:12Z,0.35,needs-decision -> steer 2026-10-10T00:55:12Z
+judge-input-cache,ci,2026-10-10T00:55:12Z,2026-10-10T01:13:11Z,0.3,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,human_answer,2026-10-10T01:13:11Z,2026-10-10T01:21:56Z,0.15,blocked -> steer 2026-10-10T01:21:56Z
+judge-input-cache,ci,2026-10-10T01:21:56Z,2026-10-10T01:22:49Z,0.01,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,merge_queue,2026-10-10T01:22:49Z,2026-10-10T06:57:31Z,5.58,paused (rule): holding run 01M4HMYGJEJQQNQHGJ51KSE929 parked at Test per firstmate; cloud_scout
+judge-input-cache,ci,2026-10-10T06:57:31Z,2026-10-10T10:25:01Z,3.46,https://github.com/mdc2122/viral-moment/pull/660 validation+checks
+judge-input-cache,merge_queue,2026-10-10T10:25:01Z,2026-10-11T01:38:53Z,15.23,https://github.com/mdc2122/viral-moment/pull/660 green->merged
+judge-input-cache,release,2026-10-11T01:38:53Z,2026-10-16T03:44:44Z,122.1,"https://github.com/mdc2122/viral-moment/pull/660 merged, not yet live"
+ranking-compare-empty-json,ci,2026-10-09T23:27:52Z,2026-10-09T23:34:32Z,0.11,https://github.com/mdc2122/viral-moment/pull/662 validation+checks
+ranking-compare-empty-json,human_answer,2026-10-09T23:34:32Z,2026-10-09T23:40:23Z,0.1,needs-decision -> steer 2026-10-09T23:40:23Z
+ranking-compare-empty-json,ci,2026-10-09T23:40:23Z,2026-10-10T01:27:20Z,1.78,https://github.com/mdc2122/viral-moment/pull/662 validation+checks
+ranking-compare-empty-json,human_answer,2026-10-10T01:27:20Z,2026-10-10T15:45:39Z,14.31,blocked -> steer 2026-10-10T15:45:39Z
+ranking-compare-empty-json,ci,2026-10-10T15:45:39Z,2026-10-10T16:31:12Z,0.76,https://github.com/mdc2122/viral-moment/pull/662 validation+checks
+ranking-compare-empty-json,merge_queue,2026-10-10T16:31:12Z,2026-10-10T17:35:11Z,1.07,https://github.com/mdc2122/viral-moment/pull/662 green->merged
+ranking-compare-empty-json,human_answer,2026-10-10T17:35:11Z,2026-10-10T20:01:21Z,2.44,"paused (flash): PR https://github.com/mdc2122/viral-moment/pull/662 green, holding behind main u"
+ranking-compare-empty-json,merge_queue,2026-10-10T20:01:21Z,2026-10-10T20:01:36Z,0.0,https://github.com/mdc2122/viral-moment/pull/662 green->merged
+ranking-compare-empty-json,human_answer,2026-10-10T20:01:36Z,2026-10-10T20:30:55Z,0.49,"paused (flash): PR https://github.com/mdc2122/viral-moment/pull/662 green, holding behind main u"
+ranking-compare-empty-json,merge_queue,2026-10-10T20:30:55Z,2026-10-10T20:40:04Z,0.15,https://github.com/mdc2122/viral-moment/pull/662 green->merged
+ranking-compare-empty-json,human_answer,2026-10-10T20:40:04Z,2026-10-10T20:42:46Z,0.04,needs-decision -> steer 2026-10-10T20:42:46Z
+ranking-compare-empty-json,merge_queue,2026-10-10T20:42:46Z,2026-10-10T22:23:36Z,1.68,https://github.com/mdc2122/viral-moment/pull/662 green->merged
+ranking-compare-empty-json,release,2026-10-10T22:23:36Z,2026-10-16T03:44:44Z,125.35,"https://github.com/mdc2122/viral-moment/pull/662 merged, not yet live"
+vm-suite-flakes,handoff_idle,2026-10-10T00:17:23Z,2026-10-10T00:33:45Z,0.27,idle until firstmate steer (handoff)
+vm-suite-flakes,ci,2026-10-10T04:22:31Z,2026-10-10T05:15:16Z,0.88,https://github.com/mdc2122/viral-moment/pull/669 validation+checks
+vm-suite-flakes,human_answer,2026-10-10T05:15:16Z,2026-10-10T05:24:52Z,0.16,needs-decision -> steer 2026-10-10T05:24:52Z
+vm-suite-flakes,ci,2026-10-10T05:24:52Z,2026-10-10T06:11:00Z,0.77,https://github.com/mdc2122/viral-moment/pull/669 validation+checks
+vm-suite-flakes,merge_queue,2026-10-10T06:11:00Z,2026-10-10T08:50:53Z,2.66,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,human_answer,2026-10-10T08:50:53Z,2026-10-10T08:55:16Z,0.07,needs-decision -> steer 2026-10-10T08:55:16Z
+vm-suite-flakes,merge_queue,2026-10-10T08:55:16Z,2026-10-10T09:14:51Z,0.33,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,human_answer,2026-10-10T09:14:51Z,2026-10-10T09:17:56Z,0.05,needs-decision -> steer 2026-10-10T09:17:56Z
+vm-suite-flakes,merge_queue,2026-10-10T09:17:56Z,2026-10-10T09:51:33Z,0.56,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,human_answer,2026-10-10T09:51:33Z,2026-10-10T09:52:37Z,0.02,needs-decision self-cleared
+vm-suite-flakes,merge_queue,2026-10-10T09:52:37Z,2026-10-10T10:26:32Z,0.57,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,human_answer,2026-10-10T10:26:32Z,2026-10-10T10:29:22Z,0.05,needs-decision -> steer 2026-10-10T10:29:22Z
+vm-suite-flakes,merge_queue,2026-10-10T10:29:22Z,2026-10-10T14:56:44Z,4.46,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,human_answer,2026-10-10T14:56:44Z,2026-10-10T15:10:20Z,0.23,paused (flash): holding PR https://github.com/mdc2122/viral-moment/pull/669 at 688f8e82 per msg 
+vm-suite-flakes,merge_queue,2026-10-10T15:10:20Z,2026-10-10T15:44:37Z,0.57,https://github.com/mdc2122/viral-moment/pull/669 green->merged
+vm-suite-flakes,release,2026-10-10T15:44:37Z,2026-10-16T03:44:44Z,132.0,"https://github.com/mdc2122/viral-moment/pull/669 merged, not yet live"
+quota-axi-devin,human_answer,2026-10-10T00:33:39Z,2026-10-10T00:55:33Z,0.36,needs-decision -> steer 2026-10-10T00:55:33Z
+quota-axi-devin,handoff_idle,2026-10-10T00:55:33Z,2026-10-10T00:55:39Z,0.0,idle until firstmate steer (handoff)
+quota-axi-devin,ci,2026-10-10T01:21:13Z,2026-10-10T01:37:29Z,0.27,https://github.com/mdc2122/quota-axi/pull/3 validation+checks
+quota-axi-devin,merge_queue,2026-10-10T01:37:29Z,2026-10-10T01:46:02Z,0.14,https://github.com/mdc2122/quota-axi/pull/3 green->merged
+paperclip-zai-first-repo,ci,2026-10-10T01:11:18Z,2026-10-10T01:11:27Z,0.0,https://github.com/mdc2122/paperclip-ceo/pull/38 validation+checks
+paperclip-zai-first-repo,merge_queue,2026-10-10T01:11:27Z,2026-10-10T01:14:55Z,0.06,https://github.com/mdc2122/paperclip-ceo/pull/38 green->merged
+paperclip-flash-repo,ci,2026-10-10T01:32:36Z,2026-10-10T01:32:45Z,0.0,https://github.com/mdc2122/paperclip-ceo/pull/39 validation+checks
+paperclip-flash-repo,merge_queue,2026-10-10T01:32:45Z,2026-10-10T01:34:10Z,0.02,https://github.com/mdc2122/paperclip-ceo/pull/39 green->merged
+clip-crop-twitch-overlay,human_answer,2026-10-10T02:19:05Z,2026-10-10T02:47:45Z,0.48,needs-decision -> steer 2026-10-10T02:47:45Z
+clip-crop-twitch-overlay,release,2026-10-10T03:05:35Z,2026-10-10T03:06:30Z,0.02,needs-decision self-cleared
+clip-crop-twitch-overlay,ci,2026-10-10T03:06:58Z,2026-10-10T03:16:47Z,0.16,https://github.com/mdc2122/viral-moment/pull/668 validation+checks
+clip-crop-twitch-overlay,human_answer,2026-10-10T03:16:47Z,2026-10-10T03:21:46Z,0.08,needs-decision -> steer 2026-10-10T03:21:46Z
+clip-crop-twitch-overlay,ci,2026-10-10T03:21:46Z,2026-10-10T04:05:10Z,0.72,https://github.com/mdc2122/viral-moment/pull/668 validation+checks
+clip-crop-twitch-overlay,human_answer,2026-10-10T04:05:10Z,2026-10-10T04:07:09Z,0.03,needs-decision -> steer 2026-10-10T04:07:09Z
+clip-crop-twitch-overlay,ci,2026-10-10T04:07:09Z,2026-10-10T05:54:01Z,1.78,https://github.com/mdc2122/viral-moment/pull/668 validation+checks
+clip-crop-twitch-overlay,merge_queue,2026-10-10T05:54:01Z,2026-10-10T07:06:31Z,1.21,https://github.com/mdc2122/viral-moment/pull/668 green->merged
+clip-crop-twitch-overlay,release,2026-10-10T07:06:31Z,2026-10-10T07:16:38Z,0.17,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+clip-crop-twitch-overlay,human_answer,2026-10-10T07:16:38Z,2026-10-10T07:18:00Z,0.02,needs-decision -> steer 2026-10-10T07:18:00Z
+clip-crop-twitch-overlay,release,2026-10-10T07:18:00Z,2026-10-10T07:23:20Z,0.09,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+clip-crop-twitch-overlay,human_answer,2026-10-10T07:23:20Z,2026-10-10T07:23:57Z,0.01,needs-decision -> steer 2026-10-10T07:23:57Z
+clip-crop-twitch-overlay,release,2026-10-10T07:23:57Z,2026-10-10T16:15:05Z,8.85,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:15:05Z,2026-10-10T16:17:17Z,0.04,needs-decision -> steer 2026-10-10T16:17:17Z
+clip-crop-twitch-overlay,release,2026-10-10T16:17:17Z,2026-10-10T16:30:37Z,0.22,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:30:37Z,2026-10-10T16:32:01Z,0.02,needs-decision -> steer 2026-10-10T16:32:01Z
+clip-crop-twitch-overlay,release,2026-10-10T16:32:01Z,2026-10-10T16:36:33Z,0.08,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:36:33Z,2026-10-10T16:38:34Z,0.03,needs-decision -> steer 2026-10-10T16:38:34Z
+clip-crop-twitch-overlay,release,2026-10-10T16:38:34Z,2026-10-16T03:44:44Z,131.1,"https://github.com/mdc2122/viral-moment/pull/668 merged, not yet live"
+title-model-rerun,human_answer,2026-10-10T07:26:47Z,2026-10-10T08:53:42Z,1.45,paused (flash): stopped title-judge (pid 39980) + title-truth (pid 1193) for the Python cutover;
+title-model-rerun,handoff_idle,2026-10-10T08:53:42Z,2026-10-10T08:53:43Z,0.0,idle until firstmate steer (handoff)
+cursor-judge-rung-fix,ci,2026-10-10T06:03:39Z,2026-10-10T06:46:18Z,0.71,https://github.com/mdc2122/viral-moment/pull/670 validation+checks
+cursor-judge-rung-fix,merge_queue,2026-10-10T06:46:18Z,2026-10-10T07:40:32Z,0.9,https://github.com/mdc2122/viral-moment/pull/670 green->merged
+cursor-judge-rung-fix,release,2026-10-10T07:40:32Z,2026-10-16T03:44:44Z,140.07,"https://github.com/mdc2122/viral-moment/pull/670 merged, not yet live"
+deploy-between-renders,ci,2026-10-10T08:32:50Z,2026-10-10T08:45:36Z,0.21,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T08:45:36Z,2026-10-10T08:47:32Z,0.03,needs-decision -> steer 2026-10-10T08:47:32Z
+deploy-between-renders,ci,2026-10-10T08:47:32Z,2026-10-10T09:23:46Z,0.6,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T09:23:46Z,2026-10-10T09:25:33Z,0.03,needs-decision -> steer 2026-10-10T09:26:44Z
+deploy-between-renders,human_answer,2026-10-10T09:25:33Z,2026-10-10T09:26:44Z,0.02,blocked -> steer 2026-10-10T09:26:44Z
+deploy-between-renders,ci,2026-10-10T09:26:44Z,2026-10-10T09:39:37Z,0.21,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T09:39:37Z,2026-10-10T09:40:02Z,0.01,needs-decision -> steer 2026-10-10T09:40:02Z
+deploy-between-renders,ci,2026-10-10T09:40:02Z,2026-10-10T09:53:14Z,0.22,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T09:53:14Z,2026-10-10T09:54:53Z,0.03,needs-decision -> steer 2026-10-10T09:54:53Z
+deploy-between-renders,ci,2026-10-10T09:54:53Z,2026-10-10T10:05:04Z,0.17,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T10:05:04Z,2026-10-10T10:06:40Z,0.03,needs-decision -> steer 2026-10-10T10:06:40Z
+deploy-between-renders,ci,2026-10-10T10:06:40Z,2026-10-10T10:14:06Z,0.12,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,human_answer,2026-10-10T10:14:06Z,2026-10-10T10:14:49Z,0.01,needs-decision -> steer 2026-10-10T10:14:49Z
+deploy-between-renders,ci,2026-10-10T10:14:49Z,2026-10-10T11:16:17Z,1.02,https://github.com/mdc2122/viral-moment/pull/679 validation+checks
+deploy-between-renders,merge_queue,2026-10-10T11:16:17Z,2026-10-11T00:32:41Z,13.27,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,human_answer,2026-10-11T00:32:41Z,2026-10-11T00:34:00Z,0.02,needs-decision -> steer 2026-10-11T00:34:00Z
+deploy-between-renders,merge_queue,2026-10-11T00:34:00Z,2026-10-11T00:38:43Z,0.08,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,human_answer,2026-10-11T00:38:43Z,2026-10-11T00:40:30Z,0.03,needs-decision -> steer 2026-10-11T00:40:30Z
+deploy-between-renders,merge_queue,2026-10-11T00:40:30Z,2026-10-11T00:45:48Z,0.09,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,human_answer,2026-10-11T00:45:48Z,2026-10-11T00:47:52Z,0.03,needs-decision -> steer 2026-10-11T00:47:52Z
+deploy-between-renders,merge_queue,2026-10-11T00:47:52Z,2026-10-11T00:48:03Z,0.0,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,decision_park,2026-10-11T00:48:03Z,2026-10-12T16:27:57Z,39.66,"paused (rule): waiting on the captain's goal-session rule (finding goal-exempt-under-mutation, "
+deploy-between-renders,merge_queue,2026-10-12T16:27:57Z,2026-10-12T17:35:25Z,1.12,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,human_answer,2026-10-12T17:35:25Z,2026-10-12T18:21:52Z,0.77,needs-decision -> steer 2026-10-12T18:21:52Z
+deploy-between-renders,merge_queue,2026-10-12T18:21:52Z,2026-10-12T21:47:53Z,3.43,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,human_answer,2026-10-12T21:47:53Z,2026-10-12T21:54:31Z,0.11,needs-decision -> steer 2026-10-12T21:54:31Z
+deploy-between-renders,merge_queue,2026-10-12T21:54:31Z,2026-10-12T22:36:51Z,0.71,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,decision_park,2026-10-12T22:36:51Z,2026-10-12T22:51:07Z,0.24,needs-decision -> steer 2026-10-12T22:51:07Z
+deploy-between-renders,merge_queue,2026-10-12T22:51:07Z,2026-10-13T00:19:43Z,1.48,https://github.com/mdc2122/viral-moment/pull/679 green->merged
+deploy-between-renders,release,2026-10-13T00:19:43Z,2026-10-16T03:44:44Z,75.42,"https://github.com/mdc2122/viral-moment/pull/679 merged, not yet live"
+engineer-no-local-fallback,ci,2026-10-10T11:30:19Z,2026-10-10T11:30:30Z,0.0,https://github.com/mdc2122/paperclip-ceo/pull/40 validation+checks
+engineer-no-local-fallback,merge_queue,2026-10-10T11:30:30Z,2026-10-10T11:33:05Z,0.04,https://github.com/mdc2122/paperclip-ceo/pull/40 green->merged
+engineer-no-local-fallback,ci,2026-10-10T11:36:26Z,2026-10-10T11:36:36Z,0.0,https://github.com/mdc2122/paperclip-ceo/pull/41 validation+checks
+engineer-no-local-fallback,merge_queue,2026-10-10T11:36:36Z,2026-10-10T11:37:52Z,0.02,https://github.com/mdc2122/paperclip-ceo/pull/41 green->merged
+studio2-disk-growth,ci,2026-10-10T12:59:04Z,2026-10-10T13:27:47Z,0.48,https://github.com/mdc2122/viral-moment/pull/682 validation+checks
+studio2-disk-growth,human_answer,2026-10-10T13:27:47Z,2026-10-10T13:39:21Z,0.19,needs-decision -> steer 2026-10-10T13:39:21Z
+studio2-disk-growth,ci,2026-10-10T13:39:21Z,2026-10-10T13:51:37Z,0.2,https://github.com/mdc2122/viral-moment/pull/682 validation+checks
+studio2-disk-growth,merge_queue,2026-10-10T13:51:37Z,2026-10-10T14:08:47Z,0.29,https://github.com/mdc2122/viral-moment/pull/682 green->merged
+studio2-disk-growth,release,2026-10-10T14:08:47Z,2026-10-10T14:37:34Z,0.48,paused (rule): holding PR https://github.com/mdc2122/viral-moment/pull/682 in merge line behind
+studio2-disk-growth,merge_queue,2026-10-10T14:37:34Z,2026-10-10T14:40:29Z,0.05,https://github.com/mdc2122/viral-moment/pull/682 green->merged
+studio2-disk-growth,release,2026-10-10T14:40:29Z,2026-10-10T16:03:55Z,1.39,"https://github.com/mdc2122/viral-moment/pull/682 merged, not yet live"
+studio2-disk-growth,human_answer,2026-10-10T16:03:55Z,2026-10-10T16:05:57Z,0.03,needs-decision -> steer 2026-10-10T16:05:57Z
+studio2-disk-growth,release,2026-10-10T16:05:57Z,2026-10-16T03:44:44Z,131.65,"https://github.com/mdc2122/viral-moment/pull/682 merged, not yet live"
+outlier-score-new-transcripts,worker_stall,2026-10-12T15:28:46Z,2026-10-12T15:38:47Z,0.17,idle until turn_end (error stop)
+outlier-score-new-transcripts,worker_stall,2026-10-12T15:38:47Z,2026-10-12T15:44:07Z,0.09,idle until assistant (error stop)
+outlier-score-new-transcripts,ci,2026-10-12T17:07:39Z,2026-10-12T17:11:32Z,0.06,https://github.com/mdc2122/viral-moment/pull/719 validation+checks
+outlier-score-new-transcripts,human_answer,2026-10-12T17:11:32Z,2026-10-12T17:12:25Z,0.01,needs-decision -> steer 2026-10-12T17:12:25Z
+outlier-score-new-transcripts,ci,2026-10-12T17:12:25Z,2026-10-12T17:38:48Z,0.44,https://github.com/mdc2122/viral-moment/pull/719 validation+checks
+outlier-score-new-transcripts,merge_queue,2026-10-12T17:38:48Z,2026-10-12T17:44:40Z,0.1,https://github.com/mdc2122/viral-moment/pull/719 green->merged
+outlier-score-new-transcripts,release,2026-10-12T17:44:40Z,2026-10-16T03:44:44Z,82.0,"https://github.com/mdc2122/viral-moment/pull/719 merged, not yet live"
+never-cut-pin-quota-4,ci,2026-10-12T16:54:00Z,2026-10-12T17:28:04Z,0.57,https://github.com/mdc2122/viral-moment/pull/718 validation+checks
+never-cut-pin-quota-4,merge_queue,2026-10-12T17:28:04Z,2026-10-12T18:12:18Z,0.74,https://github.com/mdc2122/viral-moment/pull/718 green->merged
+never-cut-pin-quota-4,release,2026-10-12T18:12:18Z,2026-10-16T03:44:44Z,81.54,"https://github.com/mdc2122/viral-moment/pull/718 merged, not yet live"
+slot-floor-followup-order,human_answer,2026-10-12T18:35:17Z,2026-10-12T18:35:55Z,0.01,needs-decision -> steer 2026-10-12T18:35:55Z
+slot-floor-followup-order,worker_stall,2026-10-12T19:26:07Z,2026-10-12T19:29:36Z,0.06,idle until turn_end (error stop)
+slot-floor-followup-order,ci,2026-10-12T19:34:17Z,2026-10-12T19:37:05Z,0.05,https://github.com/mdc2122/viral-moment/pull/723 validation+checks
+slot-floor-followup-order,human_answer,2026-10-12T19:37:05Z,2026-10-12T19:50:59Z,0.23,needs-decision -> steer 2026-10-12T19:50:59Z
+slot-floor-followup-order,ci,2026-10-12T19:50:59Z,2026-10-12T20:16:20Z,0.42,https://github.com/mdc2122/viral-moment/pull/723 validation+checks
+slot-floor-followup-order,merge_queue,2026-10-12T20:16:20Z,2026-10-12T20:53:13Z,0.61,https://github.com/mdc2122/viral-moment/pull/723 green->merged
+slot-floor-followup-order,human_answer,2026-10-12T20:53:13Z,2026-10-12T20:58:52Z,0.09,needs-decision -> steer 2026-10-12T20:58:52Z
+slot-floor-followup-order,merge_queue,2026-10-12T20:58:52Z,2026-10-12T21:42:40Z,0.73,https://github.com/mdc2122/viral-moment/pull/723 green->merged
+slot-floor-followup-order,release,2026-10-12T21:42:40Z,2026-10-12T22:29:42Z,0.78,"https://github.com/mdc2122/viral-moment/pull/723 merged, not yet live"
+slot-floor-followup-order,human_answer,2026-10-12T22:29:42Z,2026-10-12T22:35:33Z,0.1,blocked -> steer 2026-10-12T22:35:33Z
+slot-floor-followup-order,release,2026-10-12T22:35:33Z,2026-10-12T23:47:33Z,1.2,"https://github.com/mdc2122/viral-moment/pull/723 merged, not yet live"
+slot-floor-followup-order,human_answer,2026-10-12T23:47:33Z,2026-10-12T23:52:09Z,0.08,needs-decision -> steer 2026-10-12T23:52:09Z
+slot-floor-followup-order,release,2026-10-12T23:52:09Z,2026-10-13T03:27:02Z,3.58,"https://github.com/mdc2122/viral-moment/pull/723 merged, not yet live"
+slot-floor-followup-order,human_answer,2026-10-13T03:27:02Z,2026-10-13T03:31:35Z,0.08,blocked -> steer 2026-10-13T03:31:35Z
+slot-floor-followup-order,release,2026-10-13T03:31:35Z,2026-10-13T05:10:33Z,1.65,"https://github.com/mdc2122/viral-moment/pull/723 merged, not yet live"
+slot-floor-followup-order,human_answer,2026-10-13T05:10:33Z,2026-10-13T05:24:30Z,0.23,blocked -> steer 2026-10-13T05:24:30Z
+slot-floor-followup-order,release,2026-10-13T05:24:30Z,2026-10-16T03:44:44Z,70.34,"https://github.com/mdc2122/viral-moment/pull/723 merged, not yet live"
+omniroute-composer-toolcalls,release,2026-10-12T18:52:00Z,2026-10-12T18:55:24Z,0.06,"paused (rule): stopped before restart, studio1 unchanged (backup kept at ~/omniroute-pkg-backup"
+omniroute-composer-toolcalls,handoff_idle,2026-10-12T18:55:24Z,2026-10-12T18:55:25Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,handoff_idle,2026-10-12T19:23:54Z,2026-10-12T19:42:47Z,0.31,idle until firstmate steer (handoff)
+second-host-build-work,ci,2026-10-12T21:14:54Z,2026-10-12T21:16:00Z,0.02,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,human_answer,2026-10-12T21:16:00Z,2026-10-12T21:17:33Z,0.03,needs-decision -> steer 2026-10-12T21:17:33Z
+second-host-build-work,ci,2026-10-12T21:17:33Z,2026-10-12T21:55:57Z,0.64,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,release,2026-10-12T21:55:57Z,2026-10-13T02:33:51Z,4.63,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/727 checks green (host-role guar
+second-host-build-work,ci,2026-10-13T02:33:51Z,2026-10-13T02:34:27Z,0.01,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,release,2026-10-13T02:34:27Z,2026-10-13T02:58:45Z,0.4,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/727 checks green, 5th in the mer"
+second-host-build-work,ci,2026-10-13T02:58:45Z,2026-10-13T03:10:28Z,0.2,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,release,2026-10-13T03:10:28Z,2026-10-13T03:24:45Z,0.24,paused (rule): answered wgtt-exploit studio1 offload questions at /Users/studio2/fm-primary/dat
+second-host-build-work,ci,2026-10-13T03:24:45Z,2026-10-13T03:25:00Z,0.0,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,release,2026-10-13T03:25:00Z,2026-10-13T07:37:45Z,4.21,"paused (rule): wgtt-exploit offload live on studio1 (/Volumes/GLM5-NVMe/wgtt-offload, own venv "
+second-host-build-work,ci,2026-10-13T07:37:45Z,2026-10-13T07:37:56Z,0.0,https://github.com/mdc2122/viral-moment/pull/727 validation+checks
+second-host-build-work,merge_queue,2026-10-13T07:37:56Z,2026-10-13T10:26:17Z,2.81,paused (rule): ack'd new merge rule (no catch-up rerun/push when behind; rerun only on DIRTY or
+second-host-build-work,merge_queue,2026-10-13T10:26:17Z,2026-10-13T10:26:35Z,0.01,https://github.com/mdc2122/viral-moment/pull/727 green->merged
+second-host-build-work,release,2026-10-13T10:26:35Z,2026-10-13T11:49:46Z,1.39,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,release,2026-10-13T11:49:46Z,2026-10-13T11:53:52Z,0.07,blocked self-cleared
+second-host-build-work,release,2026-10-13T11:53:52Z,2026-10-13T11:57:46Z,0.06,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T11:57:46Z,2026-10-13T11:59:18Z,0.03,needs-decision -> steer 2026-10-13T11:59:18Z
+second-host-build-work,release,2026-10-13T11:59:18Z,2026-10-13T12:13:47Z,0.24,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T12:13:47Z,2026-10-13T12:15:49Z,0.03,needs-decision -> steer 2026-10-13T12:15:49Z
+second-host-build-work,release,2026-10-13T12:15:49Z,2026-10-13T12:24:51Z,0.15,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T12:24:51Z,2026-10-13T12:27:47Z,0.05,needs-decision -> steer 2026-10-13T12:27:47Z
+second-host-build-work,release,2026-10-13T12:27:47Z,2026-10-13T13:21:38Z,0.9,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T13:21:38Z,2026-10-13T13:24:59Z,0.06,needs-decision -> steer 2026-10-13T13:24:59Z
+second-host-build-work,release,2026-10-13T13:24:59Z,2026-10-13T13:32:55Z,0.13,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T13:32:55Z,2026-10-13T13:35:06Z,0.04,needs-decision -> steer 2026-10-13T13:35:06Z
+second-host-build-work,release,2026-10-13T13:35:06Z,2026-10-13T14:15:41Z,0.68,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,human_answer,2026-10-13T14:15:41Z,2026-10-13T14:18:48Z,0.05,needs-decision -> steer 2026-10-13T14:18:48Z
+second-host-build-work,release,2026-10-13T14:18:48Z,2026-10-13T19:08:28Z,4.83,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,release,2026-10-13T19:08:28Z,2026-10-13T19:11:55Z,0.06,blocked self-cleared
+second-host-build-work,release,2026-10-13T19:11:55Z,2026-10-13T20:31:42Z,1.33,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+second-host-build-work,decision_park,2026-10-13T20:31:42Z,2026-10-13T20:38:51Z,0.12,paused (rule): ack'd captain's 3b plan for prod-20261013-11 (firstmate holds new goal sessions 
+second-host-build-work,release,2026-10-13T20:38:51Z,2026-10-16T03:44:44Z,55.1,"https://github.com/mdc2122/viral-moment/pull/727 merged, not yet live"
+composer-raw-frame-capture,human_answer,2026-10-12T19:15:35Z,2026-10-12T19:17:31Z,0.03,needs-decision -> steer 2026-10-12T19:17:31Z
+composer-raw-frame-capture,worker_stall,2026-10-12T19:25:18Z,2026-10-12T19:28:24Z,0.05,idle until status (error stop)
+composer-raw-frame-capture,human_answer,2026-10-12T19:28:24Z,2026-10-12T19:35:49Z,0.12,blocked -> steer 2026-10-12T19:35:49Z
+wgtt-hires-source,handoff_idle,2026-10-12T21:00:27Z,2026-10-12T21:05:58Z,0.09,idle until firstmate steer (handoff)
+wgtt-hires-source,decision_park,2026-10-12T21:06:09Z,2026-10-12T21:11:28Z,0.09,"paused (rule): waiting on the captain's Tubi login credentials location, then re-running harden"
+wgtt-hires-source,handoff_idle,2026-10-12T21:11:28Z,2026-10-12T21:11:29Z,0.0,idle until firstmate steer (handoff)
+wgtt-hires-source,decision_park,2026-10-12T21:14:45Z,2026-10-12T21:16:01Z,0.02,paused (rule): two yt-dlp probes blocked on macOS 'Chrome Safe Storage' keychain prompt on stud
+wgtt-hires-source,decision_park,2026-10-12T21:16:01Z,2026-10-12T21:26:24Z,0.17,paused (rule): 'Chrome Safe Storage' keychain prompt still open on studio2 GLKVM screen — waiti
+nm-single-test-suite,human_answer,2026-10-12T22:35:57Z,2026-10-12T22:36:40Z,0.01,needs-decision -> steer 2026-10-12T22:36:40Z
+nm-single-test-suite,human_answer,2026-10-12T22:40:09Z,2026-10-12T22:50:05Z,0.17,blocked -> steer 2026-10-12T22:50:05Z
+nm-single-test-suite,handoff_idle,2026-10-12T22:50:05Z,2026-10-12T22:50:07Z,0.0,idle until firstmate steer (handoff)
+nm-single-test-suite,ci,2026-10-12T22:56:31Z,2026-10-12T23:16:23Z,0.33,https://github.com/mdc2122/viral-moment/pull/729 validation+checks
+nm-single-test-suite,merge_queue,2026-10-12T23:16:23Z,2026-10-12T23:25:27Z,0.15,https://github.com/mdc2122/viral-moment/pull/729 green->merged
+nm-single-test-suite,release,2026-10-12T23:25:27Z,2026-10-16T03:44:44Z,76.32,"https://github.com/mdc2122/viral-moment/pull/729 merged, not yet live"
+deploy-gap-retry,ci,2026-10-12T23:57:35Z,2026-10-13T00:02:58Z,0.09,https://github.com/mdc2122/viral-moment/pull/732 validation+checks
+deploy-gap-retry,human_answer,2026-10-13T00:02:58Z,2026-10-13T00:06:09Z,0.05,needs-decision -> steer 2026-10-13T00:06:09Z
+deploy-gap-retry,ci,2026-10-13T00:06:09Z,2026-10-13T00:51:02Z,0.75,https://github.com/mdc2122/viral-moment/pull/732 validation+checks
+deploy-gap-retry,merge_queue,2026-10-13T00:51:02Z,2026-10-13T00:52:05Z,0.02,"paused (rule): https://github.com/mdc2122/viral-moment/pull/732 checks green, conflicts with ma"
+deploy-gap-retry,human_answer,2026-10-13T00:52:05Z,2026-10-13T01:00:52Z,0.15,needs-decision -> steer 2026-10-13T01:00:52Z
+deploy-gap-retry,ci,2026-10-13T01:00:52Z,2026-10-13T01:53:28Z,0.88,https://github.com/mdc2122/viral-moment/pull/732 validation+checks
+deploy-gap-retry,merge_queue,2026-10-13T01:53:28Z,2026-10-13T07:37:42Z,5.74,paused (rule): https://github.com/mdc2122/viral-moment/pull/732 checks green (rebased onto main
+deploy-gap-retry,ci,2026-10-13T07:37:42Z,2026-10-13T10:05:47Z,2.47,https://github.com/mdc2122/viral-moment/pull/732 validation+checks
+deploy-gap-retry,merge_queue,2026-10-13T10:05:47Z,2026-10-13T10:06:01Z,0.0,https://github.com/mdc2122/viral-moment/pull/732 green->merged
+deploy-gap-retry,release,2026-10-13T10:06:01Z,2026-10-13T10:14:39Z,0.14,"https://github.com/mdc2122/viral-moment/pull/732 merged, not yet live"
+deploy-gap-retry,human_answer,2026-10-13T10:14:39Z,2026-10-13T10:17:38Z,0.05,needs-decision -> steer 2026-10-13T10:17:38Z
+deploy-gap-retry,release,2026-10-13T10:17:38Z,2026-10-13T12:45:39Z,2.47,"https://github.com/mdc2122/viral-moment/pull/732 merged, not yet live"
+deploy-gap-retry,human_answer,2026-10-13T12:45:39Z,2026-10-13T12:48:20Z,0.04,needs-decision -> steer 2026-10-13T12:48:20Z
+deploy-gap-retry,release,2026-10-13T12:48:20Z,2026-10-13T18:12:31Z,5.4,"https://github.com/mdc2122/viral-moment/pull/732 merged, not yet live"
+deploy-gap-retry,human_answer,2026-10-13T18:12:31Z,2026-10-13T18:14:55Z,0.04,needs-decision -> steer 2026-10-13T18:14:55Z
+deploy-gap-retry,release,2026-10-13T18:14:55Z,2026-10-16T03:44:44Z,57.5,"https://github.com/mdc2122/viral-moment/pull/732 merged, not yet live"
+merge-line-ordered,human_answer,2026-10-12T23:23:32Z,2026-10-12T23:24:05Z,0.01,needs-decision -> steer 2026-10-12T23:24:05Z
+merge-line-ordered,human_answer,2026-10-12T23:31:08Z,2026-10-12T23:32:32Z,0.02,needs-decision -> steer 2026-10-12T23:32:32Z
+merge-line-ordered,ci,2026-10-13T00:46:53Z,2026-10-13T01:05:37Z,0.31,https://github.com/mdc2122/firstmate/pull/59 validation+checks
+merge-line-ordered,merge_queue,2026-10-13T01:05:37Z,2026-10-13T01:22:25Z,0.28,https://github.com/mdc2122/firstmate/pull/59 green->merged
+nm-pure-replay-upstream,handoff_idle,2026-10-13T00:05:51Z,2026-10-13T00:23:38Z,0.3,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,decision_park,2026-10-13T00:23:38Z,2026-10-13T00:39:31Z,0.26,captain hold
+nm-pure-replay-upstream,handoff_idle,2026-10-13T00:39:31Z,2026-10-13T00:40:42Z,0.02,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,ci,2026-10-13T00:41:31Z,2026-10-13T00:44:01Z,0.04,https://github.com/kunchenguid/no-mistakes/pull/1442 validation+checks
+nm-pure-replay-upstream,human_answer,2026-10-13T00:44:01Z,2026-10-13T00:46:44Z,0.05,needs-decision -> steer 2026-10-13T00:46:44Z
+nm-pure-replay-upstream,ci,2026-10-13T00:46:44Z,2026-10-13T01:43:34Z,0.95,https://github.com/kunchenguid/no-mistakes/pull/1442 validation+checks
+nm-pure-replay-upstream,human_answer,2026-10-13T01:43:34Z,2026-10-13T01:48:06Z,0.08,needs-decision -> steer 2026-10-13T01:48:06Z
+nm-pure-replay-upstream,ci,2026-10-13T01:48:06Z,2026-10-13T03:35:24Z,1.79,https://github.com/kunchenguid/no-mistakes/pull/1442 validation+checks
+nm-pure-replay-upstream,human_answer,2026-10-13T03:35:24Z,2026-10-13T03:38:31Z,0.05,needs-decision -> steer 2026-10-13T03:38:31Z
+nm-pure-replay-upstream,ci,2026-10-13T03:38:31Z,2026-10-13T04:10:20Z,0.53,https://github.com/kunchenguid/no-mistakes/pull/1442 validation+checks
+nm-pure-replay-upstream,merge_queue,2026-10-13T04:10:20Z,2026-10-13T04:15:22Z,0.08,https://github.com/kunchenguid/no-mistakes/pull/1442 green->merged
+gitea-mq-setup,decision_park,2026-10-12T23:33:14Z,2026-10-13T00:41:29Z,1.14,blocked -> steer 2026-10-13T00:41:29Z
+gitea-mq-setup,decision_park,2026-10-13T00:41:29Z,2026-10-13T00:45:08Z,0.06,captain hold
+gitea-mq-setup,decision_park,2026-10-13T00:45:08Z,2026-10-13T00:45:09Z,0.0,paused (rule): captain creating the gitea-mq GitHub App; waiting for firstmate to pass the App 
+gitea-mq-setup,handoff_idle,2026-10-13T00:45:09Z,2026-10-13T00:45:10Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-setup,human_answer,2026-10-13T00:46:30Z,2026-10-13T00:51:31Z,0.08,blocked -> steer 2026-10-13T00:51:31Z
+gitea-mq-setup,handoff_idle,2026-10-13T00:51:31Z,2026-10-13T00:51:32Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-setup,ci,2026-10-13T00:52:30Z,2026-10-13T00:54:18Z,0.03,https://github.com/mdc2122/viral-moment/pull/733 validation+checks
+gitea-mq-setup,human_answer,2026-10-13T00:54:18Z,2026-10-13T00:59:55Z,0.09,needs-decision -> steer 2026-10-13T00:59:55Z
+gitea-mq-setup,ci,2026-10-13T00:59:55Z,2026-10-13T01:37:19Z,0.62,https://github.com/mdc2122/viral-moment/pull/733 validation+checks
+gitea-mq-setup,merge_queue,2026-10-13T01:37:19Z,2026-10-13T01:37:54Z,0.01,https://github.com/mdc2122/viral-moment/pull/733 green->merged
+gitea-mq-setup,release,2026-10-13T01:37:54Z,2026-10-16T03:44:44Z,74.11,"https://github.com/mdc2122/viral-moment/pull/733 merged, not yet live"
+repost-guard-title-flag,human_answer,2026-10-13T02:03:02Z,2026-10-13T02:15:00Z,0.2,needs-decision -> steer 2026-10-13T02:15:00Z
+repost-guard-title-flag,handoff_idle,2026-10-13T02:15:00Z,2026-10-13T02:15:03Z,0.0,idle until firstmate steer (handoff)
+repost-guard-title-flag,ci,2026-10-13T02:32:56Z,2026-10-13T02:37:22Z,0.07,https://github.com/mdc2122/viral-moment/pull/734 validation+checks
+repost-guard-title-flag,human_answer,2026-10-13T02:37:22Z,2026-10-13T03:01:17Z,0.4,needs-decision -> steer 2026-10-13T03:01:17Z
+repost-guard-title-flag,ci,2026-10-13T03:01:17Z,2026-10-13T03:42:52Z,0.69,https://github.com/mdc2122/viral-moment/pull/734 validation+checks
+repost-guard-title-flag,merge_queue,2026-10-13T03:42:52Z,2026-10-13T05:19:31Z,1.61,https://github.com/mdc2122/viral-moment/pull/734 green->merged
+repost-guard-title-flag,release,2026-10-13T05:19:31Z,2026-10-16T03:44:44Z,70.42,"https://github.com/mdc2122/viral-moment/pull/734 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T04:07:55Z,2026-10-13T04:09:24Z,0.02,needs-decision -> steer 2026-10-13T04:09:24Z
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T04:15:14Z,2026-10-13T04:16:05Z,0.01,needs-decision -> steer 2026-10-13T04:16:05Z
+gitea-mq-merge-branch-ci,ci,2026-10-13T04:21:41Z,2026-10-13T04:48:07Z,0.44,https://github.com/mdc2122/viral-moment/pull/737 validation+checks
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T04:48:07Z,2026-10-13T04:54:09Z,0.1,https://github.com/mdc2122/viral-moment/pull/737 green->merged
+gitea-mq-merge-branch-ci,release,2026-10-13T04:54:09Z,2026-10-13T05:26:09Z,0.53,paused (rule): https://github.com/mdc2122/viral-moment/pull/737 armed 2nd in merge line; merge-
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T05:26:09Z,2026-10-13T06:05:29Z,0.66,https://github.com/mdc2122/viral-moment/pull/737 green->merged
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:05:29Z,2026-10-13T06:09:40Z,0.07,needs-decision -> steer 2026-10-13T06:09:40Z
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T06:09:40Z,2026-10-13T06:35:35Z,0.43,https://github.com/mdc2122/viral-moment/pull/737 green->merged
+gitea-mq-merge-branch-ci,release,2026-10-13T06:35:35Z,2026-10-13T06:45:43Z,0.17,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:45:43Z,2026-10-13T06:46:22Z,0.01,needs-decision -> steer 2026-10-13T06:46:22Z
+gitea-mq-merge-branch-ci,release,2026-10-13T06:46:22Z,2026-10-13T06:49:32Z,0.05,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:49:32Z,2026-10-13T06:51:02Z,0.02,needs-decision -> steer 2026-10-13T06:51:02Z
+gitea-mq-merge-branch-ci,release,2026-10-13T06:51:02Z,2026-10-13T07:09:42Z,0.31,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T07:09:42Z,2026-10-13T07:10:53Z,0.02,needs-decision -> steer 2026-10-13T07:10:53Z
+gitea-mq-merge-branch-ci,release,2026-10-13T07:10:53Z,2026-10-13T09:14:43Z,2.06,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T09:14:43Z,2026-10-13T09:15:59Z,0.02,needs-decision -> steer 2026-10-13T09:15:59Z
+gitea-mq-merge-branch-ci,release,2026-10-13T09:15:59Z,2026-10-13T09:29:33Z,0.23,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T09:29:33Z,2026-10-13T09:33:21Z,0.06,needs-decision -> steer 2026-10-13T09:33:21Z
+gitea-mq-merge-branch-ci,release,2026-10-13T09:33:21Z,2026-10-16T03:44:44Z,66.19,"https://github.com/mdc2122/viral-moment/pull/737 merged, not yet live"
+fm-merge-via-queue,ci,2026-10-13T03:35:22Z,2026-10-13T03:37:51Z,0.04,https://github.com/mdc2122/firstmate/pull/60 validation+checks
+fm-merge-via-queue,human_answer,2026-10-13T03:37:51Z,2026-10-13T03:38:35Z,0.01,needs-decision -> steer 2026-10-13T03:38:35Z
+fm-merge-via-queue,ci,2026-10-13T03:38:35Z,2026-10-13T03:54:42Z,0.27,https://github.com/mdc2122/firstmate/pull/60 validation+checks
+fm-merge-via-queue,human_answer,2026-10-13T03:54:42Z,2026-10-13T03:56:11Z,0.02,needs-decision -> steer 2026-10-13T03:56:11Z
+fm-merge-via-queue,ci,2026-10-13T03:56:11Z,2026-10-13T04:14:28Z,0.3,https://github.com/mdc2122/firstmate/pull/60 validation+checks
+fm-merge-via-queue,merge_queue,2026-10-13T04:14:28Z,2026-10-13T04:22:40Z,0.14,https://github.com/mdc2122/firstmate/pull/60 green->merged
+claim-first-booking,ci,2026-10-13T05:16:30Z,2026-10-13T05:21:51Z,0.09,https://github.com/mdc2122/viral-moment/pull/739 validation+checks
+claim-first-booking,human_answer,2026-10-13T05:21:51Z,2026-10-13T05:24:28Z,0.04,needs-decision -> steer 2026-10-13T05:24:28Z
+claim-first-booking,ci,2026-10-13T05:24:28Z,2026-10-13T05:45:34Z,0.35,https://github.com/mdc2122/viral-moment/pull/739 validation+checks
+claim-first-booking,human_answer,2026-10-13T05:45:34Z,2026-10-13T05:46:23Z,0.01,needs-decision -> steer 2026-10-13T05:46:23Z
+claim-first-booking,ci,2026-10-13T05:46:23Z,2026-10-13T06:38:16Z,0.86,https://github.com/mdc2122/viral-moment/pull/739 validation+checks
+claim-first-booking,merge_queue,2026-10-13T06:38:16Z,2026-10-13T06:56:14Z,0.3,https://github.com/mdc2122/viral-moment/pull/739 green->merged
+claim-first-booking,release,2026-10-13T06:56:14Z,2026-10-13T07:37:40Z,0.69,paused (rule): https://github.com/mdc2122/viral-moment/pull/739 in merge line (2nd behind 738);
+claim-first-booking,merge_queue,2026-10-13T07:37:40Z,2026-10-13T08:44:55Z,1.12,https://github.com/mdc2122/viral-moment/pull/739 green->merged
+claim-first-booking,release,2026-10-13T08:44:55Z,2026-10-13T09:10:01Z,0.42,"https://github.com/mdc2122/viral-moment/pull/739 merged, not yet live"
+claim-first-booking,human_answer,2026-10-13T09:10:01Z,2026-10-13T09:11:04Z,0.02,needs-decision -> steer 2026-10-13T09:11:04Z
+claim-first-booking,release,2026-10-13T09:11:04Z,2026-10-13T09:57:56Z,0.78,"https://github.com/mdc2122/viral-moment/pull/739 merged, not yet live"
+claim-first-booking,human_answer,2026-10-13T09:57:56Z,2026-10-13T10:06:49Z,0.15,blocked -> steer 2026-10-13T10:06:49Z
+claim-first-booking,release,2026-10-13T10:06:49Z,2026-10-13T11:00:03Z,0.89,"https://github.com/mdc2122/viral-moment/pull/739 merged, not yet live"
+claim-first-booking,release,2026-10-13T11:00:03Z,2026-10-13T11:03:31Z,0.06,blocked self-cleared
+claim-first-booking,release,2026-10-13T11:03:31Z,2026-10-16T03:44:44Z,64.69,"https://github.com/mdc2122/viral-moment/pull/739 merged, not yet live"
+title-claim-hygiene,ci,2026-10-13T05:22:12Z,2026-10-13T05:27:16Z,0.08,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,human_answer,2026-10-13T05:27:16Z,2026-10-13T05:34:57Z,0.13,needs-decision -> steer 2026-10-13T05:34:57Z
+title-claim-hygiene,ci,2026-10-13T05:34:57Z,2026-10-13T05:52:14Z,0.29,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,human_answer,2026-10-13T05:52:14Z,2026-10-13T05:55:41Z,0.06,needs-decision -> steer 2026-10-13T05:55:41Z
+title-claim-hygiene,ci,2026-10-13T05:55:41Z,2026-10-13T06:21:11Z,0.43,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,human_answer,2026-10-13T06:21:11Z,2026-10-13T06:21:51Z,0.01,needs-decision -> steer 2026-10-13T06:21:51Z
+title-claim-hygiene,ci,2026-10-13T06:21:51Z,2026-10-13T06:24:25Z,0.04,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,human_answer,2026-10-13T06:24:25Z,2026-10-13T06:28:27Z,0.07,needs-decision self-cleared
+title-claim-hygiene,ci,2026-10-13T06:28:27Z,2026-10-13T06:58:13Z,0.5,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,human_answer,2026-10-13T06:58:13Z,2026-10-13T07:00:20Z,0.04,needs-decision -> steer 2026-10-13T07:00:20Z
+title-claim-hygiene,ci,2026-10-13T07:00:20Z,2026-10-13T07:32:02Z,0.53,https://github.com/mdc2122/viral-moment/pull/740 validation+checks
+title-claim-hygiene,merge_queue,2026-10-13T07:32:02Z,2026-10-13T07:46:32Z,0.24,https://github.com/mdc2122/viral-moment/pull/740 green->merged
+title-claim-hygiene,human_answer,2026-10-13T07:46:32Z,2026-10-13T07:54:36Z,0.13,needs-decision -> steer 2026-10-13T07:54:36Z
+title-claim-hygiene,merge_queue,2026-10-13T07:54:36Z,2026-10-13T09:44:31Z,1.83,https://github.com/mdc2122/viral-moment/pull/740 green->merged
+title-claim-hygiene,release,2026-10-13T09:44:31Z,2026-10-13T10:57:28Z,1.22,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/740 green, 3rd in merge line — w"
+title-claim-hygiene,release,2026-10-13T10:57:28Z,2026-10-16T03:44:44Z,64.79,"https://github.com/mdc2122/viral-moment/pull/740 merged, not yet live"
+revert-725-main-red,ci,2026-10-13T03:33:58Z,2026-10-13T03:53:12Z,0.32,https://github.com/mdc2122/viral-moment/pull/735 validation+checks
+revert-725-main-red,merge_queue,2026-10-13T03:53:12Z,2026-10-13T04:03:01Z,0.16,https://github.com/mdc2122/viral-moment/pull/735 green->merged
+revert-725-main-red,release,2026-10-13T04:03:01Z,2026-10-13T06:00:09Z,1.95,"https://github.com/mdc2122/viral-moment/pull/735 merged, not yet live"
+revert-725-main-red,decision_park,2026-10-13T06:00:09Z,2026-10-13T06:02:51Z,0.04,needs-decision -> steer 2026-10-13T06:02:51Z
+revert-725-main-red,release,2026-10-13T06:02:51Z,2026-10-16T03:44:44Z,69.7,"https://github.com/mdc2122/viral-moment/pull/735 merged, not yet live"
+pc-readme-retention,ci,2026-10-13T03:58:34Z,2026-10-13T03:58:45Z,0.0,https://github.com/mdc2122/paperclip-ceo/pull/42 validation+checks
+pc-readme-retention,merge_queue,2026-10-13T03:58:45Z,2026-10-13T04:00:21Z,0.03,https://github.com/mdc2122/paperclip-ceo/pull/42 green->merged
+revert-titles-740,ci,2026-10-13T12:46:36Z,2026-10-13T13:17:10Z,0.51,https://github.com/mdc2122/viral-moment/pull/746 validation+checks
+revert-titles-740,merge_queue,2026-10-13T13:17:10Z,2026-10-13T13:21:41Z,0.08,https://github.com/mdc2122/viral-moment/pull/746 green->merged
+revert-titles-740,release,2026-10-13T13:21:41Z,2026-10-13T13:33:05Z,0.19,"https://github.com/mdc2122/viral-moment/pull/746 merged, not yet live"
+revert-titles-740,human_answer,2026-10-13T13:33:05Z,2026-10-13T13:35:13Z,0.04,needs-decision -> steer 2026-10-13T13:35:13Z
+revert-titles-740,release,2026-10-13T13:35:13Z,2026-10-16T03:44:44Z,62.16,"https://github.com/mdc2122/viral-moment/pull/746 merged, not yet live"
+omniroute-composer-exec-upstream,decision_park,2026-10-13T13:23:30Z,2026-10-13T13:37:08Z,0.23,needs-decision -> steer 2026-10-13T13:37:08Z
+omniroute-composer-exec-upstream,handoff_idle,2026-10-13T13:37:08Z,2026-10-13T13:37:11Z,0.0,idle until firstmate steer (handoff)
+ballot-swap-downgrade-audit,handoff_idle,2026-10-13T15:37:51Z,2026-10-13T15:45:09Z,0.12,idle until firstmate steer (handoff)
+ballot-swap-downgrade-audit,ci,2026-10-13T16:08:23Z,2026-10-13T16:40:30Z,0.54,https://github.com/mdc2122/viral-moment/pull/750 validation+checks
+community-post-audit,handoff_idle,2026-10-13T15:13:05Z,2026-10-13T15:32:27Z,0.32,idle until firstmate steer (handoff)
+community-post-audit,ci,2026-10-13T15:47:14Z,2026-10-13T15:52:19Z,0.08,https://github.com/mdc2122/viral-moment/pull/751 validation+checks
+community-post-audit,decision_park,2026-10-13T15:52:19Z,2026-10-13T15:53:09Z,0.01,needs-decision -> steer 2026-10-13T15:53:09Z
+community-post-audit,ci,2026-10-13T15:53:09Z,2026-10-13T16:43:15Z,0.84,https://github.com/mdc2122/viral-moment/pull/751 validation+checks
+community-post-audit,merge_queue,2026-10-13T16:43:15Z,2026-10-13T17:21:58Z,0.65,https://github.com/mdc2122/viral-moment/pull/751 green->merged
+community-post-audit,release,2026-10-13T17:21:58Z,2026-10-14T00:04:50Z,6.71,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+community-post-audit,human_answer,2026-10-14T00:04:50Z,2026-10-14T00:06:49Z,0.03,needs-decision -> steer 2026-10-14T00:06:49Z
+community-post-audit,release,2026-10-14T00:06:49Z,2026-10-14T01:41:29Z,1.58,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+community-post-audit,human_answer,2026-10-14T01:41:29Z,2026-10-14T01:42:20Z,0.01,needs-decision -> steer 2026-10-14T01:42:20Z
+community-post-audit,release,2026-10-14T01:42:20Z,2026-10-14T01:50:13Z,0.13,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+community-post-audit,human_answer,2026-10-14T01:50:13Z,2026-10-14T01:54:01Z,0.06,needs-decision -> steer 2026-10-14T01:54:01Z
+community-post-audit,release,2026-10-14T01:54:01Z,2026-10-14T02:00:26Z,0.11,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+community-post-audit,decision_park,2026-10-14T02:00:26Z,2026-10-14T03:10:47Z,1.17,paused (rule): parked at review gate nm-01M4W12BPE33Y78VBTBH6P2W0W-review-r4 awaiting the capta
+community-post-audit,release,2026-10-14T03:10:47Z,2026-10-14T03:15:14Z,0.07,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+community-post-audit,human_answer,2026-10-14T03:15:14Z,2026-10-14T03:42:00Z,0.45,needs-decision self-cleared
+community-post-audit,release,2026-10-14T03:42:00Z,2026-10-14T07:32:14Z,3.84,"https://github.com/mdc2122/viral-moment/pull/751 merged, not yet live"
+conveyor-tick-hung,human_answer,2026-10-13T16:49:03Z,2026-10-13T16:50:45Z,0.03,needs-decision -> steer 2026-10-13T16:50:45Z
+conveyor-tick-hung,human_answer,2026-10-13T17:01:51Z,2026-10-13T17:03:14Z,0.02,needs-decision -> steer 2026-10-13T17:03:14Z
+conveyor-tick-hung,ci,2026-10-13T17:06:02Z,2026-10-13T17:44:36Z,0.64,https://github.com/mdc2122/viral-moment/pull/753 validation+checks
+conveyor-tick-hung,release,2026-10-13T17:44:36Z,2026-10-13T18:08:31Z,0.4,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/753 checks green (pytest 25m35s 
+conveyor-tick-hung,release,2026-10-13T18:08:31Z,2026-10-13T20:23:34Z,2.25,"https://github.com/mdc2122/viral-moment/pull/753 merged, not yet live"
+conveyor-tick-hung,human_answer,2026-10-13T20:23:34Z,2026-10-13T20:26:30Z,0.05,needs-decision -> steer 2026-10-13T20:26:30Z
+conveyor-tick-hung,release,2026-10-13T20:26:30Z,2026-10-16T03:44:44Z,55.3,"https://github.com/mdc2122/viral-moment/pull/753 merged, not yet live"
+dead-class-within-score,ci,2026-10-13T16:36:14Z,2026-10-13T16:38:07Z,0.03,https://github.com/mdc2122/viral-moment/pull/752 validation+checks
+dead-class-within-score,human_answer,2026-10-13T16:38:07Z,2026-10-13T16:39:11Z,0.02,needs-decision -> steer 2026-10-13T16:39:11Z
+dead-class-within-score,ci,2026-10-13T16:39:11Z,2026-10-13T16:44:05Z,0.08,https://github.com/mdc2122/viral-moment/pull/752 validation+checks
+dead-class-within-score,human_answer,2026-10-13T16:44:05Z,2026-10-13T16:46:05Z,0.03,needs-decision -> steer 2026-10-13T16:46:05Z
+dead-class-within-score,ci,2026-10-13T16:46:05Z,2026-10-13T17:36:46Z,0.84,https://github.com/mdc2122/viral-moment/pull/752 validation+checks
+dead-class-within-score,merge_queue,2026-10-13T17:36:46Z,2026-10-13T17:52:54Z,0.27,https://github.com/mdc2122/viral-moment/pull/752 green->merged
+dead-class-within-score,release,2026-10-13T17:52:54Z,2026-10-16T03:44:44Z,57.86,"https://github.com/mdc2122/viral-moment/pull/752 merged, not yet live"
+selection-dashboard,human_answer,2026-10-13T18:15:22Z,2026-10-13T18:18:35Z,0.05,needs-decision -> steer 2026-10-13T18:18:35Z
+selection-dashboard,ci,2026-10-13T19:07:46Z,2026-10-13T19:14:58Z,0.12,https://github.com/mdc2122/viral-moment/pull/757 validation+checks
+selection-dashboard,human_answer,2026-10-13T19:14:58Z,2026-10-13T19:15:17Z,0.01,needs-decision self-cleared
+selection-dashboard,ci,2026-10-13T19:15:17Z,2026-10-13T20:15:40Z,1.01,https://github.com/mdc2122/viral-moment/pull/757 validation+checks
+selection-dashboard,merge_queue,2026-10-13T20:15:40Z,2026-10-13T20:30:08Z,0.24,https://github.com/mdc2122/viral-moment/pull/757 green->merged
+selection-dashboard,release,2026-10-13T20:30:08Z,2026-10-16T03:44:44Z,55.24,"https://github.com/mdc2122/viral-moment/pull/757 merged, not yet live"
+stable-outlier-tier,ci,2026-10-13T18:29:43Z,2026-10-13T18:33:35Z,0.06,https://github.com/mdc2122/viral-moment/pull/755 validation+checks
+stable-outlier-tier,decision_park,2026-10-13T18:33:35Z,2026-10-13T18:36:24Z,0.05,needs-decision -> steer 2026-10-13T18:36:24Z
+stable-outlier-tier,ci,2026-10-13T18:36:24Z,2026-10-13T19:06:42Z,0.51,https://github.com/mdc2122/viral-moment/pull/755 validation+checks
+stable-outlier-tier,merge_queue,2026-10-13T19:06:42Z,2026-10-13T19:34:30Z,0.46,https://github.com/mdc2122/viral-moment/pull/755 green->merged
+stable-outlier-tier,release,2026-10-13T19:34:30Z,2026-10-16T03:44:44Z,56.17,"https://github.com/mdc2122/viral-moment/pull/755 merged, not yet live"
+release-dirs,merge_queue,2026-10-13T18:01:14Z,2026-10-13T18:54:17Z,0.88,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,human_answer,2026-10-13T18:54:17Z,2026-10-13T18:56:32Z,0.04,needs-decision -> steer 2026-10-13T18:56:32Z
+release-dirs,merge_queue,2026-10-13T18:56:32Z,2026-10-13T23:01:12Z,4.08,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,human_answer,2026-10-13T23:01:12Z,2026-10-13T23:02:42Z,0.02,needs-decision -> steer 2026-10-13T23:02:42Z
+release-dirs,merge_queue,2026-10-13T23:02:42Z,2026-10-13T23:46:40Z,0.73,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,human_answer,2026-10-13T23:46:40Z,2026-10-13T23:47:34Z,0.01,needs-decision -> steer 2026-10-13T23:47:34Z
+release-dirs,merge_queue,2026-10-13T23:47:34Z,2026-10-14T00:19:34Z,0.53,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,release,2026-10-14T00:19:34Z,2026-10-14T02:49:57Z,2.51,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/762 green (c51ebca7); firstmate 
+release-dirs,merge_queue,2026-10-14T02:49:57Z,2026-10-14T03:13:13Z,0.39,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,human_answer,2026-10-14T03:13:13Z,2026-10-14T03:13:57Z,0.01,needs-decision -> steer 2026-10-14T03:13:57Z
+release-dirs,merge_queue,2026-10-14T03:13:57Z,2026-10-14T04:06:59Z,0.88,https://github.com/mdc2122/viral-moment/pull/717 green->merged
+release-dirs,release,2026-10-14T04:06:59Z,2026-10-14T05:19:58Z,1.22,"paused (rule): waiting for merge of PR https://github.com/mdc2122/viral-moment/pull/762 (armed,"
+release-dirs,release,2026-10-14T05:19:58Z,2026-10-14T05:44:54Z,0.42,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-14T05:44:54Z,2026-10-14T09:34:22Z,3.82,needs-decision -> steer 2026-10-14T09:34:22Z
+release-dirs,release,2026-10-14T09:34:22Z,2026-10-14T13:48:40Z,4.24,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-14T13:48:40Z,2026-10-14T13:53:35Z,0.08,needs-decision -> steer 2026-10-14T13:53:35Z
+release-dirs,release,2026-10-14T13:53:35Z,2026-10-14T15:19:13Z,1.43,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-14T15:19:13Z,2026-10-14T15:21:28Z,0.04,needs-decision -> steer 2026-10-14T15:21:28Z
+release-dirs,release,2026-10-14T15:21:28Z,2026-10-14T18:33:15Z,3.2,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-14T18:33:15Z,2026-10-14T22:18:56Z,3.76,"paused (rule): all pre-window work done and proven (prod-20261014-13 live both hosts, guard pro"
+release-dirs,release,2026-10-14T22:18:56Z,2026-10-15T03:13:45Z,4.91,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T03:13:45Z,2026-10-15T03:17:11Z,0.06,blocked -> steer 2026-10-15T03:17:11Z
+release-dirs,release,2026-10-15T03:17:11Z,2026-10-15T03:19:56Z,0.05,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T03:19:56Z,2026-10-15T03:21:36Z,0.03,blocked -> steer 2026-10-15T03:21:36Z
+release-dirs,release,2026-10-15T03:21:36Z,2026-10-15T04:04:37Z,0.72,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T04:04:37Z,2026-10-15T04:06:32Z,0.03,paused (rule): msg 030 decision recorded - the 10:30Z switch today is OFF and nothing switches 
+release-dirs,release,2026-10-15T04:06:32Z,2026-10-15T09:10:31Z,5.07,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T09:10:31Z,2026-10-15T09:52:35Z,0.7,"paused (rule): standing state - prod-20261015-9 (a8d47a48) live on studio2 + studio1, flip-chec"
+release-dirs,release,2026-10-15T09:52:35Z,2026-10-15T10:16:21Z,0.4,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T10:16:21Z,2026-10-15T10:38:05Z,0.36,paused (rule): msg 046 - PR https://github.com/mdc2122/viral-moment/pull/797 (4a77eaad vein-boo
+release-dirs,release,2026-10-15T10:38:05Z,2026-10-15T10:38:27Z,0.01,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T10:38:27Z,2026-10-15T12:18:18Z,1.66,"paused (rule): msg 047 - PR https://github.com/mdc2122/viral-moment/pull/798 (8fca2429, canary "
+release-dirs,release,2026-10-15T12:18:18Z,2026-10-15T12:25:05Z,0.11,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T12:25:05Z,2026-10-15T12:25:18Z,0.0,blocked -> steer 2026-10-15T12:25:18Z
+release-dirs,release,2026-10-15T12:25:18Z,2026-10-15T14:38:02Z,2.21,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T14:38:02Z,2026-10-15T14:39:06Z,0.02,blocked -> steer 2026-10-15T14:39:06Z
+release-dirs,release,2026-10-15T14:39:06Z,2026-10-15T15:22:56Z,0.73,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T15:22:56Z,2026-10-15T15:24:24Z,0.02,needs-decision -> steer 2026-10-15T15:24:24Z
+release-dirs,release,2026-10-15T15:24:24Z,2026-10-15T16:02:37Z,0.64,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T16:02:37Z,2026-10-15T16:03:19Z,0.01,needs-decision -> steer 2026-10-15T16:03:19Z
+release-dirs,release,2026-10-15T16:03:19Z,2026-10-15T17:02:51Z,0.99,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T17:02:51Z,2026-10-15T17:09:01Z,0.1,blocked -> steer 2026-10-15T17:09:01Z
+release-dirs,release,2026-10-15T17:09:01Z,2026-10-15T18:23:39Z,1.24,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T18:23:39Z,2026-10-15T18:26:21Z,0.04,needs-decision -> steer 2026-10-15T18:26:21Z
+release-dirs,release,2026-10-15T18:26:21Z,2026-10-15T22:17:33Z,3.85,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,decision_park,2026-10-15T22:17:33Z,2026-10-15T22:17:51Z,0.01,needs-decision self-cleared
+release-dirs,release,2026-10-15T22:17:51Z,2026-10-15T22:19:06Z,0.02,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,human_answer,2026-10-15T22:19:06Z,2026-10-15T22:34:58Z,0.26,needs-decision -> steer 2026-10-15T22:34:58Z
+release-dirs,release,2026-10-15T22:34:58Z,2026-10-15T23:56:05Z,1.35,"https://github.com/mdc2122/viral-moment/pull/762 merged, not yet live"
+release-dirs,release,2026-10-15T23:56:05Z,2026-10-15T23:57:49Z,0.03,"https://github.com/mdc2122/viral-moment/pull/717 merged, not yet live"
+release-dirs,human_answer,2026-10-15T23:57:49Z,2026-10-15T23:59:03Z,0.02,needs-decision -> steer 2026-10-15T23:59:03Z
+release-dirs,release,2026-10-15T23:59:03Z,2026-10-16T00:59:29Z,1.01,"https://github.com/mdc2122/viral-moment/pull/717 merged, not yet live"
+release-dirs,decision_park,2026-10-16T00:59:29Z,2026-10-16T01:10:10Z,0.18,"paused (rule): waiting on external handoffs, not stuck. (1) The manifest-artifact-reroot ship h"
+release-dirs,decision_park,2026-10-16T01:10:10Z,2026-10-16T03:44:44Z,2.58,paused (rule): the three open rows wait on things outside my control. (1) The reroot ship's PR 
+verdict-route,ci,2026-10-13T18:27:44Z,2026-10-13T18:37:58Z,0.17,https://github.com/mdc2122/trending-moment/pull/53 validation+checks
+verdict-route,human_answer,2026-10-13T18:37:58Z,2026-10-13T18:38:13Z,0.0,needs-decision -> steer 2026-10-13T18:38:13Z
+verdict-route,ci,2026-10-13T18:38:13Z,2026-10-13T18:52:14Z,0.23,https://github.com/mdc2122/trending-moment/pull/53 validation+checks
+verdict-route,merge_queue,2026-10-13T18:52:14Z,2026-10-13T18:55:52Z,0.06,https://github.com/mdc2122/trending-moment/pull/53 green->merged
+swap-design,ci,2026-10-13T22:08:58Z,2026-10-13T23:21:39Z,1.21,https://github.com/mdc2122/viral-moment/pull/766 validation+checks
+swap-design,decision_park,2026-10-13T23:21:39Z,2026-10-13T23:28:14Z,0.11,paused (rule): parked at fix_review gate nm-01M4VMZJB85X3NNPES3SNB7ZST-review-fix4 per firstmat
+swap-design,ci,2026-10-13T23:28:14Z,2026-10-14T00:29:51Z,1.03,https://github.com/mdc2122/viral-moment/pull/766 validation+checks
+swap-design,merge_queue,2026-10-14T00:29:51Z,2026-10-14T00:32:53Z,0.05,https://github.com/mdc2122/viral-moment/pull/766 green->merged
+swap-design,release,2026-10-14T00:32:53Z,2026-10-14T01:23:19Z,0.84,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/766 queued behind the release un
+swap-design,merge_queue,2026-10-14T01:23:19Z,2026-10-14T02:16:18Z,0.88,https://github.com/mdc2122/viral-moment/pull/766 green->merged
+swap-design,release,2026-10-14T02:16:18Z,2026-10-16T03:44:44Z,49.47,"https://github.com/mdc2122/viral-moment/pull/766 merged, not yet live"
+caption-qc-advisory,ci,2026-10-13T20:50:25Z,2026-10-13T20:51:52Z,0.02,https://github.com/mdc2122/viral-moment/pull/760 validation+checks
+caption-qc-advisory,human_answer,2026-10-13T20:51:52Z,2026-10-13T20:54:25Z,0.04,needs-decision -> steer 2026-10-13T20:54:25Z
+caption-qc-advisory,ci,2026-10-13T20:54:25Z,2026-10-13T21:30:31Z,0.6,https://github.com/mdc2122/viral-moment/pull/760 validation+checks
+caption-qc-advisory,merge_queue,2026-10-13T21:30:31Z,2026-10-13T22:05:42Z,0.59,https://github.com/mdc2122/viral-moment/pull/760 green->merged
+caption-qc-advisory,release,2026-10-13T22:05:42Z,2026-10-16T03:44:44Z,53.65,"https://github.com/mdc2122/viral-moment/pull/760 merged, not yet live"
+shorts-series-packaging,decision_park,2026-10-13T22:19:24Z,2026-10-13T22:20:00Z,0.01,needs-decision -> steer 2026-10-13T22:20:00Z
+shorts-series-packaging,ci,2026-10-13T22:55:08Z,2026-10-13T23:30:08Z,0.58,https://github.com/mdc2122/viral-moment/pull/763 validation+checks
+shorts-series-packaging,merge_queue,2026-10-13T23:30:08Z,2026-10-14T00:00:43Z,0.51,https://github.com/mdc2122/viral-moment/pull/763 green->merged
+shorts-series-packaging,release,2026-10-14T00:00:43Z,2026-10-16T03:44:44Z,51.73,"https://github.com/mdc2122/viral-moment/pull/763 merged, not yet live"
+mr1-judge,ci,2026-10-14T00:13:00Z,2026-10-14T00:17:20Z,0.07,https://github.com/mdc2122/viral-moment/pull/769 validation+checks
+mr1-judge,human_answer,2026-10-14T00:17:20Z,2026-10-14T00:18:58Z,0.03,needs-decision -> steer 2026-10-14T00:18:58Z
+mr1-judge,ci,2026-10-14T00:18:58Z,2026-10-14T00:53:00Z,0.57,https://github.com/mdc2122/viral-moment/pull/769 validation+checks
+mr1-judge,merge_queue,2026-10-14T00:53:00Z,2026-10-14T01:37:58Z,0.75,https://github.com/mdc2122/viral-moment/pull/769 green->merged
+mr1-judge,release,2026-10-14T01:37:58Z,2026-10-16T03:44:44Z,50.11,"https://github.com/mdc2122/viral-moment/pull/769 merged, not yet live"
+finishing-peak-window,ci,2026-10-14T00:48:35Z,2026-10-14T01:14:03Z,0.42,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,human_answer,2026-10-14T01:14:03Z,2026-10-14T01:14:53Z,0.01,needs-decision -> steer 2026-10-14T01:14:53Z
+finishing-peak-window,ci,2026-10-14T01:14:53Z,2026-10-14T01:31:43Z,0.28,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,human_answer,2026-10-14T01:31:43Z,2026-10-14T01:35:46Z,0.07,needs-decision -> steer 2026-10-14T01:35:46Z
+finishing-peak-window,ci,2026-10-14T01:35:46Z,2026-10-14T01:42:24Z,0.11,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,human_answer,2026-10-14T01:42:24Z,2026-10-14T01:44:51Z,0.04,needs-decision -> steer 2026-10-14T01:44:51Z
+finishing-peak-window,ci,2026-10-14T01:44:51Z,2026-10-14T01:44:58Z,0.0,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,decision_park,2026-10-14T01:44:58Z,2026-10-14T03:10:43Z,1.43,paused (rule): parked at review gate nm-01M4VY3VKHR5WKW0J6FNJ2S2H2-review-r5 per msg 006; R5-F1
+finishing-peak-window,ci,2026-10-14T03:10:43Z,2026-10-14T03:17:15Z,0.11,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,human_answer,2026-10-14T03:17:15Z,2026-10-14T03:18:49Z,0.03,needs-decision -> steer 2026-10-14T03:18:49Z
+finishing-peak-window,ci,2026-10-14T03:18:49Z,2026-10-14T03:43:17Z,0.41,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,human_answer,2026-10-14T03:43:17Z,2026-10-14T03:44:31Z,0.02,needs-decision -> steer 2026-10-14T03:44:31Z
+finishing-peak-window,ci,2026-10-14T03:44:31Z,2026-10-14T03:45:01Z,0.01,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,decision_park,2026-10-14T03:45:01Z,2026-10-14T09:34:19Z,5.82,"paused (rule): test gate had already closed itself (LT-1 auto-fixed with judge prompt v3, 53d95"
+finishing-peak-window,ci,2026-10-14T09:34:19Z,2026-10-14T09:35:11Z,0.01,https://github.com/mdc2122/viral-moment/pull/774 validation+checks
+finishing-peak-window,merge_queue,2026-10-14T09:35:11Z,2026-10-14T09:48:25Z,0.22,https://github.com/mdc2122/viral-moment/pull/774 green->merged
+finishing-peak-window,release,2026-10-14T09:48:25Z,2026-10-14T10:00:55Z,0.21,"paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/774 (armed, he"
+finishing-peak-window,release,2026-10-14T10:00:55Z,2026-10-14T12:06:06Z,2.09,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+finishing-peak-window,human_answer,2026-10-14T12:06:06Z,2026-10-14T12:06:57Z,0.01,needs-decision -> steer 2026-10-14T12:06:57Z
+finishing-peak-window,release,2026-10-14T12:06:57Z,2026-10-14T12:07:05Z,0.0,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+finishing-peak-window,decision_park,2026-10-14T12:07:05Z,2026-10-14T14:00:53Z,1.9,paused (rule): e46825f6 held local and unpushed per msg 015; read-extent choice (key pw-read-ex
+finishing-peak-window,release,2026-10-14T14:00:53Z,2026-10-14T14:05:12Z,0.07,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+finishing-peak-window,decision_park,2026-10-14T14:05:12Z,2026-10-14T14:06:28Z,0.02,needs-decision -> steer 2026-10-14T14:06:28Z
+finishing-peak-window,release,2026-10-14T14:06:28Z,2026-10-14T14:12:30Z,0.1,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+finishing-peak-window,human_answer,2026-10-14T14:12:30Z,2026-10-14T14:14:44Z,0.04,needs-decision -> steer 2026-10-14T14:14:44Z
+finishing-peak-window,release,2026-10-14T14:14:44Z,2026-10-14T19:06:12Z,4.86,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+finishing-peak-window,decision_park,2026-10-14T19:06:12Z,2026-10-14T19:11:15Z,0.08,needs-decision -> steer 2026-10-14T19:11:15Z
+finishing-peak-window,release,2026-10-14T19:11:15Z,2026-10-16T03:44:44Z,32.56,"https://github.com/mdc2122/viral-moment/pull/774 merged, not yet live"
+shorts-winners-2026,worker_stall,2026-10-14T01:27:48Z,2026-10-14T01:52:46Z,0.42,idle until relaunch
+shorts-winners-2026,ci,2026-10-15T03:05:27Z,2026-10-15T03:14:41Z,0.15,https://github.com/mdc2122/channel-analytics/pull/22 validation+checks
+shorts-winners-2026,merge_queue,2026-10-15T03:14:41Z,2026-10-15T03:17:04Z,0.04,"https://github.com/mdc2122/channel-analytics/pull/22 green, still open"
+teardown-orca-gone-worktree,worker_stall,2026-10-13T23:28:10Z,2026-10-13T23:32:43Z,0.08,no worker activity to end of span
+title-bracket-cleanup,ci,2026-10-13T23:39:17Z,2026-10-14T00:02:09Z,0.38,https://github.com/mdc2122/viral-moment/pull/765 validation+checks
+title-bracket-cleanup,merge_queue,2026-10-14T00:02:09Z,2026-10-14T00:45:01Z,0.71,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/765 checks green; waiting on off
+title-bracket-cleanup,ci,2026-10-14T00:45:01Z,2026-10-14T00:50:58Z,0.1,https://github.com/mdc2122/viral-moment/pull/765 validation+checks
+title-bracket-cleanup,merge_queue,2026-10-14T00:50:58Z,2026-10-14T00:51:01Z,0.0,https://github.com/mdc2122/viral-moment/pull/765 green->merged
+title-bracket-cleanup,release,2026-10-14T00:51:01Z,2026-10-16T03:44:44Z,50.9,"https://github.com/mdc2122/viral-moment/pull/765 merged, not yet live"
+finishing-climb-order,ci,2026-10-14T02:18:38Z,2026-10-14T02:33:50Z,0.25,https://github.com/mdc2122/viral-moment/pull/772 validation+checks
+finishing-climb-order,human_answer,2026-10-14T02:33:50Z,2026-10-14T02:35:10Z,0.02,needs-decision -> steer 2026-10-14T02:35:10Z
+finishing-climb-order,ci,2026-10-14T02:35:10Z,2026-10-14T03:00:29Z,0.42,https://github.com/mdc2122/viral-moment/pull/772 validation+checks
+finishing-climb-order,merge_queue,2026-10-14T03:00:29Z,2026-10-14T03:07:50Z,0.12,https://github.com/mdc2122/viral-moment/pull/772 green->merged
+finishing-climb-order,release,2026-10-14T03:07:50Z,2026-10-14T04:08:22Z,1.01,paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/772 (third in 
+finishing-climb-order,merge_queue,2026-10-14T04:08:22Z,2026-10-14T04:48:31Z,0.67,https://github.com/mdc2122/viral-moment/pull/772 green->merged
+finishing-climb-order,release,2026-10-14T04:48:31Z,2026-10-14T04:54:04Z,0.09,paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/772 (head of m
+finishing-climb-order,release,2026-10-14T04:54:04Z,2026-10-16T03:44:44Z,46.84,"https://github.com/mdc2122/viral-moment/pull/772 merged, not yet live"
+composer-regular-variant,ci,2026-10-14T02:10:10Z,2026-10-14T02:49:37Z,0.66,https://github.com/mdc2122/viral-moment/pull/770 validation+checks
+composer-regular-variant,merge_queue,2026-10-14T02:49:37Z,2026-10-14T03:16:36Z,0.45,https://github.com/mdc2122/viral-moment/pull/770 green->merged
+composer-regular-variant,release,2026-10-14T03:16:36Z,2026-10-16T03:44:44Z,48.47,"https://github.com/mdc2122/viral-moment/pull/770 merged, not yet live"
+slot-panel-1014,worker_stall,2026-10-14T09:50:07Z,2026-10-14T09:53:12Z,0.05,idle until turn_end
+slot-panel-1014,worker_stall,2026-10-14T09:56:46Z,2026-10-14T10:02:50Z,0.1,idle until turn_end
+slot-swap-1014-1847,human_answer,2026-10-14T13:14:41Z,2026-10-14T13:16:33Z,0.03,needs-decision -> steer 2026-10-14T13:16:33Z
+rank-private-stock,handoff_idle,2026-10-14T14:23:41Z,2026-10-14T14:27:17Z,0.06,idle until firstmate steer (handoff)
+rank-private-stock,worker_stall,2026-10-14T15:57:47Z,2026-10-14T16:01:26Z,0.06,idle until script steer
+hit-lane-gates-relax,ci,2026-10-14T15:57:39Z,2026-10-14T16:05:35Z,0.13,https://github.com/mdc2122/viral-moment/pull/780 validation+checks
+hit-lane-gates-relax,human_answer,2026-10-14T16:05:35Z,2026-10-14T16:07:34Z,0.03,needs-decision -> steer 2026-10-14T16:07:34Z
+hit-lane-gates-relax,ci,2026-10-14T16:07:34Z,2026-10-14T16:46:54Z,0.66,https://github.com/mdc2122/viral-moment/pull/780 validation+checks
+hit-lane-gates-relax,merge_queue,2026-10-14T16:46:54Z,2026-10-14T17:18:38Z,0.53,https://github.com/mdc2122/viral-moment/pull/780 green->merged
+hit-lane-gates-relax,release,2026-10-14T17:18:38Z,2026-10-16T03:44:44Z,34.44,"https://github.com/mdc2122/viral-moment/pull/780 merged, not yet live"
+slot-swap-1847-thesefit,human_answer,2026-10-14T15:52:03Z,2026-10-14T15:54:40Z,0.04,needs-decision -> steer 2026-10-14T15:54:40Z
+untested-source-two-cuts,ci,2026-10-14T16:34:01Z,2026-10-14T16:37:22Z,0.06,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,human_answer,2026-10-14T16:37:22Z,2026-10-14T16:38:27Z,0.02,needs-decision -> steer 2026-10-14T16:38:27Z
+untested-source-two-cuts,ci,2026-10-14T16:38:27Z,2026-10-14T16:54:53Z,0.27,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,human_answer,2026-10-14T16:54:53Z,2026-10-14T16:55:50Z,0.02,needs-decision -> steer 2026-10-14T16:55:50Z
+untested-source-two-cuts,ci,2026-10-14T16:55:50Z,2026-10-14T17:24:02Z,0.47,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,human_answer,2026-10-14T17:24:02Z,2026-10-14T17:26:49Z,0.05,needs-decision -> steer 2026-10-14T17:26:49Z
+untested-source-two-cuts,ci,2026-10-14T17:26:49Z,2026-10-14T17:27:13Z,0.01,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,human_answer,2026-10-14T17:27:13Z,2026-10-14T17:27:48Z,0.01,needs-decision self-cleared
+untested-source-two-cuts,ci,2026-10-14T17:27:48Z,2026-10-14T17:46:30Z,0.31,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,human_answer,2026-10-14T17:46:30Z,2026-10-14T17:48:37Z,0.04,needs-decision -> steer 2026-10-14T17:48:37Z
+untested-source-two-cuts,ci,2026-10-14T17:48:37Z,2026-10-14T18:51:58Z,1.06,https://github.com/mdc2122/viral-moment/pull/781 validation+checks
+untested-source-two-cuts,merge_queue,2026-10-14T18:51:58Z,2026-10-14T20:15:27Z,1.39,https://github.com/mdc2122/viral-moment/pull/781 green->merged
+untested-source-two-cuts,release,2026-10-14T20:15:27Z,2026-10-16T03:44:44Z,31.49,"https://github.com/mdc2122/viral-moment/pull/781 merged, not yet live"
+moment-gate-restore,release,2026-10-14T18:11:18Z,2026-10-14T18:11:43Z,0.01,needs-decision self-cleared
+moment-gate-restore,human_answer,2026-10-14T18:11:43Z,2026-10-14T18:13:50Z,0.04,needs-decision -> steer 2026-10-14T18:13:50Z
+moment-gate-restore,release,2026-10-14T18:47:42Z,2026-10-14T18:47:53Z,0.0,blocked self-cleared
+moment-gate-restore,decision_park,2026-10-14T18:47:53Z,2026-10-14T19:34:52Z,0.78,"paused (rule): waiting out the review-seat cooldown (codex gpt-6.1-sol resets ~21:2xZ, ~3h; opu"
+moment-gate-restore,ci,2026-10-14T19:35:34Z,2026-10-14T20:09:27Z,0.56,paused (rule): retry 01M4XYG98VPECGJPGNN7FF1C6E failed before review — codex gpt-6.1-sol cooldo
+moment-gate-restore,ci,2026-10-14T20:37:34Z,2026-10-14T21:39:15Z,1.03,paused (rule): post-cooldown retry 01M4Y21VC9HHB6RMZ9EV2EYTRM still hit codex review cooldown (
+moment-gate-restore,ci,2026-10-14T21:52:19Z,2026-10-14T21:56:22Z,0.07,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-14T21:56:22Z,2026-10-14T21:58:03Z,0.03,needs-decision -> steer 2026-10-14T21:58:03Z
+moment-gate-restore,ci,2026-10-14T21:58:03Z,2026-10-14T22:18:34Z,0.34,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-14T22:18:34Z,2026-10-14T22:19:47Z,0.02,needs-decision -> steer 2026-10-14T22:19:47Z
+moment-gate-restore,ci,2026-10-14T22:19:47Z,2026-10-14T22:31:18Z,0.19,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-14T22:31:18Z,2026-10-14T22:31:50Z,0.01,needs-decision -> steer 2026-10-14T22:33:34Z
+moment-gate-restore,decision_park,2026-10-14T22:31:50Z,2026-10-14T22:33:34Z,0.03,"paused (rule): test gate awaits firstmate/captain disposition of T1,test-2 ask-user findings; n"
+moment-gate-restore,ci,2026-10-14T22:33:34Z,2026-10-14T22:46:38Z,0.22,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-14T22:46:38Z,2026-10-14T22:47:46Z,0.02,needs-decision -> steer 2026-10-14T22:47:46Z
+moment-gate-restore,ci,2026-10-14T22:47:46Z,2026-10-14T22:54:14Z,0.11,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-14T22:54:14Z,2026-10-14T22:56:22Z,0.04,needs-decision -> steer 2026-10-14T22:56:22Z
+moment-gate-restore,ci,2026-10-14T22:56:22Z,2026-10-14T23:18:59Z,0.38,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,merge_queue,2026-10-14T23:18:59Z,2026-10-15T03:35:27Z,4.27,paused (rule): durable retry job moment-gate-review-retry armed; verdict=/Users/studio2/fm-prim
+moment-gate-restore,ci,2026-10-15T03:35:27Z,2026-10-15T03:36:21Z,0.02,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,merge_queue,2026-10-15T03:36:21Z,2026-10-15T04:10:24Z,0.57,paused (rule): durable retry moment-gate-review-retry-2 armed under data; verdict=/Users/studio
+moment-gate-restore,ci,2026-10-15T04:10:24Z,2026-10-15T04:11:10Z,0.01,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-15T04:11:10Z,2026-10-15T04:12:30Z,0.02,needs-decision -> steer 2026-10-15T04:12:30Z
+moment-gate-restore,ci,2026-10-15T04:12:30Z,2026-10-15T04:21:58Z,0.16,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,human_answer,2026-10-15T04:21:58Z,2026-10-15T04:23:48Z,0.03,needs-decision -> steer 2026-10-15T04:23:48Z
+moment-gate-restore,ci,2026-10-15T04:23:48Z,2026-10-15T04:42:40Z,0.31,https://github.com/mdc2122/viral-moment/pull/784 validation+checks
+moment-gate-restore,merge_queue,2026-10-15T04:42:40Z,2026-10-15T05:09:57Z,0.45,paused (rule): final CI pytest pending; PR attestation now pass on PR https://github.com/mdc212
+moment-gate-restore,merge_queue,2026-10-15T05:09:57Z,2026-10-15T05:10:04Z,0.0,https://github.com/mdc2122/viral-moment/pull/784 green->merged
+moment-gate-restore,release,2026-10-15T05:10:04Z,2026-10-16T03:44:44Z,22.58,"https://github.com/mdc2122/viral-moment/pull/784 merged, not yet live"
+reviewer-fallback-scout,handoff_idle,2026-10-14T19:19:37Z,2026-10-14T19:48:57Z,0.49,idle until firstmate steer (handoff)
+catalog-ingestion-audit,handoff_idle,2026-10-14T18:52:31Z,2026-10-14T19:03:10Z,0.18,idle until firstmate steer (handoff)
+family-window-supply-rerun,worker_stall,2026-10-14T18:57:53Z,2026-10-14T19:55:14Z,0.96,idle until relaunch
+family-window-supply-rerun,handoff_idle,2026-10-14T20:12:49Z,2026-10-14T20:21:18Z,0.14,idle until firstmate steer (handoff)
+speaker-gate-fix,worker_stall,2026-10-14T19:12:51Z,2026-10-14T19:53:17Z,0.67,idle until relaunch
+speaker-gate-fix,ci,2026-10-14T21:55:02Z,2026-10-15T02:57:31Z,5.04,https://github.com/mdc2122/viral-moment/pull/785 validation+checks
+speaker-gate-fix,merge_queue,2026-10-15T02:57:31Z,2026-10-15T02:57:48Z,0.0,https://github.com/mdc2122/viral-moment/pull/785 green->merged
+speaker-gate-fix,release,2026-10-15T02:57:48Z,2026-10-16T03:44:44Z,24.78,"https://github.com/mdc2122/viral-moment/pull/785 merged, not yet live"
+finish-in-booking-order,release,2026-10-14T20:06:43Z,2026-10-16T03:44:44Z,31.63,"https://github.com/mdc2122/viral-moment/pull/731 merged, not yet live"
+finishing-reseat-stalls,ci,2026-10-14T20:39:55Z,2026-10-15T00:54:54Z,4.25,"paused (rule): claude and codex 429 until ~21:51Z; rebase onto main is 2a28c2b5, validation rer"
+finishing-reseat-stalls,handoff_idle,2026-10-15T00:54:54Z,2026-10-15T00:54:55Z,0.0,idle until firstmate steer (handoff)
+finishing-reseat-stalls,human_answer,2026-10-15T01:00:46Z,2026-10-15T01:09:56Z,0.15,blocked -> steer 2026-10-15T01:09:56Z
+finishing-reseat-stalls,ci,2026-10-15T03:05:02Z,2026-10-15T07:25:07Z,4.33,https://github.com/mdc2122/viral-moment/pull/792 validation+checks
+finishing-reseat-stalls,merge_queue,2026-10-15T07:25:07Z,2026-10-15T07:25:09Z,0.0,https://github.com/mdc2122/viral-moment/pull/792 green->merged
+finishing-reseat-stalls,release,2026-10-15T07:25:09Z,2026-10-16T03:44:44Z,20.33,"https://github.com/mdc2122/viral-moment/pull/792 merged, not yet live"
+muse-wonder-reviewer-bakeoff,handoff_idle,2026-10-14T20:53:20Z,2026-10-14T22:00:08Z,1.11,idle until firstmate steer (handoff)
+winners-copresence-priority,merge_queue,2026-10-14T21:00:41Z,2026-10-14T23:05:15Z,2.08,paused (rule): review refused on codex gpt-6.1-sol cooldown (reset_seconds 3159 from 2026-10-14
+winners-copresence-priority,merge_queue,2026-10-14T23:05:15Z,2026-10-14T23:05:31Z,0.0,https://github.com/mdc2122/viral-moment/pull/782 green->merged
+winners-copresence-priority,release,2026-10-14T23:05:31Z,2026-10-16T03:44:44Z,28.65,"https://github.com/mdc2122/viral-moment/pull/782 merged, not yet live"
+otel-sentinel-wiring,ci,2026-10-15T03:42:11Z,2026-10-15T04:15:02Z,0.55,https://github.com/mdc2122/viral-moment/pull/787 validation+checks
+otel-sentinel-wiring,merge_queue,2026-10-15T04:15:02Z,2026-10-15T04:35:33Z,0.34,https://github.com/mdc2122/viral-moment/pull/787 green->merged
+otel-sentinel-wiring,release,2026-10-15T04:35:33Z,2026-10-16T03:44:44Z,23.15,"https://github.com/mdc2122/viral-moment/pull/787 merged, not yet live"
+ab-collapse-alert,ci,2026-10-15T03:21:37Z,2026-10-15T03:47:03Z,0.42,https://github.com/mdc2122/viral-moment/pull/786 validation+checks
+ab-collapse-alert,merge_queue,2026-10-15T03:47:03Z,2026-10-15T03:55:54Z,0.15,https://github.com/mdc2122/viral-moment/pull/786 green->merged
+ab-collapse-alert,release,2026-10-15T03:55:54Z,2026-10-16T03:44:44Z,23.81,"https://github.com/mdc2122/viral-moment/pull/786 merged, not yet live"
+present-failure-retry-queue,ci,2026-10-15T03:44:52Z,2026-10-15T03:48:08Z,0.05,https://github.com/mdc2122/viral-moment/pull/788 validation+checks
+present-failure-retry-queue,human_answer,2026-10-15T03:48:08Z,2026-10-15T03:49:23Z,0.02,needs-decision -> steer 2026-10-15T03:49:23Z
+present-failure-retry-queue,ci,2026-10-15T03:49:23Z,2026-10-15T04:20:30Z,0.52,https://github.com/mdc2122/viral-moment/pull/788 validation+checks
+present-failure-retry-queue,human_answer,2026-10-15T04:20:30Z,2026-10-15T04:22:04Z,0.03,needs-decision -> steer 2026-10-15T04:22:04Z
+present-failure-retry-queue,ci,2026-10-15T04:22:04Z,2026-10-15T05:35:32Z,1.22,https://github.com/mdc2122/viral-moment/pull/788 validation+checks
+present-failure-retry-queue,merge_queue,2026-10-15T05:35:32Z,2026-10-15T05:35:35Z,0.0,https://github.com/mdc2122/viral-moment/pull/788 green->merged
+present-failure-retry-queue,release,2026-10-15T05:35:35Z,2026-10-16T03:44:44Z,22.15,"https://github.com/mdc2122/viral-moment/pull/788 merged, not yet live"
+flip-check-ship,decision_park,2026-10-15T05:43:27Z,2026-10-15T05:47:12Z,0.06,needs-decision -> steer 2026-10-15T05:47:12Z
+flip-check-ship,handoff_idle,2026-10-15T05:47:12Z,2026-10-15T05:47:13Z,0.0,idle until firstmate steer (handoff)
+flip-check-ship,ci,2026-10-15T06:11:55Z,2026-10-15T06:52:04Z,0.67,https://github.com/mdc2122/viral-moment/pull/793 validation+checks
+flip-check-ship,merge_queue,2026-10-15T06:52:04Z,2026-10-15T07:58:41Z,1.11,https://github.com/mdc2122/viral-moment/pull/793 green->merged
+flip-check-ship,release,2026-10-15T07:58:41Z,2026-10-16T03:44:44Z,19.77,"https://github.com/mdc2122/viral-moment/pull/793 merged, not yet live"
+ready-pool-challengers,ci,2026-10-15T06:06:33Z,2026-10-15T06:12:21Z,0.1,https://github.com/mdc2122/viral-moment/pull/794 validation+checks
+ready-pool-challengers,human_answer,2026-10-15T06:12:21Z,2026-10-15T06:13:51Z,0.02,needs-decision -> steer 2026-10-15T06:13:51Z
+ready-pool-challengers,ci,2026-10-15T06:13:51Z,2026-10-15T06:33:30Z,0.33,https://github.com/mdc2122/viral-moment/pull/794 validation+checks
+ready-pool-challengers,human_answer,2026-10-15T06:33:30Z,2026-10-15T06:34:59Z,0.02,needs-decision -> steer 2026-10-15T06:34:59Z
+ready-pool-challengers,ci,2026-10-15T06:34:59Z,2026-10-15T06:56:59Z,0.37,https://github.com/mdc2122/viral-moment/pull/794 validation+checks
+ready-pool-challengers,merge_queue,2026-10-15T06:56:59Z,2026-10-15T08:21:07Z,1.4,https://github.com/mdc2122/viral-moment/pull/794 green->merged
+ready-pool-challengers,release,2026-10-15T08:21:07Z,2026-10-16T03:44:44Z,19.39,"https://github.com/mdc2122/viral-moment/pull/794 merged, not yet live"
+sept11-gates-doc,ci,2026-10-15T08:16:38Z,2026-10-15T08:37:36Z,0.35,https://github.com/mdc2122/viral-moment/pull/796 validation+checks
+sept11-gates-doc,merge_queue,2026-10-15T08:37:36Z,2026-10-15T08:58:55Z,0.36,https://github.com/mdc2122/viral-moment/pull/796 green->merged
+sept11-gates-doc,release,2026-10-15T08:58:55Z,2026-10-16T03:44:44Z,18.76,"https://github.com/mdc2122/viral-moment/pull/796 merged, not yet live"
+vein-boost-intake,ci,2026-10-15T08:51:48Z,2026-10-15T08:54:45Z,0.05,https://github.com/mdc2122/viral-moment/pull/797 validation+checks
+vein-boost-intake,human_answer,2026-10-15T08:54:45Z,2026-10-15T08:55:35Z,0.01,needs-decision -> steer 2026-10-15T08:55:35Z
+vein-boost-intake,ci,2026-10-15T08:55:35Z,2026-10-15T09:06:43Z,0.19,https://github.com/mdc2122/viral-moment/pull/797 validation+checks
+vein-boost-intake,human_answer,2026-10-15T09:06:43Z,2026-10-15T09:08:23Z,0.03,needs-decision -> steer 2026-10-15T09:08:23Z
+vein-boost-intake,ci,2026-10-15T09:08:23Z,2026-10-15T09:28:10Z,0.33,https://github.com/mdc2122/viral-moment/pull/797 validation+checks
+vein-boost-intake,merge_queue,2026-10-15T09:28:10Z,2026-10-15T09:50:17Z,0.37,https://github.com/mdc2122/viral-moment/pull/797 green->merged
+vein-boost-intake,release,2026-10-15T09:50:17Z,2026-10-16T03:44:44Z,17.91,"https://github.com/mdc2122/viral-moment/pull/797 merged, not yet live"
+canary-flake-deflake,ci,2026-10-15T09:58:10Z,2026-10-15T10:28:07Z,0.5,https://github.com/mdc2122/viral-moment/pull/798 validation+checks
+canary-flake-deflake,merge_queue,2026-10-15T10:28:07Z,2026-10-15T10:33:05Z,0.08,https://github.com/mdc2122/viral-moment/pull/798 green->merged
+canary-flake-deflake,release,2026-10-15T10:33:05Z,2026-10-16T03:44:44Z,17.19,"https://github.com/mdc2122/viral-moment/pull/798 merged, not yet live"
+retitle-hp4ej-shedeur,ci,2026-10-15T13:19:39Z,2026-10-15T13:23:58Z,0.07,https://github.com/mdc2122/viral-moment/pull/800 validation+checks
+retitle-hp4ej-shedeur,human_answer,2026-10-15T13:23:58Z,2026-10-15T13:32:54Z,0.15,needs-decision -> steer 2026-10-15T13:32:54Z
+retitle-hp4ej-shedeur,ci,2026-10-15T13:32:54Z,2026-10-15T14:15:39Z,0.71,https://github.com/mdc2122/viral-moment/pull/800 validation+checks
+retitle-hp4ej-shedeur,merge_queue,2026-10-15T14:15:39Z,2026-10-15T14:22:47Z,0.12,https://github.com/mdc2122/viral-moment/pull/800 green->merged
+retitle-hp4ej-shedeur,release,2026-10-15T14:22:47Z,2026-10-15T16:09:47Z,1.78,"https://github.com/mdc2122/viral-moment/pull/800 merged, not yet live"
+retitle-hp4ej-shedeur,human_answer,2026-10-15T16:09:47Z,2026-10-15T16:10:31Z,0.01,blocked -> steer 2026-10-15T16:10:31Z
+retitle-hp4ej-shedeur,release,2026-10-15T16:10:31Z,2026-10-15T16:46:19Z,0.6,"https://github.com/mdc2122/viral-moment/pull/800 merged, not yet live"
+retitle-hp4ej-shedeur,human_answer,2026-10-15T16:46:19Z,2026-10-15T16:49:53Z,0.06,needs-decision -> steer 2026-10-15T16:49:53Z
+retitle-hp4ej-shedeur,release,2026-10-15T16:49:53Z,2026-10-15T23:17:39Z,6.46,"https://github.com/mdc2122/viral-moment/pull/800 merged, not yet live"
+retitle-hp4ej-shedeur,human_answer,2026-10-15T23:17:39Z,2026-10-15T23:18:39Z,0.02,needs-decision -> steer 2026-10-15T23:18:39Z
+retitle-hp4ej-shedeur,release,2026-10-15T23:18:39Z,2026-10-16T03:44:44Z,4.43,"https://github.com/mdc2122/viral-moment/pull/800 merged, not yet live"
+mq1-vocab-activation,ci,2026-10-15T13:25:58Z,2026-10-15T13:29:57Z,0.07,https://github.com/mdc2122/viral-moment/pull/799 validation+checks
+mq1-vocab-activation,human_answer,2026-10-15T13:29:57Z,2026-10-15T13:38:33Z,0.14,needs-decision -> steer 2026-10-15T13:38:33Z
+mq1-vocab-activation,ci,2026-10-15T13:38:33Z,2026-10-15T14:21:48Z,0.72,https://github.com/mdc2122/viral-moment/pull/799 validation+checks
+mq1-vocab-activation,merge_queue,2026-10-15T14:21:48Z,2026-10-15T14:51:02Z,0.49,https://github.com/mdc2122/viral-moment/pull/799 green->merged
+mq1-vocab-activation,release,2026-10-15T14:51:02Z,2026-10-16T03:44:44Z,12.89,"https://github.com/mdc2122/viral-moment/pull/799 merged, not yet live"
+flipcheck-activation,ci,2026-10-15T13:48:58Z,2026-10-15T13:56:56Z,0.13,https://github.com/mdc2122/viral-moment/pull/801 validation+checks
+flipcheck-activation,human_answer,2026-10-15T13:56:56Z,2026-10-15T14:06:28Z,0.16,needs-decision -> steer 2026-10-15T14:06:28Z
+flipcheck-activation,ci,2026-10-15T14:06:28Z,2026-10-15T14:41:19Z,0.58,https://github.com/mdc2122/viral-moment/pull/801 validation+checks
+flipcheck-activation,merge_queue,2026-10-15T14:41:19Z,2026-10-15T15:19:37Z,0.64,https://github.com/mdc2122/viral-moment/pull/801 green->merged
+flipcheck-activation,release,2026-10-15T15:19:37Z,2026-10-16T03:44:44Z,12.42,"https://github.com/mdc2122/viral-moment/pull/801 merged, not yet live"
+fix-held-stall-reoffer-build,ci,2026-10-15T15:21:48Z,2026-10-15T15:26:52Z,0.08,https://github.com/mdc2122/viral-moment/pull/807 validation+checks
+fix-held-stall-reoffer-build,human_answer,2026-10-15T15:26:52Z,2026-10-15T15:28:17Z,0.02,needs-decision -> steer 2026-10-15T15:28:17Z
+fix-held-stall-reoffer-build,ci,2026-10-15T15:28:17Z,2026-10-15T16:43:39Z,1.26,https://github.com/mdc2122/viral-moment/pull/807 validation+checks
+fix-held-stall-reoffer-build,merge_queue,2026-10-15T16:43:39Z,2026-10-15T18:51:07Z,2.12,https://github.com/mdc2122/viral-moment/pull/807 green->merged
+fix-held-stall-reoffer-build,release,2026-10-15T18:51:07Z,2026-10-16T03:44:44Z,8.89,"https://github.com/mdc2122/viral-moment/pull/807 merged, not yet live"
+ballot-pool-restore,ci,2026-10-15T14:47:34Z,2026-10-15T14:53:32Z,0.1,https://github.com/mdc2122/viral-moment/pull/804 validation+checks
+ballot-pool-restore,human_answer,2026-10-15T14:53:32Z,2026-10-15T14:56:04Z,0.04,needs-decision -> steer 2026-10-15T14:56:04Z
+ballot-pool-restore,ci,2026-10-15T14:56:04Z,2026-10-15T15:48:12Z,0.87,https://github.com/mdc2122/viral-moment/pull/804 validation+checks
+ballot-pool-restore,merge_queue,2026-10-15T15:48:12Z,2026-10-15T16:17:51Z,0.49,https://github.com/mdc2122/viral-moment/pull/804 green->merged
+ballot-pool-restore,release,2026-10-15T16:17:51Z,2026-10-16T03:44:44Z,11.45,"https://github.com/mdc2122/viral-moment/pull/804 merged, not yet live"
+senior-review-flow-restore,ci,2026-10-15T15:30:44Z,2026-10-15T15:53:36Z,0.38,https://github.com/mdc2122/viral-moment/pull/805 validation+checks
+senior-review-flow-restore,merge_queue,2026-10-15T15:53:36Z,2026-10-15T15:54:15Z,0.01,https://github.com/mdc2122/viral-moment/pull/805 green->merged
+senior-review-flow-restore,human_answer,2026-10-15T15:54:15Z,2026-10-15T15:57:17Z,0.05,blocked -> steer 2026-10-15T15:57:17Z
+senior-review-flow-restore,merge_queue,2026-10-15T15:57:17Z,2026-10-15T15:57:40Z,0.01,https://github.com/mdc2122/viral-moment/pull/805 green->merged
+senior-review-flow-restore,release,2026-10-15T15:57:40Z,2026-10-15T16:44:57Z,0.79,"paused (rule): waiting on PR 804 (ballot-pool-restore, merge-queue head) to deploy - it carries"
+senior-review-flow-restore,merge_queue,2026-10-15T16:44:57Z,2026-10-15T16:46:53Z,0.03,https://github.com/mdc2122/viral-moment/pull/805 green->merged
+senior-review-flow-restore,release,2026-10-15T16:46:53Z,2026-10-16T03:44:44Z,10.96,"https://github.com/mdc2122/viral-moment/pull/805 merged, not yet live"
+senior-review-parallel,worker_stall,2026-10-15T15:56:52Z,2026-10-15T16:01:08Z,0.07,idle until assistant (error stop)
+senior-review-parallel,worker_stall,2026-10-15T16:50:12Z,2026-10-15T16:53:21Z,0.05,idle until assistant (error stop)
+senior-review-parallel,ci,2026-10-15T19:07:00Z,2026-10-15T19:11:01Z,0.07,https://github.com/mdc2122/viral-moment/pull/818 validation+checks
+senior-review-parallel,human_answer,2026-10-15T19:11:01Z,2026-10-15T19:11:59Z,0.02,needs-decision -> steer 2026-10-15T19:11:59Z
+senior-review-parallel,ci,2026-10-15T19:11:59Z,2026-10-15T19:22:43Z,0.18,https://github.com/mdc2122/viral-moment/pull/818 validation+checks
+senior-review-parallel,human_answer,2026-10-15T19:22:43Z,2026-10-15T19:23:59Z,0.02,needs-decision -> steer 2026-10-15T19:23:59Z
+senior-review-parallel,ci,2026-10-15T19:23:59Z,2026-10-15T20:33:57Z,1.17,https://github.com/mdc2122/viral-moment/pull/818 validation+checks
+senior-review-parallel,merge_queue,2026-10-15T20:33:57Z,2026-10-16T02:00:41Z,5.45,https://github.com/mdc2122/viral-moment/pull/818 green->merged
+senior-review-parallel,human_answer,2026-10-16T02:00:41Z,2026-10-16T02:05:30Z,0.08,blocked -> steer 2026-10-16T02:05:30Z
+senior-review-parallel,merge_queue,2026-10-16T02:05:30Z,2026-10-16T03:02:04Z,0.94,https://github.com/mdc2122/viral-moment/pull/818 green->merged
+senior-review-parallel,release,2026-10-16T03:02:04Z,2026-10-16T03:44:44Z,0.71,"https://github.com/mdc2122/viral-moment/pull/818 merged, not yet live"
+selection-sight-guard,ci,2026-10-15T18:04:22Z,2026-10-15T18:25:16Z,0.35,https://github.com/mdc2122/viral-moment/pull/814 validation+checks
+selection-sight-guard,human_answer,2026-10-15T18:25:16Z,2026-10-15T18:26:44Z,0.02,needs-decision self-cleared
+selection-sight-guard,ci,2026-10-15T18:26:44Z,2026-10-15T19:17:01Z,0.84,https://github.com/mdc2122/viral-moment/pull/814 validation+checks
+selection-sight-guard,merge_queue,2026-10-15T19:17:01Z,2026-10-15T21:09:09Z,1.87,https://github.com/mdc2122/viral-moment/pull/814 green->merged
+selection-sight-guard,release,2026-10-15T21:09:09Z,2026-10-16T03:44:44Z,6.59,"https://github.com/mdc2122/viral-moment/pull/814 merged, not yet live"
+goal-check-yard-read,release,2026-10-15T20:16:54Z,2026-10-15T20:17:00Z,0.0,needs-decision self-cleared
+goal-check-yard-read,human_answer,2026-10-15T20:17:00Z,2026-10-15T20:19:37Z,0.04,needs-decision -> steer 2026-10-15T20:19:37Z
+goal-check-yard-read,ci,2026-10-15T20:47:10Z,2026-10-15T20:53:04Z,0.1,https://github.com/mdc2122/viral-moment/pull/822 validation+checks
+goal-check-yard-read,human_answer,2026-10-15T20:53:04Z,2026-10-15T20:55:13Z,0.04,needs-decision -> steer 2026-10-15T20:55:13Z
+goal-check-yard-read,ci,2026-10-15T20:55:13Z,2026-10-15T21:46:47Z,0.86,https://github.com/mdc2122/viral-moment/pull/822 validation+checks
+goal-check-yard-read,merge_queue,2026-10-15T21:46:47Z,2026-10-16T03:44:44Z,5.97,"https://github.com/mdc2122/viral-moment/pull/822 green, still open"
+speaker-gate-prune,ci,2026-10-15T20:20:29Z,2026-10-15T20:52:42Z,0.54,https://github.com/mdc2122/viral-moment/pull/819 validation+checks
+speaker-gate-prune,merge_queue,2026-10-15T20:52:42Z,2026-10-16T03:44:44Z,6.87,"https://github.com/mdc2122/viral-moment/pull/819 green, still open"
+title-card-emoji-persist,ci,2026-10-15T20:28:52Z,2026-10-15T20:30:16Z,0.02,https://github.com/mdc2122/viral-moment/pull/820 validation+checks
+title-card-emoji-persist,human_answer,2026-10-15T20:30:16Z,2026-10-15T20:34:37Z,0.07,needs-decision -> steer 2026-10-15T20:34:37Z
+title-card-emoji-persist,ci,2026-10-15T20:34:37Z,2026-10-15T20:58:57Z,0.41,https://github.com/mdc2122/viral-moment/pull/820 validation+checks
+title-card-emoji-persist,merge_queue,2026-10-15T20:58:57Z,2026-10-16T03:44:44Z,6.76,"https://github.com/mdc2122/viral-moment/pull/820 green, still open"
+proven-vein-boost,ci,2026-10-15T19:59:45Z,2026-10-15T20:23:23Z,0.39,https://github.com/mdc2122/viral-moment/pull/816 validation+checks
+finishing-preflight-checks,ci,2026-10-15T20:50:31Z,2026-10-15T20:53:19Z,0.05,https://github.com/mdc2122/viral-moment/pull/823 validation+checks
+finishing-preflight-checks,human_answer,2026-10-15T20:53:19Z,2026-10-15T20:57:52Z,0.08,needs-decision -> steer 2026-10-15T20:57:52Z
+finishing-preflight-checks,ci,2026-10-15T20:57:52Z,2026-10-15T21:59:53Z,1.03,https://github.com/mdc2122/viral-moment/pull/823 validation+checks
+finishing-preflight-checks,merge_queue,2026-10-15T21:59:53Z,2026-10-16T03:44:44Z,5.75,"https://github.com/mdc2122/viral-moment/pull/823 green, still open"
+word-evidence-durability,human_answer,2026-10-15T23:05:19Z,2026-10-15T23:09:31Z,0.07,needs-decision -> steer 2026-10-15T23:09:31Z
+word-evidence-durability,handoff_idle,2026-10-15T23:09:31Z,2026-10-15T23:09:36Z,0.0,idle until firstmate steer (handoff)
+word-evidence-durability,ci,2026-10-15T23:14:55Z,2026-10-15T23:39:10Z,0.4,https://github.com/mdc2122/viral-moment/pull/824 validation+checks
+word-evidence-durability,merge_queue,2026-10-15T23:39:10Z,2026-10-16T03:44:44Z,4.09,"https://github.com/mdc2122/viral-moment/pull/824 green, still open"
+draft-pick-identity-fix,ci,2026-10-15T21:00:12Z,2026-10-15T21:20:45Z,0.34,https://github.com/mdc2122/viral-moment/pull/821 validation+checks
+draft-pick-identity-fix,merge_queue,2026-10-15T21:20:45Z,2026-10-16T03:44:44Z,6.4,"https://github.com/mdc2122/viral-moment/pull/821 green, still open"
+library-selection-evidence-scan,worker_stall,2026-10-15T22:28:25Z,2026-10-16T01:11:28Z,2.72,idle until relaunch
+selection-layered-packet,decision_park,2026-10-16T01:36:53Z,2026-10-16T01:42:34Z,0.09,needs-decision -> steer 2026-10-16T01:42:34Z
+selection-layered-packet,handoff_idle,2026-10-16T01:42:34Z,2026-10-16T01:42:36Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T01:48:52Z,2026-10-16T01:50:47Z,0.03,needs-decision -> steer 2026-10-16T01:50:47Z
+selection-layered-packet,handoff_idle,2026-10-16T01:51:03Z,2026-10-16T02:17:39Z,0.44,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:25:33Z,2026-10-16T02:40:02Z,0.24,needs-decision -> steer 2026-10-16T02:40:02Z
+selection-layered-packet,handoff_idle,2026-10-16T02:40:02Z,2026-10-16T02:40:05Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:40:17Z,2026-10-16T02:51:02Z,0.18,paused (rule): parked at no-mistakes review gate (run 01M515G9WC660P2RCZB0ZT0N94) awaiting capt
+selection-layered-packet,handoff_idle,2026-10-16T02:51:02Z,2026-10-16T02:51:05Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:55:11Z,2026-10-16T02:57:10Z,0.03,needs-decision -> steer 2026-10-16T02:57:10Z
+selection-layered-packet,decision_park,2026-10-16T02:57:19Z,2026-10-16T03:03:00Z,0.09,paused (rule): parked at no-mistakes review gate (run 01M515G9WC660P2RCZB0ZT0N94) awaiting reop
+selection-layered-packet,handoff_idle,2026-10-16T03:03:00Z,2026-10-16T03:03:01Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T03:38:58Z,2026-10-16T03:43:44Z,0.08,blocked -> steer 2026-10-16T03:43:44Z
+selection-layered-packet,handoff_idle,2026-10-16T03:43:44Z,2026-10-16T03:43:45Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T03:44:30Z,2026-10-16T03:44:44Z,0.0,blocked still open
+manifest-artifact-reroot,ci,2026-10-15T23:53:50Z,2026-10-16T00:37:15Z,0.72,https://github.com/mdc2122/viral-moment/pull/827 validation+checks
+manifest-artifact-reroot,human_answer,2026-10-16T00:37:15Z,2026-10-16T00:40:58Z,0.06,needs-decision -> steer 2026-10-16T00:40:58Z
+manifest-artifact-reroot,ci,2026-10-16T00:40:58Z,2026-10-16T00:41:49Z,0.01,https://github.com/mdc2122/viral-moment/pull/827 validation+checks
+manifest-artifact-reroot,release,2026-10-16T00:41:49Z,2026-10-16T01:50:06Z,1.14,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/827 outcome passed-with-override
+manifest-artifact-reroot,ci,2026-10-16T01:50:06Z,2026-10-16T02:17:55Z,0.46,https://github.com/mdc2122/viral-moment/pull/827 validation+checks
+manifest-artifact-reroot,merge_queue,2026-10-16T02:17:55Z,2026-10-16T03:26:44Z,1.15,https://github.com/mdc2122/viral-moment/pull/827 green->merged
+manifest-artifact-reroot,release,2026-10-16T03:26:44Z,2026-10-16T03:44:44Z,0.3,"https://github.com/mdc2122/viral-moment/pull/827 merged, not yet live"
+goldratt-progress-watch,ci,2026-10-16T01:51:47Z,2026-10-16T01:54:38Z,0.05,https://github.com/mdc2122/viral-moment/pull/841 validation+checks
+goldratt-progress-watch,human_answer,2026-10-16T01:54:38Z,2026-10-16T02:17:34Z,0.38,needs-decision -> steer 2026-10-16T02:17:34Z
+goldratt-progress-watch,ci,2026-10-16T02:17:34Z,2026-10-16T02:21:19Z,0.06,https://github.com/mdc2122/viral-moment/pull/841 validation+checks
+goldratt-progress-watch,human_answer,2026-10-16T02:21:19Z,2026-10-16T02:23:29Z,0.04,needs-decision -> steer 2026-10-16T02:23:29Z
+goldratt-progress-watch,ci,2026-10-16T02:23:29Z,2026-10-16T03:05:07Z,0.69,https://github.com/mdc2122/viral-moment/pull/841 validation+checks
+goldratt-progress-watch,merge_queue,2026-10-16T03:05:07Z,2026-10-16T03:44:44Z,0.66,"https://github.com/mdc2122/viral-moment/pull/841 green, still open"
+vein-boost-revert,ci,2026-10-15T23:40:21Z,2026-10-16T00:01:37Z,0.35,https://github.com/mdc2122/viral-moment/pull/826 validation+checks
+vein-boost-revert,merge_queue,2026-10-16T00:01:37Z,2026-10-16T00:38:30Z,0.61,https://github.com/mdc2122/viral-moment/pull/826 green->merged
+vein-boost-revert,release,2026-10-16T00:38:30Z,2026-10-16T03:44:44Z,3.1,"https://github.com/mdc2122/viral-moment/pull/826 merged, not yet live"
+question-opener-term,ci,2026-10-16T00:47:49Z,2026-10-16T00:56:39Z,0.15,https://github.com/mdc2122/viral-moment/pull/831 validation+checks
+question-opener-term,human_answer,2026-10-16T00:56:39Z,2026-10-16T01:02:29Z,0.1,needs-decision -> steer 2026-10-16T01:02:29Z
+question-opener-term,ci,2026-10-16T01:02:29Z,2026-10-16T01:38:35Z,0.6,https://github.com/mdc2122/viral-moment/pull/831 validation+checks
+question-opener-term,merge_queue,2026-10-16T01:38:35Z,2026-10-16T03:44:44Z,2.1,"https://github.com/mdc2122/viral-moment/pull/831 green, still open"
+cv2-dup-dist-fix,human_answer,2026-10-16T00:54:31Z,2026-10-16T00:57:09Z,0.04,needs-decision -> steer 2026-10-16T00:57:09Z
+cv2-dup-dist-fix,ci,2026-10-16T00:58:55Z,2026-10-16T01:19:30Z,0.34,https://github.com/mdc2122/viral-moment/pull/830 validation+checks
+cv2-dup-dist-fix,merge_queue,2026-10-16T01:19:30Z,2026-10-16T01:39:20Z,0.33,https://github.com/mdc2122/viral-moment/pull/830 green->merged
+cv2-dup-dist-fix,release,2026-10-16T01:39:20Z,2026-10-16T03:44:44Z,2.09,"https://github.com/mdc2122/viral-moment/pull/830 merged, not yet live"
+merge-stats-harness,human_answer,2026-10-16T01:59:17Z,2026-10-16T02:18:33Z,0.32,blocked -> steer 2026-10-16T02:18:33Z
+merge-stats-harness,handoff_idle,2026-10-16T02:18:33Z,2026-10-16T02:18:35Z,0.0,idle until firstmate steer (handoff)
+merge-stats-harness,human_answer,2026-10-16T02:19:06Z,2026-10-16T02:24:58Z,0.1,needs-decision -> steer 2026-10-16T02:24:58Z
+merge-stats-harness,handoff_idle,2026-10-16T02:24:58Z,2026-10-16T02:25:00Z,0.0,idle until firstmate steer (handoff)
+flash-parity-replay,worker_stall,2026-10-16T03:32:47Z,2026-10-16T03:44:44Z,0.2,no worker activity to end of span
+yt-test-access-check,handoff_idle,2026-10-16T01:30:24Z,2026-10-16T01:59:54Z,0.49,idle until firstmate steer (handoff)
+deep-recut-deprioritize,ci,2026-10-16T03:17:34Z,2026-10-16T03:43:57Z,0.44,https://github.com/mdc2122/viral-moment/pull/843 validation+checks
+deep-recut-deprioritize,merge_queue,2026-10-16T03:43:57Z,2026-10-16T03:44:44Z,0.01,"https://github.com/mdc2122/viral-moment/pull/843 green, still open"
+discernment-mq1-writepath,ci,2026-10-16T01:50:36Z,2026-10-16T02:11:14Z,0.34,https://github.com/mdc2122/viral-moment/pull/834 validation+checks
+discernment-mq1-writepath,merge_queue,2026-10-16T02:11:14Z,2026-10-16T03:44:44Z,1.56,"https://github.com/mdc2122/viral-moment/pull/834 green, still open"
+merge-watch-rebind,worker_stall,2026-10-16T03:39:32Z,2026-10-16T03:44:44Z,0.09,no worker activity to end of span
+finishing-harness-commit,ci,2026-10-16T02:00:18Z,2026-10-16T02:33:39Z,0.56,https://github.com/mdc2122/viral-moment/pull/835 validation+checks
+finishing-harness-commit,merge_queue,2026-10-16T02:33:39Z,2026-10-16T03:44:44Z,1.18,"https://github.com/mdc2122/viral-moment/pull/835 green, still open"
+merge-stall-records,human_answer,2026-10-16T02:21:14Z,2026-10-16T02:23:32Z,0.04,needs-decision -> steer 2026-10-16T02:23:32Z
+merge-stall-records,human_answer,2026-10-16T03:05:33Z,2026-10-16T03:13:13Z,0.13,blocked -> steer 2026-10-16T03:13:13Z
+merge-stall-records,handoff_idle,2026-10-16T03:13:13Z,2026-10-16T03:13:15Z,0.0,idle until firstmate steer (handoff)
+merge-stall-records,worker_stall,2026-10-16T03:13:48Z,2026-10-16T03:20:43Z,0.12,no worker activity to end of span
+mq-off-n100,human_answer,2026-10-16T01:54:22Z,2026-10-16T02:18:36Z,0.4,needs-decision -> steer 2026-10-16T02:18:36Z
+mq-off-n100,handoff_idle,2026-10-16T02:18:36Z,2026-10-16T02:18:37Z,0.0,idle until firstmate steer (handoff)
+replay-harness-commit,ci,2026-10-16T02:13:18Z,2026-10-16T02:16:52Z,0.06,https://github.com/mdc2122/viral-moment/pull/840 validation+checks
+replay-harness-commit,human_answer,2026-10-16T02:16:52Z,2026-10-16T02:20:20Z,0.06,needs-decision -> steer 2026-10-16T02:20:20Z
+replay-harness-commit,ci,2026-10-16T02:20:20Z,2026-10-16T03:26:30Z,1.1,https://github.com/mdc2122/viral-moment/pull/840 validation+checks
+replay-harness-commit,merge_queue,2026-10-16T03:26:30Z,2026-10-16T03:44:44Z,0.3,"https://github.com/mdc2122/viral-moment/pull/840 green, still open"
+release-join-main-advance,worker_stall,2026-10-16T03:37:10Z,2026-10-16T03:44:44Z,0.13,no worker activity to end of span
+flow-decision-tables,human_answer,2026-10-16T03:03:15Z,2026-10-16T03:06:35Z,0.06,needs-decision -> steer 2026-10-16T03:06:35Z
+flow-decision-tables,human_answer,2026-10-16T03:08:59Z,2026-10-16T03:11:35Z,0.04,needs-decision -> steer 2026-10-16T03:11:35Z
+flow-decision-tables,decision_park,2026-10-16T03:14:45Z,2026-10-16T03:23:06Z,0.14,needs-decision -> steer 2026-10-16T03:23:06Z
+flow-decision-tables,handoff_idle,2026-10-16T03:23:06Z,2026-10-16T03:23:15Z,0.0,idle until firstmate steer (handoff)
+flow-decision-tables,human_answer,2026-10-16T03:24:26Z,2026-10-16T03:35:35Z,0.19,needs-decision -> steer 2026-10-16T03:35:35Z
+flow-decision-tables,handoff_idle,2026-10-16T03:35:35Z,2026-10-16T03:35:38Z,0.0,idle until firstmate steer (handoff)
+flow-decision-tables,human_answer,2026-10-16T03:39:31Z,2026-10-16T03:43:21Z,0.06,needs-decision -> steer 2026-10-16T03:43:21Z
+flow-decision-tables,handoff_idle,2026-10-16T03:43:21Z,2026-10-16T03:43:39Z,0.01,idle until firstmate steer (handoff)
+goal-check-qualified-depth,ci,2026-10-16T02:24:43Z,2026-10-16T02:48:43Z,0.4,https://github.com/mdc2122/viral-moment/pull/839 validation+checks
+goal-check-qualified-depth,merge_queue,2026-10-16T02:48:43Z,2026-10-16T03:44:44Z,0.93,"https://github.com/mdc2122/viral-moment/pull/839 green, still open"
+gemini-av-guard-path,human_answer,2026-10-16T03:05:36Z,2026-10-16T03:11:38Z,0.1,needs-decision -> steer 2026-10-16T03:11:38Z
+gemini-av-guard-path,handoff_idle,2026-10-16T03:11:38Z,2026-10-16T03:11:40Z,0.0,idle until firstmate steer (handoff)
+gemini-av-guard-path,ci,2026-10-16T03:17:16Z,2026-10-16T03:40:48Z,0.39,https://github.com/mdc2122/viral-moment/pull/842 validation+checks
+gemini-av-guard-path,merge_queue,2026-10-16T03:40:48Z,2026-10-16T03:44:44Z,0.07,"https://github.com/mdc2122/viral-moment/pull/842 green, still open"
+libscan-harness-commit,human_answer,2026-10-16T03:01:44Z,2026-10-16T03:06:33Z,0.08,needs-decision -> steer 2026-10-16T03:06:33Z
+libscan-harness-commit,handoff_idle,2026-10-16T03:06:33Z,2026-10-16T03:06:34Z,0.0,idle until firstmate steer (handoff)
+libscan-harness-commit,human_answer,2026-10-16T03:26:07Z,2026-10-16T03:35:40Z,0.16,needs-decision -> steer 2026-10-16T03:35:40Z
+libscan-harness-commit,handoff_idle,2026-10-16T03:35:40Z,2026-10-16T03:35:41Z,0.0,idle until firstmate steer (handoff)
+libscan-harness-commit,worker_stall,2026-10-16T03:39:51Z,2026-10-16T03:44:44Z,0.08,no worker activity to end of span
+yt-test-tools-commit,ci,2026-10-16T02:14:01Z,2026-10-16T02:36:10Z,0.37,https://github.com/mdc2122/viral-moment/pull/837 validation+checks
+yt-test-tools-commit,merge_queue,2026-10-16T02:36:10Z,2026-10-16T03:44:44Z,1.14,"https://github.com/mdc2122/viral-moment/pull/837 green, still open"
+ci-pytest-parallel,ci,2026-10-16T03:13:54Z,2026-10-16T03:43:37Z,0.5,https://github.com/mdc2122/viral-moment/pull/844 validation+checks
+ci-pytest-parallel,merge_queue,2026-10-16T03:43:37Z,2026-10-16T03:44:44Z,0.02,"https://github.com/mdc2122/viral-moment/pull/844 green, still open"
+merge-line-handoff,worker_stall,2026-10-16T03:38:41Z,2026-10-16T03:44:44Z,0.1,no worker activity to end of span

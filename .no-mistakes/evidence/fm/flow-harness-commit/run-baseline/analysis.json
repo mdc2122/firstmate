@@ -1,0 +1,376 @@
+{
+ "touch_categories_settled": [
+  [
+   "steer:decision_answer",
+   257
+  ],
+  [
+   "steer:go_ahead_after_external_event",
+   163
+  ],
+  [
+   "steer:merge_or_release_routing",
+   158
+  ],
+  [
+   "re-point",
+   156
+  ],
+  [
+   "steer:correction_or_scope_change",
+   98
+  ],
+  [
+   "steer:new_work",
+   34
+  ],
+  [
+   "steer:body-not-captured",
+   28
+  ],
+  [
+   "relaunch",
+   23
+  ],
+  [
+   "steer:admin_maintenance",
+   19
+  ],
+  [
+   "steer:unblock_information",
+   14
+  ],
+  [
+   "answer",
+   10
+  ],
+  [
+   "steer:other",
+   4
+  ],
+  [
+   "steer:status_request",
+   3
+  ]
+ ],
+ "tasks_touched_by_category_settled": [
+  [
+   "steer:decision_answer",
+   76
+  ],
+  [
+   "steer:go_ahead_after_external_event",
+   58
+  ],
+  [
+   "re-point",
+   54
+  ],
+  [
+   "steer:correction_or_scope_change",
+   52
+  ],
+  [
+   "steer:merge_or_release_routing",
+   45
+  ],
+  [
+   "steer:new_work",
+   21
+  ],
+  [
+   "steer:admin_maintenance",
+   15
+  ],
+  [
+   "steer:body-not-captured",
+   13
+  ],
+  [
+   "steer:unblock_information",
+   13
+  ],
+  [
+   "relaunch",
+   13
+  ],
+  [
+   "answer",
+   7
+  ],
+  [
+   "steer:other",
+   3
+  ],
+  [
+   "steer:status_request",
+   3
+  ]
+ ],
+ "counterfactual_zero_touch_live": {
+  "baseline": 32,
+  "minus_merge_release_handoffs": 46,
+  "minus_handoffs_and_decision_answers": 77,
+  "minus_handoffs_decisions_relaunch": 78,
+  "settled_denominator": 159
+ },
+ "ship_touches_per_task": {
+  "n": 95,
+  "median": 5,
+  "mean": 8.8
+ },
+ "scout_touches_per_task": {
+  "n": 64,
+  "median": 0.5,
+  "mean": 2.0
+ },
+ "decision_answers": {
+  "total": 287,
+  "no_mistakes_gate": 145,
+  "captain": 19
+ },
+ "merge_queue_per_item_h": {
+  "n": 126,
+  "median": 0.7,
+  "p90": 6.39,
+  "sum": 293.5,
+  "top": [
+   [
+    "mdc2122/viral-moment#717",
+    "release-dirs",
+    30.7
+   ],
+   [
+    "mdc2122/viral-moment#679",
+    "deploy-between-renders",
+    20.2
+   ],
+   [
+    "mdc2122/viral-moment#646",
+    "analytics-readouts",
+    19.9
+   ],
+   [
+    "mdc2122/viral-moment#665",
+    "review-model-bakeoff-wiring",
+    18.4
+   ],
+   [
+    "mdc2122/viral-moment#660",
+    "judge-input-cache",
+    15.2
+   ],
+   [
+    "mdc2122/viral-moment#652",
+    "fresh-upload-backfill",
+    9.8
+   ],
+   [
+    "mdc2122/viral-moment#669",
+    "vm-suite-flakes",
+    9.2
+   ],
+   [
+    "mdc2122/viral-moment#672",
+    "clip-crop-twitch-overlay",
+    7.7
+   ],
+   [
+    "paused:outlier-shadow-profile",
+    "outlier-shadow-profile",
+    7.0
+   ],
+   [
+    "mdc2122/viral-moment#819",
+    "speaker-gate-prune",
+    6.9
+   ]
+  ]
+ },
+ "release_per_item_h": {
+  "n": 124,
+  "median": 1.02,
+  "p90": 4.78,
+  "sum": 213.3,
+  "top": [
+   [
+    "mdc2122/viral-moment#740",
+    "title-claim-hygiene",
+    8.4
+   ],
+   [
+    "mdc2122/viral-moment#653",
+    "goal-panel-backup-dead",
+    6.9
+   ],
+   [
+    "mdc2122/viral-moment#727",
+    "second-host-build-work",
+    6.4
+   ],
+   [
+    "mdc2122/viral-moment#743",
+    "gitea-mq-merge-branch-ci",
+    6.3
+   ],
+   [
+    "mdc2122/viral-moment#636",
+    "goal-pool-policy",
+    5.9
+   ],
+   [
+    "paused:release-dirs",
+    "release-dirs",
+    5.8
+   ],
+   [
+    "mdc2122/viral-moment#737",
+    "gitea-mq-merge-branch-ci",
+    5.7
+   ],
+   [
+    "mdc2122/viral-moment#736",
+    "revert-725-main-red",
+    5.5
+   ],
+   [
+    "mdc2122/viral-moment#798",
+    "canary-flake-deflake",
+    5.4
+   ],
+   [
+    "mdc2122/viral-moment#663",
+    "goal-render-speed",
+    5.3
+   ]
+  ]
+ },
+ "ci_per_item_h": {
+  "n": 127,
+  "median": 0.62,
+  "p90": 2.24,
+  "sum": 123.8,
+  "top": [
+   [
+    "mdc2122/viral-moment#785",
+    "speaker-gate-fix",
+    5.0
+   ],
+   [
+    "mdc2122/viral-moment#660",
+    "judge-input-cache",
+    4.8
+   ],
+   [
+    "mdc2122/viral-moment#792",
+    "finishing-reseat-stalls",
+    4.3
+   ],
+   [
+    "paused:finishing-reseat-stalls",
+    "finishing-reseat-stalls",
+    4.2
+   ],
+   [
+    "mdc2122/viral-moment#732",
+    "deploy-gap-retry",
+    4.2
+   ],
+   [
+    "paused:finish-in-booking-order",
+    "finish-in-booking-order",
+    4.0
+   ],
+   [
+    "mdc2122/viral-moment#790",
+    "hit-lane-gates-relax",
+    3.9
+   ],
+   [
+    "kunchenguid/no-mistakes#1442",
+    "nm-pure-replay-upstream",
+    3.3
+   ],
+   [
+    "mdc2122/viral-moment#668",
+    "clip-crop-twitch-overlay",
+    2.7
+   ],
+   [
+    "mdc2122/viral-moment#662",
+    "ranking-compare-empty-json",
+    2.7
+   ]
+  ]
+ },
+ "hours_by_day_and_class": {
+  "2026-10-09": {
+   "ci": 15.8,
+   "decision_park": 4.3,
+   "handoff_idle": 0.2,
+   "human_answer": 2.1,
+   "merge_queue": 35.9,
+   "release": 21.7
+  },
+  "2026-10-10": {
+   "ci": 18.6,
+   "decision_park": 1.5,
+   "handoff_idle": 15.5,
+   "human_answer": 26.2,
+   "merge_queue": 114.4,
+   "release": 34.7,
+   "worker_stall": 0.2
+  },
+  "2026-10-11": {
+   "decision_park": 39.7,
+   "human_answer": 0.1,
+   "merge_queue": 0.2,
+   "release": 4.7
+  },
+  "2026-10-12": {
+   "ci": 2.6,
+   "decision_park": 1.7,
+   "handoff_idle": 0.4,
+   "human_answer": 1.7,
+   "merge_queue": 9.1,
+   "release": 10.4,
+   "worker_stall": 0.4
+  },
+  "2026-10-13": {
+   "ci": 26.7,
+   "decision_park": 0.9,
+   "handoff_idle": 0.8,
+   "human_answer": 2.8,
+   "merge_queue": 25.8,
+   "release": 80.6,
+   "worker_stall": 0.1
+  },
+  "2026-10-14": {
+   "ci": 24.4,
+   "decision_park": 18.7,
+   "handoff_idle": 6.4,
+   "human_answer": 1.4,
+   "merge_queue": 22.6,
+   "release": 28.5,
+   "worker_stall": 2.4
+  },
+  "2026-10-15": {
+   "ci": 28.8,
+   "decision_park": 2.8,
+   "handoff_idle": 2.1,
+   "human_answer": 1.9,
+   "merge_queue": 72.2,
+   "release": 28.1,
+   "worker_stall": 3.0
+  },
+  "2026-10-16": {
+   "ci": 6.9,
+   "decision_park": 0.8,
+   "handoff_idle": 0.9,
+   "human_answer": 2.6,
+   "merge_queue": 13.2,
+   "release": 4.6,
+   "worker_stall": 0.7
+  }
+ }
+}

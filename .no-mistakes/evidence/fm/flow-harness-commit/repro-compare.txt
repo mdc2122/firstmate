@@ -1,0 +1,15 @@
+tasks.csv: DIFFERS
+touches.csv: IDENTICAL (    1251 lines)
+waits.csv: IDENTICAL (    1082 lines)
+steers.csv: IDENTICAL (    1115 lines)
+summary.json identical except generated + coverage.owned_prs_unresolved: True
+owned_prs_unresolved: {"flow-decision-tables": ["https://github.com/mdc2122/firstmate/pull/65"], "libscan-harness-commit": ["https://github.com/mdc2122/viral-moment/pull/845"]}
+keys only in new: set() coverage keys only in new: {'owned_prs_unresolved'}
+
+tasks.csv detail: the only difference is the descriptive `yolo` column, on 6 rows (goal-pool-policy, opus-burn-alarm,
+omniroute-15567-ci, paperclip-14479-rebase, render-lock-wait-metric, merge-stall-records): recorded "" -> now on/off.
+Source: the committed copy also reads `--yolo` from multi-id fm-spawn calls (spawn_many). Probe with that branch disabled:
+those 6 rows match, but merge-watch-rebind and flow-decision-tables then lose yolo=on, because their state/<id>.meta was
+read live at baseline time and has since been torn down. So no version can now reproduce the yolo column byte-for-byte.
+yolo feeds no figure: touches/waits/steers.csv are byte-identical and summary.json is identical except `generated` and
+the new `coverage.owned_prs_unresolved` key.

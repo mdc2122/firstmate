@@ -1,0 +1,861 @@
+{
+ "window": [
+  "2026-10-09",
+  "2026-10-17"
+ ],
+ "generated": "2026-10-16T04:51:06Z",
+ "now_cap": "2026-10-16T03:44:44Z",
+ "tasks_spawned": 191,
+ "excluded": 0,
+ "measured": 191,
+ "settled": 178,
+ "live_proven": 163,
+ "closed_not_live": 15,
+ "in_flight": 13,
+ "zero_touch_live": 44,
+ "zero_touch_share_of_settled_pct": 24.7,
+ "zero_touch_share_of_live_pct": 27.0,
+ "in_flight_untouched_so_far": 9,
+ "upper_bound_if_all_untouched_inflight_land_pct": 27.7,
+ "by_kind": {
+  "scout": {
+   "settled": 64,
+   "zero_touch_live": 27,
+   "live": 56
+  },
+  "ship": {
+   "settled": 114,
+   "zero_touch_live": 17,
+   "live": 107
+  }
+ },
+ "touches_total": 1001,
+ "touches_by_type": {
+  "steer": 863,
+  "re-point": 98,
+  "relaunch": 29,
+  "answer": 11
+ },
+ "steer_purposes": {
+  "body-not-captured": 25,
+  "new_work": 39,
+  "decision_answer": 290,
+  "merge_or_release_routing": 157,
+  "correction_or_scope_change": 111,
+  "go_ahead_after_external_event": 172,
+  "admin_maintenance": 21,
+  "unblock_information": 17,
+  "unclassified": 30,
+  "other": 4,
+  "status_request": 3
+ },
+ "steer_answerers": {
+  "firstmate": 793,
+  "captain": 76
+ },
+ "script_steers_excluded": 93,
+ "flash_classified_rows": {
+  "steers": 361,
+  "pauses": 8
+ },
+ "wait_hours_by_class": {
+  "decision_park": 70.5,
+  "human_answer": 126.4,
+  "ci": 11.0,
+  "merge_queue": 67.7,
+  "release": 130.5,
+  "worker_stall": 13.1,
+  "of_which_handoff_idle": 87.2
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 69.0,
+  "human_answer": 123.8,
+  "ci": 5.1,
+  "merge_queue": 62.9,
+  "release": 130.4,
+  "worker_stall": 11.1
+ },
+ "top_tasks_by_class": {
+  "decision_park": [
+   {
+    "task": "deploy-between-renders",
+    "hours": 39.9
+   },
+   {
+    "task": "release-dirs",
+    "hours": 10.35
+   },
+   {
+    "task": "finishing-peak-window",
+    "hours": 9.17
+   },
+   {
+    "task": "intake-gate-launch-boundary",
+    "hours": 4.25
+   },
+   {
+    "task": "python-org-venv",
+    "hours": 1.49
+   },
+   {
+    "task": "gitea-mq-setup",
+    "hours": 1.2
+   },
+   {
+    "task": "community-post-audit",
+    "hours": 1.19
+   },
+   {
+    "task": "moment-gate-restore",
+    "hours": 0.81
+   }
+  ],
+  "human_answer": [
+   {
+    "task": "ranking-compare-empty-json",
+    "hours": 18.86
+   },
+   {
+    "task": "intake-gate-launch-boundary",
+    "hours": 14.93
+   },
+   {
+    "task": "deploy-between-renders",
+    "hours": 13.11
+   },
+   {
+    "task": "review-model-bakeoff-wiring",
+    "hours": 10.01
+   },
+   {
+    "task": "senior-review-parallel",
+    "hours": 5.52
+   },
+   {
+    "task": "fresh-upload-backfill",
+    "hours": 5.51
+   },
+   {
+    "task": "selection-sight-guard",
+    "hours": 4.23
+   },
+   {
+    "task": "analytics-readouts",
+    "hours": 4.09
+   }
+  ],
+  "ci": [
+   {
+    "task": "finishing-reseat-stalls",
+    "hours": 4.25
+   },
+   {
+    "task": "finish-in-booking-order",
+    "hours": 4.04
+   },
+   {
+    "task": "moment-gate-restore",
+    "hours": 1.59
+   },
+   {
+    "task": "community-post-audit",
+    "hours": 0.88
+   },
+   {
+    "task": "title-bracket-cleanup",
+    "hours": 0.21
+   }
+  ],
+  "merge_queue": [
+   {
+    "task": "judge-input-cache",
+    "hours": 10.92
+   },
+   {
+    "task": "outlier-shadow-profile",
+    "hours": 9.39
+   },
+   {
+    "task": "deploy-gap-retry",
+    "hours": 7.33
+   },
+   {
+    "task": "review-model-bakeoff-wiring",
+    "hours": 7.19
+   },
+   {
+    "task": "analytics-readouts",
+    "hours": 6.96
+   },
+   {
+    "task": "moment-gate-restore",
+    "hours": 4.84
+   },
+   {
+    "task": "finish-in-booking-order",
+    "hours": 4.23
+   },
+   {
+    "task": "goal-skill-outlier-profile",
+    "hours": 3.37
+   }
+  ],
+  "release": [
+   {
+    "task": "ranking-compare-empty-json",
+    "hours": 24.28
+   },
+   {
+    "task": "second-host-build-work",
+    "hours": 13.65
+   },
+   {
+    "task": "shorts-series-packaging",
+    "hours": 13.18
+   },
+   {
+    "task": "release-dirs",
+    "hours": 9.95
+   },
+   {
+    "task": "deploy-gap-retry",
+    "hours": 7.83
+   },
+   {
+    "task": "community-post-audit",
+    "hours": 7.76
+   },
+   {
+    "task": "goal-panel-backup-dead",
+    "hours": 4.67
+   },
+   {
+    "task": "conveyor-tick-hung",
+    "hours": 4.35
+   }
+  ],
+  "worker_stall": [
+   {
+    "task": "library-selection-evidence-scan",
+    "hours": 2.72
+   },
+   {
+    "task": "clip-crop-twitch-overlay",
+    "hours": 1.38
+   },
+   {
+    "task": "speaker-gate-fix",
+    "hours": 1.24
+   },
+   {
+    "task": "vm-suite-flakes",
+    "hours": 1.0
+   },
+   {
+    "task": "family-window-supply-rerun",
+    "hours": 0.96
+   },
+   {
+    "task": "supply-rebuild-list-response",
+    "hours": 0.73
+   },
+   {
+    "task": "deploy-between-renders",
+    "hours": 0.7
+   },
+   {
+    "task": "shorts-winners-2026",
+    "hours": 0.42
+   }
+  ],
+  "handoff_idle": [
+   {
+    "task": "intake-gate-launch-boundary",
+    "hours": 14.75
+   },
+   {
+    "task": "deploy-between-renders",
+    "hours": 11.98
+   },
+   {
+    "task": "review-model-bakeoff-wiring",
+    "hours": 9.59
+   },
+   {
+    "task": "senior-review-parallel",
+    "hours": 5.4
+   },
+   {
+    "task": "fresh-upload-backfill",
+    "hours": 5.34
+   },
+   {
+    "task": "selection-sight-guard",
+    "hours": 4.21
+   },
+   {
+    "task": "analytics-readouts",
+    "hours": 3.57
+   },
+   {
+    "task": "deploy-gap-retry",
+    "hours": 2.9
+   }
+  ]
+ },
+ "coverage": {
+  "supervisor_transcripts": [
+   {
+    "first": "2026-10-02T22:50:55Z",
+    "last": "2026-10-10T02:22:20Z",
+    "file": "2026-10-02T22-50-55-541Z_01a0fed0-3eb5-7000-b727-8a3607f0afb5.jsonl"
+   },
+   {
+    "first": "2026-10-03T06:04:47Z",
+    "last": "2026-10-08T11:26:32Z",
+    "file": "2026-10-03T06-04-47-454Z_01a1005d-75de-7000-aa0e-8a3037b80014.jsonl"
+   },
+   {
+    "first": "2026-10-08T11:26:54Z",
+    "last": "2026-10-08T20:45:23Z",
+    "file": "2026-10-08T11-26-54-561Z_01a11b44-2a61-7000-a44b-b26508e73e18.jsonl"
+   },
+   {
+    "first": "2026-10-08T20:46:02Z",
+    "last": "2026-10-13T01:24:24Z",
+    "file": "2026-10-08T20-46-02-939Z_01a11d44-12bb-7000-8f00-5e2846434a83.jsonl"
+   },
+   {
+    "first": "2026-10-09T00:21:27Z",
+    "last": "2026-10-09T00:21:36Z",
+    "file": "2026-10-09T00-21-27-805Z_01a11e09-4a7d-7000-a89d-df10677969fb.jsonl"
+   },
+   {
+    "first": "2026-10-12T15:33:42Z",
+    "last": "2026-10-14T17:35:11Z",
+    "file": "2026-10-12T15-33-42-079Z_01a130bf-8c3f-7000-8644-10a09c586782.jsonl"
+   },
+   {
+    "first": "2026-10-13T01:24:50Z",
+    "last": "2026-10-13T04:24:09Z",
+    "file": "2026-10-13T01-24-50-776Z_01a132dc-c1d8-7000-901e-3a57b714cf13.jsonl"
+   },
+   {
+    "first": "2026-10-13T04:24:41Z",
+    "last": "2026-10-13T11:45:02Z",
+    "file": "2026-10-13T04-24-41-283Z_01a13381-6843-7000-a94a-37a327b671b3.jsonl"
+   },
+   {
+    "first": "2026-10-13T11:46:13Z",
+    "last": "2026-10-14T19:58:11Z",
+    "file": "2026-10-13T11-46-13-898Z_01a13515-a70a-7000-b209-694b48f2ce87.jsonl"
+   },
+   {
+    "first": "2026-10-14T01:50:39Z",
+    "last": "2026-10-14T01:51:21Z",
+    "file": "2026-10-14T01-50-39-954Z_01a1381a-c152-7000-8f53-5f4ef67b701c.jsonl"
+   },
+   {
+    "first": "2026-10-14T17:35:43Z",
+    "last": "2026-10-14T19:27:07Z",
+    "file": "2026-10-14T17-35-43-181Z_01a13b7b-fa4d-7000-8266-84a70e045eac.jsonl"
+   },
+   {
+    "first": "2026-10-14T19:32:16Z",
+    "last": "2026-10-14T21:18:21Z",
+    "file": "2026-10-14T19-32-16-925Z_01a13be6-b19d-7000-b5a1-3111354961be.jsonl"
+   },
+   {
+    "first": "2026-10-14T19:59:31Z",
+    "last": "2026-10-15T20:49:21Z",
+    "file": "2026-10-14T19-59-31-990Z_01a13bff-a496-7000-960b-c6d166104077.jsonl"
+   },
+   {
+    "first": "2026-10-14T21:37:32Z",
+    "last": "2026-10-15T18:10:57Z",
+    "file": "2026-10-14T21-37-32-865Z_01a13c59-60c1-7000-a5be-d40d41b13ed0.jsonl"
+   },
+   {
+    "first": "2026-10-15T18:11:30Z",
+    "last": "2026-10-16T00:06:10Z",
+    "file": "2026-10-15T18-11-30-881Z_01a140c3-1bc1-7000-aa20-f311c3d24252.jsonl"
+   },
+   {
+    "first": "2026-10-15T20:50:29Z",
+    "last": "2026-10-16T02:29:15Z",
+    "file": "2026-10-15T20-50-29-641Z_01a14154-a889-7000-a715-b8b6a515c8ad.jsonl"
+   },
+   {
+    "first": "2026-10-16T00:06:13Z",
+    "last": "2026-10-16T03:44:17Z",
+    "file": "2026-10-16T00-06-13-428Z_01a14207-dab4-7000-ae09-f9f79c54e6d8.jsonl"
+   },
+   {
+    "first": "2026-10-16T02:29:58Z",
+    "last": "2026-10-16T03:33:20Z",
+    "file": "2026-10-16T02-29-58-376Z_01a1428b-75e8-7000-bfab-b45c29a2fd3b.jsonl"
+   }
+  ],
+  "supervisor_unresolved_variable_targets": {
+   "send": 14,
+   "control": 7
+  },
+  "backlog_rows_closed_in_window_without_worker_transcript": [
+   "acquire-family-channels",
+   "best-clip-booking-build",
+   "booking-gap-audit-commit",
+   "booking-stranded-fixes",
+   "breakouts-first-cut-policy",
+   "captain-hold-archived-key",
+   "catalog-queue-midnight-gap",
+   "catalog-sameness-digest",
+   "cloud-scout-spawn-kill-flake",
+   "composer-swarm-scale-test",
+   "contributions-transient-wake",
+   "dashboard-mr1-picks",
+   "dr-r4-github-hardening",
+   "finishing-unshippable-seat-hours",
+   "flipcheck-actor-window-call",
+   "goal-ab-round3-harness",
+   "goal-never-cut-variant",
+   "goal-token-accounting",
+   "grok-swarm-composer-toolcalls",
+   "ledger-snapshot-missing",
+   "mq1-main-speaker-roster-vocab",
+   "muse-family-window-supply",
+   "never-cut-cap-32",
+   "opus-draw-kit",
+   "opus-goal-matched-3src",
+   "outlier-odds-goal-check",
+   "outlier-proven-elsewhere",
+   "panel-sheet-ffmpeg-threads",
+   "paperclip-strip-server-env-pr",
+   "paperclip-sweep-backlog-marker",
+   "prime-swarm-1m-plan",
+   "prime-swarm-algo-1m",
+   "prime-swarm-audience-channels",
+   "prime-swarm-audience-round2",
+   "prime-swarm-composer32",
+   "prime-swarm-grok",
+   "prime-swarm-launcher-smoke",
+   "prime-swarm-merge-line",
+   "prime-swarm-mesh",
+   "prime-swarm-muse-actions",
+   "prime-swarm-muse-benchmarks",
+   "prime-swarm-muse-score",
+   "prime-swarm-muse-swaps",
+   "prime-swarm-muse-wonder",
+   "prime-swarm-ranking",
+   "prime-swarm-wgtt-720p",
+   "queue-zero-br-timeout",
+   "qwen-scout-strix-hold-flake",
+   "release-venv-build-fix",
+   "render-timing-tooling",
+   "repair-loop-latency",
+   "same-moment-fresh-recut-ranking",
+   "scan-bakeoff-harness-commit",
+   "score-rest-census",
+   "seat-hours-repair-taint",
+   "sfx-tail-keepout",
+   "slot-plan-outlier-ordering",
+   "source-freshness-persist",
+   "stock-audit-harness-commit",
+   "swap-repair-upload-churn",
+   "title-lead-absent-speaker",
+   "title-seat-gemini-rung2",
+   "trending-crossover-ytdlp-cap",
+   "vm-flaky-timing-tests",
+   "vm-flaky-timing-tests-2",
+   "wgtt-cut-all-24h",
+   "wgtt-exploit",
+   "wgtt-staged-render",
+   "wonder-visual-prescreen"
+  ],
+  "owned_prs_unresolved": {
+   "ab-collapse-alert": [
+    "https://github.com/mdc2122/viral-moment/pull/786"
+   ],
+   "analytics-readouts": [
+    "https://github.com/mdc2122/viral-moment/pull/646"
+   ],
+   "ballot-pool-restore": [
+    "https://github.com/mdc2122/viral-moment/pull/804"
+   ],
+   "ballot-swap-downgrade-audit": [
+    "https://github.com/mdc2122/viral-moment/pull/750"
+   ],
+   "canary-flake-deflake": [
+    "https://github.com/mdc2122/viral-moment/pull/798"
+   ],
+   "caption-qc-advisory": [
+    "https://github.com/mdc2122/viral-moment/pull/760"
+   ],
+   "catalog-gate-winner-recall": [
+    "https://github.com/mdc2122/viral-moment/pull/620"
+   ],
+   "ci-pytest-parallel": [
+    "https://github.com/mdc2122/viral-moment/pull/844"
+   ],
+   "claim-first-booking": [
+    "https://github.com/mdc2122/viral-moment/pull/739"
+   ],
+   "clip-crop-twitch-overlay": [
+    "https://github.com/mdc2122/viral-moment/pull/668",
+    "https://github.com/mdc2122/viral-moment/pull/672"
+   ],
+   "cliproxy-mgmt-key-quota": [
+    "https://github.com/mdc2122/cliproxy-homelab/pull/11",
+    "https://github.com/mdc2122/viral-moment/pull/641"
+   ],
+   "community-post-audit": [
+    "https://github.com/mdc2122/viral-moment/pull/751",
+    "https://github.com/mdc2122/viral-moment/pull/767",
+    "https://github.com/mdc2122/viral-moment/pull/773"
+   ],
+   "composer-regular-variant": [
+    "https://github.com/mdc2122/viral-moment/pull/770"
+   ],
+   "conveyor-tick-hung": [
+    "https://github.com/mdc2122/viral-moment/pull/753",
+    "https://github.com/mdc2122/viral-moment/pull/759"
+   ],
+   "cursor-judge-rung-fix": [
+    "https://github.com/mdc2122/viral-moment/pull/670"
+   ],
+   "cv2-dup-dist-fix": [
+    "https://github.com/mdc2122/viral-moment/pull/830"
+   ],
+   "dead-class-within-score": [
+    "https://github.com/mdc2122/viral-moment/pull/752"
+   ],
+   "deep-recut-deprioritize": [
+    "https://github.com/mdc2122/viral-moment/pull/843"
+   ],
+   "deploy-between-renders": [
+    "https://github.com/mdc2122/viral-moment/pull/679"
+   ],
+   "deploy-gap-retry": [
+    "https://github.com/mdc2122/viral-moment/pull/732",
+    "https://github.com/mdc2122/viral-moment/pull/747",
+    "https://github.com/mdc2122/viral-moment/pull/754"
+   ],
+   "discernment-mq1-writepath": [
+    "https://github.com/mdc2122/viral-moment/pull/834"
+   ],
+   "draft-pick-identity-fix": [
+    "https://github.com/mdc2122/viral-moment/pull/821"
+   ],
+   "engineer-no-local-fallback": [
+    "https://github.com/mdc2122/paperclip-ceo/pull/40",
+    "https://github.com/mdc2122/paperclip-ceo/pull/41"
+   ],
+   "finish-in-booking-order": [
+    "https://github.com/mdc2122/viral-moment/pull/731",
+    "https://github.com/mdc2122/viral-moment/pull/789"
+   ],
+   "finishing-climb-order": [
+    "https://github.com/mdc2122/viral-moment/pull/772"
+   ],
+   "finishing-harness-commit": [
+    "https://github.com/mdc2122/viral-moment/pull/835"
+   ],
+   "finishing-peak-window": [
+    "https://github.com/mdc2122/viral-moment/pull/774",
+    "https://github.com/mdc2122/viral-moment/pull/778"
+   ],
+   "finishing-preflight-checks": [
+    "https://github.com/mdc2122/viral-moment/pull/823"
+   ],
+   "finishing-reseat-stalls": [
+    "https://github.com/mdc2122/viral-moment/pull/792"
+   ],
+   "first-cut-rung-and-regret": [
+    "https://github.com/mdc2122/viral-moment/pull/650"
+   ],
+   "firstmate-6636-rebase": [
+    "https://github.com/kunchenguid/firstmate/pull/6636"
+   ],
+   "fix-held-stall-reoffer-build": [
+    "https://github.com/mdc2122/viral-moment/pull/807"
+   ],
+   "flip-check-ship": [
+    "https://github.com/mdc2122/viral-moment/pull/793"
+   ],
+   "flipcheck-activation": [
+    "https://github.com/mdc2122/viral-moment/pull/801"
+   ],
+   "flow-decision-tables": [
+    "https://github.com/mdc2122/firstmate/pull/65"
+   ],
+   "fm-merge-via-queue": [
+    "https://github.com/mdc2122/firstmate/pull/60"
+   ],
+   "fresh-upload-backfill": [
+    "https://github.com/mdc2122/viral-moment/pull/652"
+   ],
+   "gemini-av-guard-path": [
+    "https://github.com/mdc2122/viral-moment/pull/842"
+   ],
+   "gitea-mq-merge-branch-ci": [
+    "https://github.com/mdc2122/viral-moment/pull/737",
+    "https://github.com/mdc2122/viral-moment/pull/742",
+    "https://github.com/mdc2122/viral-moment/pull/743"
+   ],
+   "gitea-mq-setup": [
+    "https://github.com/mdc2122/viral-moment/pull/733"
+   ],
+   "goal-check-qualified-depth": [
+    "https://github.com/mdc2122/viral-moment/pull/839"
+   ],
+   "goal-check-yard-read": [
+    "https://github.com/mdc2122/viral-moment/pull/822"
+   ],
+   "goal-panel-backup-dead": [
+    "https://github.com/mdc2122/viral-moment/pull/653"
+   ],
+   "goal-pool-policy": [
+    "https://github.com/mdc2122/viral-moment/pull/636"
+   ],
+   "goal-render-speed": [
+    "https://github.com/mdc2122/viral-moment/pull/663"
+   ],
+   "goal-skill-outlier-profile": [
+    "https://github.com/mdc2122/viral-moment/pull/651"
+   ],
+   "goldratt-check-v2": [
+    "https://github.com/mdc2122/viral-moment/pull/642"
+   ],
+   "goldratt-progress-watch": [
+    "https://github.com/mdc2122/viral-moment/pull/841"
+   ],
+   "hit-lane-gates-relax": [
+    "https://github.com/mdc2122/viral-moment/pull/780",
+    "https://github.com/mdc2122/viral-moment/pull/790"
+   ],
+   "intake-gate-launch-boundary": [
+    "https://github.com/mdc2122/viral-moment/pull/643",
+    "https://github.com/mdc2122/viral-moment/pull/692"
+   ],
+   "judge-input-cache": [
+    "https://github.com/mdc2122/viral-moment/pull/660"
+   ],
+   "libscan-harness-commit": [
+    "https://github.com/mdc2122/viral-moment/pull/845"
+   ],
+   "manifest-artifact-reroot": [
+    "https://github.com/mdc2122/viral-moment/pull/827"
+   ],
+   "merge-line-ordered": [
+    "https://github.com/mdc2122/firstmate/pull/59"
+   ],
+   "merge-stall-records": [
+    "https://github.com/mdc2122/firstmate/pull/64"
+   ],
+   "merge-stats-harness": [
+    "https://github.com/mdc2122/firstmate/pull/63"
+   ],
+   "moment-gate-restore": [
+    "https://github.com/mdc2122/viral-moment/pull/784"
+   ],
+   "mq1-vocab-activation": [
+    "https://github.com/mdc2122/viral-moment/pull/799"
+   ],
+   "mr1-judge": [
+    "https://github.com/mdc2122/viral-moment/pull/769",
+    "https://github.com/mdc2122/viral-moment/pull/771"
+   ],
+   "never-cut-pin-quota-4": [
+    "https://github.com/mdc2122/viral-moment/pull/718"
+   ],
+   "nm-evidence-bound": [
+    "https://github.com/kunchenguid/no-mistakes/pull/1485"
+   ],
+   "nm-pure-replay-upstream": [
+    "https://github.com/kunchenguid/no-mistakes/pull/1442"
+   ],
+   "nm-single-test-suite": [
+    "https://github.com/mdc2122/viral-moment/pull/729"
+   ],
+   "omniroute-15567-ci": [
+    "https://github.com/diegosouzapw/OmniRoute/pull/15567"
+   ],
+   "omniroute-composer-exec-upstream": [
+    "https://github.com/diegosouzapw/OmniRoute/pull/16500"
+   ],
+   "opus-burn-alarm": [
+    "https://github.com/mdc2122/viral-moment/pull/635"
+   ],
+   "otel-sentinel-wiring": [
+    "https://github.com/mdc2122/viral-moment/pull/787"
+   ],
+   "outlier-score-new-transcripts": [
+    "https://github.com/mdc2122/viral-moment/pull/719"
+   ],
+   "outlier-shadow-profile": [
+    "https://github.com/mdc2122/viral-moment/pull/664"
+   ],
+   "paperclip-14479-rebase": [
+    "https://github.com/paperclipai/paperclip/pull/14479"
+   ],
+   "paperclip-flash-repo": [
+    "https://github.com/mdc2122/paperclip-ceo/pull/39"
+   ],
+   "paperclip-zai-first-repo": [
+    "https://github.com/mdc2122/paperclip-ceo/pull/38"
+   ],
+   "pc-readme-retention": [
+    "https://github.com/mdc2122/paperclip-ceo/pull/42"
+   ],
+   "present-failure-retry-queue": [
+    "https://github.com/mdc2122/viral-moment/pull/788"
+   ],
+   "proven-vein-boost": [
+    "https://github.com/mdc2122/viral-moment/pull/816"
+   ],
+   "python-org-venv": [
+    "https://github.com/mdc2122/viral-moment/pull/639",
+    "https://github.com/mdc2122/viral-moment/pull/647",
+    "https://github.com/mdc2122/viral-moment/pull/648"
+   ],
+   "question-opener-term": [
+    "https://github.com/mdc2122/viral-moment/pull/831"
+   ],
+   "quota-axi-devin": [
+    "https://github.com/mdc2122/quota-axi/pull/3"
+   ],
+   "ranking-compare-empty-json": [
+    "https://github.com/mdc2122/viral-moment/pull/662"
+   ],
+   "ready-pool-challengers": [
+    "https://github.com/mdc2122/viral-moment/pull/794"
+   ],
+   "release-dirs": [
+    "https://github.com/mdc2122/viral-moment/pull/717",
+    "https://github.com/mdc2122/viral-moment/pull/762",
+    "https://github.com/mdc2122/viral-moment/pull/777",
+    "https://github.com/mdc2122/viral-moment/pull/779",
+    "https://github.com/mdc2122/viral-moment/pull/791",
+    "https://github.com/mdc2122/viral-moment/pull/803",
+    "https://github.com/mdc2122/viral-moment/pull/808",
+    "https://github.com/mdc2122/viral-moment/pull/815"
+   ],
+   "render-lock-wait-metric": [
+    "https://github.com/mdc2122/viral-moment/pull/644"
+   ],
+   "replay-harness-commit": [
+    "https://github.com/mdc2122/viral-moment/pull/840"
+   ],
+   "repost-guard-title-flag": [
+    "https://github.com/mdc2122/viral-moment/pull/734"
+   ],
+   "retitle-hp4ej-shedeur": [
+    "https://github.com/mdc2122/viral-moment/pull/800",
+    "https://github.com/mdc2122/viral-moment/pull/810",
+    "https://github.com/mdc2122/viral-moment/pull/817",
+    "https://github.com/mdc2122/viral-moment/pull/832"
+   ],
+   "revert-725-main-red": [
+    "https://github.com/mdc2122/viral-moment/pull/735",
+    "https://github.com/mdc2122/viral-moment/pull/736",
+    "https://github.com/mdc2122/viral-moment/pull/741"
+   ],
+   "revert-titles-740": [
+    "https://github.com/mdc2122/viral-moment/pull/746"
+   ],
+   "review-model-bakeoff-wiring": [
+    "https://github.com/mdc2122/viral-moment/pull/665",
+    "https://github.com/mdc2122/viral-moment/pull/696"
+   ],
+   "second-host-build-work": [
+    "https://github.com/mdc2122/viral-moment/pull/727",
+    "https://github.com/mdc2122/viral-moment/pull/748",
+    "https://github.com/mdc2122/viral-moment/pull/756"
+   ],
+   "selection-dashboard": [
+    "https://github.com/mdc2122/viral-moment/pull/757",
+    "https://github.com/mdc2122/viral-moment/pull/758",
+    "https://github.com/mdc2122/viral-moment/pull/761",
+    "https://github.com/mdc2122/viral-moment/pull/768"
+   ],
+   "selection-sight-guard": [
+    "https://github.com/mdc2122/viral-moment/pull/814"
+   ],
+   "senior-review-flow-restore": [
+    "https://github.com/mdc2122/viral-moment/pull/805"
+   ],
+   "senior-review-parallel": [
+    "https://github.com/mdc2122/viral-moment/pull/818"
+   ],
+   "sept11-gates-doc": [
+    "https://github.com/mdc2122/viral-moment/pull/795",
+    "https://github.com/mdc2122/viral-moment/pull/796"
+   ],
+   "shorts-series-packaging": [
+    "https://github.com/mdc2122/viral-moment/pull/763"
+   ],
+   "shorts-winners-2026": [
+    "https://github.com/mdc2122/channel-analytics/pull/22"
+   ],
+   "slot-floor-followup-order": [
+    "https://github.com/mdc2122/viral-moment/pull/723"
+   ],
+   "speaker-gate-fix": [
+    "https://github.com/mdc2122/viral-moment/pull/785"
+   ],
+   "speaker-gate-prune": [
+    "https://github.com/mdc2122/viral-moment/pull/819"
+   ],
+   "stable-outlier-tier": [
+    "https://github.com/mdc2122/viral-moment/pull/755"
+   ],
+   "studio2-disk-growth": [
+    "https://github.com/mdc2122/viral-moment/pull/682",
+    "https://github.com/mdc2122/viral-moment/pull/689"
+   ],
+   "supply-rebuild-list-response": [
+    "https://github.com/mdc2122/viral-moment/pull/617"
+   ],
+   "swap-design": [
+    "https://github.com/mdc2122/viral-moment/pull/766"
+   ],
+   "teardown-orca-gone-worktree": [
+    "https://github.com/mdc2122/firstmate/pull/61"
+   ],
+   "title-bracket-cleanup": [
+    "https://github.com/mdc2122/viral-moment/pull/765"
+   ],
+   "title-card-emoji-persist": [
+    "https://github.com/mdc2122/viral-moment/pull/820"
+   ],
+   "title-claim-hygiene": [
+    "https://github.com/mdc2122/viral-moment/pull/740"
+   ],
+   "untested-source-two-cuts": [
+    "https://github.com/mdc2122/viral-moment/pull/781"
+   ],
+   "vein-boost-intake": [
+    "https://github.com/mdc2122/viral-moment/pull/797"
+   ],
+   "vein-boost-revert": [
+    "https://github.com/mdc2122/viral-moment/pull/826"
+   ],
+   "verdict-route": [
+    "https://github.com/mdc2122/trending-moment/pull/53"
+   ],
+   "vm-suite-flakes": [
+    "https://github.com/mdc2122/viral-moment/pull/669"
+   ],
+   "winners-copresence-priority": [
+    "https://github.com/mdc2122/viral-moment/pull/782"
+   ],
+   "word-evidence-durability": [
+    "https://github.com/mdc2122/viral-moment/pull/824"
+   ],
+   "yt-test-tools-commit": [
+    "https://github.com/mdc2122/viral-moment/pull/837"
+   ]
+  },
+  "gh_cache_entries": 0,
+  "releases_indexed": 117
+ }
+}

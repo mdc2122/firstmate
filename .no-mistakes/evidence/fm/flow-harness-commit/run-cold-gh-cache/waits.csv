@@ -1,0 +1,823 @@
+task,cls,start,end,hours,ref
+catalog-gate-winner-recall,merge_queue,2026-10-09T02:33:58Z,2026-10-09T03:06:43Z,0.55,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/620 passed review/test/document/
+catalog-gate-winner-recall,worker_stall,2026-10-09T03:06:58Z,2026-10-09T03:11:48Z,0.08,idle until script steer
+catalog-gate-winner-recall,human_answer,2026-10-09T03:13:49Z,2026-10-09T03:15:47Z,0.03,needs-decision -> steer 2026-10-09T03:15:47Z
+catalog-gate-winner-recall,worker_stall,2026-10-09T04:17:38Z,2026-10-09T04:23:04Z,0.09,idle until script steer
+catalog-gate-winner-recall,human_answer,2026-10-09T04:54:33Z,2026-10-09T04:55:50Z,0.02,needs-decision -> steer 2026-10-09T04:55:50Z
+catalog-gate-winner-recall,human_answer,2026-10-09T05:44:10Z,2026-10-09T05:45:49Z,0.03,needs-decision -> steer 2026-10-09T05:45:49Z
+catalog-gate-winner-recall,human_answer,2026-10-09T06:09:04Z,2026-10-09T06:10:20Z,0.02,needs-decision -> steer 2026-10-09T06:10:20Z
+supply-rebuild-list-response,worker_stall,2026-10-09T01:56:05Z,2026-10-09T02:06:39Z,0.18,idle until script steer
+supply-rebuild-list-response,human_answer,2026-10-09T02:11:09Z,2026-10-09T02:11:52Z,0.01,needs-decision -> steer 2026-10-09T02:11:52Z
+supply-rebuild-list-response,worker_stall,2026-10-09T03:02:47Z,2026-10-09T03:05:59Z,0.05,idle until script steer
+supply-rebuild-list-response,worker_stall,2026-10-09T05:27:40Z,2026-10-09T05:57:58Z,0.5,idle until script steer
+supply-rebuild-list-response,handoff_idle,2026-10-09T07:20:53Z,2026-10-09T07:28:01Z,0.12,idle until firstmate steer (handoff)
+goal-pool-policy,human_answer,2026-10-09T12:45:08Z,2026-10-09T12:46:37Z,0.02,needs-decision -> steer 2026-10-09T12:46:37Z
+goal-pool-policy,handoff_idle,2026-10-09T13:16:26Z,2026-10-09T13:56:26Z,0.67,idle until firstmate steer (handoff)
+opus-burn-alarm,human_answer,2026-10-09T12:16:54Z,2026-10-09T12:18:24Z,0.02,needs-decision -> steer 2026-10-09T12:18:24Z
+opus-burn-alarm,human_answer,2026-10-09T12:18:54Z,2026-10-09T12:20:35Z,0.03,needs-decision self-cleared
+opus-burn-alarm,handoff_idle,2026-10-09T12:54:56Z,2026-10-09T13:00:37Z,0.09,idle until firstmate steer (handoff)
+opus-burn-alarm,release,2026-10-09T13:57:24Z,2026-10-09T14:32:51Z,0.59,"paused (rule): release-635 durable job running (canary -> promote -> deploy, busy-factory defer"
+opus-burn-alarm,human_answer,2026-10-09T14:32:51Z,2026-10-09T14:33:51Z,0.02,blocked -> steer 2026-10-09T14:33:51Z
+firstmate-6636-rebase,human_answer,2026-10-09T14:36:39Z,2026-10-09T14:37:51Z,0.02,blocked -> steer 2026-10-09T14:37:51Z
+python-org-venv,human_answer,2026-10-09T14:13:40Z,2026-10-09T14:14:31Z,0.01,needs-decision -> steer 2026-10-09T14:14:31Z
+python-org-venv,human_answer,2026-10-09T14:28:31Z,2026-10-09T14:34:02Z,0.09,needs-decision -> steer 2026-10-09T14:34:02Z
+python-org-venv,human_answer,2026-10-09T16:16:53Z,2026-10-09T16:20:03Z,0.05,needs-decision -> steer 2026-10-09T16:20:03Z
+python-org-venv,human_answer,2026-10-09T16:36:24Z,2026-10-09T16:37:04Z,0.01,blocked -> steer 2026-10-09T16:37:04Z
+python-org-venv,handoff_idle,2026-10-09T17:09:39Z,2026-10-09T17:12:48Z,0.05,idle until firstmate steer (handoff)
+python-org-venv,human_answer,2026-10-09T17:17:34Z,2026-10-09T17:18:52Z,0.02,needs-decision -> steer 2026-10-09T17:18:52Z
+python-org-venv,human_answer,2026-10-09T17:55:52Z,2026-10-09T18:00:54Z,0.08,needs-decision -> steer 2026-10-09T18:00:54Z
+python-org-venv,merge_queue,2026-10-09T18:49:55Z,2026-10-09T19:00:35Z,0.18,paused (rule): waiting for https://github.com/mdc2122/viral-moment/pull/642 to merge before re-
+python-org-venv,human_answer,2026-10-09T19:00:35Z,2026-10-09T19:02:35Z,0.03,needs-decision -> steer 2026-10-09T19:02:35Z
+python-org-venv,human_answer,2026-10-09T19:11:32Z,2026-10-09T19:11:44Z,0.0,needs-decision self-cleared
+python-org-venv,merge_queue,2026-10-09T19:11:44Z,2026-10-09T19:16:49Z,0.08,paused (rule): https://github.com/mdc2122/viral-moment/pull/639 rerun 01M4H12M is parked at its
+python-org-venv,human_answer,2026-10-09T19:20:13Z,2026-10-09T19:24:10Z,0.07,needs-decision -> steer 2026-10-09T19:24:10Z
+python-org-venv,human_answer,2026-10-09T19:32:42Z,2026-10-09T19:37:16Z,0.08,needs-decision -> steer 2026-10-09T19:37:16Z
+python-org-venv,merge_queue,2026-10-09T19:49:17Z,2026-10-09T20:09:33Z,0.34,paused (rule): https://github.com/mdc2122/viral-moment/pull/639 checks green at $(gh pr view 63
+python-org-venv,handoff_idle,2026-10-09T20:52:30Z,2026-10-09T21:04:03Z,0.19,idle until firstmate steer (handoff)
+python-org-venv,human_answer,2026-10-09T21:16:15Z,2026-10-09T21:16:57Z,0.01,needs-decision -> steer 2026-10-09T21:16:57Z
+python-org-venv,human_answer,2026-10-09T21:17:02Z,2026-10-09T21:19:38Z,0.04,blocked -> steer 2026-10-09T21:19:38Z
+python-org-venv,human_answer,2026-10-09T21:20:29Z,2026-10-09T21:23:21Z,0.05,needs-decision -> steer 2026-10-09T21:23:21Z
+python-org-venv,release,2026-10-09T23:28:18Z,2026-10-10T00:18:32Z,0.84,paused (rule): prod-20261009-17 (https://github.com/mdc2122/viral-moment/pull/648) promoted but
+python-org-venv,release,2026-10-10T00:18:32Z,2026-10-10T00:35:06Z,0.28,paused (rule): prod-20261009-17 (648) still not deployed — renders ran continuously for ~80 min
+python-org-venv,release,2026-10-10T00:35:06Z,2026-10-10T00:49:03Z,0.23,paused (rule): prod-20261009-17 deployed+released (t268 done). Cutover held by gate: renders fi
+python-org-venv,handoff_idle,2026-10-10T00:49:03Z,2026-10-10T00:49:05Z,0.0,idle until firstmate steer (handoff)
+python-org-venv,human_answer,2026-10-10T01:42:07Z,2026-10-10T01:44:40Z,0.04,blocked -> steer 2026-10-10T01:44:40Z
+python-org-venv,release,2026-10-10T03:22:09Z,2026-10-10T05:08:00Z,1.76,blocked self-cleared
+python-org-venv,decision_park,2026-10-10T05:08:00Z,2026-10-10T06:37:09Z,1.49,blocked -> steer 2026-10-10T06:37:09Z
+python-org-venv,handoff_idle,2026-10-10T06:37:09Z,2026-10-10T06:37:18Z,0.0,idle until firstmate steer (handoff)
+python-org-venv,human_answer,2026-10-10T06:39:39Z,2026-10-10T06:43:09Z,0.06,blocked -> steer 2026-10-10T06:43:09Z
+python-org-venv,human_answer,2026-10-10T08:00:52Z,2026-10-10T08:00:58Z,0.0,blocked -> steer 2026-10-10T08:00:58Z
+python-org-venv,handoff_idle,2026-10-10T08:10:20Z,2026-10-10T08:23:51Z,0.23,idle until firstmate steer (handoff)
+goldratt-check-v2,human_answer,2026-10-09T17:43:11Z,2026-10-09T17:45:04Z,0.03,needs-decision -> steer 2026-10-09T17:45:04Z
+goldratt-check-v2,human_answer,2026-10-09T18:03:21Z,2026-10-09T18:06:12Z,0.05,needs-decision -> steer 2026-10-09T18:06:12Z
+goldratt-check-v2,worker_stall,2026-10-09T18:21:49Z,2026-10-09T18:36:00Z,0.24,idle until script steer
+goldratt-check-v2,human_answer,2026-10-09T18:41:50Z,2026-10-09T18:45:55Z,0.07,needs-decision -> steer 2026-10-09T18:45:55Z
+goldratt-check-v2,handoff_idle,2026-10-09T18:45:55Z,2026-10-09T18:46:01Z,0.0,idle until firstmate steer (handoff)
+goldratt-check-v2,merge_queue,2026-10-09T18:57:26Z,2026-10-09T19:00:14Z,0.05,needs-decision self-cleared
+goldratt-check-v2,merge_queue,2026-10-09T19:00:14Z,2026-10-09T19:02:47Z,0.04,paused (rule): 006 order change: re-sync paused until https://github.com/mdc2122/viral-moment/p
+goldratt-check-v2,merge_queue,2026-10-09T19:03:14Z,2026-10-09T19:08:36Z,0.09,paused (rule): waiting for https://github.com/mdc2122/viral-moment/pull/643 to merge (durable w
+goldratt-check-v2,handoff_idle,2026-10-09T19:08:36Z,2026-10-09T19:08:39Z,0.0,idle until firstmate steer (handoff)
+goldratt-check-v2,release,2026-10-09T19:09:22Z,2026-10-09T20:53:07Z,1.73,paused (rule): https://github.com/mdc2122/viral-moment/pull/642 merged as 44da5f66 (stale-rope 
+goldratt-check-v2,handoff_idle,2026-10-09T20:53:07Z,2026-10-09T20:53:08Z,0.0,idle until firstmate steer (handoff)
+cliproxy-mgmt-key-quota,decision_park,2026-10-09T17:12:51Z,2026-10-09T17:16:19Z,0.06,blocked self-cleared
+cliproxy-mgmt-key-quota,release,2026-10-09T18:27:47Z,2026-10-09T18:28:00Z,0.0,needs-decision self-cleared
+cliproxy-mgmt-key-quota,release,2026-10-09T18:29:04Z,2026-10-09T20:53:10Z,2.4,paused (rule): release of https://github.com/mdc2122/viral-moment/pull/641 (main@9dede182) runn
+render-lock-wait-metric,human_answer,2026-10-09T18:23:14Z,2026-10-09T18:25:39Z,0.04,needs-decision -> steer 2026-10-09T18:25:39Z
+render-lock-wait-metric,human_answer,2026-10-09T18:31:13Z,2026-10-09T18:32:27Z,0.02,needs-decision -> steer 2026-10-09T18:32:27Z
+render-lock-wait-metric,human_answer,2026-10-09T18:36:58Z,2026-10-09T18:37:46Z,0.01,needs-decision -> steer 2026-10-09T18:37:46Z
+render-lock-wait-metric,handoff_idle,2026-10-09T19:11:48Z,2026-10-09T19:17:03Z,0.09,idle until firstmate steer (handoff)
+render-lock-wait-metric,merge_queue,2026-10-09T19:17:17Z,2026-10-09T19:23:03Z,0.1,paused (rule): https://github.com/mdc2122/viral-moment/pull/644 green but behind; waiting for h
+render-lock-wait-metric,human_answer,2026-10-09T19:25:01Z,2026-10-09T19:26:08Z,0.02,needs-decision -> steer 2026-10-09T19:26:08Z
+render-lock-wait-metric,release,2026-10-09T19:59:50Z,2026-10-09T20:34:55Z,0.58,paused (rule): https://github.com/mdc2122/viral-moment/pull/644 drafted by firstmate; waiting f
+render-lock-wait-metric,handoff_idle,2026-10-09T20:34:55Z,2026-10-09T20:34:56Z,0.0,idle until firstmate steer (handoff)
+render-lock-wait-metric,handoff_idle,2026-10-09T21:06:21Z,2026-10-09T21:09:54Z,0.06,idle until firstmate steer (handoff)
+render-lock-wait-metric,release,2026-10-09T22:03:28Z,2026-10-09T23:11:33Z,1.13,"paused (rule): prod-20261009-16 promoted (d407f264, PR https://github.com/mdc2122/viral-moment/"
+render-lock-wait-metric,release,2026-10-09T23:11:33Z,2026-10-10T00:40:51Z,1.49,"paused (rule): prod-20261009-16 deploy queued as t262 behind t261 python-org-venv (holding 44m,"
+intake-gate-launch-boundary,human_answer,2026-10-09T18:27:48Z,2026-10-09T18:30:24Z,0.04,needs-decision -> steer 2026-10-09T18:30:24Z
+intake-gate-launch-boundary,handoff_idle,2026-10-09T18:52:06Z,2026-10-09T18:56:42Z,0.08,idle until firstmate steer (handoff)
+intake-gate-launch-boundary,human_answer,2026-10-09T19:00:21Z,2026-10-09T19:02:22Z,0.03,needs-decision -> steer 2026-10-09T19:02:22Z
+intake-gate-launch-boundary,human_answer,2026-10-09T19:24:41Z,2026-10-09T19:25:55Z,0.02,blocked -> steer 2026-10-09T19:25:55Z
+intake-gate-launch-boundary,human_answer,2026-10-09T19:30:33Z,2026-10-09T19:32:48Z,0.04,blocked -> steer 2026-10-09T19:32:48Z
+intake-gate-launch-boundary,human_answer,2026-10-09T19:36:09Z,2026-10-09T19:37:03Z,0.01,needs-decision -> steer 2026-10-09T19:37:03Z
+intake-gate-launch-boundary,handoff_idle,2026-10-09T20:11:07Z,2026-10-09T20:32:44Z,0.36,idle until firstmate steer (handoff)
+intake-gate-launch-boundary,release,2026-10-09T20:32:51Z,2026-10-09T20:53:04Z,0.34,"paused (rule): release-643 (prod-20261009-14, canary+promote passed) deferring on factory busy "
+intake-gate-launch-boundary,handoff_idle,2026-10-09T20:53:04Z,2026-10-09T20:53:06Z,0.0,idle until firstmate steer (handoff)
+intake-gate-launch-boundary,release,2026-10-09T20:53:44Z,2026-10-09T21:32:00Z,0.64,paused (rule): waiting for the 21:27Z intake tick (first after deploy); watcher watch-tick-2127
+intake-gate-launch-boundary,decision_park,2026-10-09T21:32:45Z,2026-10-10T01:44:28Z,4.2,paused (flash): re-pin done; waiting for jZqn9Pu2vB0 (acquired 21:28Z) to reach a ballot card; w
+intake-gate-launch-boundary,handoff_idle,2026-10-10T01:44:28Z,2026-10-10T01:44:39Z,0.0,idle until firstmate steer (handoff)
+intake-gate-launch-boundary,handoff_idle,2026-10-10T01:45:39Z,2026-10-10T16:04:27Z,14.31,idle until firstmate steer (handoff)
+intake-gate-launch-boundary,decision_park,2026-10-10T16:09:52Z,2026-10-10T16:12:57Z,0.05,needs-decision -> steer 2026-10-10T16:12:57Z
+intake-gate-launch-boundary,human_answer,2026-10-10T16:40:59Z,2026-10-10T16:42:31Z,0.03,needs-decision -> steer 2026-10-10T16:42:31Z
+intake-gate-launch-boundary,merge_queue,2026-10-10T17:15:59Z,2026-10-10T17:21:03Z,0.08,"paused (rule): https://github.com/mdc2122/viral-moment/pull/692 green, holding behind main (no "
+intake-gate-launch-boundary,release,2026-10-10T17:57:17Z,2026-10-10T18:29:34Z,0.54,paused (rule): https://github.com/mdc2122/viral-moment/pull/692 merged (84f46640); release-692 
+intake-gate-launch-boundary,release,2026-10-10T18:29:48Z,2026-10-10T19:37:26Z,1.13,paused (rule): waiting for the 19:27Z intake tick (first on prod-20261010-12) to rebuild supply
+analytics-readouts,human_answer,2026-10-09T20:30:03Z,2026-10-09T20:30:49Z,0.01,needs-decision -> steer 2026-10-09T20:30:49Z
+analytics-readouts,handoff_idle,2026-10-09T21:06:32Z,2026-10-09T21:09:57Z,0.06,idle until firstmate steer (handoff)
+analytics-readouts,merge_queue,2026-10-09T21:10:13Z,2026-10-09T21:42:36Z,0.54,paused (rule): https://github.com/mdc2122/viral-moment/pull/646 drafted; waiting for https://gi
+analytics-readouts,merge_queue,2026-10-09T21:45:15Z,2026-10-09T23:00:08Z,1.25,paused (rule): https://github.com/mdc2122/viral-moment/pull/646 held as draft; queue 648 -> 647
+analytics-readouts,human_answer,2026-10-09T23:58:32Z,2026-10-10T00:02:45Z,0.07,blocked -> steer 2026-10-10T00:02:45Z
+analytics-readouts,handoff_idle,2026-10-10T00:02:45Z,2026-10-10T00:02:46Z,0.0,idle until firstmate steer (handoff)
+analytics-readouts,worker_stall,2026-10-10T00:07:46Z,2026-10-10T00:12:46Z,0.08,idle until turn_end (error stop)
+analytics-readouts,worker_stall,2026-10-10T00:20:15Z,2026-10-10T00:24:17Z,0.07,idle until turn_end (error stop)
+analytics-readouts,worker_stall,2026-10-10T00:26:52Z,2026-10-10T00:30:18Z,0.06,idle until assistant (error stop)
+analytics-readouts,human_answer,2026-10-10T00:43:09Z,2026-10-10T00:48:58Z,0.1,needs-decision -> steer 2026-10-10T00:48:58Z
+analytics-readouts,handoff_idle,2026-10-10T00:48:58Z,2026-10-10T00:48:59Z,0.0,idle until firstmate steer (handoff)
+analytics-readouts,handoff_idle,2026-10-10T00:51:12Z,2026-10-10T00:54:53Z,0.06,idle until firstmate steer (handoff)
+analytics-readouts,handoff_idle,2026-10-10T02:12:05Z,2026-10-10T02:50:30Z,0.64,idle until firstmate steer (handoff)
+analytics-readouts,merge_queue,2026-10-10T02:52:28Z,2026-10-10T07:03:16Z,4.18,paused (rule): https://github.com/mdc2122/viral-moment/pull/646 drafted per merge-order hold (6
+analytics-readouts,handoff_idle,2026-10-10T07:03:16Z,2026-10-10T07:03:19Z,0.0,idle until firstmate steer (handoff)
+analytics-readouts,human_answer,2026-10-10T07:07:35Z,2026-10-10T07:09:00Z,0.02,needs-decision -> steer 2026-10-10T07:09:00Z
+analytics-readouts,worker_stall,2026-10-10T07:40:40Z,2026-10-10T07:46:54Z,0.1,idle until script steer
+analytics-readouts,human_answer,2026-10-10T07:51:36Z,2026-10-10T07:52:59Z,0.02,needs-decision -> steer 2026-10-10T07:52:59Z
+analytics-readouts,human_answer,2026-10-10T11:20:10Z,2026-10-10T11:37:54Z,0.3,needs-decision -> steer 2026-10-10T11:37:54Z
+analytics-readouts,handoff_idle,2026-10-10T11:37:54Z,2026-10-10T11:38:00Z,0.0,idle until firstmate steer (handoff)
+analytics-readouts,merge_queue,2026-10-10T11:55:21Z,2026-10-10T12:24:26Z,0.48,"paused (rule): https://github.com/mdc2122/viral-moment/pull/646 drafted per merge line (666, 66"
+analytics-readouts,merge_queue,2026-10-10T12:24:26Z,2026-10-10T12:29:52Z,0.09,"paused (rule): https://github.com/mdc2122/viral-moment/pull/646 checks green on current base, h"
+analytics-readouts,handoff_idle,2026-10-10T12:29:52Z,2026-10-10T12:29:53Z,0.0,idle until firstmate steer (handoff)
+analytics-readouts,handoff_idle,2026-10-10T12:31:06Z,2026-10-10T15:19:34Z,2.81,idle until firstmate steer (handoff)
+analytics-readouts,merge_queue,2026-10-10T15:20:35Z,2026-10-10T15:45:37Z,0.42,paused (rule): merge line updated (msg 023) - https://github.com/mdc2122/viral-moment/pull/646 
+analytics-readouts,handoff_idle,2026-10-10T15:45:37Z,2026-10-10T15:45:38Z,0.0,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,human_answer,2026-10-09T21:36:10Z,2026-10-09T21:37:07Z,0.02,needs-decision -> steer 2026-10-09T21:37:07Z
+first-cut-rung-and-regret,human_answer,2026-10-09T21:41:00Z,2026-10-09T21:44:45Z,0.06,needs-decision -> steer 2026-10-09T21:44:45Z
+first-cut-rung-and-regret,handoff_idle,2026-10-09T21:44:45Z,2026-10-09T21:44:48Z,0.0,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,human_answer,2026-10-09T23:05:59Z,2026-10-09T23:09:06Z,0.05,needs-decision -> steer 2026-10-09T23:09:06Z
+first-cut-rung-and-regret,worker_stall,2026-10-10T00:20:43Z,2026-10-10T00:25:30Z,0.08,idle until assistant (error stop)
+first-cut-rung-and-regret,worker_stall,2026-10-10T00:26:02Z,2026-10-10T00:29:02Z,0.05,idle until turn_end (error stop)
+first-cut-rung-and-regret,handoff_idle,2026-10-10T00:41:09Z,2026-10-10T00:48:51Z,0.13,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,handoff_idle,2026-10-10T01:22:22Z,2026-10-10T01:26:58Z,0.08,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,human_answer,2026-10-10T02:49:43Z,2026-10-10T02:55:33Z,0.1,needs-decision -> steer 2026-10-10T02:55:33Z
+first-cut-rung-and-regret,handoff_idle,2026-10-10T02:55:33Z,2026-10-10T02:55:37Z,0.0,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,handoff_idle,2026-10-10T03:39:32Z,2026-10-10T03:58:42Z,0.32,idle until firstmate steer (handoff)
+first-cut-rung-and-regret,release,2026-10-10T04:33:54Z,2026-10-10T07:45:56Z,3.2,"paused (rule): release handed to goal-skill-outlier-profile (t313, canary 49218c85 = main with "
+pr6636-nm-raise,human_answer,2026-10-09T22:03:05Z,2026-10-09T22:04:07Z,0.02,needs-decision -> steer 2026-10-09T22:04:07Z
+fresh-upload-backfill,human_answer,2026-10-09T21:56:10Z,2026-10-09T21:58:04Z,0.03,needs-decision -> steer 2026-10-09T21:58:04Z
+fresh-upload-backfill,release,2026-10-09T23:36:00Z,2026-10-09T23:40:35Z,0.08,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/652 green at 1f746ce0 but GitHub
+fresh-upload-backfill,handoff_idle,2026-10-09T23:40:35Z,2026-10-09T23:40:37Z,0.0,idle until firstmate steer (handoff)
+fresh-upload-backfill,worker_stall,2026-10-10T00:09:00Z,2026-10-10T00:13:00Z,0.07,idle until turn_end (error stop)
+fresh-upload-backfill,worker_stall,2026-10-10T00:26:53Z,2026-10-10T00:30:10Z,0.05,idle until assistant (error stop)
+fresh-upload-backfill,human_answer,2026-10-10T01:18:12Z,2026-10-10T01:22:12Z,0.07,needs-decision -> steer 2026-10-10T01:22:12Z
+fresh-upload-backfill,handoff_idle,2026-10-10T01:22:12Z,2026-10-10T01:22:17Z,0.0,idle until firstmate steer (handoff)
+fresh-upload-backfill,handoff_idle,2026-10-10T02:02:30Z,2026-10-10T07:22:27Z,5.33,idle until firstmate steer (handoff)
+fresh-upload-backfill,human_answer,2026-10-10T08:24:20Z,2026-10-10T08:25:29Z,0.02,needs-decision -> steer 2026-10-10T08:25:29Z
+fresh-upload-backfill,human_answer,2026-10-10T10:31:19Z,2026-10-10T10:34:43Z,0.06,needs-decision -> steer 2026-10-10T10:34:43Z
+fresh-upload-backfill,handoff_idle,2026-10-10T10:34:43Z,2026-10-10T10:34:46Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-09T23:11:12Z,2026-10-09T23:18:13Z,0.12,needs-decision -> steer 2026-10-09T23:18:13Z
+outlier-shadow-profile,handoff_idle,2026-10-09T23:18:13Z,2026-10-09T23:18:20Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-09T23:31:19Z,2026-10-09T23:39:25Z,0.13,needs-decision -> steer 2026-10-09T23:39:25Z
+outlier-shadow-profile,handoff_idle,2026-10-09T23:39:25Z,2026-10-09T23:39:27Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-09T23:53:32Z,2026-10-09T23:56:30Z,0.05,needs-decision -> steer 2026-10-09T23:56:30Z
+outlier-shadow-profile,worker_stall,2026-10-10T00:11:01Z,2026-10-10T00:15:59Z,0.08,idle until assistant (error stop)
+outlier-shadow-profile,worker_stall,2026-10-10T00:20:42Z,2026-10-10T00:25:35Z,0.08,idle until assistant (error stop)
+outlier-shadow-profile,worker_stall,2026-10-10T00:26:52Z,2026-10-10T00:30:20Z,0.06,idle until assistant (error stop)
+outlier-shadow-profile,handoff_idle,2026-10-10T00:38:51Z,2026-10-10T00:49:08Z,0.17,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-10T02:28:18Z,2026-10-10T02:51:34Z,0.39,needs-decision -> steer 2026-10-10T02:51:34Z
+outlier-shadow-profile,handoff_idle,2026-10-10T02:51:34Z,2026-10-10T02:51:44Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,merge_queue,2026-10-10T02:52:13Z,2026-10-10T09:52:40Z,7.01,paused (rule): waiting for firstmate to say the vm-suite-flakes cloud_scout flake fix merged; t
+outlier-shadow-profile,handoff_idle,2026-10-10T09:52:40Z,2026-10-10T09:52:42Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-10T10:04:16Z,2026-10-10T10:06:37Z,0.04,needs-decision -> steer 2026-10-10T10:06:37Z
+outlier-shadow-profile,handoff_idle,2026-10-10T10:55:36Z,2026-10-10T10:59:19Z,0.06,idle until firstmate steer (handoff)
+outlier-shadow-profile,release,2026-10-10T10:59:28Z,2026-10-10T12:30:04Z,1.51,paused (rule): https://github.com/mdc2122/viral-moment/pull/664 stays draft until https://githu
+outlier-shadow-profile,handoff_idle,2026-10-10T12:30:04Z,2026-10-10T12:30:06Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,human_answer,2026-10-10T12:30:18Z,2026-10-10T15:19:35Z,2.82,paused (flash): ack 012 (watcher rerun notices ignored); https://github.com/mdc2122/viral-moment
+outlier-shadow-profile,handoff_idle,2026-10-10T15:19:35Z,2026-10-10T15:19:37Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,merge_queue,2026-10-10T15:20:30Z,2026-10-10T17:33:20Z,2.21,paused (rule): ack 013 — merge line: 669 then 646 (https://github.com/mdc2122/viral-moment/pull
+outlier-shadow-profile,handoff_idle,2026-10-10T17:33:20Z,2026-10-10T17:33:21Z,0.0,idle until firstmate steer (handoff)
+outlier-shadow-profile,merge_queue,2026-10-10T18:41:52Z,2026-10-10T18:52:04Z,0.17,paused (rule): ack 017 — holding https://github.com/mdc2122/viral-moment/pull/664 as is (no rer
+outlier-shadow-profile,worker_stall,2026-10-10T18:52:14Z,2026-10-10T18:57:02Z,0.08,idle until script steer
+outlier-shadow-profile,human_answer,2026-10-10T19:48:45Z,2026-10-10T19:50:37Z,0.03,needs-decision -> steer 2026-10-10T19:50:37Z
+goal-skill-outlier-profile,human_answer,2026-10-09T22:01:40Z,2026-10-09T22:04:02Z,0.04,needs-decision -> steer 2026-10-09T22:04:02Z
+goal-skill-outlier-profile,merge_queue,2026-10-09T22:26:59Z,2026-10-09T22:58:52Z,0.53,paused (rule): https://github.com/mdc2122/viral-moment/pull/651 drafted per merge order; waitin
+goal-skill-outlier-profile,merge_queue,2026-10-09T23:01:24Z,2026-10-10T01:51:35Z,2.84,"paused (rule): https://github.com/mdc2122/viral-moment/pull/651 re-drafted per new order (652, "
+goal-skill-outlier-profile,handoff_idle,2026-10-10T01:51:35Z,2026-10-10T01:51:37Z,0.0,idle until firstmate steer (handoff)
+goal-skill-outlier-profile,release,2026-10-10T03:29:20Z,2026-10-10T03:50:43Z,0.36,paused (rule): https://github.com/mdc2122/viral-moment/pull/651 still draft; https://github.com
+goal-skill-outlier-profile,human_answer,2026-10-10T03:50:43Z,2026-10-10T03:55:37Z,0.08,needs-decision self-cleared
+goal-skill-outlier-profile,human_answer,2026-10-10T03:55:37Z,2026-10-10T03:58:34Z,0.05,blocked -> steer 2026-10-10T03:58:34Z
+goal-skill-outlier-profile,human_answer,2026-10-10T04:08:01Z,2026-10-10T04:10:07Z,0.04,needs-decision self-cleared
+goal-skill-outlier-profile,release,2026-10-10T04:42:32Z,2026-10-10T05:35:19Z,0.88,paused (rule): prod-20261010-3 (carries 49218c85 + prod-20261010-1/-2) canary pass + promoted; 
+goal-panel-backup-dead,human_answer,2026-10-09T22:01:07Z,2026-10-09T22:04:05Z,0.05,needs-decision -> steer 2026-10-09T22:04:05Z
+goal-panel-backup-dead,human_answer,2026-10-09T22:44:45Z,2026-10-09T22:45:16Z,0.01,needs-decision -> steer 2026-10-09T22:45:16Z
+goal-panel-backup-dead,worker_stall,2026-10-09T23:11:14Z,2026-10-09T23:23:56Z,0.21,idle until script steer
+goal-panel-backup-dead,worker_stall,2026-10-09T23:26:37Z,2026-10-09T23:33:05Z,0.11,idle until script steer
+goal-panel-backup-dead,handoff_idle,2026-10-10T00:03:09Z,2026-10-10T01:23:02Z,1.33,idle until firstmate steer (handoff)
+goal-panel-backup-dead,release,2026-10-10T01:36:14Z,2026-10-10T04:33:58Z,2.96,"paused (rule): prod-20261010-1 (a8481b39, incl. #653) promoted; deploy deferred (factory busy),"
+goal-panel-backup-dead,human_answer,2026-10-10T04:33:58Z,2026-10-10T04:41:32Z,0.13,needs-decision -> steer 2026-10-10T04:41:32Z
+goal-panel-backup-dead,release,2026-10-10T05:00:50Z,2026-10-10T05:29:46Z,0.48,paused (rule): waiting for t313 (goal-skill-outlier-profile) to deploy 49218c85 (contains #653)
+goal-panel-backup-dead,human_answer,2026-10-10T05:29:46Z,2026-10-10T05:36:09Z,0.11,needs-decision -> steer 2026-10-10T05:36:09Z
+goal-panel-backup-dead,release,2026-10-10T06:05:06Z,2026-10-10T07:18:40Z,1.23,paused (rule): goal-skill-outlier-profile retrying prod-20261010-3 every 5m (factory busy); liv
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T00:06:57Z,2026-10-10T00:49:20Z,0.71,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,human_answer,2026-10-10T00:53:04Z,2026-10-10T01:05:44Z,0.21,needs-decision -> steer 2026-10-10T01:05:44Z
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T01:05:44Z,2026-10-10T01:05:53Z,0.0,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,human_answer,2026-10-10T01:28:41Z,2026-10-10T01:30:43Z,0.03,needs-decision -> steer 2026-10-10T01:30:43Z
+review-model-bakeoff-wiring,human_answer,2026-10-10T01:35:20Z,2026-10-10T01:39:49Z,0.07,needs-decision -> steer 2026-10-10T01:39:49Z
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T01:39:49Z,2026-10-10T01:39:51Z,0.0,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T02:31:20Z,2026-10-10T02:51:19Z,0.33,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,merge_queue,2026-10-10T02:52:23Z,2026-10-10T09:59:53Z,7.12,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/665 marked draft per merge-order
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T09:59:53Z,2026-10-10T09:59:55Z,0.0,idle until firstmate steer (handoff)
+review-model-bakeoff-wiring,human_answer,2026-10-10T10:03:56Z,2026-10-10T10:06:34Z,0.04,needs-decision -> steer 2026-10-10T10:06:34Z
+review-model-bakeoff-wiring,human_answer,2026-10-10T11:52:18Z,2026-10-10T11:54:40Z,0.04,needs-decision -> steer 2026-10-10T11:54:40Z
+review-model-bakeoff-wiring,merge_queue,2026-10-10T12:23:25Z,2026-10-10T12:27:37Z,0.07,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/665 checks green on current base
+review-model-bakeoff-wiring,human_answer,2026-10-10T12:27:37Z,2026-10-10T12:29:07Z,0.02,needs-decision -> steer 2026-10-10T12:29:07Z
+review-model-bakeoff-wiring,handoff_idle,2026-10-10T12:30:15Z,2026-10-10T21:02:52Z,8.54,idle until firstmate steer (handoff)
+goal-render-speed,handoff_idle,2026-10-10T00:06:31Z,2026-10-10T00:49:12Z,0.71,idle until firstmate steer (handoff)
+goal-render-speed,human_answer,2026-10-10T00:51:26Z,2026-10-10T00:54:59Z,0.06,needs-decision -> steer 2026-10-10T00:54:59Z
+goal-render-speed,handoff_idle,2026-10-10T01:14:34Z,2026-10-10T01:27:05Z,0.21,idle until firstmate steer (handoff)
+goal-render-speed,human_answer,2026-10-10T01:42:58Z,2026-10-10T01:46:51Z,0.06,needs-decision -> steer 2026-10-10T01:46:51Z
+goal-render-speed,handoff_idle,2026-10-10T01:46:51Z,2026-10-10T01:46:52Z,0.0,idle until firstmate steer (handoff)
+judge-input-cache,human_answer,2026-10-09T23:22:24Z,2026-10-09T23:31:02Z,0.14,needs-decision -> steer 2026-10-09T23:31:02Z
+judge-input-cache,human_answer,2026-10-09T23:34:33Z,2026-10-09T23:40:19Z,0.1,needs-decision -> steer 2026-10-09T23:40:19Z
+judge-input-cache,human_answer,2026-10-10T00:34:23Z,2026-10-10T00:55:12Z,0.35,needs-decision -> steer 2026-10-10T00:55:12Z
+judge-input-cache,human_answer,2026-10-10T01:13:11Z,2026-10-10T01:21:56Z,0.15,blocked -> steer 2026-10-10T01:21:56Z
+judge-input-cache,handoff_idle,2026-10-10T01:21:56Z,2026-10-10T01:22:02Z,0.0,idle until firstmate steer (handoff)
+judge-input-cache,merge_queue,2026-10-10T01:22:49Z,2026-10-10T06:57:31Z,5.58,paused (rule): holding run 01M4HMYGJEJQQNQHGJ51KSE929 parked at Test per firstmate; cloud_scout
+judge-input-cache,handoff_idle,2026-10-10T06:57:31Z,2026-10-10T06:57:32Z,0.0,idle until firstmate steer (handoff)
+judge-input-cache,worker_stall,2026-10-10T10:27:30Z,2026-10-10T10:51:59Z,0.41,idle until script steer
+judge-input-cache,merge_queue,2026-10-10T12:00:41Z,2026-10-10T12:29:59Z,0.49,paused (rule): run 01M4JS2CWNKB6DV1BQCD2K8H7V green on head 0e17f7cb; holding per firstmate mer
+judge-input-cache,merge_queue,2026-10-10T20:01:30Z,2026-10-11T00:52:38Z,4.85,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/660 green, holding in the merge "
+ranking-compare-empty-json,human_answer,2026-10-09T23:34:32Z,2026-10-09T23:40:23Z,0.1,needs-decision -> steer 2026-10-09T23:40:23Z
+ranking-compare-empty-json,handoff_idle,2026-10-09T23:40:23Z,2026-10-09T23:40:26Z,0.0,idle until firstmate steer (handoff)
+ranking-compare-empty-json,handoff_idle,2026-10-10T00:11:00Z,2026-10-10T00:49:15Z,0.64,idle until firstmate steer (handoff)
+ranking-compare-empty-json,human_answer,2026-10-10T01:27:20Z,2026-10-10T15:45:39Z,14.31,blocked -> steer 2026-10-10T15:45:39Z
+ranking-compare-empty-json,handoff_idle,2026-10-10T15:45:39Z,2026-10-10T15:45:40Z,0.0,idle until firstmate steer (handoff)
+ranking-compare-empty-json,handoff_idle,2026-10-10T16:44:10Z,2026-10-10T17:34:46Z,0.84,idle until firstmate steer (handoff)
+ranking-compare-empty-json,human_answer,2026-10-10T17:35:11Z,2026-10-10T20:01:21Z,2.44,"paused (flash): PR https://github.com/mdc2122/viral-moment/pull/662 green, holding behind main u"
+ranking-compare-empty-json,handoff_idle,2026-10-10T20:01:21Z,2026-10-10T20:01:22Z,0.0,idle until firstmate steer (handoff)
+ranking-compare-empty-json,human_answer,2026-10-10T20:01:36Z,2026-10-10T20:30:55Z,0.49,"paused (flash): PR https://github.com/mdc2122/viral-moment/pull/662 green, holding behind main u"
+ranking-compare-empty-json,handoff_idle,2026-10-10T20:30:55Z,2026-10-10T20:30:56Z,0.0,idle until firstmate steer (handoff)
+ranking-compare-empty-json,human_answer,2026-10-10T20:40:04Z,2026-10-10T20:42:46Z,0.04,needs-decision -> steer 2026-10-10T20:42:46Z
+ranking-compare-empty-json,release,2026-10-10T23:53:40Z,2026-10-12T00:10:12Z,24.28,paused (rule): prod-20261010-17 live + queue released; first live call proved (finish_reason na
+ranking-compare-empty-json,handoff_idle,2026-10-12T00:10:12Z,2026-10-12T00:10:13Z,0.0,idle until firstmate steer (handoff)
+vm-suite-flakes,handoff_idle,2026-10-10T00:17:23Z,2026-10-10T00:33:45Z,0.27,idle until firstmate steer (handoff)
+vm-suite-flakes,human_answer,2026-10-10T05:15:16Z,2026-10-10T05:24:52Z,0.16,needs-decision -> steer 2026-10-10T05:24:52Z
+vm-suite-flakes,handoff_idle,2026-10-10T05:24:52Z,2026-10-10T05:25:33Z,0.01,idle until firstmate steer (handoff)
+vm-suite-flakes,worker_stall,2026-10-10T06:11:16Z,2026-10-10T06:28:03Z,0.28,idle until script steer
+vm-suite-flakes,human_answer,2026-10-10T08:50:53Z,2026-10-10T08:55:16Z,0.07,needs-decision -> steer 2026-10-10T08:55:16Z
+vm-suite-flakes,handoff_idle,2026-10-10T08:55:16Z,2026-10-10T08:55:20Z,0.0,idle until firstmate steer (handoff)
+vm-suite-flakes,human_answer,2026-10-10T09:14:51Z,2026-10-10T09:17:56Z,0.05,needs-decision -> steer 2026-10-10T09:17:56Z
+vm-suite-flakes,human_answer,2026-10-10T09:51:33Z,2026-10-10T09:52:37Z,0.02,needs-decision self-cleared
+vm-suite-flakes,human_answer,2026-10-10T10:26:32Z,2026-10-10T10:29:22Z,0.05,needs-decision -> steer 2026-10-10T10:29:22Z
+vm-suite-flakes,merge_queue,2026-10-10T10:54:27Z,2026-10-10T11:06:32Z,0.2,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/669 pushed at b3bd3259 after fir
+vm-suite-flakes,worker_stall,2026-10-10T11:06:40Z,2026-10-10T11:49:44Z,0.72,idle until script steer
+vm-suite-flakes,merge_queue,2026-10-10T12:37:32Z,2026-10-10T12:39:24Z,0.03,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/669 green at 545aa75a but behind
+vm-suite-flakes,handoff_idle,2026-10-10T13:13:57Z,2026-10-10T13:28:06Z,0.24,idle until firstmate steer (handoff)
+vm-suite-flakes,merge_queue,2026-10-10T14:04:10Z,2026-10-10T14:12:41Z,0.14,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/669 green at c3f56396 but BEHIND
+vm-suite-flakes,handoff_idle,2026-10-10T14:16:06Z,2026-10-10T14:25:51Z,0.16,idle until firstmate steer (handoff)
+vm-suite-flakes,merge_queue,2026-10-10T14:50:05Z,2026-10-10T14:56:22Z,0.1,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/669 green at 688f8e82 but BEHIND
+vm-suite-flakes,handoff_idle,2026-10-10T14:56:22Z,2026-10-10T14:56:34Z,0.0,idle until firstmate steer (handoff)
+vm-suite-flakes,human_answer,2026-10-10T14:56:44Z,2026-10-10T15:10:20Z,0.23,paused (flash): holding PR https://github.com/mdc2122/viral-moment/pull/669 at 688f8e82 per msg 
+vm-suite-flakes,handoff_idle,2026-10-10T15:10:20Z,2026-10-10T15:10:22Z,0.0,idle until firstmate steer (handoff)
+quota-axi-devin,human_answer,2026-10-10T00:33:39Z,2026-10-10T00:55:33Z,0.36,needs-decision -> steer 2026-10-10T00:55:33Z
+quota-axi-devin,handoff_idle,2026-10-10T00:55:33Z,2026-10-10T00:55:39Z,0.0,idle until firstmate steer (handoff)
+quota-axi-devin,handoff_idle,2026-10-10T01:24:19Z,2026-10-10T01:28:07Z,0.06,idle until firstmate steer (handoff)
+quota-axi-devin,handoff_idle,2026-10-10T01:38:15Z,2026-10-10T01:47:16Z,0.15,idle until firstmate steer (handoff)
+quota-axi-devin,decision_park,2026-10-10T01:47:32Z,2026-10-10T01:58:10Z,0.18,paused (rule): merged; studio1 install waits on captain approval
+quota-axi-devin,handoff_idle,2026-10-10T01:58:10Z,2026-10-10T01:58:15Z,0.0,idle until firstmate steer (handoff)
+clip-crop-twitch-overlay,human_answer,2026-10-10T02:19:05Z,2026-10-10T02:47:45Z,0.48,needs-decision -> steer 2026-10-10T02:47:45Z
+clip-crop-twitch-overlay,release,2026-10-10T03:05:35Z,2026-10-10T03:06:30Z,0.02,needs-decision self-cleared
+clip-crop-twitch-overlay,human_answer,2026-10-10T03:16:47Z,2026-10-10T03:21:46Z,0.08,needs-decision -> steer 2026-10-10T03:21:46Z
+clip-crop-twitch-overlay,handoff_idle,2026-10-10T03:21:46Z,2026-10-10T03:21:50Z,0.0,idle until firstmate steer (handoff)
+clip-crop-twitch-overlay,human_answer,2026-10-10T04:05:10Z,2026-10-10T04:07:09Z,0.03,needs-decision -> steer 2026-10-10T04:07:09Z
+clip-crop-twitch-overlay,handoff_idle,2026-10-10T04:51:11Z,2026-10-10T04:56:14Z,0.08,idle until firstmate steer (handoff)
+clip-crop-twitch-overlay,worker_stall,2026-10-10T05:55:21Z,2026-10-10T06:10:47Z,0.26,idle until script steer
+clip-crop-twitch-overlay,human_answer,2026-10-10T07:16:38Z,2026-10-10T07:18:00Z,0.02,needs-decision -> steer 2026-10-10T07:18:00Z
+clip-crop-twitch-overlay,human_answer,2026-10-10T07:23:20Z,2026-10-10T07:23:57Z,0.01,needs-decision -> steer 2026-10-10T07:23:57Z
+clip-crop-twitch-overlay,release,2026-10-10T08:32:27Z,2026-10-10T08:53:36Z,0.35,paused (rule): holding canary/deploy of PR https://github.com/mdc2122/viral-moment/pull/672 unt
+clip-crop-twitch-overlay,handoff_idle,2026-10-10T09:04:16Z,2026-10-10T09:08:15Z,0.07,idle until firstmate steer (handoff)
+clip-crop-twitch-overlay,worker_stall,2026-10-10T10:00:10Z,2026-10-10T10:03:42Z,0.06,idle until script steer
+clip-crop-twitch-overlay,merge_queue,2026-10-10T10:47:10Z,2026-10-10T11:03:01Z,0.26,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/672 pytest green; 'PR must be ra
+clip-crop-twitch-overlay,worker_stall,2026-10-10T11:41:31Z,2026-10-10T11:47:43Z,0.1,idle until script steer
+clip-crop-twitch-overlay,merge_queue,2026-10-10T12:13:06Z,2026-10-10T12:26:20Z,0.22,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/672 at f7ad098a (rerun finished 
+clip-crop-twitch-overlay,worker_stall,2026-10-10T13:06:15Z,2026-10-10T13:55:00Z,0.81,idle until script steer
+clip-crop-twitch-overlay,worker_stall,2026-10-10T14:24:07Z,2026-10-10T14:29:18Z,0.09,idle until script steer
+clip-crop-twitch-overlay,worker_stall,2026-10-10T15:47:51Z,2026-10-10T15:51:17Z,0.06,idle until script steer
+clip-crop-twitch-overlay,handoff_idle,2026-10-10T16:09:36Z,2026-10-10T16:14:30Z,0.08,idle until firstmate steer (handoff)
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:15:05Z,2026-10-10T16:17:17Z,0.04,needs-decision -> steer 2026-10-10T16:17:17Z
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:30:37Z,2026-10-10T16:32:01Z,0.02,needs-decision -> steer 2026-10-10T16:32:01Z
+clip-crop-twitch-overlay,human_answer,2026-10-10T16:36:33Z,2026-10-10T16:38:34Z,0.03,needs-decision -> steer 2026-10-10T16:38:34Z
+title-model-rerun,human_answer,2026-10-10T07:26:47Z,2026-10-10T08:53:42Z,1.45,paused (flash): stopped title-judge (pid 39980) + title-truth (pid 1193) for the Python cutover;
+title-model-rerun,handoff_idle,2026-10-10T08:53:42Z,2026-10-10T08:53:43Z,0.0,idle until firstmate steer (handoff)
+cursor-judge-rung-fix,release,2026-10-10T07:51:01Z,2026-10-10T08:05:52Z,0.25,"paused (rule): canary t337 had already finished (passed, 07:49:44Z) so nothing held the prod ve"
+cursor-judge-rung-fix,release,2026-10-10T08:29:51Z,2026-10-10T08:53:22Z,0.39,"paused (rule): deploy watcher disarmed (verified dead, had not fired); prod-20261010-5 deploy w"
+deploy-between-renders,human_answer,2026-10-10T08:45:36Z,2026-10-10T08:47:32Z,0.03,needs-decision -> steer 2026-10-10T08:47:32Z
+deploy-between-renders,human_answer,2026-10-10T09:23:46Z,2026-10-10T09:25:33Z,0.03,needs-decision -> steer 2026-10-10T09:26:44Z
+deploy-between-renders,human_answer,2026-10-10T09:25:33Z,2026-10-10T09:26:44Z,0.02,blocked -> steer 2026-10-10T09:26:44Z
+deploy-between-renders,human_answer,2026-10-10T09:39:37Z,2026-10-10T09:40:02Z,0.01,needs-decision -> steer 2026-10-10T09:40:02Z
+deploy-between-renders,human_answer,2026-10-10T09:53:14Z,2026-10-10T09:54:53Z,0.03,needs-decision -> steer 2026-10-10T09:54:53Z
+deploy-between-renders,human_answer,2026-10-10T10:05:04Z,2026-10-10T10:06:40Z,0.03,needs-decision -> steer 2026-10-10T10:06:40Z
+deploy-between-renders,human_answer,2026-10-10T10:14:06Z,2026-10-10T10:14:49Z,0.01,needs-decision -> steer 2026-10-10T10:14:49Z
+deploy-between-renders,worker_stall,2026-10-10T11:17:12Z,2026-10-10T11:48:39Z,0.52,idle until script steer
+deploy-between-renders,merge_queue,2026-10-10T11:56:28Z,2026-10-10T12:29:56Z,0.56,paused (rule): merge line (008): rerun onto main aborted before push; PR https://github.com/mdc
+deploy-between-renders,handoff_idle,2026-10-10T12:29:56Z,2026-10-10T12:29:57Z,0.0,idle until firstmate steer (handoff)
+deploy-between-renders,handoff_idle,2026-10-10T12:30:28Z,2026-10-11T00:29:18Z,11.98,idle until firstmate steer (handoff)
+deploy-between-renders,human_answer,2026-10-11T00:32:41Z,2026-10-11T00:34:00Z,0.02,needs-decision -> steer 2026-10-11T00:34:00Z
+deploy-between-renders,human_answer,2026-10-11T00:38:43Z,2026-10-11T00:40:30Z,0.03,needs-decision -> steer 2026-10-11T00:40:30Z
+deploy-between-renders,human_answer,2026-10-11T00:45:48Z,2026-10-11T00:47:52Z,0.03,needs-decision -> steer 2026-10-11T00:47:52Z
+deploy-between-renders,decision_park,2026-10-11T00:48:03Z,2026-10-12T16:27:57Z,39.66,"paused (rule): waiting on the captain's goal-session rule (finding goal-exempt-under-mutation, "
+deploy-between-renders,handoff_idle,2026-10-12T16:27:57Z,2026-10-12T16:27:58Z,0.0,idle until firstmate steer (handoff)
+deploy-between-renders,worker_stall,2026-10-12T17:27:01Z,2026-10-12T17:31:49Z,0.08,idle until script steer
+deploy-between-renders,human_answer,2026-10-12T17:35:25Z,2026-10-12T18:21:52Z,0.77,needs-decision -> steer 2026-10-12T18:21:52Z
+deploy-between-renders,handoff_idle,2026-10-12T18:21:52Z,2026-10-12T18:21:54Z,0.0,idle until firstmate steer (handoff)
+deploy-between-renders,worker_stall,2026-10-12T19:25:32Z,2026-10-12T19:31:11Z,0.09,idle until turn_end (error stop)
+deploy-between-renders,human_answer,2026-10-12T21:47:53Z,2026-10-12T21:54:31Z,0.11,needs-decision -> steer 2026-10-12T21:54:31Z
+deploy-between-renders,decision_park,2026-10-12T22:36:51Z,2026-10-12T22:51:07Z,0.24,needs-decision -> steer 2026-10-12T22:51:07Z
+deploy-between-renders,handoff_idle,2026-10-12T22:51:07Z,2026-10-12T22:51:09Z,0.0,idle until firstmate steer (handoff)
+studio2-disk-growth,human_answer,2026-10-10T13:27:47Z,2026-10-10T13:39:21Z,0.19,needs-decision -> steer 2026-10-10T13:39:21Z
+studio2-disk-growth,handoff_idle,2026-10-10T13:39:21Z,2026-10-10T13:39:23Z,0.0,idle until firstmate steer (handoff)
+studio2-disk-growth,handoff_idle,2026-10-10T13:51:51Z,2026-10-10T14:08:40Z,0.28,idle until firstmate steer (handoff)
+studio2-disk-growth,release,2026-10-10T14:08:47Z,2026-10-10T14:37:34Z,0.48,paused (rule): holding PR https://github.com/mdc2122/viral-moment/pull/682 in merge line behind
+studio2-disk-growth,handoff_idle,2026-10-10T14:37:41Z,2026-10-10T14:43:08Z,0.09,idle until firstmate steer (handoff)
+studio2-disk-growth,release,2026-10-10T15:59:35Z,2026-10-10T16:02:21Z,0.05,paused (rule): live proof on prod-20261010-9 (contains 48e22ec7): real passes archived 17 close
+studio2-disk-growth,human_answer,2026-10-10T16:03:55Z,2026-10-10T16:05:57Z,0.03,needs-decision -> steer 2026-10-10T16:05:57Z
+outlier-score-new-transcripts,worker_stall,2026-10-12T15:28:46Z,2026-10-12T15:38:47Z,0.17,idle until turn_end (error stop)
+outlier-score-new-transcripts,worker_stall,2026-10-12T15:38:47Z,2026-10-12T15:44:07Z,0.09,idle until assistant (error stop)
+outlier-score-new-transcripts,human_answer,2026-10-12T17:11:32Z,2026-10-12T17:12:25Z,0.01,needs-decision -> steer 2026-10-12T17:12:25Z
+never-cut-pin-quota-4,worker_stall,2026-10-12T17:29:08Z,2026-10-12T17:32:11Z,0.05,idle until script steer
+slot-floor-followup-order,human_answer,2026-10-12T18:35:17Z,2026-10-12T18:35:55Z,0.01,needs-decision -> steer 2026-10-12T18:35:55Z
+slot-floor-followup-order,worker_stall,2026-10-12T19:26:07Z,2026-10-12T19:29:36Z,0.06,idle until turn_end (error stop)
+slot-floor-followup-order,human_answer,2026-10-12T19:37:05Z,2026-10-12T19:50:59Z,0.23,needs-decision -> steer 2026-10-12T19:50:59Z
+slot-floor-followup-order,worker_stall,2026-10-12T20:16:55Z,2026-10-12T20:28:43Z,0.2,idle until script steer
+slot-floor-followup-order,human_answer,2026-10-12T20:53:13Z,2026-10-12T20:58:52Z,0.09,needs-decision -> steer 2026-10-12T20:58:52Z
+slot-floor-followup-order,handoff_idle,2026-10-12T20:58:52Z,2026-10-12T20:58:55Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,human_answer,2026-10-12T22:29:42Z,2026-10-12T22:35:33Z,0.1,blocked -> steer 2026-10-12T22:35:33Z
+slot-floor-followup-order,handoff_idle,2026-10-12T22:35:33Z,2026-10-12T22:35:34Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,human_answer,2026-10-12T23:47:33Z,2026-10-12T23:52:09Z,0.08,needs-decision -> steer 2026-10-12T23:52:09Z
+slot-floor-followup-order,handoff_idle,2026-10-12T23:52:09Z,2026-10-12T23:52:12Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,merge_queue,2026-10-13T00:18:43Z,2026-10-13T00:42:02Z,0.39,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/731 checks green (finish-in-book
+slot-floor-followup-order,handoff_idle,2026-10-13T00:42:02Z,2026-10-13T00:42:03Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,merge_queue,2026-10-13T00:42:13Z,2026-10-13T03:00:11Z,2.3,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/731 green, behind main; third in"
+slot-floor-followup-order,handoff_idle,2026-10-13T03:00:11Z,2026-10-13T03:00:12Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,human_answer,2026-10-13T03:27:02Z,2026-10-13T03:31:35Z,0.08,blocked -> steer 2026-10-13T03:31:35Z
+slot-floor-followup-order,handoff_idle,2026-10-13T03:31:35Z,2026-10-13T03:31:36Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,merge_queue,2026-10-13T03:32:33Z,2026-10-13T04:03:53Z,0.52,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/731 — run 01M4SKA9QD6TX50EC35ZQD
+slot-floor-followup-order,handoff_idle,2026-10-13T04:03:53Z,2026-10-13T04:03:54Z,0.0,idle until firstmate steer (handoff)
+slot-floor-followup-order,handoff_idle,2026-10-13T04:37:55Z,2026-10-13T04:55:02Z,0.29,idle until firstmate steer (handoff)
+slot-floor-followup-order,human_answer,2026-10-13T05:10:33Z,2026-10-13T05:24:30Z,0.23,blocked -> steer 2026-10-13T05:24:30Z
+slot-floor-followup-order,handoff_idle,2026-10-13T05:24:30Z,2026-10-13T05:24:31Z,0.0,idle until firstmate steer (handoff)
+omniroute-composer-toolcalls,release,2026-10-12T18:52:00Z,2026-10-12T18:55:24Z,0.06,"paused (rule): stopped before restart, studio1 unchanged (backup kept at ~/omniroute-pkg-backup"
+omniroute-composer-toolcalls,handoff_idle,2026-10-12T18:55:24Z,2026-10-12T18:55:25Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,handoff_idle,2026-10-12T19:23:54Z,2026-10-12T19:42:47Z,0.31,idle until firstmate steer (handoff)
+second-host-build-work,human_answer,2026-10-12T21:16:00Z,2026-10-12T21:17:33Z,0.03,needs-decision -> steer 2026-10-12T21:17:33Z
+second-host-build-work,release,2026-10-12T21:55:57Z,2026-10-13T02:33:51Z,4.63,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/727 checks green (host-role guar
+second-host-build-work,handoff_idle,2026-10-13T02:33:51Z,2026-10-13T02:33:57Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T02:34:27Z,2026-10-13T02:58:45Z,0.4,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/727 checks green, 5th in the mer"
+second-host-build-work,handoff_idle,2026-10-13T02:58:45Z,2026-10-13T02:58:58Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T03:10:28Z,2026-10-13T03:24:45Z,0.24,paused (rule): answered wgtt-exploit studio1 offload questions at /Users/studio2/fm-primary/dat
+second-host-build-work,handoff_idle,2026-10-13T03:24:45Z,2026-10-13T03:24:46Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T03:25:00Z,2026-10-13T07:37:45Z,4.21,"paused (rule): wgtt-exploit offload live on studio1 (/Volumes/GLM5-NVMe/wgtt-offload, own venv "
+second-host-build-work,handoff_idle,2026-10-13T07:37:45Z,2026-10-13T07:37:46Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,merge_queue,2026-10-13T07:37:56Z,2026-10-13T10:29:31Z,2.86,paused (rule): ack'd new merge rule (no catch-up rerun/push when behind; rerun only on DIRTY or
+second-host-build-work,handoff_idle,2026-10-13T10:29:31Z,2026-10-13T10:29:34Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T11:49:46Z,2026-10-13T11:53:52Z,0.07,blocked self-cleared
+second-host-build-work,human_answer,2026-10-13T11:57:46Z,2026-10-13T11:59:18Z,0.03,needs-decision -> steer 2026-10-13T11:59:18Z
+second-host-build-work,human_answer,2026-10-13T12:13:47Z,2026-10-13T12:15:49Z,0.03,needs-decision -> steer 2026-10-13T12:15:49Z
+second-host-build-work,human_answer,2026-10-13T12:24:51Z,2026-10-13T12:27:47Z,0.05,needs-decision -> steer 2026-10-13T12:27:47Z
+second-host-build-work,release,2026-10-13T12:43:37Z,2026-10-13T12:43:40Z,0.0,paused (rule): -noted: FREEZE ack'd (no release from main >= ee4b2f57); I hold no release ticke
+second-host-build-work,human_answer,2026-10-13T13:21:38Z,2026-10-13T13:24:59Z,0.06,needs-decision -> steer 2026-10-13T13:24:59Z
+second-host-build-work,handoff_idle,2026-10-13T13:24:59Z,2026-10-13T13:25:07Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,human_answer,2026-10-13T13:32:55Z,2026-10-13T13:35:06Z,0.04,needs-decision -> steer 2026-10-13T13:35:06Z
+second-host-build-work,human_answer,2026-10-13T14:15:41Z,2026-10-13T14:18:48Z,0.05,needs-decision -> steer 2026-10-13T14:18:48Z
+second-host-build-work,handoff_idle,2026-10-13T14:18:48Z,2026-10-13T14:18:54Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T14:45:35Z,2026-10-13T15:15:39Z,0.5,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/745 merged (7ae5a046, canary PAS"
+second-host-build-work,release,2026-10-13T15:15:39Z,2026-10-13T15:35:10Z,0.33,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/748 checks green (follow-up: med
+second-host-build-work,handoff_idle,2026-10-13T15:35:10Z,2026-10-13T15:35:17Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T15:35:35Z,2026-10-13T18:01:15Z,2.43,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/748 merged (00dc9885, carries 74"
+second-host-build-work,handoff_idle,2026-10-13T18:01:15Z,2026-10-13T18:01:16Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T18:01:30Z,2026-10-13T18:12:13Z,0.18,paused (rule): ack'd release-dirs coordination (no scope change). prod-20261013-8 hand-deploy (
+second-host-build-work,release,2026-10-13T19:08:28Z,2026-10-13T19:11:55Z,0.06,blocked self-cleared
+second-host-build-work,handoff_idle,2026-10-13T19:28:33Z,2026-10-13T19:41:44Z,0.22,idle until firstmate steer (handoff)
+second-host-build-work,release,2026-10-13T19:42:01Z,2026-10-13T20:08:17Z,0.44,paused (rule): firstmate 028 - waiting read-only for PR https://github.com/mdc2122/viral-moment
+second-host-build-work,release,2026-10-13T20:21:45Z,2026-10-13T20:31:31Z,0.16,paused (rule): prod-20261013-11 (10d48ace: #754 #755 #756) canaried+promoted; deploy refused by
+second-host-build-work,handoff_idle,2026-10-13T20:31:31Z,2026-10-13T20:31:34Z,0.0,idle until firstmate steer (handoff)
+second-host-build-work,decision_park,2026-10-13T20:31:42Z,2026-10-13T20:38:51Z,0.12,paused (rule): ack'd captain's 3b plan for prod-20261013-11 (firstmate holds new goal sessions 
+composer-raw-frame-capture,human_answer,2026-10-12T19:15:35Z,2026-10-12T19:17:31Z,0.03,needs-decision -> steer 2026-10-12T19:17:31Z
+composer-raw-frame-capture,worker_stall,2026-10-12T19:25:18Z,2026-10-12T19:28:24Z,0.05,idle until status (error stop)
+composer-raw-frame-capture,human_answer,2026-10-12T19:28:24Z,2026-10-12T19:35:49Z,0.12,blocked -> steer 2026-10-12T19:35:49Z
+wgtt-hires-source,handoff_idle,2026-10-12T21:00:27Z,2026-10-12T21:05:58Z,0.09,idle until firstmate steer (handoff)
+wgtt-hires-source,decision_park,2026-10-12T21:06:09Z,2026-10-12T21:11:28Z,0.09,"paused (rule): waiting on the captain's Tubi login credentials location, then re-running harden"
+wgtt-hires-source,handoff_idle,2026-10-12T21:11:28Z,2026-10-12T21:11:29Z,0.0,idle until firstmate steer (handoff)
+wgtt-hires-source,decision_park,2026-10-12T21:14:45Z,2026-10-12T21:16:01Z,0.02,paused (rule): two yt-dlp probes blocked on macOS 'Chrome Safe Storage' keychain prompt on stud
+wgtt-hires-source,decision_park,2026-10-12T21:16:01Z,2026-10-12T21:26:24Z,0.17,paused (rule): 'Chrome Safe Storage' keychain prompt still open on studio2 GLKVM screen — waiti
+nm-single-test-suite,human_answer,2026-10-12T22:35:57Z,2026-10-12T22:36:40Z,0.01,needs-decision -> steer 2026-10-12T22:36:40Z
+nm-single-test-suite,human_answer,2026-10-12T22:40:09Z,2026-10-12T22:50:05Z,0.17,blocked -> steer 2026-10-12T22:50:05Z
+nm-single-test-suite,handoff_idle,2026-10-12T22:50:05Z,2026-10-12T22:50:07Z,0.0,idle until firstmate steer (handoff)
+nm-single-test-suite,merge_queue,2026-10-12T23:17:46Z,2026-10-12T23:17:56Z,0.0,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/729 checks green; waiting for me
+deploy-gap-retry,human_answer,2026-10-13T00:02:58Z,2026-10-13T00:06:09Z,0.05,needs-decision -> steer 2026-10-13T00:06:09Z
+deploy-gap-retry,handoff_idle,2026-10-13T00:06:09Z,2026-10-13T00:06:35Z,0.01,idle until firstmate steer (handoff)
+deploy-gap-retry,merge_queue,2026-10-13T00:51:02Z,2026-10-13T00:52:05Z,0.02,"paused (rule): https://github.com/mdc2122/viral-moment/pull/732 checks green, conflicts with ma"
+deploy-gap-retry,human_answer,2026-10-13T00:52:05Z,2026-10-13T01:00:52Z,0.15,needs-decision -> steer 2026-10-13T01:00:52Z
+deploy-gap-retry,handoff_idle,2026-10-13T01:00:52Z,2026-10-13T01:17:23Z,0.28,idle until firstmate steer (handoff)
+deploy-gap-retry,merge_queue,2026-10-13T01:53:28Z,2026-10-13T07:37:42Z,5.74,paused (rule): https://github.com/mdc2122/viral-moment/pull/732 checks green (rebased onto main
+deploy-gap-retry,handoff_idle,2026-10-13T07:37:42Z,2026-10-13T07:37:43Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,handoff_idle,2026-10-13T07:37:55Z,2026-10-13T10:14:16Z,2.61,idle until firstmate steer (handoff)
+deploy-gap-retry,human_answer,2026-10-13T10:14:39Z,2026-10-13T10:17:38Z,0.05,needs-decision -> steer 2026-10-13T10:17:38Z
+deploy-gap-retry,handoff_idle,2026-10-13T10:17:38Z,2026-10-13T10:17:54Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,release,2026-10-13T10:29:27Z,2026-10-13T11:08:23Z,0.65,paused (rule): release of https://github.com/mdc2122/viral-moment/pull/732 queued as t581 (cana
+deploy-gap-retry,merge_queue,2026-10-13T11:08:23Z,2026-10-13T12:43:08Z,1.58,paused (rule): canary for https://github.com/mdc2122/viral-moment/pull/732 (5dd95843) failed on
+deploy-gap-retry,handoff_idle,2026-10-13T12:43:08Z,2026-10-13T12:43:12Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,human_answer,2026-10-13T12:45:39Z,2026-10-13T12:48:20Z,0.04,needs-decision -> steer 2026-10-13T12:48:20Z
+deploy-gap-retry,release,2026-10-13T13:31:25Z,2026-10-13T14:09:18Z,0.63,"paused (rule): freeze lifted (ack 009); https://github.com/mdc2122/viral-moment/pull/747 green,"
+deploy-gap-retry,handoff_idle,2026-10-13T14:09:18Z,2026-10-13T14:09:22Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,release,2026-10-13T14:28:16Z,2026-10-13T15:26:24Z,0.97,paused (rule): deploy-retry live proof in progress: t586 prod-20261013-8 parked 8x (13:49-14:26
+deploy-gap-retry,release,2026-10-13T15:27:03Z,2026-10-13T18:00:11Z,2.55,"paused (rule): 011 armed: durable job hand-deploy-8 waits to 18:00Z; if prod-20261013-8 (t586, "
+deploy-gap-retry,human_answer,2026-10-13T18:12:31Z,2026-10-13T18:14:55Z,0.04,needs-decision -> steer 2026-10-13T18:14:55Z
+deploy-gap-retry,release,2026-10-13T18:52:37Z,2026-10-13T18:59:33Z,0.12,paused (rule): https://github.com/mdc2122/viral-moment/pull/754 checks green (forced attended d
+deploy-gap-retry,handoff_idle,2026-10-13T18:59:33Z,2026-10-13T18:59:34Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,release,2026-10-13T19:00:22Z,2026-10-13T21:13:19Z,2.22,paused (rule): ack 014; https://github.com/mdc2122/viral-moment/pull/754 merged (7dc7ed8d); rea
+deploy-gap-retry,handoff_idle,2026-10-13T21:13:19Z,2026-10-13T21:13:22Z,0.0,idle until firstmate steer (handoff)
+deploy-gap-retry,release,2026-10-13T21:41:07Z,2026-10-13T22:23:17Z,0.7,paused (rule): releasing https://github.com/mdc2122/viral-moment/pull/759 as prod-20261013-12 (
+merge-line-ordered,human_answer,2026-10-12T23:23:32Z,2026-10-12T23:24:05Z,0.01,needs-decision -> steer 2026-10-12T23:24:05Z
+merge-line-ordered,human_answer,2026-10-12T23:31:08Z,2026-10-12T23:32:32Z,0.02,needs-decision -> steer 2026-10-12T23:32:32Z
+nm-pure-replay-upstream,handoff_idle,2026-10-13T00:05:51Z,2026-10-13T00:23:38Z,0.3,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,decision_park,2026-10-13T00:23:38Z,2026-10-13T00:39:31Z,0.26,captain hold
+nm-pure-replay-upstream,handoff_idle,2026-10-13T00:39:31Z,2026-10-13T00:40:42Z,0.02,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,human_answer,2026-10-13T00:44:01Z,2026-10-13T00:46:44Z,0.05,needs-decision -> steer 2026-10-13T00:46:44Z
+nm-pure-replay-upstream,human_answer,2026-10-13T01:43:34Z,2026-10-13T01:48:06Z,0.08,needs-decision -> steer 2026-10-13T01:48:06Z
+nm-pure-replay-upstream,handoff_idle,2026-10-13T01:48:06Z,2026-10-13T01:48:08Z,0.0,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,human_answer,2026-10-13T03:35:24Z,2026-10-13T03:38:31Z,0.05,needs-decision -> steer 2026-10-13T03:38:31Z
+nm-pure-replay-upstream,handoff_idle,2026-10-13T03:38:31Z,2026-10-13T03:38:33Z,0.0,idle until firstmate steer (handoff)
+nm-pure-replay-upstream,handoff_idle,2026-10-13T04:11:27Z,2026-10-13T04:15:16Z,0.06,idle until firstmate steer (handoff)
+gitea-mq-setup,decision_park,2026-10-12T23:33:14Z,2026-10-13T00:41:29Z,1.14,blocked -> steer 2026-10-13T00:41:29Z
+gitea-mq-setup,decision_park,2026-10-13T00:41:29Z,2026-10-13T00:45:08Z,0.06,captain hold
+gitea-mq-setup,decision_park,2026-10-13T00:45:08Z,2026-10-13T00:45:09Z,0.0,paused (rule): captain creating the gitea-mq GitHub App; waiting for firstmate to pass the App 
+gitea-mq-setup,handoff_idle,2026-10-13T00:45:09Z,2026-10-13T00:45:10Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-setup,human_answer,2026-10-13T00:46:30Z,2026-10-13T00:51:31Z,0.08,blocked -> steer 2026-10-13T00:51:31Z
+gitea-mq-setup,handoff_idle,2026-10-13T00:51:31Z,2026-10-13T00:51:32Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-setup,human_answer,2026-10-13T00:54:18Z,2026-10-13T00:59:55Z,0.09,needs-decision -> steer 2026-10-13T00:59:55Z
+gitea-mq-setup,handoff_idle,2026-10-13T00:59:55Z,2026-10-13T01:17:26Z,0.29,idle until firstmate steer (handoff)
+repost-guard-title-flag,human_answer,2026-10-13T02:03:02Z,2026-10-13T02:15:00Z,0.2,needs-decision -> steer 2026-10-13T02:15:00Z
+repost-guard-title-flag,handoff_idle,2026-10-13T02:15:00Z,2026-10-13T02:15:03Z,0.0,idle until firstmate steer (handoff)
+repost-guard-title-flag,human_answer,2026-10-13T02:37:22Z,2026-10-13T03:01:17Z,0.4,needs-decision -> steer 2026-10-13T03:01:17Z
+repost-guard-title-flag,handoff_idle,2026-10-13T03:01:17Z,2026-10-13T03:01:21Z,0.0,idle until firstmate steer (handoff)
+repost-guard-title-flag,handoff_idle,2026-10-13T03:43:08Z,2026-10-13T03:48:03Z,0.08,idle until firstmate steer (handoff)
+repost-guard-title-flag,merge_queue,2026-10-13T03:48:11Z,2026-10-13T04:41:56Z,0.9,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/734 armed, 3rd in merge line (af"
+repost-guard-title-flag,handoff_idle,2026-10-13T04:41:56Z,2026-10-13T04:41:57Z,0.0,idle until firstmate steer (handoff)
+repost-guard-title-flag,handoff_idle,2026-10-13T05:14:01Z,2026-10-13T05:30:16Z,0.27,idle until firstmate steer (handoff)
+repost-guard-title-flag,release,2026-10-13T05:31:15Z,2026-10-13T06:23:54Z,0.88,paused (rule): release queue t574 (canary 97a47409 = PR https://github.com/mdc2122/viral-moment
+repost-guard-title-flag,release,2026-10-13T06:23:54Z,2026-10-13T06:39:59Z,0.27,paused (rule): canary 97a47409 PASSED (receipt runs/canary-deploy-97a47409-2026-10-13T061910Z) 
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T04:07:55Z,2026-10-13T04:09:24Z,0.02,needs-decision -> steer 2026-10-13T04:09:24Z
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T04:15:14Z,2026-10-13T04:16:05Z,0.01,needs-decision -> steer 2026-10-13T04:16:05Z
+gitea-mq-merge-branch-ci,release,2026-10-13T04:54:09Z,2026-10-13T05:26:09Z,0.53,paused (rule): https://github.com/mdc2122/viral-moment/pull/737 armed 2nd in merge line; merge-
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T05:26:09Z,2026-10-13T05:26:11Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T05:26:41Z,2026-10-13T06:02:02Z,0.59,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:05:29Z,2026-10-13T06:09:40Z,0.07,needs-decision -> steer 2026-10-13T06:09:40Z
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T06:09:40Z,2026-10-13T06:09:55Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T06:31:25Z,2026-10-13T06:42:32Z,0.19,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:45:43Z,2026-10-13T06:46:22Z,0.01,needs-decision -> steer 2026-10-13T06:46:22Z
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T06:49:32Z,2026-10-13T06:51:02Z,0.02,needs-decision -> steer 2026-10-13T06:51:02Z
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T07:09:42Z,2026-10-13T07:10:53Z,0.02,needs-decision -> steer 2026-10-13T07:10:53Z
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T07:11:38Z,2026-10-13T07:30:01Z,0.31,paused (rule): GO received; waiting for https://github.com/mdc2122/viral-moment/pull/742 to mer
+gitea-mq-merge-branch-ci,release,2026-10-13T07:35:06Z,2026-10-13T07:35:46Z,0.01,paused (rule): strict OFF since 07:29:54Z; first behind PR (https://github.com/mdc2122/viral-mo
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T09:14:43Z,2026-10-13T09:15:59Z,0.02,needs-decision -> steer 2026-10-13T09:15:59Z
+gitea-mq-merge-branch-ci,human_answer,2026-10-13T09:29:33Z,2026-10-13T09:33:21Z,0.06,needs-decision -> steer 2026-10-13T09:33:21Z
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T09:33:21Z,2026-10-13T09:33:34Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T09:52:44Z,2026-10-13T10:15:21Z,0.38,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T10:15:30Z,2026-10-13T12:16:45Z,2.02,paused (rule): https://github.com/mdc2122/viral-moment/pull/743 is 5th in the merge line; then 
+gitea-mq-merge-branch-ci,merge_queue,2026-10-13T12:16:45Z,2026-10-13T12:43:31Z,0.45,paused (rule): https://github.com/mdc2122/viral-moment/pull/743 merged through the queue (11:53
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T12:43:31Z,2026-10-13T12:43:32Z,0.0,idle until firstmate steer (handoff)
+gitea-mq-merge-branch-ci,handoff_idle,2026-10-13T13:17:00Z,2026-10-13T13:31:27Z,0.24,idle until firstmate steer (handoff)
+fm-merge-via-queue,human_answer,2026-10-13T03:37:51Z,2026-10-13T03:38:35Z,0.01,needs-decision -> steer 2026-10-13T03:38:35Z
+fm-merge-via-queue,human_answer,2026-10-13T03:54:42Z,2026-10-13T03:56:11Z,0.02,needs-decision -> steer 2026-10-13T03:56:11Z
+claim-first-booking,human_answer,2026-10-13T05:21:51Z,2026-10-13T05:24:28Z,0.04,needs-decision -> steer 2026-10-13T05:24:28Z
+claim-first-booking,human_answer,2026-10-13T05:45:34Z,2026-10-13T05:46:23Z,0.01,needs-decision -> steer 2026-10-13T05:46:23Z
+claim-first-booking,handoff_idle,2026-10-13T06:44:01Z,2026-10-13T06:56:09Z,0.2,idle until firstmate steer (handoff)
+claim-first-booking,release,2026-10-13T06:56:14Z,2026-10-13T07:37:40Z,0.69,paused (rule): https://github.com/mdc2122/viral-moment/pull/739 in merge line (2nd behind 738);
+claim-first-booking,handoff_idle,2026-10-13T07:37:40Z,2026-10-13T07:37:41Z,0.0,idle until firstmate steer (handoff)
+claim-first-booking,handoff_idle,2026-10-13T07:37:52Z,2026-10-13T08:47:57Z,1.17,idle until firstmate steer (handoff)
+claim-first-booking,human_answer,2026-10-13T09:10:01Z,2026-10-13T09:11:04Z,0.02,needs-decision -> steer 2026-10-13T09:11:04Z
+claim-first-booking,human_answer,2026-10-13T09:57:56Z,2026-10-13T10:06:49Z,0.15,blocked -> steer 2026-10-13T10:06:49Z
+claim-first-booking,handoff_idle,2026-10-13T10:06:49Z,2026-10-13T10:06:52Z,0.0,idle until firstmate steer (handoff)
+claim-first-booking,release,2026-10-13T11:00:03Z,2026-10-13T11:03:31Z,0.06,blocked self-cleared
+title-claim-hygiene,human_answer,2026-10-13T05:27:16Z,2026-10-13T05:34:57Z,0.13,needs-decision -> steer 2026-10-13T05:34:57Z
+title-claim-hygiene,human_answer,2026-10-13T05:52:14Z,2026-10-13T05:55:41Z,0.06,needs-decision -> steer 2026-10-13T05:55:41Z
+title-claim-hygiene,human_answer,2026-10-13T06:21:11Z,2026-10-13T06:21:51Z,0.01,needs-decision -> steer 2026-10-13T06:21:51Z
+title-claim-hygiene,human_answer,2026-10-13T06:24:25Z,2026-10-13T06:28:27Z,0.07,needs-decision self-cleared
+title-claim-hygiene,human_answer,2026-10-13T06:58:13Z,2026-10-13T07:00:20Z,0.04,needs-decision -> steer 2026-10-13T07:00:20Z
+title-claim-hygiene,worker_stall,2026-10-13T07:32:11Z,2026-10-13T07:37:48Z,0.09,idle until script steer
+title-claim-hygiene,human_answer,2026-10-13T07:46:32Z,2026-10-13T07:54:36Z,0.13,needs-decision -> steer 2026-10-13T07:54:36Z
+revert-725-main-red,handoff_idle,2026-10-13T05:07:46Z,2026-10-13T05:31:39Z,0.4,idle until firstmate steer (handoff)
+revert-725-main-red,decision_park,2026-10-13T06:00:09Z,2026-10-13T06:02:51Z,0.04,needs-decision -> steer 2026-10-13T06:02:51Z
+revert-725-main-red,release,2026-10-13T07:19:29Z,2026-10-13T07:23:44Z,0.07,paused (rule): https://github.com/mdc2122/viral-moment/pull/741 checks green (pytest pass); arm
+revert-725-main-red,handoff_idle,2026-10-13T07:23:44Z,2026-10-13T07:23:45Z,0.0,idle until firstmate steer (handoff)
+revert-725-main-red,handoff_idle,2026-10-13T07:50:36Z,2026-10-13T08:03:36Z,0.22,idle until firstmate steer (handoff)
+revert-725-main-red,release,2026-10-13T08:31:15Z,2026-10-13T08:58:59Z,0.46,paused (rule): prod-20261013-5 (d3188ec0) promoted; deploy-prod deferred by goal session pid 41
+revert-725-main-red,release,2026-10-13T09:12:13Z,2026-10-13T10:17:26Z,1.09,paused (rule): prod-20261013-5 deploy cancelled before any deploy step (was still waiting in ac
+revert-725-main-red,handoff_idle,2026-10-13T10:17:26Z,2026-10-13T10:17:35Z,0.0,idle until firstmate steer (handoff)
+revert-725-main-red,release,2026-10-13T10:17:48Z,2026-10-13T11:41:08Z,1.39,paused (rule): t579 (prod-20261013-5) already closed - queue auto-abandoned it 10:17:06Z (obser
+revert-725-main-red,handoff_idle,2026-10-13T11:41:08Z,2026-10-13T11:41:11Z,0.0,idle until firstmate steer (handoff)
+omniroute-composer-exec-upstream,decision_park,2026-10-13T13:23:30Z,2026-10-13T13:37:08Z,0.23,needs-decision -> steer 2026-10-13T13:37:08Z
+omniroute-composer-exec-upstream,handoff_idle,2026-10-13T13:37:08Z,2026-10-13T13:37:11Z,0.0,idle until firstmate steer (handoff)
+ballot-swap-downgrade-audit,handoff_idle,2026-10-13T15:37:51Z,2026-10-13T15:45:09Z,0.12,idle until firstmate steer (handoff)
+community-post-audit,handoff_idle,2026-10-13T15:13:05Z,2026-10-13T15:32:27Z,0.32,idle until firstmate steer (handoff)
+community-post-audit,decision_park,2026-10-13T15:52:19Z,2026-10-13T15:53:09Z,0.01,needs-decision -> steer 2026-10-13T15:53:09Z
+community-post-audit,handoff_idle,2026-10-13T16:43:20Z,2026-10-13T17:28:53Z,0.76,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-13T17:29:26Z,2026-10-13T19:00:48Z,1.52,paused (rule): waiting for release carrying 4e256197 to deploy (hand-deploy prod-20261013-8 ~18
+community-post-audit,handoff_idle,2026-10-13T19:00:48Z,2026-10-13T19:00:52Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-13T19:04:00Z,2026-10-13T19:36:15Z,0.54,paused (rule): prod-20261013-10 live w/ 4e256197; no tick ran new code yet (19:00Z tick predate
+community-post-audit,handoff_idle,2026-10-13T19:36:15Z,2026-10-13T19:36:17Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,ci,2026-10-13T19:36:38Z,2026-10-13T20:18:19Z,0.69,paused (rule): first new-code tick now ~19:55Z (scheduler timer reset 19:25Z); will check that 
+community-post-audit,handoff_idle,2026-10-13T20:18:19Z,2026-10-13T20:18:20Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,ci,2026-10-13T20:18:35Z,2026-10-13T20:27:40Z,0.15,"paused (flash): first new-code tick (pid 70610) in-flight since ~19:55Z, deadline ~20:21Z; conve"
+community-post-audit,release,2026-10-13T21:18:32Z,2026-10-13T22:24:35Z,1.1,paused (rule): tick #2 (20:53Z) also deadline-starved community_post — reached related_attach 2
+community-post-audit,handoff_idle,2026-10-13T22:24:35Z,2026-10-13T22:24:36Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-13T22:26:18Z,2026-10-13T23:01:16Z,0.58,"paused (rule): prod-20261013-12 (#759 detached ranking refresh) live 22:23Z; last tick (22:19Z,"
+community-post-audit,release,2026-10-13T23:24:56Z,2026-10-13T23:36:24Z,0.19,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/764 checks green (sys.executable
+community-post-audit,handoff_idle,2026-10-13T23:36:24Z,2026-10-13T23:36:25Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-13T23:37:09Z,2026-10-13T23:53:10Z,0.27,paused (rule): PR 764 merged as 47fac6be; prod still prod-20261013-12 — waiting for a release c
+community-post-audit,handoff_idle,2026-10-13T23:53:10Z,2026-10-13T23:53:12Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,human_answer,2026-10-14T00:04:50Z,2026-10-14T00:06:49Z,0.03,needs-decision -> steer 2026-10-14T00:06:49Z
+community-post-audit,release,2026-10-14T00:27:48Z,2026-10-14T00:30:47Z,0.05,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/767 checks green (captain_verdic
+community-post-audit,release,2026-10-14T00:39:48Z,2026-10-14T01:06:58Z,0.45,"paused (rule): waiting for https://github.com/mdc2122/viral-moment/pull/767 to merge (green, st"
+community-post-audit,handoff_idle,2026-10-14T01:06:58Z,2026-10-14T01:07:01Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-14T01:20:12Z,2026-10-14T01:25:24Z,0.09,"paused (rule): prod-20261014-2 (65b1aa26) live since 01:20Z, clean tree, post_argv uses sys.exe"
+community-post-audit,release,2026-10-14T01:25:35Z,2026-10-14T01:37:15Z,0.19,paused (rule): ticket t595 released (prod-20261014-2 proof). Watching for first real community 
+community-post-audit,human_answer,2026-10-14T01:41:29Z,2026-10-14T01:42:20Z,0.01,needs-decision -> steer 2026-10-14T01:42:20Z
+community-post-audit,human_answer,2026-10-14T01:50:13Z,2026-10-14T01:54:01Z,0.06,needs-decision -> steer 2026-10-14T01:54:01Z
+community-post-audit,handoff_idle,2026-10-14T01:54:01Z,2026-10-14T01:54:04Z,0.0,idle until firstmate steer (handoff)
+community-post-audit,ci,2026-10-14T01:58:08Z,2026-10-14T02:00:26Z,0.04,needs-decision self-cleared
+community-post-audit,decision_park,2026-10-14T02:00:26Z,2026-10-14T03:10:47Z,1.17,paused (rule): parked at review gate nm-01M4W12BPE33Y78VBTBH6P2W0W-review-r4 awaiting the capta
+community-post-audit,human_answer,2026-10-14T03:15:14Z,2026-10-14T03:42:00Z,0.45,needs-decision self-cleared
+community-post-audit,handoff_idle,2026-10-14T03:42:08Z,2026-10-14T03:52:37Z,0.17,idle until firstmate steer (handoff)
+community-post-audit,release,2026-10-14T03:52:45Z,2026-10-14T04:41:13Z,0.81,"paused (rule): waiting for https://github.com/mdc2122/viral-moment/pull/773 to merge (armed, 2n"
+community-post-audit,release,2026-10-14T05:34:08Z,2026-10-14T05:41:53Z,0.13,paused (rule): prod-20261014-8 promoted; deploy deferred on in-flight factory jobs (2700s drain
+community-post-audit,release,2026-10-14T05:42:07Z,2026-10-14T07:32:14Z,1.84,"paused (rule): released t601 (prod-20261014-8 -> live as ancestor of prod-20261014-9, b2caf9cf)"
+conveyor-tick-hung,human_answer,2026-10-13T16:49:03Z,2026-10-13T16:50:45Z,0.03,needs-decision -> steer 2026-10-13T16:50:45Z
+conveyor-tick-hung,human_answer,2026-10-13T17:01:51Z,2026-10-13T17:03:14Z,0.02,needs-decision -> steer 2026-10-13T17:03:14Z
+conveyor-tick-hung,release,2026-10-13T17:44:36Z,2026-10-13T19:02:52Z,1.3,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/753 checks green (pytest 25m35s 
+conveyor-tick-hung,handoff_idle,2026-10-13T19:02:52Z,2026-10-13T19:02:53Z,0.0,idle until firstmate steer (handoff)
+conveyor-tick-hung,release,2026-10-13T19:03:36Z,2026-10-13T19:32:10Z,0.48,paused (rule): prod-20261013-10 live since 19:01:12Z (fix #753 included); no tick has run on it
+conveyor-tick-hung,release,2026-10-13T19:32:10Z,2026-10-13T20:14:13Z,0.7,paused (rule): no tick on prod-20261013-10 yet — the conveyor-tick LaunchAgent plist was edited
+conveyor-tick-hung,human_answer,2026-10-13T20:23:34Z,2026-10-13T20:26:30Z,0.05,needs-decision -> steer 2026-10-13T20:26:30Z
+conveyor-tick-hung,release,2026-10-13T21:10:18Z,2026-10-13T22:24:37Z,1.24,paused (rule): follow-up PR https://github.com/mdc2122/viral-moment/pull/759 checks green (rank
+conveyor-tick-hung,handoff_idle,2026-10-13T22:24:37Z,2026-10-13T22:24:38Z,0.0,idle until firstmate steer (handoff)
+conveyor-tick-hung,release,2026-10-13T22:25:01Z,2026-10-13T23:03:02Z,0.63,paused (rule): prod-20261013-12 live 22:23Z with #759 (verified: detached ranking spawn + run_d
+dead-class-within-score,human_answer,2026-10-13T16:38:07Z,2026-10-13T16:39:11Z,0.02,needs-decision -> steer 2026-10-13T16:39:11Z
+dead-class-within-score,human_answer,2026-10-13T16:44:05Z,2026-10-13T16:46:05Z,0.03,needs-decision -> steer 2026-10-13T16:46:05Z
+selection-dashboard,human_answer,2026-10-13T18:15:22Z,2026-10-13T18:18:35Z,0.05,needs-decision -> steer 2026-10-13T18:18:35Z
+selection-dashboard,human_answer,2026-10-13T19:14:58Z,2026-10-13T19:15:17Z,0.01,needs-decision self-cleared
+selection-dashboard,release,2026-10-13T21:04:54Z,2026-10-13T21:35:10Z,0.5,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/758 pytest queued behind 2 other
+selection-dashboard,handoff_idle,2026-10-13T21:35:10Z,2026-10-13T21:35:16Z,0.0,idle until firstmate steer (handoff)
+selection-dashboard,release,2026-10-13T22:15:04Z,2026-10-13T22:17:07Z,0.03,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/761 (engaged-views) all pipeline
+selection-dashboard,release,2026-10-13T22:17:07Z,2026-10-13T22:24:40Z,0.13,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/761 checks green; #757 deploy ch
+selection-dashboard,handoff_idle,2026-10-13T22:24:40Z,2026-10-13T22:24:41Z,0.0,idle until firstmate steer (handoff)
+selection-dashboard,release,2026-10-13T22:37:18Z,2026-10-13T23:00:47Z,0.39,paused (rule): prod-20261013-12 live; deployed code renders the page read-only against live dat
+selection-dashboard,handoff_idle,2026-10-13T23:00:54Z,2026-10-13T23:15:02Z,0.24,idle until firstmate steer (handoff)
+selection-dashboard,release,2026-10-13T23:15:15Z,2026-10-14T00:11:33Z,0.94,"paused (rule): #761 merged (2177dc73), waiting for a release containing it to go live (prod is "
+selection-dashboard,handoff_idle,2026-10-14T00:11:33Z,2026-10-14T00:11:37Z,0.0,idle until firstmate steer (handoff)
+selection-dashboard,handoff_idle,2026-10-14T00:45:02Z,2026-10-14T01:22:54Z,0.63,idle until firstmate steer (handoff)
+stable-outlier-tier,decision_park,2026-10-13T18:33:35Z,2026-10-13T18:36:24Z,0.05,needs-decision -> steer 2026-10-13T18:36:24Z
+stable-outlier-tier,handoff_idle,2026-10-13T19:06:50Z,2026-10-13T19:41:40Z,0.58,idle until firstmate steer (handoff)
+stable-outlier-tier,release,2026-10-13T19:42:04Z,2026-10-13T20:52:20Z,1.17,paused (rule): waiting for a release containing 502a9c01 (prod still prod-20261013-10 @0c9724bb
+stable-outlier-tier,handoff_idle,2026-10-13T20:52:20Z,2026-10-13T20:52:21Z,0.0,idle until firstmate steer (handoff)
+stable-outlier-tier,release,2026-10-13T20:53:16Z,2026-10-13T20:53:42Z,0.01,paused (rule): prod-20261013-11 live but 0 --pending calls since 20:37Z (ready+booked 88/88 pen
+stable-outlier-tier,release,2026-10-13T20:53:42Z,2026-10-13T21:36:36Z,0.72,"paused (rule): correction — pid 43828 is a no-mistakes /tmp sandbox, not blocking prod; the fir"
+stable-outlier-tier,release,2026-10-13T21:36:36Z,2026-10-13T23:22:08Z,1.76,"paused (rule): backfill live on prod-20261013-11, Cursor only, booked first; ready+booked unsta"
+release-dirs,human_answer,2026-10-13T18:54:17Z,2026-10-13T18:56:32Z,0.04,needs-decision -> steer 2026-10-13T18:56:32Z
+release-dirs,human_answer,2026-10-13T23:01:12Z,2026-10-13T23:02:42Z,0.02,needs-decision -> steer 2026-10-13T23:02:42Z
+release-dirs,human_answer,2026-10-13T23:46:40Z,2026-10-13T23:47:34Z,0.01,needs-decision -> steer 2026-10-13T23:47:34Z
+release-dirs,handoff_idle,2026-10-14T00:14:01Z,2026-10-14T00:19:27Z,0.09,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-14T00:19:34Z,2026-10-14T02:49:57Z,2.51,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/762 green (c51ebca7); firstmate 
+release-dirs,handoff_idle,2026-10-14T02:49:57Z,2026-10-14T02:49:58Z,0.0,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-14T03:13:13Z,2026-10-14T03:13:57Z,0.01,needs-decision -> steer 2026-10-14T03:13:57Z
+release-dirs,handoff_idle,2026-10-14T03:57:32Z,2026-10-14T04:06:51Z,0.16,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-14T04:06:59Z,2026-10-14T05:26:25Z,1.32,"paused (rule): waiting for merge of PR https://github.com/mdc2122/viral-moment/pull/762 (armed,"
+release-dirs,handoff_idle,2026-10-14T05:26:25Z,2026-10-14T05:26:26Z,0.0,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-14T05:27:38Z,2026-10-14T05:37:15Z,0.16,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/762 merged as b2caf9cf (tip of m
+release-dirs,handoff_idle,2026-10-14T05:37:15Z,2026-10-14T05:37:16Z,0.0,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-14T05:44:54Z,2026-10-14T09:34:22Z,3.82,needs-decision -> steer 2026-10-14T09:34:22Z
+release-dirs,handoff_idle,2026-10-14T09:34:22Z,2026-10-14T09:34:24Z,0.0,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-14T13:48:40Z,2026-10-14T13:53:35Z,0.08,needs-decision -> steer 2026-10-14T13:53:35Z
+release-dirs,handoff_idle,2026-10-14T13:53:35Z,2026-10-14T13:53:37Z,0.0,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-14T15:19:13Z,2026-10-14T15:21:28Z,0.04,needs-decision -> steer 2026-10-14T15:21:28Z
+release-dirs,handoff_idle,2026-10-14T16:29:04Z,2026-10-14T16:37:32Z,0.14,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-14T18:33:15Z,2026-10-14T22:18:56Z,3.76,"paused (rule): all pre-window work done and proven (prod-20261014-13 live both hosts, guard pro"
+release-dirs,handoff_idle,2026-10-14T22:18:56Z,2026-10-14T22:18:57Z,0.0,idle until firstmate steer (handoff)
+release-dirs,handoff_idle,2026-10-14T22:26:53Z,2026-10-14T22:39:33Z,0.21,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-14T22:39:50Z,2026-10-14T23:07:50Z,0.47,paused (rule): the #781 release (prod-20261014-15) is live on both hosts since 22:25:29Z and th
+release-dirs,handoff_idle,2026-10-14T23:07:50Z,2026-10-14T23:07:51Z,0.0,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-14T23:35:10Z,2026-10-15T02:59:52Z,3.41,paused (rule): #782 released — prod-20261014-16 (7cdd64c6) live on BOTH hosts since 23:34:38Z (
+release-dirs,handoff_idle,2026-10-15T02:59:52Z,2026-10-15T02:59:53Z,0.0,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-15T03:13:45Z,2026-10-15T03:17:11Z,0.06,blocked -> steer 2026-10-15T03:17:11Z
+release-dirs,human_answer,2026-10-15T03:19:56Z,2026-10-15T03:21:36Z,0.03,blocked -> steer 2026-10-15T03:21:36Z
+release-dirs,release,2026-10-15T03:56:13Z,2026-10-15T03:57:57Z,0.03,paused (rule): 10:30Z switch RE-HELD per msg 026 rule. Incident resolved (approved FIR-333 GLM5
+release-dirs,decision_park,2026-10-15T04:04:37Z,2026-10-15T04:06:32Z,0.03,paused (rule): msg 030 decision recorded - the 10:30Z switch today is OFF and nothing switches 
+release-dirs,handoff_idle,2026-10-15T07:40:54Z,2026-10-15T07:49:40Z,0.15,idle until firstmate steer (handoff)
+release-dirs,release,2026-10-15T08:18:01Z,2026-10-15T08:24:53Z,0.11,paused (rule): msg 042 - PR https://github.com/mdc2122/viral-moment/pull/793 (153747d5 flip-che
+release-dirs,handoff_idle,2026-10-15T08:35:10Z,2026-10-15T08:39:58Z,0.08,idle until firstmate steer (handoff)
+release-dirs,handoff_idle,2026-10-15T08:42:38Z,2026-10-15T09:10:07Z,0.46,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-15T09:10:31Z,2026-10-15T09:52:35Z,0.7,"paused (rule): standing state - prod-20261015-9 (a8d47a48) live on studio2 + studio1, flip-chec"
+release-dirs,handoff_idle,2026-10-15T09:52:35Z,2026-10-15T09:52:36Z,0.0,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-15T10:16:21Z,2026-10-15T10:38:05Z,0.36,paused (rule): msg 046 - PR https://github.com/mdc2122/viral-moment/pull/797 (4a77eaad vein-boo
+release-dirs,handoff_idle,2026-10-15T10:38:05Z,2026-10-15T10:38:12Z,0.0,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-15T10:38:27Z,2026-10-15T12:18:18Z,1.66,"paused (rule): msg 047 - PR https://github.com/mdc2122/viral-moment/pull/798 (8fca2429, canary "
+release-dirs,handoff_idle,2026-10-15T12:18:18Z,2026-10-15T12:18:19Z,0.0,idle until firstmate steer (handoff)
+release-dirs,decision_park,2026-10-15T12:25:05Z,2026-10-15T12:25:18Z,0.0,blocked -> steer 2026-10-15T12:25:18Z
+release-dirs,release,2026-10-15T12:34:40Z,2026-10-15T14:26:15Z,1.86,paused (rule): standing state after the cutover - release layout live at prod-20261015-10 (veri
+release-dirs,handoff_idle,2026-10-15T14:26:15Z,2026-10-15T14:26:16Z,0.0,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-15T14:38:02Z,2026-10-15T14:39:06Z,0.02,blocked -> steer 2026-10-15T14:39:06Z
+release-dirs,human_answer,2026-10-15T15:22:56Z,2026-10-15T15:24:24Z,0.02,needs-decision -> steer 2026-10-15T15:24:24Z
+release-dirs,human_answer,2026-10-15T16:02:37Z,2026-10-15T16:03:19Z,0.01,needs-decision -> steer 2026-10-15T16:03:19Z
+release-dirs,handoff_idle,2026-10-15T16:42:30Z,2026-10-15T16:50:42Z,0.14,idle until firstmate steer (handoff)
+release-dirs,human_answer,2026-10-15T17:02:51Z,2026-10-15T17:09:01Z,0.1,blocked -> steer 2026-10-15T17:09:01Z
+release-dirs,human_answer,2026-10-15T18:23:39Z,2026-10-15T18:26:21Z,0.04,needs-decision -> steer 2026-10-15T18:26:21Z
+release-dirs,release,2026-10-15T19:41:15Z,2026-10-15T19:45:54Z,0.08,needs-decision self-cleared
+release-dirs,decision_park,2026-10-15T22:17:33Z,2026-10-15T22:17:51Z,0.01,needs-decision self-cleared
+release-dirs,human_answer,2026-10-15T22:19:06Z,2026-10-15T22:34:58Z,0.26,needs-decision -> steer 2026-10-15T22:34:58Z
+release-dirs,handoff_idle,2026-10-15T22:34:58Z,2026-10-15T22:35:01Z,0.0,idle until firstmate steer (handoff)
+verdict-route,human_answer,2026-10-13T18:37:58Z,2026-10-13T18:38:13Z,0.0,needs-decision -> steer 2026-10-13T18:38:13Z
+verdict-route,handoff_idle,2026-10-13T18:53:21Z,2026-10-13T18:59:31Z,0.1,idle until firstmate steer (handoff)
+swap-design,handoff_idle,2026-10-13T22:41:21Z,2026-10-13T23:01:06Z,0.33,idle until firstmate steer (handoff)
+swap-design,decision_park,2026-10-13T23:21:39Z,2026-10-13T23:28:14Z,0.11,paused (rule): parked at fix_review gate nm-01M4VMZJB85X3NNPES3SNB7ZST-review-fix4 per firstmat
+swap-design,handoff_idle,2026-10-13T23:28:14Z,2026-10-13T23:28:15Z,0.0,idle until firstmate steer (handoff)
+swap-design,release,2026-10-14T00:32:53Z,2026-10-14T01:23:19Z,0.84,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/766 queued behind the release un
+swap-design,handoff_idle,2026-10-14T01:23:19Z,2026-10-14T01:23:20Z,0.0,idle until firstmate steer (handoff)
+swap-design,handoff_idle,2026-10-14T01:26:05Z,2026-10-14T01:35:45Z,0.16,idle until firstmate steer (handoff)
+swap-design,handoff_idle,2026-10-14T02:13:37Z,2026-10-14T02:19:02Z,0.09,idle until firstmate steer (handoff)
+swap-design,release,2026-10-14T02:19:27Z,2026-10-14T02:33:36Z,0.24,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/766 merged (ed85430d); prod is p
+swap-design,handoff_idle,2026-10-14T02:33:36Z,2026-10-14T02:33:37Z,0.0,idle until firstmate steer (handoff)
+caption-qc-advisory,human_answer,2026-10-13T20:51:52Z,2026-10-13T20:54:25Z,0.04,needs-decision -> steer 2026-10-13T20:54:25Z
+caption-qc-advisory,handoff_idle,2026-10-13T21:30:34Z,2026-10-13T22:16:30Z,0.77,idle until firstmate steer (handoff)
+caption-qc-advisory,release,2026-10-13T22:16:42Z,2026-10-14T01:23:53Z,3.12,paused (rule): waiting for a release containing merge 813eee88 (PR https://github.com/mdc2122/v
+caption-qc-advisory,handoff_idle,2026-10-14T01:23:53Z,2026-10-14T01:23:54Z,0.0,idle until firstmate steer (handoff)
+shorts-series-packaging,decision_park,2026-10-13T22:19:24Z,2026-10-13T22:20:00Z,0.01,needs-decision -> steer 2026-10-13T22:20:00Z
+shorts-series-packaging,handoff_idle,2026-10-13T23:30:24Z,2026-10-14T00:16:56Z,0.78,idle until firstmate steer (handoff)
+shorts-series-packaging,release,2026-10-14T00:18:20Z,2026-10-14T01:20:41Z,1.04,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/763 merged (22b1aa2b); prod stil
+shorts-series-packaging,release,2026-10-14T01:20:41Z,2026-10-14T01:23:58Z,0.05,paused (rule): release prod-20261014-2 (65b1aa26) live with series hook; readout runs on prod. 
+shorts-series-packaging,release,2026-10-14T01:30:31Z,2026-10-14T13:08:10Z,11.63,paused (rule): verified on prod-20261014-2: dry-run tick (VIRAL_SHORTS_SERIES=1) runs series_jo
+shorts-series-packaging,release,2026-10-14T13:59:49Z,2026-10-14T14:27:18Z,0.46,paused (rule): prod-20261014-2 live; series_join plan on prod reads cleanly (quota back) and co
+mr1-judge,human_answer,2026-10-14T00:17:20Z,2026-10-14T00:18:58Z,0.03,needs-decision -> steer 2026-10-14T00:18:58Z
+mr1-judge,handoff_idle,2026-10-14T00:53:09Z,2026-10-14T01:38:20Z,0.75,idle until firstmate steer (handoff)
+mr1-judge,release,2026-10-14T01:55:44Z,2026-10-14T02:18:59Z,0.39,paused (rule): prod-20261014-4 (969c5b7e) parked on t597 behind a running goal session; deploy-
+mr1-judge,release,2026-10-14T02:52:24Z,2026-10-14T03:42:44Z,0.84,"paused (rule): t598 already released (done, with proof) 02:50Z — queue free for PR 770; waiting"
+mr1-judge,handoff_idle,2026-10-14T03:42:44Z,2026-10-14T03:42:45Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,human_answer,2026-10-14T01:14:03Z,2026-10-14T01:14:53Z,0.01,needs-decision -> steer 2026-10-14T01:14:53Z
+finishing-peak-window,human_answer,2026-10-14T01:31:43Z,2026-10-14T01:35:46Z,0.07,needs-decision -> steer 2026-10-14T01:35:46Z
+finishing-peak-window,handoff_idle,2026-10-14T01:35:46Z,2026-10-14T01:35:48Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,human_answer,2026-10-14T01:42:24Z,2026-10-14T01:44:51Z,0.04,needs-decision -> steer 2026-10-14T01:44:51Z
+finishing-peak-window,decision_park,2026-10-14T01:44:58Z,2026-10-14T03:10:43Z,1.43,paused (rule): parked at review gate nm-01M4VY3VKHR5WKW0J6FNJ2S2H2-review-r5 per msg 006; R5-F1
+finishing-peak-window,handoff_idle,2026-10-14T03:10:43Z,2026-10-14T03:10:44Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,human_answer,2026-10-14T03:17:15Z,2026-10-14T03:18:49Z,0.03,needs-decision -> steer 2026-10-14T03:18:49Z
+finishing-peak-window,human_answer,2026-10-14T03:43:17Z,2026-10-14T03:44:31Z,0.02,needs-decision -> steer 2026-10-14T03:44:31Z
+finishing-peak-window,decision_park,2026-10-14T03:45:01Z,2026-10-14T09:34:19Z,5.82,"paused (rule): test gate had already closed itself (LT-1 auto-fixed with judge prompt v3, 53d95"
+finishing-peak-window,handoff_idle,2026-10-14T09:34:19Z,2026-10-14T09:34:21Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,handoff_idle,2026-10-14T09:35:18Z,2026-10-14T09:47:55Z,0.21,idle until firstmate steer (handoff)
+finishing-peak-window,release,2026-10-14T09:48:25Z,2026-10-14T10:02:30Z,0.23,"paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/774 (armed, he"
+finishing-peak-window,handoff_idle,2026-10-14T10:02:30Z,2026-10-14T10:02:31Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,handoff_idle,2026-10-14T11:45:30Z,2026-10-14T11:53:04Z,0.13,idle until firstmate steer (handoff)
+finishing-peak-window,human_answer,2026-10-14T12:06:06Z,2026-10-14T12:06:57Z,0.01,needs-decision -> steer 2026-10-14T12:06:57Z
+finishing-peak-window,decision_park,2026-10-14T12:07:05Z,2026-10-14T14:00:53Z,1.9,paused (rule): e46825f6 held local and unpushed per msg 015; read-extent choice (key pw-read-ex
+finishing-peak-window,handoff_idle,2026-10-14T14:00:53Z,2026-10-14T14:00:54Z,0.0,idle until firstmate steer (handoff)
+finishing-peak-window,decision_park,2026-10-14T14:05:12Z,2026-10-14T14:06:28Z,0.02,needs-decision -> steer 2026-10-14T14:06:28Z
+finishing-peak-window,human_answer,2026-10-14T14:12:30Z,2026-10-14T14:14:44Z,0.04,needs-decision -> steer 2026-10-14T14:14:44Z
+shorts-winners-2026,worker_stall,2026-10-14T01:27:48Z,2026-10-14T01:52:46Z,0.42,idle until relaunch
+title-bracket-cleanup,merge_queue,2026-10-14T00:02:09Z,2026-10-14T00:45:01Z,0.71,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/765 checks green; waiting on off
+title-bracket-cleanup,ci,2026-10-14T00:46:08Z,2026-10-14T00:58:41Z,0.21,paused (flash): core replay proof posted https://github.com/mdc2122/viral-moment/pull/765#issuec
+title-bracket-cleanup,release,2026-10-14T01:24:43Z,2026-10-14T03:11:03Z,1.77,"paused (rule): prod-20261014-2 verified to contain 784ed2b8 (no-bracket style library, Karruech"
+finishing-climb-order,human_answer,2026-10-14T02:33:50Z,2026-10-14T02:35:10Z,0.02,needs-decision -> steer 2026-10-14T02:35:10Z
+finishing-climb-order,handoff_idle,2026-10-14T03:00:40Z,2026-10-14T03:07:42Z,0.12,idle until firstmate steer (handoff)
+finishing-climb-order,release,2026-10-14T03:07:50Z,2026-10-14T04:08:22Z,1.01,paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/772 (third in 
+finishing-climb-order,handoff_idle,2026-10-14T04:08:22Z,2026-10-14T04:08:24Z,0.0,idle until firstmate steer (handoff)
+finishing-climb-order,handoff_idle,2026-10-14T04:37:35Z,2026-10-14T04:48:26Z,0.18,idle until firstmate steer (handoff)
+finishing-climb-order,release,2026-10-14T04:48:31Z,2026-10-14T04:56:51Z,0.14,paused (rule): waiting for merge of https://github.com/mdc2122/viral-moment/pull/772 (head of m
+finishing-climb-order,handoff_idle,2026-10-14T04:56:51Z,2026-10-14T04:56:52Z,0.0,idle until firstmate steer (handoff)
+composer-regular-variant,worker_stall,2026-10-14T03:36:50Z,2026-10-14T03:46:17Z,0.16,idle until status
+slot-panel-1014,worker_stall,2026-10-14T09:50:07Z,2026-10-14T09:53:12Z,0.05,idle until turn_end
+slot-panel-1014,worker_stall,2026-10-14T09:56:46Z,2026-10-14T10:02:50Z,0.1,idle until turn_end
+slot-swap-1014-1847,human_answer,2026-10-14T13:14:41Z,2026-10-14T13:16:33Z,0.03,needs-decision -> steer 2026-10-14T13:16:33Z
+rank-private-stock,handoff_idle,2026-10-14T14:23:41Z,2026-10-14T14:27:17Z,0.06,idle until firstmate steer (handoff)
+rank-private-stock,worker_stall,2026-10-14T15:57:47Z,2026-10-14T16:01:26Z,0.06,idle until script steer
+hit-lane-gates-relax,human_answer,2026-10-14T16:05:35Z,2026-10-14T16:07:34Z,0.03,needs-decision -> steer 2026-10-14T16:07:34Z
+slot-swap-1847-thesefit,human_answer,2026-10-14T15:52:03Z,2026-10-14T15:54:40Z,0.04,needs-decision -> steer 2026-10-14T15:54:40Z
+untested-source-two-cuts,human_answer,2026-10-14T16:37:22Z,2026-10-14T16:38:27Z,0.02,needs-decision -> steer 2026-10-14T16:38:27Z
+untested-source-two-cuts,human_answer,2026-10-14T16:54:53Z,2026-10-14T16:55:50Z,0.02,needs-decision -> steer 2026-10-14T16:55:50Z
+untested-source-two-cuts,human_answer,2026-10-14T17:24:02Z,2026-10-14T17:26:49Z,0.05,needs-decision -> steer 2026-10-14T17:26:49Z
+untested-source-two-cuts,human_answer,2026-10-14T17:27:13Z,2026-10-14T17:27:48Z,0.01,needs-decision self-cleared
+untested-source-two-cuts,human_answer,2026-10-14T17:46:30Z,2026-10-14T17:48:37Z,0.04,needs-decision -> steer 2026-10-14T17:48:37Z
+untested-source-two-cuts,handoff_idle,2026-10-14T18:52:40Z,2026-10-14T19:57:53Z,1.09,idle until firstmate steer (handoff)
+untested-source-two-cuts,handoff_idle,2026-10-14T20:06:45Z,2026-10-14T20:11:01Z,0.07,idle until firstmate steer (handoff)
+untested-source-two-cuts,handoff_idle,2026-10-14T20:11:19Z,2026-10-14T20:38:52Z,0.46,idle until firstmate steer (handoff)
+moment-gate-restore,release,2026-10-14T18:11:18Z,2026-10-14T18:11:43Z,0.01,needs-decision self-cleared
+moment-gate-restore,human_answer,2026-10-14T18:11:43Z,2026-10-14T18:13:50Z,0.04,needs-decision -> steer 2026-10-14T18:13:50Z
+moment-gate-restore,release,2026-10-14T18:47:42Z,2026-10-14T18:47:53Z,0.0,blocked self-cleared
+moment-gate-restore,decision_park,2026-10-14T18:47:53Z,2026-10-14T19:34:52Z,0.78,"paused (rule): waiting out the review-seat cooldown (codex gpt-6.1-sol resets ~21:2xZ, ~3h; opu"
+moment-gate-restore,ci,2026-10-14T19:35:34Z,2026-10-14T20:09:27Z,0.56,paused (rule): retry 01M4XYG98VPECGJPGNN7FF1C6E failed before review — codex gpt-6.1-sol cooldo
+moment-gate-restore,ci,2026-10-14T20:37:34Z,2026-10-14T21:39:15Z,1.03,paused (rule): post-cooldown retry 01M4Y21VC9HHB6RMZ9EV2EYTRM still hit codex review cooldown (
+moment-gate-restore,human_answer,2026-10-14T21:56:22Z,2026-10-14T21:58:03Z,0.03,needs-decision -> steer 2026-10-14T21:58:03Z
+moment-gate-restore,human_answer,2026-10-14T22:18:34Z,2026-10-14T22:19:47Z,0.02,needs-decision -> steer 2026-10-14T22:19:47Z
+moment-gate-restore,human_answer,2026-10-14T22:31:18Z,2026-10-14T22:31:50Z,0.01,needs-decision -> steer 2026-10-14T22:33:34Z
+moment-gate-restore,decision_park,2026-10-14T22:31:50Z,2026-10-14T22:33:34Z,0.03,"paused (rule): test gate awaits firstmate/captain disposition of T1,test-2 ask-user findings; n"
+moment-gate-restore,human_answer,2026-10-14T22:46:38Z,2026-10-14T22:47:46Z,0.02,needs-decision -> steer 2026-10-14T22:47:46Z
+moment-gate-restore,human_answer,2026-10-14T22:54:14Z,2026-10-14T22:56:22Z,0.04,needs-decision -> steer 2026-10-14T22:56:22Z
+moment-gate-restore,handoff_idle,2026-10-14T23:00:53Z,2026-10-14T23:18:40Z,0.3,idle until firstmate steer (handoff)
+moment-gate-restore,merge_queue,2026-10-14T23:18:59Z,2026-10-15T03:35:27Z,4.27,paused (rule): durable retry job moment-gate-review-retry armed; verdict=/Users/studio2/fm-prim
+moment-gate-restore,handoff_idle,2026-10-15T03:35:27Z,2026-10-15T03:35:28Z,0.0,idle until firstmate steer (handoff)
+moment-gate-restore,merge_queue,2026-10-15T03:36:21Z,2026-10-15T04:10:24Z,0.57,paused (rule): durable retry moment-gate-review-retry-2 armed under data; verdict=/Users/studio
+moment-gate-restore,handoff_idle,2026-10-15T04:10:24Z,2026-10-15T04:10:25Z,0.0,idle until firstmate steer (handoff)
+moment-gate-restore,human_answer,2026-10-15T04:11:10Z,2026-10-15T04:12:30Z,0.02,needs-decision -> steer 2026-10-15T04:12:30Z
+moment-gate-restore,human_answer,2026-10-15T04:21:58Z,2026-10-15T04:23:48Z,0.03,needs-decision -> steer 2026-10-15T04:23:48Z
+moment-gate-restore,merge_queue,2026-10-15T04:42:40Z,2026-10-15T04:42:43Z,0.0,paused (rule): final CI pytest pending; PR attestation now pass on PR https://github.com/mdc212
+reviewer-fallback-scout,handoff_idle,2026-10-14T19:19:37Z,2026-10-14T19:48:57Z,0.49,idle until firstmate steer (handoff)
+catalog-ingestion-audit,handoff_idle,2026-10-14T18:52:31Z,2026-10-14T19:03:10Z,0.18,idle until firstmate steer (handoff)
+family-window-supply-rerun,worker_stall,2026-10-14T18:57:53Z,2026-10-14T19:55:14Z,0.96,idle until relaunch
+family-window-supply-rerun,handoff_idle,2026-10-14T20:12:49Z,2026-10-14T20:21:18Z,0.14,idle until firstmate steer (handoff)
+speaker-gate-fix,worker_stall,2026-10-14T19:12:51Z,2026-10-14T19:53:17Z,0.67,idle until relaunch
+speaker-gate-fix,worker_stall,2026-10-15T02:00:10Z,2026-10-15T02:34:05Z,0.57,idle until turn_end
+finish-in-booking-order,ci,2026-10-14T20:29:16Z,2026-10-15T00:31:41Z,4.04,"paused (rule): no-mistakes review step blocked on provider 429 model_cooldown (gpt-6.1-sol, usa"
+finish-in-booking-order,handoff_idle,2026-10-15T00:31:41Z,2026-10-15T00:31:42Z,0.0,idle until firstmate steer (handoff)
+finish-in-booking-order,merge_queue,2026-10-15T00:35:05Z,2026-10-15T04:48:58Z,4.23,paused (rule): review 429 again (reset ~03:00Z); head c23ce1b3 custody returned; durable retry 
+finishing-reseat-stalls,ci,2026-10-14T20:39:55Z,2026-10-15T00:54:54Z,4.25,"paused (rule): claude and codex 429 until ~21:51Z; rebase onto main is 2a28c2b5, validation rer"
+finishing-reseat-stalls,handoff_idle,2026-10-15T00:54:54Z,2026-10-15T00:54:55Z,0.0,idle until firstmate steer (handoff)
+finishing-reseat-stalls,human_answer,2026-10-15T01:00:46Z,2026-10-15T01:09:56Z,0.15,blocked -> steer 2026-10-15T01:09:56Z
+muse-wonder-reviewer-bakeoff,handoff_idle,2026-10-14T20:53:20Z,2026-10-14T22:00:08Z,1.11,idle until firstmate steer (handoff)
+winners-copresence-priority,merge_queue,2026-10-14T21:00:41Z,2026-10-14T21:01:39Z,0.02,paused (rule): review refused on codex gpt-6.1-sol cooldown (reset_seconds 3159 from 2026-10-14
+present-failure-retry-queue,human_answer,2026-10-15T03:48:08Z,2026-10-15T03:49:23Z,0.02,needs-decision -> steer 2026-10-15T03:49:23Z
+present-failure-retry-queue,handoff_idle,2026-10-15T03:59:25Z,2026-10-15T04:20:04Z,0.34,idle until firstmate steer (handoff)
+present-failure-retry-queue,human_answer,2026-10-15T04:20:30Z,2026-10-15T04:22:04Z,0.03,needs-decision -> steer 2026-10-15T04:22:04Z
+present-failure-retry-queue,handoff_idle,2026-10-15T04:22:16Z,2026-10-15T04:43:40Z,0.36,idle until firstmate steer (handoff)
+present-failure-retry-queue,handoff_idle,2026-10-15T05:02:15Z,2026-10-15T05:39:41Z,0.62,idle until firstmate steer (handoff)
+flip-check-ship,decision_park,2026-10-15T05:43:27Z,2026-10-15T05:47:12Z,0.06,needs-decision -> steer 2026-10-15T05:47:12Z
+flip-check-ship,handoff_idle,2026-10-15T05:47:12Z,2026-10-15T05:47:13Z,0.0,idle until firstmate steer (handoff)
+ready-pool-challengers,human_answer,2026-10-15T06:12:21Z,2026-10-15T06:13:51Z,0.02,needs-decision -> steer 2026-10-15T06:13:51Z
+ready-pool-challengers,human_answer,2026-10-15T06:33:30Z,2026-10-15T06:34:59Z,0.02,needs-decision -> steer 2026-10-15T06:34:59Z
+vein-boost-intake,human_answer,2026-10-15T08:54:45Z,2026-10-15T08:55:35Z,0.01,needs-decision -> steer 2026-10-15T08:55:35Z
+vein-boost-intake,human_answer,2026-10-15T09:06:43Z,2026-10-15T09:08:23Z,0.03,needs-decision -> steer 2026-10-15T09:08:23Z
+retitle-hp4ej-shedeur,human_answer,2026-10-15T13:23:58Z,2026-10-15T13:32:54Z,0.15,needs-decision -> steer 2026-10-15T13:32:54Z
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T13:32:54Z,2026-10-15T13:32:56Z,0.0,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T14:22:23Z,2026-10-15T15:59:29Z,1.62,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,human_answer,2026-10-15T16:09:47Z,2026-10-15T16:10:31Z,0.01,blocked -> steer 2026-10-15T16:10:31Z
+retitle-hp4ej-shedeur,release,2026-10-15T16:10:40Z,2026-10-15T16:44:49Z,0.57,paused (rule): waiting for PR 804 (runs-root union) deploy — then re-run governed QC from step 
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T16:44:49Z,2026-10-15T16:44:50Z,0.0,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,human_answer,2026-10-15T16:46:19Z,2026-10-15T16:49:53Z,0.06,needs-decision -> steer 2026-10-15T16:49:53Z
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T16:49:53Z,2026-10-15T16:49:54Z,0.0,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,worker_stall,2026-10-15T16:52:23Z,2026-10-15T17:00:07Z,0.13,idle until relaunch
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T17:25:56Z,2026-10-15T17:46:37Z,0.34,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,release,2026-10-15T17:46:53Z,2026-10-15T18:24:04Z,0.62,paused (rule): waiting for PR https://github.com/mdc2122/viral-moment/pull/810 merge+deploy (pr
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T18:24:04Z,2026-10-15T18:24:06Z,0.0,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,release,2026-10-15T18:24:37Z,2026-10-15T18:47:01Z,0.37,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/810 merged (a9e00236) but not de
+retitle-hp4ej-shedeur,handoff_idle,2026-10-15T18:47:01Z,2026-10-15T18:47:04Z,0.0,idle until firstmate steer (handoff)
+retitle-hp4ej-shedeur,release,2026-10-15T20:46:00Z,2026-10-15T20:52:06Z,0.1,"paused (rule): PR https://github.com/mdc2122/viral-moment/pull/817 green, waiting on merge poll"
+retitle-hp4ej-shedeur,release,2026-10-15T21:39:08Z,2026-10-15T21:53:57Z,0.25,paused (rule): waiting on release owner to deploy c52371fd (PR 817); then live conveyor-cycle p
+retitle-hp4ej-shedeur,human_answer,2026-10-15T23:17:39Z,2026-10-15T23:18:39Z,0.02,needs-decision -> steer 2026-10-15T23:18:39Z
+mq1-vocab-activation,human_answer,2026-10-15T13:29:57Z,2026-10-15T13:38:33Z,0.14,needs-decision -> steer 2026-10-15T13:38:33Z
+mq1-vocab-activation,handoff_idle,2026-10-15T13:38:33Z,2026-10-15T13:38:35Z,0.0,idle until firstmate steer (handoff)
+flipcheck-activation,human_answer,2026-10-15T13:56:56Z,2026-10-15T14:06:28Z,0.16,needs-decision -> steer 2026-10-15T14:06:28Z
+fix-held-stall-reoffer-build,human_answer,2026-10-15T15:26:52Z,2026-10-15T15:28:17Z,0.02,needs-decision -> steer 2026-10-15T15:28:17Z
+ballot-pool-restore,human_answer,2026-10-15T14:53:32Z,2026-10-15T14:56:04Z,0.04,needs-decision -> steer 2026-10-15T14:56:04Z
+senior-review-flow-restore,human_answer,2026-10-15T15:54:15Z,2026-10-15T15:57:17Z,0.05,blocked -> steer 2026-10-15T15:57:17Z
+senior-review-flow-restore,release,2026-10-15T15:57:40Z,2026-10-15T16:44:57Z,0.79,"paused (rule): waiting on PR 804 (ballot-pool-restore, merge-queue head) to deploy - it carries"
+senior-review-flow-restore,handoff_idle,2026-10-15T16:44:57Z,2026-10-15T16:44:58Z,0.0,idle until firstmate steer (handoff)
+senior-review-flow-restore,handoff_idle,2026-10-15T16:49:32Z,2026-10-15T17:22:51Z,0.56,idle until firstmate steer (handoff)
+senior-review-parallel,worker_stall,2026-10-15T15:56:52Z,2026-10-15T16:01:08Z,0.07,idle until assistant (error stop)
+senior-review-parallel,worker_stall,2026-10-15T16:50:12Z,2026-10-15T16:53:21Z,0.05,idle until assistant (error stop)
+senior-review-parallel,human_answer,2026-10-15T19:11:01Z,2026-10-15T19:11:59Z,0.02,needs-decision -> steer 2026-10-15T19:11:59Z
+senior-review-parallel,human_answer,2026-10-15T19:22:43Z,2026-10-15T19:23:59Z,0.02,needs-decision -> steer 2026-10-15T19:23:59Z
+senior-review-parallel,handoff_idle,2026-10-15T20:34:09Z,2026-10-16T01:05:22Z,4.52,idle until firstmate steer (handoff)
+senior-review-parallel,handoff_idle,2026-10-16T01:05:34Z,2026-10-16T01:58:35Z,0.88,idle until firstmate steer (handoff)
+senior-review-parallel,human_answer,2026-10-16T02:00:41Z,2026-10-16T02:05:30Z,0.08,blocked -> steer 2026-10-16T02:05:30Z
+senior-review-parallel,handoff_idle,2026-10-16T02:05:30Z,2026-10-16T02:05:31Z,0.0,idle until firstmate steer (handoff)
+selection-sight-guard,handoff_idle,2026-10-15T18:12:03Z,2026-10-15T18:18:26Z,0.11,idle until firstmate steer (handoff)
+selection-sight-guard,human_answer,2026-10-15T18:25:16Z,2026-10-15T18:26:44Z,0.02,needs-decision self-cleared
+selection-sight-guard,handoff_idle,2026-10-15T19:17:14Z,2026-10-15T23:23:16Z,4.1,idle until firstmate steer (handoff)
+goal-check-yard-read,release,2026-10-15T20:16:54Z,2026-10-15T20:17:00Z,0.0,needs-decision self-cleared
+goal-check-yard-read,human_answer,2026-10-15T20:17:00Z,2026-10-15T20:19:37Z,0.04,needs-decision -> steer 2026-10-15T20:19:37Z
+goal-check-yard-read,human_answer,2026-10-15T20:53:04Z,2026-10-15T20:55:13Z,0.04,needs-decision -> steer 2026-10-15T20:55:13Z
+title-card-emoji-persist,human_answer,2026-10-15T20:30:16Z,2026-10-15T20:34:37Z,0.07,needs-decision -> steer 2026-10-15T20:34:37Z
+title-card-emoji-persist,handoff_idle,2026-10-15T20:34:37Z,2026-10-15T20:34:48Z,0.0,idle until firstmate steer (handoff)
+finishing-preflight-checks,human_answer,2026-10-15T20:53:19Z,2026-10-15T20:57:52Z,0.08,needs-decision -> steer 2026-10-15T20:57:52Z
+finishing-preflight-checks,handoff_idle,2026-10-15T20:57:52Z,2026-10-15T20:57:54Z,0.0,idle until firstmate steer (handoff)
+word-evidence-durability,human_answer,2026-10-15T23:05:19Z,2026-10-15T23:09:31Z,0.07,needs-decision -> steer 2026-10-15T23:09:31Z
+word-evidence-durability,handoff_idle,2026-10-15T23:09:31Z,2026-10-15T23:09:36Z,0.0,idle until firstmate steer (handoff)
+library-selection-evidence-scan,worker_stall,2026-10-15T22:28:25Z,2026-10-16T01:11:28Z,2.72,idle until relaunch
+selection-layered-packet,decision_park,2026-10-16T01:36:53Z,2026-10-16T01:42:34Z,0.09,needs-decision -> steer 2026-10-16T01:42:34Z
+selection-layered-packet,handoff_idle,2026-10-16T01:42:34Z,2026-10-16T01:42:36Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T01:48:52Z,2026-10-16T01:50:47Z,0.03,needs-decision -> steer 2026-10-16T01:50:47Z
+selection-layered-packet,handoff_idle,2026-10-16T01:51:03Z,2026-10-16T02:17:39Z,0.44,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:25:33Z,2026-10-16T02:40:02Z,0.24,needs-decision -> steer 2026-10-16T02:40:02Z
+selection-layered-packet,handoff_idle,2026-10-16T02:40:02Z,2026-10-16T02:40:05Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:40:17Z,2026-10-16T02:51:02Z,0.18,paused (rule): parked at no-mistakes review gate (run 01M515G9WC660P2RCZB0ZT0N94) awaiting capt
+selection-layered-packet,handoff_idle,2026-10-16T02:51:02Z,2026-10-16T02:51:05Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,decision_park,2026-10-16T02:55:11Z,2026-10-16T02:57:10Z,0.03,needs-decision -> steer 2026-10-16T02:57:10Z
+selection-layered-packet,decision_park,2026-10-16T02:57:19Z,2026-10-16T03:03:00Z,0.09,paused (rule): parked at no-mistakes review gate (run 01M515G9WC660P2RCZB0ZT0N94) awaiting reop
+selection-layered-packet,handoff_idle,2026-10-16T03:03:00Z,2026-10-16T03:03:01Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T03:38:58Z,2026-10-16T03:43:44Z,0.08,blocked -> steer 2026-10-16T03:43:44Z
+selection-layered-packet,handoff_idle,2026-10-16T03:43:44Z,2026-10-16T03:43:45Z,0.0,idle until firstmate steer (handoff)
+selection-layered-packet,human_answer,2026-10-16T03:44:30Z,2026-10-16T03:44:44Z,0.0,blocked still open
+manifest-artifact-reroot,human_answer,2026-10-16T00:37:15Z,2026-10-16T00:40:58Z,0.06,needs-decision -> steer 2026-10-16T00:40:58Z
+manifest-artifact-reroot,handoff_idle,2026-10-16T00:40:58Z,2026-10-16T00:41:09Z,0.0,idle until firstmate steer (handoff)
+manifest-artifact-reroot,release,2026-10-16T00:41:49Z,2026-10-16T01:50:06Z,1.14,paused (rule): PR https://github.com/mdc2122/viral-moment/pull/827 outcome passed-with-override
+manifest-artifact-reroot,handoff_idle,2026-10-16T01:50:06Z,2026-10-16T01:50:08Z,0.0,idle until firstmate steer (handoff)
+goldratt-progress-watch,human_answer,2026-10-16T01:54:38Z,2026-10-16T02:17:34Z,0.38,needs-decision -> steer 2026-10-16T02:17:34Z
+goldratt-progress-watch,handoff_idle,2026-10-16T02:17:34Z,2026-10-16T02:17:36Z,0.0,idle until firstmate steer (handoff)
+goldratt-progress-watch,human_answer,2026-10-16T02:21:19Z,2026-10-16T02:23:29Z,0.04,needs-decision -> steer 2026-10-16T02:23:29Z
+question-opener-term,human_answer,2026-10-16T00:56:39Z,2026-10-16T01:02:29Z,0.1,needs-decision -> steer 2026-10-16T01:02:29Z
+question-opener-term,handoff_idle,2026-10-16T01:02:29Z,2026-10-16T01:02:30Z,0.0,idle until firstmate steer (handoff)
+cv2-dup-dist-fix,human_answer,2026-10-16T00:54:31Z,2026-10-16T00:57:09Z,0.04,needs-decision -> steer 2026-10-16T00:57:09Z
+merge-stats-harness,human_answer,2026-10-16T01:59:17Z,2026-10-16T02:18:33Z,0.32,blocked -> steer 2026-10-16T02:18:33Z
+merge-stats-harness,handoff_idle,2026-10-16T02:18:33Z,2026-10-16T02:18:35Z,0.0,idle until firstmate steer (handoff)
+merge-stats-harness,human_answer,2026-10-16T02:19:06Z,2026-10-16T02:24:58Z,0.1,needs-decision -> steer 2026-10-16T02:24:58Z
+merge-stats-harness,handoff_idle,2026-10-16T02:24:58Z,2026-10-16T02:25:00Z,0.0,idle until firstmate steer (handoff)
+flash-parity-replay,worker_stall,2026-10-16T03:32:47Z,2026-10-16T03:44:44Z,0.2,no worker activity to end of span
+yt-test-access-check,handoff_idle,2026-10-16T01:30:24Z,2026-10-16T01:59:54Z,0.49,idle until firstmate steer (handoff)
+merge-watch-rebind,worker_stall,2026-10-16T03:39:32Z,2026-10-16T03:44:44Z,0.09,no worker activity to end of span
+merge-stall-records,human_answer,2026-10-16T02:21:14Z,2026-10-16T02:23:32Z,0.04,needs-decision -> steer 2026-10-16T02:23:32Z
+merge-stall-records,human_answer,2026-10-16T03:05:33Z,2026-10-16T03:13:13Z,0.13,blocked -> steer 2026-10-16T03:13:13Z
+merge-stall-records,handoff_idle,2026-10-16T03:13:13Z,2026-10-16T03:13:15Z,0.0,idle until firstmate steer (handoff)
+mq-off-n100,human_answer,2026-10-16T01:54:22Z,2026-10-16T02:18:36Z,0.4,needs-decision -> steer 2026-10-16T02:18:36Z
+mq-off-n100,handoff_idle,2026-10-16T02:18:36Z,2026-10-16T02:18:37Z,0.0,idle until firstmate steer (handoff)
+replay-harness-commit,human_answer,2026-10-16T02:16:52Z,2026-10-16T02:20:20Z,0.06,needs-decision -> steer 2026-10-16T02:20:20Z
+replay-harness-commit,handoff_idle,2026-10-16T02:20:20Z,2026-10-16T02:20:25Z,0.0,idle until firstmate steer (handoff)
+release-join-main-advance,worker_stall,2026-10-16T03:37:10Z,2026-10-16T03:44:44Z,0.13,no worker activity to end of span
+flow-decision-tables,human_answer,2026-10-16T03:03:15Z,2026-10-16T03:06:35Z,0.06,needs-decision -> steer 2026-10-16T03:06:35Z
+flow-decision-tables,human_answer,2026-10-16T03:08:59Z,2026-10-16T03:11:35Z,0.04,needs-decision -> steer 2026-10-16T03:11:35Z
+flow-decision-tables,decision_park,2026-10-16T03:14:45Z,2026-10-16T03:23:06Z,0.14,needs-decision -> steer 2026-10-16T03:23:06Z
+flow-decision-tables,handoff_idle,2026-10-16T03:23:06Z,2026-10-16T03:23:15Z,0.0,idle until firstmate steer (handoff)
+flow-decision-tables,human_answer,2026-10-16T03:24:26Z,2026-10-16T03:35:35Z,0.19,needs-decision -> steer 2026-10-16T03:35:35Z
+flow-decision-tables,handoff_idle,2026-10-16T03:35:35Z,2026-10-16T03:35:38Z,0.0,idle until firstmate steer (handoff)
+flow-decision-tables,human_answer,2026-10-16T03:39:31Z,2026-10-16T03:43:21Z,0.06,needs-decision -> steer 2026-10-16T03:43:21Z
+flow-decision-tables,handoff_idle,2026-10-16T03:43:21Z,2026-10-16T03:43:39Z,0.01,idle until firstmate steer (handoff)
+gemini-av-guard-path,human_answer,2026-10-16T03:05:36Z,2026-10-16T03:11:38Z,0.1,needs-decision -> steer 2026-10-16T03:11:38Z
+gemini-av-guard-path,handoff_idle,2026-10-16T03:11:38Z,2026-10-16T03:11:40Z,0.0,idle until firstmate steer (handoff)
+libscan-harness-commit,human_answer,2026-10-16T03:01:44Z,2026-10-16T03:06:33Z,0.08,needs-decision -> steer 2026-10-16T03:06:33Z
+libscan-harness-commit,handoff_idle,2026-10-16T03:06:33Z,2026-10-16T03:06:34Z,0.0,idle until firstmate steer (handoff)
+libscan-harness-commit,human_answer,2026-10-16T03:26:07Z,2026-10-16T03:35:40Z,0.16,needs-decision -> steer 2026-10-16T03:35:40Z
+libscan-harness-commit,handoff_idle,2026-10-16T03:35:40Z,2026-10-16T03:35:41Z,0.0,idle until firstmate steer (handoff)
+libscan-harness-commit,worker_stall,2026-10-16T03:39:51Z,2026-10-16T03:44:44Z,0.08,no worker activity to end of span
+merge-line-handoff,worker_stall,2026-10-16T03:38:41Z,2026-10-16T03:44:44Z,0.1,no worker activity to end of span

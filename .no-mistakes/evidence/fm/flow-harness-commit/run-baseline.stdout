@@ -1,0 +1,78 @@
+{
+ "window": [
+  "2026-10-09",
+  "2026-10-17"
+ ],
+ "generated": "2026-10-16T04:49:51Z",
+ "now_cap": "2026-10-16T03:44:44Z",
+ "tasks_spawned": 191,
+ "excluded": 0,
+ "measured": 191,
+ "settled": 159,
+ "live_proven": 149,
+ "closed_not_live": 10,
+ "in_flight": 32,
+ "zero_touch_live": 32,
+ "zero_touch_share_of_settled_pct": 20.1,
+ "zero_touch_share_of_live_pct": 21.5,
+ "in_flight_untouched_so_far": 10,
+ "upper_bound_if_all_untouched_inflight_land_pct": 22.0,
+ "by_kind": {
+  "scout": {
+   "settled": 64,
+   "zero_touch_live": 27,
+   "live": 56
+  },
+  "ship": {
+   "settled": 95,
+   "zero_touch_live": 5,
+   "live": 93
+  }
+ },
+ "touches_total": 1073,
+ "touches_by_type": {
+  "steer": 842,
+  "re-point": 188,
+  "relaunch": 33,
+  "answer": 10
+ },
+ "steer_purposes": {
+  "body-not-captured": 28,
+  "new_work": 40,
+  "decision_answer": 287,
+  "merge_or_release_routing": 162,
+  "correction_or_scope_change": 111,
+  "go_ahead_after_external_event": 173,
+  "admin_maintenance": 21,
+  "unblock_information": 17,
+  "other": 4,
+  "status_request": 3
+ },
+ "steer_answerers": {
+  "firstmate": 772,
+  "captain": 74
+ },
+ "script_steers_excluded": 94,
+ "flash_classified_rows": {
+  "steers": 376,
+  "pauses": 7
+ },
+ "wait_hours_by_class": {
+  "decision_park": 70.3,
+  "human_answer": 65.0,
+  "ci": 124.0,
+  "merge_queue": 293.4,
+  "release": 213.3,
+  "worker_stall": 6.8,
+  "of_which_handoff_idle": 26.3
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 69.5,
+  "human_answer": 62.2,
+  "ci": 109.1,
+  "merge_queue": 238.3,
+  "release": 205.4,
+  "worker_stall": 5.9
+ }
+}
+wrote /Users/studio2/.no-mistakes/evidence/01M51GABP76WT6ADZHJX6XZFAC/run-baseline

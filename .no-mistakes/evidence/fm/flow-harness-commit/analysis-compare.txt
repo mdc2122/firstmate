@@ -1,0 +1,8 @@
+analysis.json identical to recorded baseline: False
+ differs: merge_queue_per_item_h
+ differs: release_per_item_h
+ differs: ci_per_item_h
+new-only keys: set()
+headline zero_touch_share_of_settled_pct: 20.1 settled 159 zero_touch_live 32
+by_kind: {'scout': {'settled': 64, 'zero_touch_live': 27, 'live': 56}, 'ship': {'settled': 95, 'zero_touch_live': 5, 'live': 93}}
+wait hours: {'wait_hours_by_class': {'decision_park': 70.3, 'human_answer': 65.0, 'ci': 124.0, 'merge_queue': 293.4, 'release': 213.3, 'worker_stall': 6.8, 'of_which_handoff_idle': 26.3}, 'wait_hours_by_class_live_tasks': {'decision_park': 69.5, 'human_answer': 62.2, 'ci': 109.1, 'merge_queue': 238.3, 'release': 205.4, 'worker_stall': 5.9}}
