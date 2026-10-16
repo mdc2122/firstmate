@@ -3774,6 +3774,8 @@ test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall() {
   pass "a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode"
 }
 
+# A head closed unmerged is dropped by the sweep's prune before any poll runs,
+# with one queued wake, so the PRs behind it land in that same sweep.
 test_merge_line_closed_head_is_dropped_and_wakes() {
   local dir state head=https://github.com/o/r/pull/679
   dir=$(make_case merge-line-closed-head)
@@ -3782,16 +3784,13 @@ test_merge_line_closed_head_is_dropped_and_wakes() {
   merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
   fake_line_head "$dir" "$head" CLOSED SUCCESS
   FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c1
-  case "$(cat "$dir/c1.out")" in
-    *"merge-line head $head closed unmerged; dropped from its line"*) ;;
-    *) fail "a closed head did not wake at once: $(cat "$dir/c1.out")" ;;
-  esac
+  [ "$(grep -cF "merge-line head $head closed unmerged; dropped from its line" "$dir/c1.queue")" -eq 1 ] \
+    || fail "a closed head did not queue exactly one wake: $(cat "$dir/c1.queue")"
   ! grep -qF "$head" "$state/merge-lines/github@github.com@o%2Fr" \
     || fail "the closed head stayed in its line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
-  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c2
   [ "$(forge_merges "$dir")" = '1 2 ' ] \
-    || fail "the line did not land in order after the closed head left: $(forge_merges "$dir")"
-  pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
+    || fail "the line did not land in order in the sweep that dropped the closed head: $(forge_merges "$dir")"
+  pass "a head closed unmerged is dropped from its line with one wake, and the PRs behind it land in the same sweep"
 }
 
 # A head that merges outside its poll ends every held PR's stall episode at
@@ -3843,8 +3842,8 @@ test_merge_line_merged_head_clears_every_stall_record_with_one_wake() {
 # A repository whose base branch has no merge-queue app merges directly, so
 # the line's single-head gate is the only serialization there: a green PR
 # behind an armed head that cannot merge yet stays held. Once that head reads
-# merged outside its own poll, the held PR's stall probe drops it and the line
-# hands off to the held PR in that same sweep.
+# merged outside its own poll, the sweep's prune drops it and the held PR, now
+# the head, lands in that same sweep.
 test_merge_line_gate_serializes_without_queue_and_probe_hands_off() {
   local dir state head=https://github.com/o/r/pull/1
   dir=$(make_case merge-line-probe-handoff)
@@ -3877,6 +3876,143 @@ test_repo_without_merge_line_is_unchanged() {
     || fail "an unlined repository did not merge the first green yolo PR the watcher reached: $(forge_merges "$dir")"
   [ ! -e "$dir/home/state/merge-lines/github@github.com@o%2Fr" ] || fail "arming created a line for an unlined repository"
   pass "a repository without a declared merge line merges exactly as before"
+}
+
+# --- merge-line prune ----------------------------------------------------------
+
+# The forge's "state,headRefOid" read that prune makes is served per PR number
+# from $dir/prune/<n>.json; every other gh call passes through unchanged, so a
+# PR's own merge poll and the merge path keep reading the default fixture.
+prune_reads() {  # <dir>
+  local dir=$1
+  mkdir -p "$dir/prune"
+  [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
+  cat > "$dir/fakebin/gh" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.json" ]; then
+  printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
+  cat "$dir/prune/\${3##*/}.json"
+  exit 0
+fi
+exec "$dir/fakebin/gh.real" "\$@"
+SH
+  chmod +x "$dir/fakebin/gh"
+}
+
+prune_read() {  # <dir> <pr-number> <OPEN|MERGED|CLOSED> [head]
+  printf '{"state":"%s","headRefOid":"%s"}\n' "$3" "${4:-0123456789abcdef0123456789abcdef01234567}" \
+    > "$1/prune/$2.json"
+}
+
+line_entries() {  # <dir>: listed URLs, head first
+  tail -n +3 "$1/home/state/merge-lines/github@github.com@o%2Fr" | awk '{ print $1 }' | tr '\n' ' '
+}
+
+# The armed head merged where its own poll has not seen it yet (a queue app's
+# merge, a hand merge): prune drops it at the start of the sweep, and the PR
+# behind it is the head for that same sweep and lands, so a merged head never
+# holds the line.
+test_merge_line_prune_drops_a_merged_head_and_the_next_lands_the_same_sweep() {
+  local dir
+  dir=$(make_case merge-line-prune-merged-head)
+  seed_two_yolo_prs "$dir" 1
+  prune_reads "$dir"
+  prune_read "$dir" 1 MERGED
+  prune_read "$dir" 2 OPEN
+  merge_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "the PR behind a merged head did not land in the sweep that pruned it: $(forge_merges "$dir")"
+  case "$(cat "$dir/c1.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the next head's landing was not reported: $(cat "$dir/c1.out")" ;; esac
+  [ -z "$(line_entries "$dir")" ] || fail "the line kept entries after its head merged and the next landed: $(line_entries "$dir")"
+  ! grep -qF 'merge-line-prune: https://github.com/o/r/pull/' "$dir/c1.queue" \
+    || fail "an owned entry raised an unowned wake: $(cat "$dir/c1.queue")"
+  pass "prune drops a merged head before the sweep's polls, so the next entry is the head and lands in that sweep"
+}
+
+# A closed entry behind the head leaves the line without a wake and without
+# reordering what stays; its own still-armed yolo poll never merges it.
+test_merge_line_prune_drops_a_closed_non_head_entry() {
+  local dir state
+  dir=$(make_case merge-line-prune-closed-entry)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" enqueue https://github.com/o/r/pull/3 || fail "could not enqueue a third PR"
+  write_task_meta "$dir" task-c
+  printf 'yolo=on\n' >> "$state/task-c.meta"
+  run_check_entry "$dir" task-c https://github.com/o/r/pull/3 >/dev/null 2> "$dir/arm-c.err" \
+    || fail "could not arm task-c: $(cat "$dir/arm-c.err")"
+  # A fronted head no poll arms holds the line, so its order stays visible.
+  merge_line "$dir" front https://github.com/o/r/pull/9 >/dev/null || fail "front refused"
+  [ "$(line_entries "$dir")" = 'https://github.com/o/r/pull/9 https://github.com/o/r/pull/1 https://github.com/o/r/pull/2 https://github.com/o/r/pull/3 ' ] \
+    || fail "fixture: unexpected line $(line_entries "$dir")"
+  prune_reads "$dir"
+  prune_read "$dir" 9 OPEN
+  prune_read "$dir" 1 OPEN
+  prune_read "$dir" 2 CLOSED
+  prune_read "$dir" 3 OPEN
+  merge_line_cycle "$dir" c1
+  [ "$(line_entries "$dir")" = 'https://github.com/o/r/pull/9 https://github.com/o/r/pull/1 https://github.com/o/r/pull/3 ' ] \
+    || fail "prune did not drop exactly the closed entry, in place: $(line_entries "$dir")"
+  [ -z "$(forge_merges "$dir")" ] || fail "a PR merged past the held head: $(forge_merges "$dir")"
+  ! grep -qF 'pull/2' "$dir/c1.queue" || fail "a closed non-head entry woke: $(cat "$dir/c1.queue")"
+  pass "prune drops a closed entry behind the head without a wake and keeps the rest of the line in order"
+}
+
+# An open entry no poll arms (its task was torn down, or it was enqueued by
+# hand) queues one wake naming it, never every sweep, and again only once its
+# head commit moves; it is never armed or merged by prune.
+test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head() {
+  local dir state url=https://github.com/o/r/pull/3
+  dir=$(make_case merge-line-prune-unowned)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
+  merge_line "$dir" enqueue "$url" || fail "could not enqueue the unowned PR"
+  add_stop_custom_check "$dir"
+  prune_reads "$dir"
+  prune_read "$dir" 3 OPEN
+  merge_line_cycle "$dir" c1
+  [ "$(grep -cF "merge-line-prune: $url is listed open in the merge line for github.com/o/r at head 0123456789abcdef0123456789abcdef01234567" "$dir/c1.queue")" -eq 1 ] \
+    || fail "an unowned open entry did not queue exactly one wake: $(cat "$dir/c1.queue")"
+  merge_line_cycle "$dir" c2
+  ! grep -qF "merge-line-prune: $url" "$dir/c2.queue" || fail "an unowned open entry woke again at the same head: $(cat "$dir/c2.queue")"
+  prune_read "$dir" 3 OPEN fedcba9876543210fedcba9876543210fedcba98
+  merge_line_cycle "$dir" c3
+  [ "$(grep -cF "merge-line-prune: $url is listed open in the merge line for github.com/o/r at head fedcba9876543210fedcba9876543210fedcba98" "$dir/c3.queue")" -eq 1 ] \
+    || fail "an unowned open entry at a new head did not wake once: $(cat "$dir/c3.queue")"
+  [ "$(line_entries "$dir")" = "$url " ] || fail "prune removed or moved an open entry: $(line_entries "$dir")"
+  ! grep -lF "$url" "$state"/*.pr-poll >/dev/null 2>&1 || fail "prune armed an unowned entry"
+  [ -z "$(forge_merges "$dir")" ] || fail "prune merged an unowned entry: $(forge_merges "$dir")"
+  pass "an unowned open merge-line entry wakes once per head and is never armed or merged"
+}
+
+# An open entry its live task's poll arms is left alone; once cleanup retires
+# that task's poll while the PR stays open and listed, it wakes once.
+test_merge_line_prune_leaves_an_owned_open_entry_and_wakes_once_it_loses_its_poll() {
+  local dir state url=https://github.com/o/r/pull/1
+  dir=$(make_case merge-line-prune-owned)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
+  write_task_meta "$dir" task-z
+  run_check_entry "$dir" task-z "$url" >/dev/null 2> "$dir/arm.err" || fail "could not arm task-z: $(cat "$dir/arm.err")"
+  add_stop_custom_check "$dir"
+  prune_reads "$dir"
+  prune_read "$dir" 1 OPEN
+  cp "$state/merge-lines/github@github.com@o%2Fr" "$dir/line.before"
+  merge_line_cycle "$dir" c1
+  merge_line_cycle "$dir" c2
+  ! grep -qF "merge-line-prune: $url" "$dir/c1.queue" "$dir/c2.queue" \
+    || fail "an owned open entry raised a prune wake: $(cat "$dir/c1.queue" "$dir/c2.queue")"
+  cmp -s "$dir/line.before" "$state/merge-lines/github@github.com@o%2Fr" \
+    || fail "prune changed a line whose only entry is owned and open: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  rm -f "$state/task-z.check.sh" "$state/task-z.check-trust" "$state/task-z.pr-poll" "$state/task-z.pr-poll-registration"
+  merge_line_cycle "$dir" c3
+  merge_line_cycle "$dir" c4
+  [ "$(cat "$dir/c3.queue" "$dir/c4.queue" | grep -cF "merge-line-prune: $url is listed open")" -eq 1 ] \
+    || fail "an entry whose poll was retired did not wake exactly once over two sweeps: $(cat "$dir/c3.queue" "$dir/c4.queue")"
+  [ "$(line_entries "$dir")" = "$url " ] || fail "prune removed an open entry that lost its poll: $(line_entries "$dir")"
+  pass "prune leaves an owned open entry alone and wakes once when it loses its poll"
 }
 
 
@@ -4065,6 +4201,10 @@ test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
 test_merge_line_merged_head_clears_every_stall_record_with_one_wake
 test_merge_line_closed_head_is_dropped_and_wakes
 test_merge_line_gate_serializes_without_queue_and_probe_hands_off
+test_merge_line_prune_drops_a_merged_head_and_the_next_lands_the_same_sweep
+test_merge_line_prune_drops_a_closed_non_head_entry
+test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head
+test_merge_line_prune_leaves_an_owned_open_entry_and_wakes_once_it_loses_its_poll
 test_merge_line_queue_window_arms_green_entries_in_line_order
 test_merge_line_queue_window_waits_for_an_earlier_green_entry
 test_merge_line_queue_window_holds_behind_a_pending_entry

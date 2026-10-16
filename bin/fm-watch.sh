@@ -167,9 +167,16 @@
 #                          same head held it for FM_MERGE_LINE_STALL_SECS
 #                          (default 30 minutes); one wake per episode
 #                          (merge_line_stall_tick)
-#   check: <check>: merge-line head <head> closed unmerged; ...
-#                          the head of a held PR's merge line closed without
-#                          merging; it was dropped from the line at once
+#   check: merge-line-prune: merge-line head <head> closed unmerged; ...
+#                          the head of a merge line closed without merging; it
+#                          was dropped from the line at the start of the sweep
+#                          (merge_line_prune)
+#   check: merge-line-prune: <url> is listed open in the merge line for <repo> at head <sha>, but no live task's merge poll arms it, ...
+#                          a listed open PR has no owner (no poll arms it, or
+#                          its task's record is gone), so the line never merges
+#                          it; never armed automatically, one wake per PR and
+#                          head (merge_line_prune; bin/fm-merge-line.sh prune).
+#                          Several prune rows in one sweep wake as one count line
 #   check: <check>: stall alarms stale: <url> merged, so <n> earlier stall alarm(s) naming it no longer hold: ...
 #                          a PR that earlier merge-line-stalled wakes named
 #                          as the head merged; every stall record naming it
@@ -327,6 +334,13 @@ case "$ATTENTION_CHECK_INTERVAL" in ''|*[!0-9]*|0) ATTENTION_CHECK_INTERVAL=600 
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 YOLO_MERGE_TIMEOUT=${FM_YOLO_MERGE_TIMEOUT:-120}  # seconds allowed for the watcher-run yolo merge attempt
+MERGE_LINE_PRUNE_TIMEOUT=${FM_MERGE_LINE_PRUNE_TIMEOUT:-90}  # seconds allowed for one merge-line prune (bin/fm-merge-line.sh prune)
+case "$MERGE_LINE_PRUNE_TIMEOUT" in ''|*[!0-9]*|0) MERGE_LINE_PRUNE_TIMEOUT=90 ;; esac
+case "$WATCHER_STALE_GRACE" in
+  ''|*[!0-9]*) ;;
+  *) [ "$MERGE_LINE_PRUNE_TIMEOUT" -le $((WATCHER_STALE_GRACE / 3)) ] || [ "$WATCHER_STALE_GRACE" -lt 3 ] \
+       || MERGE_LINE_PRUNE_TIMEOUT=$((WATCHER_STALE_GRACE / 3)) ;;
+esac
 PR_AUTOARM_TIMEOUT=${FM_PR_AUTOARM_TIMEOUT:-60}  # seconds allowed for arming a merge poll from a ready line
 case "$PR_AUTOARM_TIMEOUT" in ''|*[!0-9]*|0) PR_AUTOARM_TIMEOUT=60 ;; esac
 PR_GREEN_BLOCKED_SECS=${FM_PR_GREEN_BLOCKED_SECS:-1800}  # green-but-unmergeable PR age before its one wake
@@ -2937,60 +2951,64 @@ merge_line_handoff() {  # <landed-url>
   pr_poll_control_release || exit 1
 }
 
+# Once per check sweep, before any merge poll runs, bin/fm-merge-line.sh prune
+# (its header owns PRUNE) drops every merged or closed entry of every merge
+# line, so a landed or closed head never holds the line and the next entry is
+# the head for this same sweep's polls, and queues one wake per unowned open
+# entry and head. A merged entry also retires every stall record naming it
+# (stall_records_retire_landed). The rows are queued durably at once; the
+# wake that reports them is left in MERGE_LINE_PRUNE_WAKE for the sweep to
+# deliver after its polls, so a prune never starves this sweep's merges.
+MERGE_LINE_PRUNE_WAKE=
+merge_line_prune() {
+  local line url wakes='' logs='' n=0
+  MERGE_LINE_PRUNE_WAKE=
+  [ -d "$STATE/merge-lines" ] || return 0
+  touch "$STATE/.last-watcher-beat"
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    run_action_capture "$MERGE_LINE_PRUNE_TIMEOUT" "$SCRIPT_DIR/fm-merge-line.sh" prune || exit 1
+  touch "$STATE/.last-watcher-beat"
+  while IFS= read -r line; do
+    case "$line" in
+      'pruned merged '*)
+        url=${line#pruned merged }
+        url=${url% head}
+        triage_log "merge line prune dropped merged $url"
+        stall_records_retire_landed merge-line-prune "$url"
+        [ -z "$STALL_CORRECTION_REASON" ] || { wakes="$wakes$STALL_CORRECTION_REASON"$'\n'; n=$((n + 1)); }
+        ;;
+      'pruned closed '*) triage_log "merge line prune dropped closed ${line#pruned closed }" ;;
+      'check: merge-line-prune: '*) wakes="$wakes$line"$'\n'; n=$((n + 1)) ;;
+      '') ;;
+      *) logs="$logs $line" ;;
+    esac
+  done <<EOF
+$FM_CHECK_RESULT
+EOF
+  [ -z "${logs// /}" ] || triage_log "merge line prune (rc=$FM_ACTION_STATUS):$logs"
+  case "$n" in
+    0) ;;
+    1) MERGE_LINE_PRUNE_WAKE=${wakes%$'\n'} ;;
+    *) MERGE_LINE_PRUNE_WAKE="check: merge-line-prune: $n merge-line entries need attention" ;;
+  esac
+}
+
 # A merge line must not stall silently behind its head. For a PR the line
 # holds (bin/fm-merge-line.sh owns the line, its head, and the read-only forge
-# probe), this reads the head first: a head closed unmerged is dropped from
-# the line and wakes firstmate at once, and a head that merged outside its poll
-# is dropped so the next PR becomes the head, retiring every task's stall
-# record that names it with one corrective wake for any alarm already raised
-# (stall_records_retire_landed), and hands the line to that next PR in the
-# same sweep (merge_line_handoff). Otherwise, while the held PR reads green,
+# probe; merge_line_prune already dropped a merged or closed head at the start
+# of this sweep), while the held PR reads green,
 # state/<id>.merge-line-stall records "<held-url> <head-url>
 # <first-seen-epoch> <alerted>" and one wake fires per episode once that same
 # head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR that is no
 # longer green, or its landing starts over. An unknown read changes nothing.
-# Retired with the merged poll and at teardown. Returns 1, with <id>'s control
-# lock released, after a hand-off that did not wake, because the hand-off may
-# have released that lock: the rest of <id>'s sweep waits for the next one.
+# Retired with the merged poll and at teardown.
 merge_line_stall_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file line_head verdict now age reason correction
+  local id=$1 c=$2 url=$3 file line_head verdict now age reason
   local rec_url='' rec_head='' first='' alerted=''
   file="$STATE/$id.merge-line-stall"
   line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null) || return 0
   [ -n "$line_head" ] && [ "$line_head" != "$url" ] || return 0
-  run_check_capture "$SCRIPT_DIR/fm-merge-line.sh" probe "$line_head" || exit 1
-  verdict=${FM_CHECK_RESULT%%$'\n'*}
-  case "$verdict" in
-    closed|merged)
-      if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-          "$SCRIPT_DIR/fm-merge-line.sh" remove "$line_head" >/dev/null 2>&1; then
-        triage_log "merge line head $line_head reads $verdict but could not be dropped"
-        return 0
-      fi
-      triage_log "merge line head $line_head reads $verdict; dropped from its line"
-      if [ "$verdict" = merged ]; then
-        stall_records_retire_landed "$c" "$line_head"
-        rm -f "$file"
-        # The hand-off can land and handle another poll, which resets the
-        # correction global; its row is already queued durably.
-        correction=$STALL_CORRECTION_REASON
-        merge_line_handoff "$line_head"
-        if [ -z "$correction" ]; then
-          pr_poll_control_release || exit 1
-          return 1
-        fi
-        reason=$correction
-      else
-        rm -f "$file"
-        reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
-        fm_wake_append check "$c" "$reason" || exit 1
-      fi
-      pr_poll_control_release || exit 1
-      touch "$STATE/.last-check"
-      wake "$reason"
-      ;;
-  esac
   run_check_capture "$SCRIPT_DIR/fm-merge-line.sh" probe "$url" || exit 1
   verdict=${FM_CHECK_RESULT%%$'\n'*}
   case "$verdict" in
@@ -3119,6 +3137,7 @@ while :; do
   if [ "$(age_of "$STATE/.last-check")" -ge "$CHECK_INTERVAL" ]; then
     rejected_checks=
     contribution_check_output=
+    merge_line_prune
     for c in "$STATE"/*.check.sh; do
       [ -e "$c" ] || continue
       is_pr_poll=0
@@ -3275,7 +3294,7 @@ EOF
         wake "$reason"
       fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$pr_line_held" -eq 1 ]; then
-        merge_line_stall_tick "$id" "$c" "$url" || continue
+        merge_line_stall_tick "$id" "$c" "$url"
       fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
         pr_green_blocked_tick "$id" "$c" "$url" "$pr_line_held"
@@ -3289,6 +3308,9 @@ EOF
       wake "$reason"
     fi
     touch "$STATE/.last-check"
+    if [ -n "$MERGE_LINE_PRUNE_WAKE" ]; then
+      wake "$MERGE_LINE_PRUNE_WAKE"
+    fi
     if [ -n "$contribution_check_output" ]; then
       wake "$contribution_check_output"
     fi
