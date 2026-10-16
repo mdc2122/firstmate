@@ -269,6 +269,11 @@ if ! fm_task_id_creation_valid "$RAW_ID"; then
   die "'$RAW_ID' is not a valid task id"
 fi
 ID=$RAW_ID
+# One supervisor action ledger row per lifecycle action
+# (bin/fm-action-ledger-lib.sh owns the format); best-effort, never blocking.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+. "$SCRIPT_DIR/fm-action-ledger-lib.sh"
+fm_action_ledger_record control "$VERB" "$ID" "$ID"
 # Supervision lease guard: lifecycle control is overlap territory between the
 # two Pi supervision actors; refuse while the OTHER actor holds this task's
 # live lease (contract: bin/fm-lease-lib.sh; no-op in homes without leases).

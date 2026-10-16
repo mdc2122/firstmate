@@ -176,6 +176,11 @@ PR_NUMBER=$FM_PR_NUMBER
 # glab resolves the instance from the project URL passed to -R, so the host is
 # rebuilt from the parsed identity rather than read from any ambient default.
 PROJECT_URL="https://$FM_PR_HOST/$FM_PR_PATH"
+# One supervisor action ledger row per merge request
+# (bin/fm-action-ledger-lib.sh owns the format); best-effort, never blocking.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+. "$SCRIPT_DIR/fm-action-ledger-lib.sh"
+fm_action_ledger_record pr-merge merge "$ID" "$URL"
 shift 2
 ATTENDED_OVERRIDE=false
 ALLOW_RED=()

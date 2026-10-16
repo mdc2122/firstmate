@@ -17,15 +17,20 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           kind), every status append the worker made (tool-call
                           timestamp), every steering-inbox message body it read
                           (schema=fm-task-inbox.v1 at=...), doorbells, turn ends, relaunches.
-                          Needed because state/<id>.status lines carry no timestamp
-                          and teardown deletes both the status log and the inbox.
-  S  supervisor transcripts the omp session directories of --home and of every local
-                          secondmate home registered in <home>/data/secondmates.md
-                          (omp names a session directory "-" + the cwd relative to ~,
-                          "/" -> "-"): fm-send / fm-control / fm-pr-check / fm-pr-merge /
-                          fm-merge-line / fm-captain-hold / fm-spawn / fm-teardown tool
-                          calls with timestamps.
-  L  live state           <home>/state/<id>.meta (in-flight set, yolo), live inbox files.
+                          Needed because a worker's own state/<id>.status lines carry no
+                          timestamp (only lines firstmate scripts append are stamped).
+  S  supervisor actions   the action ledger <home>/state/supervisor-actions.jsonl of --home and
+                          of every local secondmate home registered in <home>/data/secondmates.md
+                          (format: bin/fm-action-ledger-lib.sh): every fm-send / fm-control /
+                          fm-pr-check / fm-pr-merge / fm-merge-line / fm-captain-hold invocation
+                          with its time. A row whose origin is a firstmate script rather than
+                          "direct" is automation, never a touch. Before a home's first ledger
+                          row (the baseline window predates the ledger), the same calls come
+                          from that home's supervisor transcripts: its omp session directory
+                          (omp names it "-" + the cwd relative to ~, "/" -> "-"), which also
+                          always supplies the fm-spawn / fm-teardown calls.
+  L  live state           <home>/state/<id>.meta (in-flight set, yolo), steering-inbox records:
+                          live under state/<id>.inbox/, archived by teardown under data/<id>/inbox/.
   B  backlog              <home>/data/backlog.md + done-archive.md (kind, close state).
   N  no-mistakes ledger   --nm-db (default ~/.no-mistakes/state.sqlite, opened mode=ro):
                           runs by branch, pr_url, created_at, ci_ready_at, parked_ms.
@@ -246,7 +251,7 @@ def scan_workers(since_mtime):
                         txt = text_of(msg.get("content"))
                         if "FIRSTMATE_OP: v1 launch-brief" in txt[:60]:
                             if rec is None:
-                                m = re.search(r"((?:/Users|/home)/\S+?)/state/([A-Za-z0-9._-]+)\.status", txt)
+                                m = re.search(r"(?<![^\s'\"=])(/\S+?)/state/([A-Za-z0-9._-]+)\.status", txt)
                                 if not m:
                                     break
                                 mode = re.search(r"Delivery contract: mode=(\S+)", txt)
@@ -307,13 +312,73 @@ def local_secondmate_homes(home):
     return [m.group(1).strip() for m in (re.search(r"\(home: ([^;]+); scope: ", ln) for ln in lines) if m]
 
 
+# Action ledger rows (bin/fm-action-ledger-lib.sh) -> the act shapes SUP_PATTERNS produce,
+# so every touch and wait rule reads both sources identically. merge-line undeclare and
+# the captain-hold intakes have no transcript pattern and stay out, as before.
+LEDGER_KINDS = {"send", "control", "pr_check", "pr_merge", "merge_line", "hold"}
+
+
+def ledger_act(row):
+    verb, action, task, target = (row.get(k) or "" for k in ("verb", "action", "task", "target"))
+    if verb == "send":
+        return "send", (task or target,)
+    if verb == "control" and action in ("relaunch", "exit", "interrupt"):
+        return "control", (task, action)
+    if verb == "pr-check":
+        return "pr_check", (task, target)
+    if verb == "pr-merge":
+        return "pr_merge", (task, target, "")
+    if verb == "merge-line" and action in ("front", "enqueue", "remove", "declare"):
+        return "merge_line", (action, target)
+    if verb == "captain-hold" and action in ("hold", "answer", "complete"):
+        return "hold", (action, task)
+    return None
+
+
+def read_ledger(home):
+    """(first row epoch or None, [direct-origin acts by --as-of], row count) for one home."""
+    path = os.path.join(home, "state", "supervisor-actions.jsonl")
+    first, acts, n = None, [], 0
+    try:
+        fh = open(path, errors="replace")
+    except OSError:
+        return None, acts, n
+    with fh:
+        for raw in fh:
+            try:
+                row = json.loads(raw)
+                t = float(row["epoch"])
+            except (ValueError, KeyError, TypeError):
+                continue
+            n += 1
+            first = t if first is None else min(first, t)
+            if not seen(t) or row.get("origin") != "direct":
+                continue
+            act = ledger_act(row)
+            if act:
+                acts.append(dict(t=t, kind=act[0], groups=act[1], home=os.path.basename(home), file="supervisor-actions.jsonl"))
+    return first, acts, n
+
+
 def scan_supervisors(since_mtime, home):
-    """Supervisor fm-* calls by --as-of, plus every fm-teardown call after it (task -> times)."""
+    """Supervisor actions by --as-of, plus every fm-teardown call after it (task -> times).
+    Per home, the action ledger owns every verb it records from its first row on; that
+    home's transcripts supply those verbs only before it, and fm-spawn / fm-teardown always."""
     acts = []
     coverage = []
     late_teardowns = defaultdict(list)
-    dirs = [d for d in dict.fromkeys(session_dir(p) for p in [home] + local_secondmate_homes(home)) if os.path.isdir(d)]
+    homes = list(dict.fromkeys(os.path.realpath(p) for p in [home] + local_secondmate_homes(home)))
+    ledger_from = {}
+    for h_ in homes:
+        first, rows, n = read_ledger(h_)
+        acts.extend(rows)
+        if n:
+            ledger_from[session_dir(h_)] = first
+            coverage.append(dict(dir=os.path.basename(h_), file="state/supervisor-actions.jsonl", first=iso(first),
+                                 last=iso(max((a["t"] for a in rows), default=first)), rows=n))
+    dirs = [d for d in dict.fromkeys(session_dir(p) for p in homes) if os.path.isdir(d)]
     for dpath in dirs:
+        cutoff = ledger_from.get(dpath)
         for f in sorted(glob.glob(os.path.join(dpath, "*.jsonl"))):
             if os.path.getmtime(f) < since_mtime:
                 continue
@@ -346,7 +411,11 @@ def scan_supervisors(since_mtime, home):
                                 if kind == "teardown":
                                     if late:
                                         late_teardowns[m.group(1)].append(t)
-                                elif not late:
+                                elif late:
+                                    continue
+                                elif kind in LEDGER_KINDS and cutoff is not None and t is not None and t >= cutoff:
+                                    continue   # the ledger owns this verb from its first row on
+                                else:
                                     acts.append(dict(t=t, kind=kind, groups=m.groups(), home=os.path.basename(dpath), file=os.path.basename(f)))
             coverage.append(dict(dir=os.path.basename(dpath), file=os.path.basename(f), first=iso(first), last=iso(last)))
     return acts, coverage, late_teardowns
@@ -389,17 +458,18 @@ def read_meta(path):
 
 
 def live_inbox(home, task):
-    msgs = []
-    for p in glob.glob(os.path.join(home, "state", f"{task}.inbox", "*.msg")) + \
-             glob.glob(os.path.join(home, "state", f"{task}.inbox", "handled", "*.msg")):
-        try:
-            txt = open(p, errors="replace").read()
-        except OSError:
-            continue
-        m = re.match(r"schema=fm-task-inbox\.v1\nat=(\S+)\n((?:[a-z_]+=\S*\n)*)--\n(.*)", txt, re.S)
-        if m and seen(ts(m.group(1))):
-            msgs.append((ts(m.group(1)), m.group(2), m.group(3).strip()))
-    return msgs
+    """Steering-inbox records still in state/ and those teardown archived into data/<id>/inbox/."""
+    msgs = {}
+    for d in (os.path.join(home, "state", f"{task}.inbox"), os.path.join(home, "data", task, "inbox")):
+        for p in glob.glob(os.path.join(d, "*.msg")) + glob.glob(os.path.join(d, "handled", "*.msg")):
+            try:
+                txt = open(p, errors="replace").read()
+            except OSError:
+                continue
+            m = re.match(r"schema=fm-task-inbox\.v1\nat=(\S+)\n((?:[a-z_]+=\S*\n)*)--\n(.*)", txt, re.S)
+            if m and seen(ts(m.group(1))):
+                msgs[(m.group(1), m.group(3).strip())] = (ts(m.group(1)), m.group(2), m.group(3).strip())
+    return list(msgs.values())
 
 
 # ---------------------------------------------------------------- no-mistakes (N)

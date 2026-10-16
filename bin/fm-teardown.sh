@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Tear down a finished task: return the treehouse worktree, release the Orca
 # worktree, or retire a secondmate home; kill the recorded runtime endpoint,
-# clear volatile state, and transition this home's backlog item for ship and
-# scout tasks before reporting success (a secondmate teardown transitions none,
-# since secondmates are not backlog items), then refresh/prune the project's
-# clone for PR-based ship tasks.
+# archive the task's status log and steering inbox into data/<id>/ (a failed
+# archive stops before any task record is removed), clear volatile state, and
+# transition this home's backlog item for ship and scout tasks before reporting
+# success (a secondmate teardown transitions none, since secondmates are not
+# backlog items), then refresh/prune the project's clone for PR-based ship tasks.
 # An endpoint whose close could not do its job REFUSES before any record naming
 # it is removed: those records are the only thing that names what survived, so
 # reporting such a close as a completed cleanup strands the endpoint instead of
@@ -849,6 +850,35 @@ remote_outbox_cleanup() {
   )
 }
 
+# Keep the task's wait evidence: copy its status log and steering inbox
+# (pending and handled/ records alike) into data/<id>/ as data/<id>/status and
+# data/<id>/inbox/, before the cleanup below removes the state copies. Runs
+# after the endpoint is closed, so nothing appends behind the copy. Both
+# sources only grow, so a rerun after an interrupted teardown refreshes the
+# archive to a superset. A failed copy returns 1 and the caller stops with
+# every state record retained, because evidence is never deleted unarchived.
+archive_task_evidence() {  # <state-dir> <data-dir> <task-id>
+  local state_dir=$1 data_dir=$2 id=$3 dest tmp
+  dest="$data_dir/$id"
+  if [ ! -e "$state_dir/$id.status" ] && [ ! -d "$state_dir/$id.inbox" ]; then
+    return 0
+  fi
+  mkdir -p "$dest" || return 1
+  if [ -f "$state_dir/$id.status" ] && [ ! -L "$state_dir/$id.status" ]; then
+    tmp="$dest/.status.tmp.$$"
+    if cp -p "$state_dir/$id.status" "$tmp" && mv -f "$tmp" "$dest/status"; then
+      :
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  if [ -d "$state_dir/$id.inbox" ] && [ ! -L "$state_dir/$id.inbox" ]; then
+    mkdir -p "$dest/inbox" || return 1
+    cp -Rp "$state_dir/$id.inbox/." "$dest/inbox/" || return 1
+  fi
+}
+
 remote_secondmate_teardown() {
   local remote_host remote_root remote_home kind route_host route_root route_home out rc tmp rec phase task_id
   remote_host=$(fm_meta_get "$META" remote_host)
@@ -920,6 +950,10 @@ remote_secondmate_teardown() {
   tmp="$SECONDMATE_REG.tmp.$$"
   grep -vE "^- $ID( |$)" "$SECONDMATE_REG" > "$tmp" || true
   mv -f -- "$tmp" "$SECONDMATE_REG"
+  archive_task_evidence "$STATE" "$DATA" "$ID" || {
+    echo "error: $ID's status log could not be archived into $DATA/$ID; preserving the local route for retry" >&2
+    return 1
+  }
   status_retire_presentation_task "$STATE" "$ID" || return 1
   fm_backlog_atomic_transition remove "$STATE/$ID.meta" "task record" "$STATE" || return 1
   rm -f -- "$STATE/$ID.turn-ended" "$STATE/$ID.progress"
@@ -3915,6 +3949,8 @@ if [ "$KIND" != secondmate ]; then
     exit 1
   fi
 fi
+archive_task_evidence "$STATE" "$DATA" "$ID" \
+  || { echo "error: $ID's status log and steering inbox could not be archived into $DATA/$ID; retaining every durable task record so a rerun can retry the archive" >&2; exit 1; }
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
   handoff_wake_retire_stage \
@@ -3954,7 +3990,8 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 [ -z "$T" ] || watch_window_markers_retire "$STATE" "$(window_key "$T")" || true
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
 # retired endpoint; teardown only runs after landing is confirmed, so any
-# leftover unhandled steer here is moot rather than unlanded work.
+# leftover unhandled steer here is moot rather than unlanded work. Its records
+# were archived into data/<id>/inbox/ above.
 rm -rf "$STATE/$ID.inbox"
 # The record is gone, so the backlog must not still show this task in flight
 # when teardown reports success. Still under this task's meta lock, so a steer

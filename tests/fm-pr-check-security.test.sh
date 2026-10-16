@@ -111,6 +111,9 @@ state_snapshot() {
   (
     cd "$state" || exit 1
     find . \( -type f -o -type l \) -print | LC_ALL=C sort | while IFS= read -r file; do
+      # The supervisor action ledger is a fleet-wide append-only record every
+      # firstmate verb writes (bin/fm-action-ledger-lib.sh), not poll state.
+      case "$file" in ./supervisor-actions.jsonl) continue ;; esac
       if [ -L "$file" ]; then
         printf 'link %s %s\n' "$file" "$(readlink "$file")"
       else

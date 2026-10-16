@@ -406,14 +406,15 @@ normalize_payload() { # <source> <destination>
   LC_ALL=C tr '\000-\010\013-\037\177' '?' < "$1" > "$2"
 }
 
-# Adapter-authored escalations and notes use exact-byte append suppression.
-# Mirrored payload lines use their pre-rewrite source identity in
-# stage_mirror_lines instead, because delivery state can change between replays.
+# Adapter-authored escalations and notes are this home's own lines: they carry
+# a write-time stamp and use exact-line append suppression that ignores it
+# (bin/fm-status-stamp-lib.sh, sourced through fm-pending-reply-lib.sh).
+# Mirrored payload lines are the remote worker's own words and stay verbatim;
+# they use their pre-rewrite source identity in stage_mirror_lines instead,
+# because delivery state can change between replays.
 # Returns 0 appended, 1 already present, 2 the write itself failed.
 append_status_once() { # <status-file> <line>
-  grep -Fqx -- "$2" "$1" 2>/dev/null && return 1
-  printf '%s\n' "$2" >> "$1" || return 2
-  return 0
+  fm_status_append_once "$1" "$2"
 }
 
 # Stage whole-stream additions by exact normalized source line, before pointer

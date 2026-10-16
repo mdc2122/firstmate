@@ -145,6 +145,13 @@ prime_seen() { # <state> <status>
 
 reap() { kill "$1" 2>/dev/null || true; wait "$1" 2>/dev/null || true; }
 
+# 0 when <file> holds <line> exactly, comparing each line with its trailing
+# write-time stamp (bin/fm-status-stamp-lib.sh) set aside; delivered parent
+# lines carry one.
+has_status_line() { # <line> <file>
+  sed -E 's/ \[at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\]$//' "$2" 2>/dev/null | grep -Fxq -- "$1"
+}
+
 # The main retains a terminal presentation receipt until the corresponding wake
 # is handled and acknowledged.
 test_main_direct_terminal_presentation_receipt() {
@@ -177,7 +184,7 @@ test_local_secondmate_delivers_terminal_ledger_line() {
   FM_FAKE_CREW_STATE='unknown' run_reconcile "$MATE"
   key=$(reported_outcome_key "$MATE" child 'done') || fail "ledger receipt did not retain its collision-resistant key"
   expected="done [key=$key]: child child done: PR https://example.test/owner/repo/pull/1 checks green pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off"
-  grep -Fxq "$expected" "$MAIN/state/mate.status" \
+  has_status_line "$expected" "$MAIN/state/mate.status" \
     || fail "secondmate did not deliver the child's ledger line on a plain poll: $(cat "$MAIN/state/mate.status" 2>/dev/null)"
   [ "$(outcome_count "$MATE" reported)" = 1 ] || fail "ledger delivery receipt was not durable"
   FM_FAKE_CREW_STATE='unknown' run_reconcile "$MATE"
@@ -240,11 +247,11 @@ test_secondmate_ledger_delivery_carries_report_and_failure() {
   scout_key=$(reported_outcome_key "$MATE" scout 'done') || fail "scout receipt key missing"
   boom_key=$(reported_outcome_key "$MATE" boom failed) || fail "failed receipt key missing"
   replaced_key=$(reported_outcome_key "$MATE" replaced-pr 'done') || fail "replacement PR receipt key missing"
-  grep -Fxq "done [key=$scout_key]: child scout done: report written pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off report=data/scout/report.md" \
+  has_status_line "done [key=$scout_key]: child scout done: report written pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off report=data/scout/report.md" \
     "$MAIN/state/mate.status" || fail "scout delivery lost its report pointer: $(cat "$MAIN/state/mate.status")"
-  grep -Fxq "failed [key=$boom_key]: child boom failed: build broke pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off" \
+  has_status_line "failed [key=$boom_key]: child boom failed: build broke pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" || fail "failed line was not delivered under the failed verb: $(cat "$MAIN/state/mate.status")"
-  grep -Fxq "done [key=$replaced_key]: child replaced-pr done: PR https://example.test/owner/repo/pull/22 pr=https://example.test/owner/repo/pull/22 mode=no-mistakes yolo=off" \
+  has_status_line "done [key=$replaced_key]: child replaced-pr done: PR https://example.test/owner/repo/pull/22 pr=https://example.test/owner/repo/pull/22 mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" || fail "ledger fallback did not prefer the terminal ready line PR: $(cat "$MAIN/state/mate.status")"
   printf 'working: retrying\ndone: fixed on retry\n' >> "$MATE/state/boom.status"
   FM_FAKE_CREW_STATE='unknown' run_reconcile "$MATE"
@@ -276,13 +283,13 @@ test_pr_field_requires_recorded_pr_or_ready_signal_line() {
   prose_key=$(reported_outcome_key "$MATE" prose 'done') || fail "prose receipt key missing"
   ready_key=$(reported_outcome_key "$MATE" ready 'done') || fail "ready receipt key missing"
   scout_key=$(reported_outcome_key "$MATE" lookout 'done') || fail "scout receipt key missing"
-  grep -Fxq "done [key=$prose_key]: child prose done: cleanup finished mode=no-mistakes yolo=off" \
+  has_status_line "done [key=$prose_key]: child prose done: cleanup finished mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" \
     || fail "a PR mentioned only in prose was claimed as the delivery: $(cat "$MAIN/state/mate.status")"
-  grep -Fxq "done [key=$ready_key]: child ready done: PR https://example.test/owner/repo/pull/44 checks green pr=https://example.test/owner/repo/pull/44 mode=no-mistakes yolo=off" \
+  has_status_line "done [key=$ready_key]: child ready done: PR https://example.test/owner/repo/pull/44 checks green pr=https://example.test/owner/repo/pull/44 mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" \
     || fail "a ready-signal terminal line did not carry its PR: $(cat "$MAIN/state/mate.status")"
-  grep -Fxq "done [key=$scout_key]: child lookout done: PR https://example.test/owner/repo/pull/55 mode=no-mistakes yolo=off" \
+  has_status_line "done [key=$scout_key]: child lookout done: PR https://example.test/owner/repo/pull/55 mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" \
     || fail "a scout's ready-looking line carried a PR claim: $(cat "$MAIN/state/mate.status")"
   pass "pr= requires the recorded PR or a ready-signal terminal line, and never a scout"
@@ -701,7 +708,7 @@ test_watcher_poll_delivers_child_ledger_line_to_parent() {
   done
   reap "$pid"
   key=$(reported_outcome_key "$MATE" child 'done') || fail "watcher ledger receipt key missing"
-  grep -Fxq "done [key=$key]: child child done: PR https://example.test/owner/repo/pull/1 checks green pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off" \
+  has_status_line "done [key=$key]: child child done: PR https://example.test/owner/repo/pull/1 checks green pr=https://example.test/owner/repo/pull/1 mode=no-mistakes yolo=off" \
     "$MAIN/state/mate.status" \
     || fail "the watcher poll did not deliver the child's ledger line to the parent: $(cat "$MAIN/state/mate.status" 2>/dev/null; cat "$WORLD/mate-watch.out")"
   [ ! -s "$WORLD/forge.log" ] || fail "ledger delivery invoked a forge command"

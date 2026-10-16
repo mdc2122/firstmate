@@ -429,6 +429,21 @@ cmd_show() {
   done
 }
 
+# One supervisor action ledger row per line change (bin/fm-action-ledger-lib.sh
+# owns the format); the task is the one that armed the PR, when any did. Runs in
+# a subshell so the lookup leaves no repository or poll state behind, and is
+# best-effort, never blocking the change itself.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+. "$FM_MERGE_LINE_DIR/fm-action-ledger-lib.sh"
+ledger_record() {  # <action> <url>
+  local target=$2 task=''
+  if fm_pr_url_parse "$2" 2>/dev/null; then
+    target=$FM_PR_URL
+    task=$( { resolve_repo "$target" && ARMED=$(armed_polls) && armed_task "$target"; } 2>/dev/null ) || task=''
+  fi
+  fm_action_ledger_record merge-line "$1" "$task" "$target"
+}
+
 main() {
   local cmd=${1-}
   [ -n "$cmd" ] || { usage >&2; exit 2; }
@@ -439,6 +454,9 @@ main() {
     show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
+  esac
+  case "$cmd" in
+    declare|undeclare|front|enqueue|remove) ledger_record "$cmd" "$1" ;;
   esac
   case "$cmd" in
     declare) cmd_declare "$@" ;;

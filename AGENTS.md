@@ -97,9 +97,10 @@ data/                personal fleet records; LOCAL, gitignored as a whole
   secondmates.md      local and remote secondmate routing table; firstmate-private, maintained by the secondmate seed helpers (section 6)
   <id>/brief.md      per-task crewmate brief, or per-secondmate charter brief when kind=secondmate
   <id>/report.md     scout task deliverable, written by the crewmate; survives teardown
+  <id>/status <id>/inbox/  the task's status log and steering inbox (with handled/), archived by teardown before it removes the state copies
 projects/            cloned repos; gitignored; read-only except under hard rule 1's concrete captain-approved project operation exception
 state/               runtime records and signals; gitignored
-  <id>.status        appended by crewmates: "<state>: <note>" wake-event lines, not current-state truth
+  <id>.status        appended by crewmates: "<state>: <note>" wake-event lines, not current-state truth; lines firstmate scripts append carry a trailing write-time stamp (bin/fm-status-stamp-lib.sh)
   <id>.turn-ended    touched by turn-end hooks
   <id>.progress      touched for observed native-harness activity inside one Pi turn; bin/fm-busy-event.sh owns its generation binding and bin/fm-watch.sh reads it beside turn-ended for the busy-age bound only, never as a completed turn
   <id>.grok-turnend-token   firstmate-owned grok hook registry token for the task; removed by teardown
@@ -109,7 +110,7 @@ state/               runtime records and signals; gitignored
   <id>.cursor-session  cursor busy-source binding (projects root, task worktree, prior conversations) written by fm-spawn; removed by teardown
   <id>.reconcile-nudged  epoch second of the last inventory-reconcile nudge sent to this secondmate; bin/fm-secondmate-reconcile.sh owns its per-home cooldown window
   <id>.backlog-close  the exact backlog transition a teardown recorded before removing the task's record, so an interrupted cleanup can still be finished at the next session start; bin/fm-backlog-transition-lib.sh owns its format and replay, and a landed transition removes it
-  <id>.inbox/          durable steering inbox: sequenced firstmate instruction records the worker acknowledges by moving them into its handled/ subdirectory; written by fm-send, with ordinary records re-rung and escalated by the watcher while explicit fire-and-forget records are excluded from that ladder, and removed by teardown (bin/fm-task-inbox-lib.sh)
+  <id>.inbox/          durable steering inbox: sequenced firstmate instruction records the worker acknowledges by moving them into its handled/ subdirectory; written by fm-send, with ordinary records re-rung and escalated by the watcher while explicit fire-and-forget records are excluded from that ladder, and archived into data/<id>/inbox/ then removed by teardown (bin/fm-task-inbox-lib.sh)
   <id>.meta          task metadata; each producer script's header owns its exact fields and mutation contract, with docs/configuration.md routing operator-facing backend and trace-context details
   <id>.herdr-presentation  quarantinable attempt and restart-binding journal for Herdr's optional visual projection; never task or endpoint authority; see docs/herdr-backend.md "Presentation spaces"
   <id>.check.sh      authenticated slow poll; the watcher dispatches validated PR data and the byte-identified Relay shim through trusted repository scripts, runs registered custom checks from hash-validated private snapshots, and rejects every other state check without execution
@@ -125,6 +126,7 @@ state/               runtime records and signals; gitignored
   <id>.queue-away-refused  "<url> <head>" of the last pull-request head whose yolo merge to a merge-queue app branch was refused while away; bin/fm-watch.sh's pr_queue_away_refused_tick owns its format and the one wake per head, and it retires with the merged poll and at teardown
   <id>.queue-stall  merge-queue wait episode (URL, head commit, first-seen epoch, alerted flag) for a pull request the queue still holds at one head; bin/fm-watch.sh's pr_queue_merge_tick owns its format and the one wake per pull request and head after FM_MERGE_LINE_STALL_SECS, and it retires with the merged poll and at teardown
   .pr-sweep .last-pr-sweep  forge-side PR sweep's once-per-PR report record and cadence marker; bin/fm-pr-sweep.sh owns the record's format
+  supervisor-actions.jsonl  append-only supervisor action ledger: one row (time, task, verb, target, origin) per fm-send, fm-control, fm-pr-check, fm-pr-merge, fm-merge-line, and fm-captain-hold action; bin/fm-action-ledger-lib.sh owns the format and bin/fm-flow-wait.py reads it
   branch-outcomes.jsonl .branch-outcomes-cursor .branch-outcomes-processed .<task>.branch-outcome-index .branch-outcome-index-ready  Pi supervision-branch durable outcome store, its read cursor, main's processed marker, bounded latest per-task status-coverage caches, and their recovery marker; bin/fm-branch-outcome.sh owns the formats
   branch-session/ .branch-session .branch-mirror-cursor  the branch's per-main-session conversations, the pointer to the current one, and the dialog-mirror cursor; extension-owned (docs/pi-supervision-branch.md)
   omp-branch-shadow.jsonl .omp-branch-extension-loaded  the omp report-only shadow log (what the branch would have done) and its loaded-build marker; extension-owned (docs/supervision-protocols/omp.md)

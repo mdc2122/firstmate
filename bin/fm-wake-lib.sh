@@ -2325,6 +2325,11 @@ fm_wake_status_append_self_announced() {  # <state> <status-file> <line>
   local state=$1 file=$2 line=$3 marker pre_sig='' pre_size='' pre_ident='' post_size post_ident
   local LC_ALL=C
   _fm_wake_require_classify || return 1
+  # The appended line carries its write-time stamp (bin/fm-status-stamp-lib.sh).
+  # shellcheck source=bin/fm-status-stamp-lib.sh
+  command -v fm_status_stamp >/dev/null 2>&1 \
+    || . "$FM_WAKE_LIB_DIR/fm-status-stamp-lib.sh"
+  line=$(fm_status_stamp "$line")
   marker=$(fm_wake_signal_seen_path "$state" "$file")
   if [ -e "$file" ]; then
     pre_sig=$(fm_wake_signal_sig "$file") || pre_sig=''
