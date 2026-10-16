@@ -1,0 +1,102 @@
+{
+ "window": [
+  "2026-10-16",
+  "2026-10-17"
+ ],
+ "generated": "2026-10-16T22:29:16Z",
+ "now_cap": "2026-10-16T22:29:26Z",
+ "tasks_spawned": 3,
+ "excluded": 0,
+ "measured": 3,
+ "settled": 3,
+ "live_proven": 3,
+ "closed_not_live": 0,
+ "in_flight": 0,
+ "zero_touch_live": 0,
+ "zero_touch_share_of_settled_pct": 0.0,
+ "zero_touch_share_of_live_pct": 0.0,
+ "in_flight_untouched_so_far": 0,
+ "upper_bound_if_all_untouched_inflight_land_pct": 0.0,
+ "by_kind": {
+  "scout": {
+   "settled": 3,
+   "zero_touch_live": 0,
+   "live": 3
+  }
+ },
+ "touches_total": 4,
+ "touches_by_type": {
+  "steer": 1,
+  "direct": 3
+ },
+ "steer_purposes": {
+  "unclassified": 1
+ },
+ "steer_answerers": {
+  "firstmate": 1
+ },
+ "script_steers_excluded": 2,
+ "flash_classified_rows": {
+  "steers": 0,
+  "pauses": 0
+ },
+ "wait_hours_by_class": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.0,
+  "of_which_handoff_idle": 0.0
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.0
+ }
+}
+wrote /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M53ASGSEHXE523J5E69H1FVJ/.test-switch-lab/report
+ scanning worker transcripts ...
+  3 launch-brief sessions
+scanning supervisor transcripts ...
+warning: release queue /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M53ASGSEHXE523J5E69H1FVJ/.test-switch-lab/none.jsonl missing; every merged mdc2122/viral-moment ship stays in-flight
+flash: 1 ambiguous records
+
+[
+  {
+    "task": "human-control",
+    "at": "2026-10-16T22:28:46Z",
+    "source": "live-inbox",
+    "script_template": "",
+    "purpose": "unclassified",
+    "answerer": "firstmate",
+    "classified_by": "rule",
+    "in_span": "True",
+    "body": "Please change the implementation to option B."
+  },
+  {
+    "task": "notice-secondmate",
+    "at": "2026-10-16T22:28:46Z",
+    "source": "live-inbox",
+    "script_template": "model-switch-notice",
+    "purpose": "script:model-switch-notice",
+    "answerer": "firstmate",
+    "classified_by": "rule",
+    "in_span": "True",
+    "body": "\u2063FROM_FIRSTMATE: delivery=123 Your model was switched in place from local-test/alpha to local-test/beta. Reason: disposable live acceptance. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next statu"
+  },
+  {
+    "task": "notice-worker",
+    "at": "2026-10-16T22:28:46Z",
+    "source": "live-inbox",
+    "script_template": "model-switch-notice",
+    "purpose": "script:model-switch-notice",
+    "answerer": "firstmate",
+    "classified_by": "rule",
+    "in_span": "True",
+    "body": "Your model was switched in place from local-test/alpha to local-test/beta. Reason: disposable live acceptance. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next status line."
+  }
+]

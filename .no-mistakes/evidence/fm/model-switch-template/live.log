@@ -1,0 +1,47 @@
+### Before first turn refusal
+exit=1
+error: task t1's composer state is 'pending', not proven empty; refusing to type the switch command where it could concatenate onto existing text
+
+
+### Unknown model refuses without notice
+exit=1
+error: task t1's omp session recorded no model change within 3s after '/switch nosuch-provider/nosuch-model' (submit verdict: empty); omp refuses an unknown model without switching, so it is still on local-test/alpha and no notice was sent. Check its composer for leftover text before the next steer
+
+
+### Confirmed in-place switch preserving high effort
+exit=0
+switched-model t1 harness=omp from=local-test/alpha to=local-test/beta effort=high backend=tmux endpoint=lab:fm-t1 notice=inbox
+
+
+Persisted notice:
+schema=fm-task-inbox.v1
+at=2026-10-16T22:28:46Z
+--
+Your model was switched in place from local-test/alpha to local-test/beta. Reason: disposable live acceptance. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next status line.
+
+Durable task profile:
+window=lab:fm-t1
+endpoint_task_id=t1
+worktree=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M53ASGSEHXE523J5E69H1FVJ/.test-switch-lab/home/wt
+project=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M53ASGSEHXE523J5E69H1FVJ/.test-switch-lab/home/wt
+harness=omp
+kind=ship
+spawn_gen=s1792189704.123.456
+busy_gen=g1792189712.59323.24826
+model=local-test/beta
+effort=high
+
+
+### Already-running no-op sends no duplicate
+exit=1
+error: task t1 is already running local-test/beta; nothing was switched
+
+
+### Ambiguous current records refuse
+exit=1
+error: no unique omp session record is bound to task t1's current spawn; exactly one record written at or after its spawn epoch is required, so complete its first turn before switching. Nothing was sent
+
+
+### Historical-only record refuses rather than claiming already running
+exit=1
+error: no unique omp session record is bound to task t1's current spawn; exactly one record written at or after its spawn epoch is required, so complete its first turn before switching. Nothing was sent
