@@ -395,9 +395,10 @@ The [Claude adapter reference](../.agents/skills/harness-adapters/references/har
 
 Each home caps work in progress per lane: validations (a ship before its pull request), merges (a ship whose pull request awaits its merge), reviews, and investigations.
 `bin/fm-spawn.sh` refuses a fresh ship or scout whose lane is at its cap, naming the lane, the cap, and every task occupying it, and leaves the backlog item Queued; `bin/fm-queue-zero.sh` lists a ready row for dispatch only while its lane has a free slot.
+PR registration and scout promotion also enforce lane admission before changing task metadata; when refused, finish existing work and retry rather than starting replacement work.
 Relaunches and secondmate spawns are never capped, and a blocked or parked task keeps its slot until it finishes or is cleaned up.
-A captain's direct dispatch order and outage or security work may bypass a cap with `--cap-bypass` and a reason; the bypass is recorded in the task record and in `data/wip-cap-bypasses.log`.
-The optional local, gitignored `config/wip-caps` overrides the measured defaults with `<lane>=<positive integer>` lines; any other content refuses dispatch rather than falling back to a default, and the file is not inherited by secondmate homes.
+A captain's direct dispatch order and outage or security work may bypass a cap with `--cap-bypass` and a reason; the bypass is recorded in the task record and, once the spawn succeeds, in `data/wip-cap-bypasses.log`.
+The optional local, gitignored `config/wip-caps` overrides the measured defaults with `<lane>=<positive integer>` lines, allowing blank lines and `#` comments; invalid or unreadable configuration refuses admission rather than falling back to a default, and the file is not inherited by secondmate homes.
 [`bin/fm-wip-caps-lib.sh`](../bin/fm-wip-caps-lib.sh) owns the lanes, the measured defaults and the baseline they are sized from, what holds a slot, and the pull order.
 
 ## Worker launch environment (config/launch-env-allowlist)
