@@ -3146,7 +3146,10 @@ while :; do
           # bin/fm-merge-line.sh's gate holds every PR but the line's head, so
           # a held PR is neither merged nor rerun-steered until it reaches the
           # head; it keeps its own green-unmergeable episode. No line, no hold.
-          if [ -z "$out" ] \
+          # A PR already handed to its merge queue sits in the line's queue
+          # window instead (the windowed gate below), so the queue, not a
+          # later sweep, orders it.
+          if [ -z "$out" ] && [ "$PR_QUEUE_HOLD" -eq 0 ] \
             && ! line_gate_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
               "$SCRIPT_DIR/fm-merge-line.sh" gate "$url" 2>&1); then
             pr_line_held=1
@@ -3161,8 +3164,18 @@ while :; do
           # on it must be released first and retaken afterwards. A confirmed
           # landing is recognized by the merge-notified marker the merge path
           # commits with its durable outcome, which also covers a queued or
-          # unconfirmed acceptance that must keep polling.
-          if [ -z "$out" ] && [ "$pr_line_held" -eq 0 ] && [ "$PR_QUEUE_HOLD" -eq 0 ] \
+          # unconfirmed acceptance that must keep polling. A line-held PR is
+          # attempted only when the line's windowed gate - a cheap local check
+          # of the same record the merge path enforces again live - admits it:
+          # on a merge-queue-app base whose head is queued, the queue orders
+          # the entry, and on every other base the plain hold above stands.
+          line_window=0
+          if [ "$pr_line_held" -eq 1 ] \
+            && FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+              "$SCRIPT_DIR/fm-merge-line.sh" gate --window "$url" >/dev/null 2>&1; then
+            line_window=1
+          fi
+          if [ -z "$out" ] && [ "$PR_QUEUE_HOLD" -eq 0 ] && { [ "$pr_line_held" -eq 0 ] || [ "$line_window" -eq 1 ]; } \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
             pr_poll_control_release || exit 1
             FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \

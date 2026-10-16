@@ -3,13 +3,29 @@
 #
 # A merge line is an ordered list of armed PRs for one repository that lands
 # them one at a time, in order. While a repository has a declared line, only
-# the PR at the head of that line may merge: bin/fm-watch.sh's yolo merge poll
+# the head of that line may merge directly: bin/fm-watch.sh's yolo merge poll
 # and its behind-base rerun steer act only on the head, and bin/fm-pr-merge.sh
 # refuses any other PR of that repository (so an attended merge goes through
 # the same order; move the PR to the head first with `front`). A PR behind the
 # head stays armed and green but neither merges nor gets rerun-steered until it
 # reaches the head; it keeps its own green-unmergeable episode. A repository
 # with no declared line behaves exactly as if this script did not exist.
+#
+# QUEUE WINDOW. Because a base branch whose effective rules require a
+# merge-queue app's own check cannot merge directly at all (bin/fm-pr-merge.sh
+# hands such a PR to its queue through GitHub auto-merge), the queue, not the
+# line, serializes there: once the line's head has been handed to that queue
+# (its task's state/<id>.queue-merge records the request), the first
+# FM_MERGE_LINE_QUEUE_WINDOW (default 3) listed armed entries starting at the
+# head may each be handed to the queue as well, in line order, so the queue
+# holds the order and starts each test the moment its predecessor lands.
+# `gate --window` admits exactly those entries. The window opens only behind a
+# queued head: with the head not queued, or a window size of 1, the single-head
+# gate above is the whole contract. A fronted entry that no queue holds blocks
+# the window behind it exactly as it blocks the head, so a constraint PR
+# fronted during a freeze is never overtaken. A queue ejection, a red entry,
+# or an entry no poll arms simply never lands from the window; the queue and
+# the watcher's own episode wakes report it, and the next entry arms instead.
 #
 # Repository identity is bin/fm-pr-lib.sh's provider-tagged identity
 # (provider, host, path), derived from a canonical PR URL or a repository URL
@@ -66,9 +82,15 @@
 #   fm-merge-line.sh front <pr-url>             move (or add) the PR to the head
 #   fm-merge-line.sh enqueue <pr-url>           append at the tail if lined and not listed
 #   fm-merge-line.sh remove <pr-url>            drop the PR from its line
-#   fm-merge-line.sh gate <pr-url>              exit 0 when the PR may merge now (no line,
-#                                               or it is the head); exit 3 and print why
-#                                               when it is held; exit 1 on an unreadable line
+#   fm-merge-line.sh gate <pr-url> [--window] exit 0 when the PR may merge now
+#                                               (no line, the head, or - with
+#                                               --window on a merge-queue-app
+#                                               base whose head is queued -
+#                                               one of the first
+#                                               FM_MERGE_LINE_QUEUE_WINDOW
+#                                               armed entries); exit 3 and
+#                                               print why when it is held;
+#                                               exit 1 on an unreadable line
 #   fm-merge-line.sh head <pr-or-repo-url>      print the effective head URL (empty when none);
 #                                               exit 2 without a line, 1 on an unreadable line
 #   fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
@@ -323,10 +345,56 @@ effective_head() {
   return 1
 }
 
-cmd_gate() {
-  local url=${1-} rc=0 head
+# The window: the first FM_MERGE_LINE_QUEUE_WINDOW eligible entries starting
+# at the effective head, one per line. An entry is eligible when a task's poll
+# arms it or it is fronted; an entry whose task's queue record reads ejected
+# is skipped, not re-armed. A fronted entry the queue does not hold is listed
+# and ends the listing: the queue holds nothing behind a fronted entry it does
+# not hold, so a constraint PR fronted during a freeze is never overtaken.
+# Whether the window is open at all (the head is queued) is the caller's
+# check, not this listing's.
+FM_MERGE_LINE_QUEUE_WINDOW=${FM_MERGE_LINE_QUEUE_WINDOW:-3}
+case "$FM_MERGE_LINE_QUEUE_WINDOW" in
+  ''|*[!0-9]*|0|1) FM_MERGE_LINE_QUEUE_WINDOW=1 ;;
+esac
+queue_recorded() {  # <url> <status>
+  local id
+  id=$(armed_task "$1")
+  [ -n "$id" ] || return 1
+  fm_pr_queue_merge_record_read "$STATE" "$id" || return 1
+  [ "$FM_PR_QUEUE_MERGE_URL" = "$1" ] && [ "$FM_PR_QUEUE_MERGE_STATUS" = "$2" ]
+}
+queued_head() {  # <url>
+  queue_recorded "$1" requested
+}
+window_entries() {
+  local e n=0
+  for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+    if [ -n "$(armed_task "$e")" ]; then
+      queue_recorded "$e" ejected && continue
+      printf '%s\n' "$e"
+      n=$((n + 1))
+      fronted "$e" && ! queued_head "$e" && return 0
+    elif fronted "$e"; then
+      printf '%s\n' "$e"
+      n=$((n + 1))
+      return 0
+    else
+      continue
+    fi
+    [ "$n" -lt "$FM_MERGE_LINE_QUEUE_WINDOW" ] || return 0
+  done
+}
+
+cmd_gate() {  # <url> [--window] in either order
+  local url=${1-} mode=${2-} rc=0 head e admitted='' n=0
+  if [ "$url" = --window ]; then
+    mode=$url
+    url=${2-}
+  fi
   fm_pr_url_parse "$url" || die "not a canonical PR URL: $url" 2
   resolve_repo "$url" || die "not a canonical PR URL: $url" 2
+  case "$mode" in ''|--window) ;; *) die "usage: gate <pr-url> [--window]" 2 ;; esac
   read_line || rc=$?
   case "$rc" in
     0) ;;
@@ -340,6 +408,21 @@ cmd_gate() {
   load_armed
   head=$(effective_head) || head=
   [ "$head" = "$url" ] && return 0
+  if [ "$mode" = --window ]; then
+    if [ -z "$head" ] || ! queued_head "$head"; then
+      printf 'held: %s waits behind %s in the merge line for %s; its head is not in a merge queue\n' \
+        "$url" "${head:-<none armed>}" "$(repo_label)"
+      return "$FM_MERGE_LINE_HELD"
+    fi
+    while IFS= read -r e; do
+      [ "$e" = "$url" ] && admitted=1 && break
+      n=$((n + 1))
+    done < <(window_entries)
+    [ "$admitted" = 1 ] && return 0
+    printf 'held: %s is outside the queue window (first %s) of the merge line for %s\n' \
+      "$url" "$FM_MERGE_LINE_QUEUE_WINDOW" "$(repo_label)"
+    return "$FM_MERGE_LINE_HELD"
+  fi
   printf 'held: %s waits behind %s in the merge line for %s\n' "$url" "${head:-<none armed>}" "$(repo_label)"
   return "$FM_MERGE_LINE_HELD"
 }
@@ -438,9 +521,11 @@ main() {
   [ -n "$cmd" ] || { usage >&2; exit 2; }
   shift
   case "$cmd" in
-    declare|undeclare|front|enqueue|remove|gate|head|probe)
+    gate)
+      { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$1" = --window ]; }; } \
+        || { usage >&2; exit 2; } ;;
+    declare|undeclare|front|enqueue|remove|head|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
-    show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac

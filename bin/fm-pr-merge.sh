@@ -911,13 +911,25 @@ require_recorded_pr_identity() {
 # the PR is recorded and armed (arming enqueues it, so a PR not yet armed can
 # reach the head) and again inside the merge authority lock just before
 # the forge command, the same lock every line mutation takes, so a reorder
-# cannot land between that last gate and the merge it allowed.
-require_merge_line_head() {
-  local out rc=0
+# cannot land between that last gate and the merge it allowed. The one
+# widening is the line's queue window: with <queue-window> true the gate
+# admits an entry inside FM_MERGE_LINE_QUEUE_WINDOW behind a queued head, and
+# only the queue-app branch below may pass that mode, because only a
+# merge-queue-app base serializes in the queue instead of through the line.
+require_merge_line_head() {  # [queue-window: 0|1]
+  local out rc=0 window=${1:-0} wrc=0
+  [ "$window" = true ] && window=1
   out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-merge-line.sh" gate "$URL" 2>&1) || rc=$?
   [ "$rc" -eq 0 ] && return 0
-  printf 'error: PR merge refused - %s\n' "${out:-the merge line gate failed (rc=$rc)}" >&2
+  [ "$window" = 1 ] || {
+    printf 'error: PR merge refused - %s\n' "${out:-the merge line gate failed (rc=$rc)}" >&2
+    return 1
+  }
+  out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-merge-line.sh" gate --window "$URL" 2>&1) || wrc=$?
+  [ "$wrc" -eq 0 ] && return 0
+  printf 'error: PR merge refused - %s\n' "${out:-the merge line gate failed (rc=$wrc)}" >&2
   return 1
 }
 
@@ -1057,7 +1069,10 @@ require_current_away_authority || away_status=$?
 [ "$away_status" -eq 0 ] || exit "$away_status"
 require_recorded_pr_identity || exit 1
 record_pr_metadata || exit 1
-require_merge_line_head || exit 1
+# The first gate accepts a window member too: the base's queue-app status is
+# still unread here, so the merge can be refused only once the second gate
+# inside the authority lock knows which mode applies.
+require_merge_line_head 1 || exit 1
 require_released_captain_hold || exit 1
 
 # Accepted confused-agent-grade limitation, as in bin/fm-lease-lib.sh, not an
@@ -1099,7 +1114,9 @@ case "$PROVIDER" in
     require_current_away_authority || away_status=$?
     [ "$away_status" -eq 0 ] || exit "$away_status"
     refuse_github_queue_while_away || exit 2
-    require_merge_line_head || exit 1
+    # The windowed gate is legal only here: this branch proved the base
+    # merges through a merge-queue app, so the queue serializes, not the line.
+    require_merge_line_head "$queue_app" || exit 1
     merge_status=0
     merge_output=$(gh pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
       --match-head-commit "$FM_PR_MERGE_HEAD" \

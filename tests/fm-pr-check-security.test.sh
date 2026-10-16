@@ -3373,6 +3373,159 @@ test_merge_line_lands_head_first_and_hands_off_in_the_same_sweep() {
   pass "a declared merge line lands its head first and hands off to the next PR in the same sweep"
 }
 
+# A queue-app base with a declared merge line: the watcher arms the line's
+# first FM_MERGE_LINE_QUEUE_WINDOW green entries into the merge queue in one
+# sweep, in line order, while the head is still being tested, and the queue
+# holds the order after that. An entry the queue ejected is skipped by the
+# window, so the entry behind it arms in the next sweep; the ejected entry
+# itself is never re-armed while its record stands.
+queue_line_case() {  # <name> <pr-count>
+  local dir state i id url
+  dir=$(make_case "$1")
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
+  i=0
+  while [ "$i" -lt "$2" ]; do
+    i=$((i + 1))
+    case $i in 1) id=task-a ;; 2) id=task-b ;; 3) id=task-c ;; 4) id=task-d ;; *) fail "no fixture task for PR $i" ;; esac
+    url=https://github.com/o/r/pull/$i
+    write_poll_meta "$state" "$id" "$url" yolo=on
+    run_check_entry "$dir" "$id" "$url" >/dev/null 2> "$dir/arm-$id.err" \
+      || fail "could not arm $id: $(cat "$dir/arm-$id.err")"
+  done
+  add_stop_custom_check "$dir"
+  cat > "$dir/rules.json" <<'JSON'
+[{"type":"required_status_checks","ruleset_id":202,"parameters":{"required_status_checks":[{"context":"queue-mq","integration_id":5293819}]}},
+ {"type":"pull_request","ruleset_id":101,"parameters":{}},
+ {"type":"required_status_checks","ruleset_id":101,"parameters":{"required_status_checks":[{"context":"ci","integration_id":15368}]}}]
+JSON
+  printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}]}\n' \
+    0123456789abcdef0123456789abcdef01234567 > "$dir/view.json"
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":{"mergeMethod":"SQUASH"},"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}]}\n' \
+    0123456789abcdef0123456789abcdef01234567 > "$dir/auto.json"
+  : > "$dir/check-runs.json"
+  printf '%s\n' "$dir"
+}
+
+queue_line_cycle() {  # <dir> <label> [gh-state]
+  local dir=$1 label=$2 rc
+  [ ! -s "$dir/home/state/.wake-queue" ] || ack_watcher_cycle "$dir/home/state" \
+    || fail "$label: acknowledging the previous cycle failed"
+  rm -f "$dir/home/state/.last-check"
+  set +e
+  FM_TEST_WATCH_ALARM=${FM_TEST_WATCH_ALARM:-240} \
+    FM_TEST_GH_STATE=${3:-OPEN} FM_TEST_GH_GRAPHQL_STATE=OPEN FM_TEST_GH_GRAPHQL_MERGED=false \
+    FM_TEST_GH_VIEW_JSON="$dir/view.json" FM_TEST_GH_AUTO_JSON="$dir/auto.json" \
+    FM_TEST_GH_RULES_JSON="$dir/rules.json" FM_TEST_GH_CHECK_RUNS_JSON="$dir/check-runs.json" \
+    FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/$label.out" 2> "$dir/$label.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "$label: watcher cycle failed (rc=$rc): $(cat "$dir/$label.err")"
+  cp "$dir/home/state/.wake-queue" "$dir/$label.queue" 2>/dev/null || : > "$dir/$label.queue"
+  ack_watcher_cycle "$dir/home/state" || fail "$label: acknowledgement failed"
+}
+
+# One pull request's queue hand-off read is served its own file; every other
+# gh call passes through: an ejected entry reads auto-merge off while its
+# neighbours still read waiting.
+fake_auto_per_url() {  # <dir> <url> <file>
+  local dir=$1 url=$2 file=$3
+  [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
+  cat > "$dir/fakebin/gh" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${3:-}" = "$url" ] && [[ " \$* " == *autoMergeRequest* ]]; then
+  cat "$file"
+  exit 0
+fi
+exec "$dir/fakebin/gh.real" "\$@"
+SH
+  chmod +x "$dir/fakebin/gh"
+}
+
+test_merge_line_queue_window_arms_green_entries_in_line_order() {
+  local dir state i
+  dir=$(queue_line_case queue-window-order 4)
+  state="$dir/home/state"
+
+  queue_line_cycle "$dir" c1
+  [ "$(queue_app_merge_requests "$dir")" -eq 3 ] \
+    || fail "the window did not hand exactly its first three entries to the queue in one sweep: $(grep '^pr merge' "$dir/gh.log")"
+  for i in 1 2 3; do
+    grep -q -- "pr merge $i --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto" "$dir/gh.log" \
+      || fail "pull/$i was not handed to the queue in line order: $(grep '^pr merge' "$dir/gh.log")"
+  done
+  for id in task-a task-b task-c; do
+    [ "$(cut -d' ' -f3 "$state/$id.queue-merge")" = requested ] \
+      || fail "$id's queue hand-off was not recorded: $(cat "$state/$id.queue-merge" 2>/dev/null)"
+    [ -f "$state/$id.check.sh" ] || fail "$id lost its merge poll to the queue"
+  done
+  [ ! -e "$state/task-d.queue-merge" ] || fail "an entry outside the window was handed to the queue"
+  assert_grep 'merge line holds task-d' "$state/.watch-triage.log" "the fourth entry left no hold record"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/4 > "$dir/wg.out" 2>&1 && rc=$? || rc=$?
+  [ "$rc" -eq 3 ] || fail "the fourth entry was not held outside the window: rc=$rc $(cat "$dir/wg.out")"
+  assert_grep 'outside the queue window' "$dir/wg.out" "the fourth entry's hold did not name the window"
+
+  # The queue ejects pull/2: its record stands ejected and auto-merge is off,
+  # so the window skips it and pull/4 arms in the next sweep.
+  sed -i '' 's/ requested / ejected /' "$state/task-b.queue-merge"
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    0123456789abcdef0123456789abcdef01234567 > "$dir/auto2.json"
+  fake_auto_per_url "$dir" https://github.com/o/r/pull/2 "$dir/auto2.json"
+  queue_line_cycle "$dir" c2
+  [ "$(queue_app_merge_requests "$dir")" -eq 4 ] \
+    || fail "an ejected entry blocked or duplicated a hand-off: $(grep '^pr merge' "$dir/gh.log")"
+  grep -q -- "pr merge 4 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto" "$dir/gh.log" \
+    || fail "the entry behind the ejected one did not arm: $(grep '^pr merge' "$dir/gh.log")"
+  [ "$(cut -d' ' -f3 "$state/task-b.queue-merge")" = ejected ] \
+    || fail "the ejected entry was re-armed: $(cat "$state/task-b.queue-merge")"
+  [ "$(cut -d' ' -f3 "$state/task-d.queue-merge")" = requested ] \
+    || fail "the fourth entry's hand-off was not recorded: $(cat "$state/task-d.queue-merge")"
+  pass "a queue-app base arms the window's green entries in line order, and an ejection skips forward"
+}
+
+# The window never opens on its own: without a queued head the gate holds
+# everything behind the head, a fronted entry the queue does not hold ends the
+# window at itself, and an ejected entry is skipped rather than re-armed.
+test_merge_line_queue_window_gates_without_a_queued_head() {
+  local dir state rc head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_line_case queue-window-gates 2)
+  state="$dir/home/state"
+  fm_pr_queue_merge_record_write "$state" task-z https://github.com/o/r/pull/1 "$head" requested '["queue-mq"]' \
+    || fail "could not seed the head's queue record"
+  fm_pr_queue_merge_record_write "$state" task-a https://github.com/o/r/pull/2 "$head" ejected '["queue-mq"]' \
+    || fail "could not seed the ejected record"
+
+  set +e
+  merge_line "$dir" gate --window https://github.com/o/r/pull/1 >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "the queued head itself failed the windowed gate"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "an ejected entry was admitted by the windowed gate"
+
+  # A fronted entry jumps to the head; everything it fronted over stays held
+  # behind it whether or not the queue holds the old head.
+  merge_line "$dir" enqueue https://github.com/o/r/pull/3 || fail "could not enqueue a third PR"
+  merge_line "$dir" front https://github.com/o/r/pull/3 >/dev/null || fail "front refused"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/1 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "a fronted head did not hold the queued head's old followers"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/3 >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "a fronted entry failed the gate as its own head"
+
+  merge_line "$dir" remove https://github.com/o/r/pull/3 || fail "could not remove the fronted PR"
+  rm -f "$state/task-z.queue-merge"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 3 ] || fail "the window opened behind a head no queue holds"
+  assert_grep 'head is not in a merge queue' "$dir/wg.out" "the closed window's hold did not say why"
+  pass "the queue window opens only behind a queued head and ends at a fronted entry"
+}
+
 test_merge_line_front_reorders() {
   local dir
   dir=$(make_case merge-line-front)
@@ -3423,7 +3576,7 @@ test_merge_line_holds_behind_rerun_for_non_head() {
 fake_line_head() {  # <dir> <head-url> <state> <conclusion>
   local dir=$1 url=$2 state=$3 conclusion=$4
   [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
-  printf '{"state":"%s","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"%s"}]}\n' \
+  printf '{"state":"%s","headRefOid":"0123456789abcdef0123456789abcdef01234567","reviewDecision":"APPROVED","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"%s"}]}\n' \
     "$state" "$conclusion" > "$dir/fakebin/head.json"
   cat > "$dir/fakebin/gh" <<SH
 #!/usr/bin/env bash
@@ -3757,6 +3910,8 @@ test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
 test_merge_line_merged_head_clears_every_stall_record_with_one_wake
 test_merge_line_closed_head_is_dropped_and_wakes
 test_merge_line_gate_serializes_without_queue_and_probe_hands_off
+test_merge_line_queue_window_arms_green_entries_in_line_order
+test_merge_line_queue_window_gates_without_a_queued_head
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
