@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--cap-bypass <captain|outage|security> --cap-bypass-reason <why>]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--cap-bypass <captain|outage|security> --cap-bypass-reason <why>]
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
 #        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
@@ -34,12 +34,7 @@
 #   config/wip-caps override, and what holds a slot). At cap the spawn exits 5
 #   before any endpoint, worktree, or record exists, leaving the backlog item
 #   Queued, and names each full lane, its cap, and every task occupying it.
-#   A captain's direct dispatch order or outage/security work passes
-#   --cap-bypass <captain|outage|security> with a non-empty
-#   --cap-bypass-reason; the bypass is recorded (wip_cap_bypass= in the task
-#   record and a line in data/wip-cap-bypasses.log) before anything is
-#   created, and the task still holds its slot. --secondmate spawns and
-#   --relaunch are exempt and refuse the bypass flags, so recovery is never
+#   --secondmate spawns and --relaunch are exempt, so recovery is never
 #   queued behind a cap. A scout dispatched from a backlog item of kind review
 #   records wip_lane=reviews.
 #        fm-spawn.sh <task-id> --relaunch [--harness <name>] [--model <name>] [--effort <level>]
@@ -541,10 +536,6 @@ BACKEND_SET=0
 MODE_SET=0
 YOLO_SET=0
 TRACEPARENT_SET=0
-CAP_BYPASS=
-CAP_BYPASS_REASON=
-CAP_BYPASS_SET=0
-CAP_BYPASS_REASON_SET=0
 RELAUNCH=0
 POS=()
 want_value=
@@ -580,14 +571,6 @@ for a in "$@"; do
     yolo)
       YOLO=$a
       YOLO_SET=1
-      ;;
-    cap-bypass)
-      CAP_BYPASS=$a
-      CAP_BYPASS_SET=1
-      ;;
-    cap-bypass-reason)
-      CAP_BYPASS_REASON=$a
-      CAP_BYPASS_REASON_SET=1
       ;;
     traceparent)
       TRACEPARENT_ARG=$a
@@ -646,16 +629,6 @@ for a in "$@"; do
     TRACEPARENT_ARG=${a#--traceparent=}
     TRACEPARENT_SET=1
     ;;
-  --cap-bypass) want_value=cap-bypass ;;
-  --cap-bypass=*)
-    CAP_BYPASS=${a#--cap-bypass=}
-    CAP_BYPASS_SET=1
-    ;;
-  --cap-bypass-reason) want_value=cap-bypass-reason ;;
-  --cap-bypass-reason=*)
-    CAP_BYPASS_REASON=${a#--cap-bypass-reason=}
-    CAP_BYPASS_REASON_SET=1
-    ;;
   *) POS+=("$a") ;;
   esac
 done
@@ -711,33 +684,6 @@ case "$EFFORT" in
   exit 1
   ;;
 esac
-# Work-in-progress cap bypass (header above; bin/fm-wip-caps-lib.sh owns the
-# record). Exempt spawns never consult a cap, so the flags are refused there
-# rather than silently recorded; a bypass always carries its class and reason.
-if [ "$CAP_BYPASS_SET" -eq 1 ] || [ "$CAP_BYPASS_REASON_SET" -eq 1 ]; then
-  if [ "$RELAUNCH" -eq 1 ] || [ "$KIND" = secondmate ]; then
-    echo "error: --cap-bypass applies only to fresh ship and scout dispatches; --relaunch and --secondmate are exempt from work-in-progress caps" >&2
-    exit 1
-  fi
-  fm_wip_bypass_class_valid "$CAP_BYPASS" || {
-    echo "error: --cap-bypass must be one of captain (a captain's direct dispatch order), outage, security (got '$CAP_BYPASS')" >&2
-    exit 1
-  }
-  case "$CAP_BYPASS_REASON" in
-  *[![:space:]]*) ;;
-  *)
-    echo "error: --cap-bypass requires a non-empty --cap-bypass-reason naming the order or incident it serves" >&2
-    exit 1
-    ;;
-  esac
-  case "$CAP_BYPASS_REASON" in
-  *[[:cntrl:]]*)
-    echo "error: --cap-bypass-reason must be one line without control characters" >&2
-    exit 1
-    ;;
-  esac
-fi
-
 # --relaunch reuses an existing task's endpoint, worktree, project, and kind,
 # so every axis this block resolves for a fresh spawn instead comes from that
 # task's own durable record below. Contradicting it on the command line is a
@@ -1344,9 +1290,6 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
   # spanning several modes is two invocations rather than a silent mixed dispatch.
   [ "$MODE_SET" -eq 0 ] || shared_args+=(--mode "$MODE")
   [ "$YOLO_SET" -eq 0 ] || shared_args+=(--yolo "$YOLO")
-  # A cap bypass is one order covering the whole batch, like the shared harness.
-  [ "$CAP_BYPASS_SET" -eq 0 ] || shared_args+=(--cap-bypass "$CAP_BYPASS")
-  [ "$CAP_BYPASS_REASON_SET" -eq 0 ] || shared_args+=(--cap-bypass-reason "$CAP_BYPASS_REASON")
   for pair in "${POS[@]}"; do
     case "$pair" in
     *=*) : ;;
@@ -2993,13 +2936,12 @@ else
   fi
 fi
 
-# Work-in-progress admission (bin/fm-wip-caps-lib.sh owns lanes, caps, and the
-# bypass record). Runs under the task-set lock taken above, after the backlog
+# Work-in-progress admission (bin/fm-wip-caps-lib.sh owns lanes and caps).
+# Runs under the task-set lock taken above, after the backlog
 # preflight and before any endpoint, worktree, or record exists, so a refused
 # dispatch leaves its backlog item Queued and nothing to unwind. Relaunch and
 # secondmate spawns are exempt: recovery is never queued behind a cap.
 WIP_LANE=
-WIP_BYPASSED=
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   WIP_LANE=$(fm_wip_dispatch_lane "$KIND" "${FM_BACKLOG_ROW_KIND:-}")
   WIP_ADMIT_STATUS=0
@@ -3007,16 +2949,8 @@ if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   case "$WIP_ADMIT_STATUS" in
   0) ;;
   1)
-    if [ -z "$CAP_BYPASS" ]; then
-      echo "refused: $ID was not dispatched; $FM_WIP_REFUSAL. Its backlog item stays Queued: pull it when one of these finishes, or pass --cap-bypass <captain|outage|security> --cap-bypass-reason <why> for a captain's direct order or outage/security work." >&2
-      exit 5
-    fi
-    if ! fm_wip_bypass_record "$DATA" "$ID" "${FM_WIP_BINDING%% *}" "$CAP_BYPASS" "${FM_WIP_BINDING#* }" "$CAP_BYPASS_REASON"; then
-      echo "error: the work-in-progress cap bypass for $ID could not be recorded in $DATA/wip-cap-bypasses.log; refusing rather than bypassing unrecorded" >&2
-      exit 1
-    fi
-    WIP_BYPASSED=$CAP_BYPASS
-    echo "notice: $ID bypasses the work-in-progress cap ($CAP_BYPASS: $CAP_BYPASS_REASON); $FM_WIP_REFUSAL" >&2
+    echo "refused: $ID was not dispatched; $FM_WIP_REFUSAL. Its backlog item stays Queued: pull it when one of these finishes." >&2
+    exit 5
     ;;
   *)
     echo "error: $ID was not dispatched because its work-in-progress caps could not be read: $FM_WIP_ERROR" >&2
@@ -4228,7 +4162,6 @@ preserve_relaunch_meta() {
   [ -z "$YOLO" ] || echo "yolo=$YOLO"
   # Work-in-progress fields (bin/fm-wip-caps-lib.sh); a relaunch preserves them.
   [ "$WIP_LANE" != reviews ] || echo "wip_lane=$WIP_LANE"
-  [ -z "$WIP_BYPASSED" ] || echo "wip_cap_bypass=$WIP_BYPASSED"
   echo "tasktmp=$TASK_TMP"
   echo "model=${MODEL:-default}"
   echo "effort=${EFFORT:-default}"

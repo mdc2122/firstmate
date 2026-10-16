@@ -134,43 +134,7 @@ test_lanes_are_independent() {
   pass "lanes are independent: a full ship lane does not block a scout, and vice versa"
 }
 
-test_bypass_records_itself_and_still_holds_its_slot() {
-  local home out rc log
-  home=$(new_home bypass)
-  printf 'validations=1\n' > "$home/config/wip-caps"
-  occupy "$home" ship-a
-
-  out=$(spawn_ship "$home" urgent-b --cap-bypass security --cap-bypass-reason "token leak in prod logs"); rc=$?
-  expect_code 0 "$rc" "a recorded security bypass"$'\n'"$out"
-  assert_contains "$out" "bypasses the work-in-progress cap (security: token leak in prod logs)" \
-    "the bypass must say so at dispatch"
-  assert_grep "wip_cap_bypass=security" "$home/state/urgent-b.meta" "the task record must carry its bypass"
-  log="$home/data/wip-cap-bypasses.log"
-  assert_present "$log" "the bypass must be appended to the durable bypass log"
-  [ "$(cut -f2- "$log")" = "$(printf 'urgent-b\tvalidations\tsecurity\t1/1\ttoken leak in prod logs')" ] \
-    || fail "the bypass log line must name task, lane, class, occupancy/cap, and reason; got: $(cat "$log")"
-
-  out=$(spawn_ship "$home" next-c); rc=$?
-  expect_code 5 "$rc" "a dispatch after the bypass"
-  assert_contains "$out" "urgent-b [bypass: security]" "the bypassed task must still hold its slot"
-  pass "a bypass records itself in the task record and the bypass log, and still holds its slot"
-}
-
-test_bypass_needs_a_known_class_and_a_reason() {
-  local home out rc
-  home=$(new_home bypass-args)
-  out=$(spawn_ship "$home" b1 --cap-bypass urgent --cap-bypass-reason x); rc=$?
-  expect_code 1 "$rc" "an unknown bypass class"
-  assert_contains "$out" "must be one of captain" "the refusal should name the accepted classes"
-  out=$(spawn_ship "$home" b2 --cap-bypass captain); rc=$?
-  expect_code 1 "$rc" "a bypass with no reason"
-  assert_contains "$out" "requires a non-empty --cap-bypass-reason" "a bypass must carry its reason"
-  assert_absent "$home/state/b1.meta" "a malformed bypass must create nothing"
-  assert_absent "$home/state/b2.meta" "a reasonless bypass must create nothing"
-  pass "a bypass is refused without a known class and a non-empty reason"
-}
-
-test_secondmate_spawn_is_exempt_and_refuses_bypass_flags() {
+test_secondmate_spawn_is_exempt() {
   local home sm out rc lane
   home=$(new_home secondmate)
   printf 'validations=1\nmerges=1\nreviews=1\ninvestigations=1\n' > "$home/config/wip-caps"
@@ -185,18 +149,12 @@ test_secondmate_spawn_is_exempt_and_refuses_bypass_flags() {
   printf 'charter for mate-e\n' > "$sm/data/charter.md"
 
   out=$(FM_FAKE_LAUNCH_LOG="$home/launch-mate-e.log" \
-    fm_test_run_spawn "$home" "$sm" "$home/fake/fakebin" mate-e "$sm" --secondmate \
-      --cap-bypass captain --cap-bypass-reason x); rc=$?
-  expect_code 1 "$rc" "a bypass flag on an exempt spawn"
-  assert_contains "$out" "exempt from work-in-progress caps" "the refusal should say why"
-
-  out=$(FM_FAKE_LAUNCH_LOG="$home/launch-mate-e.log" \
     fm_test_run_spawn "$home" "$sm" "$home/fake/fakebin" mate-e "$sm" --secondmate); rc=$?
   expect_code 0 "$rc" "a secondmate spawn with every lane full"$'\n'"$out"
   for lane in validations merges reviews investigations; do
     assert_not_contains "$out" "lane $lane is at its cap" "a secondmate spawn must never consult a cap"
   done
-  pass "a secondmate spawn is never capped, and refuses bypass flags it would never use"
+  pass "a secondmate spawn is never capped"
 }
 
 test_invalid_caps_refuse_instead_of_defaulting() {
@@ -256,9 +214,7 @@ test_at_cap_refusal_names_lane_cap_and_occupants_and_creates_nothing
 test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_lanes_are_independent
-test_bypass_records_itself_and_still_holds_its_slot
-test_bypass_needs_a_known_class_and_a_reason
-test_secondmate_spawn_is_exempt_and_refuses_bypass_flags
+test_secondmate_spawn_is_exempt
 test_invalid_caps_refuse_instead_of_defaulting
 test_measured_defaults_apply_without_config
 test_a_review_scout_enters_the_reviews_lane

@@ -995,17 +995,6 @@ test_relaunch_is_never_refused_by_a_full_lane() {
   pass "work-in-progress caps never refuse a relaunch, direct or through fm-control"
 }
 
-test_relaunch_refuses_a_cap_bypass_flag() {
-  local dir out rc
-  dir=$(new_case wipbypass rl44)
-  add_ship_task "$dir" rl44 claude
-  printf 'zsh' > "$dir/fake/command"
-  out=$(run_spawn "$dir" rl44 --relaunch --cap-bypass captain --cap-bypass-reason x); rc=$?
-  expect_code 1 "$rc" "a relaunch carrying a cap bypass"
-  assert_contains "$out" "exempt from work-in-progress caps" "the refusal should say relaunch is exempt"
-  pass "fm-spawn --relaunch: refuses a cap bypass flag, since a relaunch is never capped"
-}
-
 test_promoted_scout_relaunch_receives_the_current_delivery_contract() {
   local dir home id brief launch out mode rule
   for mode in no-mistakes direct-PR local-only; do
@@ -1993,7 +1982,6 @@ test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one
 test_relaunch_is_never_refused_by_a_full_lane
-test_relaunch_refuses_a_cap_bypass_flag
 test_promoted_scout_relaunch_receives_the_current_delivery_contract
 test_prefixed_prior_harness_wiring_is_still_retired
 test_muse_session_binding_is_retired_on_a_harness_switch

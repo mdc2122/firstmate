@@ -91,7 +91,6 @@ config/watched-tools.json  optional list of the tools this home depends on, read
 config/x-mode.env    generated Relay watcher cadence; LOCAL, gitignored; source before arming watcher when present
 data/                personal fleet records; LOCAL, gitignored as a whole
   backlog.md         task queue, dependencies, history
-  wip-cap-bypasses.log  append-only record of every work-in-progress cap bypass; written only by bin/fm-spawn.sh (format: bin/fm-wip-caps-lib.sh)
   captain.md         this home's domain-local captain preferences and working style; LOCAL, gitignored, canonical even if harness memory mirrors it, and updated with inspect-then-update
   captain-shared.md  main-authoritative shared captain preferences propagated read-only to secondmate homes; LOCAL, gitignored, owned by secondmate-provisioning
   learnings.md       fleet-local operational facts and gotchas; LOCAL, gitignored; dated, evidence-backed, curated, and updated with inspect-then-update - rewrite and prune rather than append forever, the same contract as captain.md; created lazily, absent until this home has a learning to store
@@ -334,7 +333,7 @@ Fill the task subsections according to section 11.
 Spawn only through `bin/fm-spawn.sh` after the profile and backend checks in section 4.
 The spawn must resolve a genuine isolated task worktree distinct from the primary checkout; a failed isolation assertion stops the task.
 When the configured tasks-axi backlog gate applies, the spawn itself moves the work item to In flight and refuses rather than dispatching work this home has no item for, so recording the dispatch is never a separate step to remember; a manual-backend home retains the hand-editing contract in `docs/configuration.md`.
-The spawn also refuses a dispatch whose lane is at its work-in-progress cap, naming the lane, the cap, and its occupants; leave that item Queued and pull it when a slot frees, never backfill idle capacity, and bypass only for a captain's direct dispatch order or outage or security work (`bin/fm-wip-caps-lib.sh` owns lanes, caps, exemptions, and the bypass record).
+The spawn also refuses a dispatch whose lane is at its work-in-progress cap, naming the lane, the cap, and its occupants; leave that item Queued and pull it when a slot frees, and never backfill idle capacity (`bin/fm-wip-caps-lib.sh` owns lanes, caps, and exemptions).
 After spawning, confirm the worker is processing the brief and handle any trust dialog through `harness-adapters`.
 A persistent secondmate is recorded in the secondmate registry and runtime state, never as a backlog work item.
 

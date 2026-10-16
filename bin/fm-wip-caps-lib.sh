@@ -61,13 +61,6 @@
 # cannot both take the last slot.
 # Exempt, never checked: a secondmate spawn and any relaunch, so recovery is
 # never queued behind a cap.
-# Bypass: a captain's direct dispatch order (class captain) and outage or
-# security work (classes outage, security) pass --cap-bypass <class>
-# --cap-bypass-reason <why>. A bypassed task still holds its slot. The bypass
-# is recorded before anything is created, as wip_cap_bypass=<class> in the
-# task record and one tab-separated line in data/wip-cap-bypasses.log
-# (<utc> <id> <lane> <class> <occupancy>/<cap> <reason>); a bypass that cannot
-# be recorded refuses the spawn.
 #
 # PULL (bin/fm-queue-zero.sh). Each ready backlog row enters the lane its kind
 # names (review -> reviews, scout -> investigations, anything else is dispatched
@@ -82,7 +75,6 @@
 FM_WIP_LANES='validations merges reviews investigations'
 FM_WIP_ERROR=
 FM_WIP_REFUSAL=
-FM_WIP_BINDING=
 
 fm_wip_cap_default() {  # <lane>
   case "$1" in
@@ -152,22 +144,21 @@ fm_wip_dispatch_lane() {  # <spawn-kind> <backlog-kind>
   esac
 }
 
-# kind|pr|wip_lane|wip_cap_bypass from one task record, last value winning.
+# kind|pr|wip_lane from one task record, last value winning.
 fm_wip_meta_fields() {  # <meta>
   awk '
     index($0, "kind=") == 1 { k = substr($0, 6) }
     index($0, "pr=") == 1 { p = substr($0, 4) }
     index($0, "wip_lane=") == 1 { w = substr($0, 10) }
-    index($0, "wip_cap_bypass=") == 1 { b = substr($0, 16) }
-    END { printf "%s|%s|%s|%s\n", k, p, w, b }
+    END { printf "%s|%s|%s\n", k, p, w }
   ' "$1" 2>/dev/null
 }
 
 # The lane one live task record holds, or empty (LANES above), in
-# FM_WIP_TASK_LANE, and its recorded bypass class, if any, in FM_WIP_TASK_BYPASS.
+# FM_WIP_TASK_LANE.
 fm_wip_task_lane() {  # <state-dir> <id>
   local state=$1 id=$2 kind pr wlane
-  IFS='|' read -r kind pr wlane FM_WIP_TASK_BYPASS <<EOF
+  IFS='|' read -r kind pr wlane <<EOF
 $(fm_wip_meta_fields "$state/$id.meta")
 EOF
   FM_WIP_TASK_LANE=
@@ -210,7 +201,6 @@ fm_wip_scan() {  # <state-dir> [exclude-id]
       last=$(tail -n 1 "$state/$id.status" 2>/dev/null | sed 's/[]:[ ].*//')
       [ -z "$last" ] || detail="last event: $last"
     fi
-    [ -z "$FM_WIP_TASK_BYPASS" ] || detail="${detail:+$detail; }bypass: $FM_WIP_TASK_BYPASS"
     var="FM_WIP_COUNT_$lane"
     printf -v "$var" '%s' $((${!var} + 1))
     var="FM_WIP_OCCUPANTS_$lane"
@@ -224,14 +214,12 @@ fm_wip_lane_full() {  # <lane>; after fm_wip_caps_load and fm_wip_scan
 }
 
 # Admission for one fresh dispatch (ADMISSION above). Returns 0 when it may
-# start. Returns 1 when a lane it needs is full, with FM_WIP_BINDING naming
-# the first full lane as "<lane> <count>/<cap>" and FM_WIP_REFUSAL naming
+# start. Returns 1 when a lane it needs is full, with FM_WIP_REFUSAL naming
 # every full lane, its cap, and its occupants. Returns 2 with FM_WIP_ERROR
 # when the caps cannot be read.
 fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
   local config=$1 state=$2 id=$3 lane=$4 need l count occupants text=
   FM_WIP_REFUSAL=
-  FM_WIP_BINDING=
   fm_wip_caps_load "$config" || return 2
   fm_wip_scan "$state" "$id"
   need=$lane
@@ -240,10 +228,9 @@ fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
     fm_wip_lane_full "$l" || continue
     count="FM_WIP_COUNT_$l"
     occupants="FM_WIP_OCCUPANTS_$l"
-    [ -n "$FM_WIP_BINDING" ] || FM_WIP_BINDING="$l ${!count}/$(fm_wip_cap "$l")"
     text="${text:+$text; }lane $l is at its cap of $(fm_wip_cap "$l") with ${!count} in flight: ${!occupants}"
   done
-  [ -n "$FM_WIP_BINDING" ] || return 0
+  [ -n "$text" ] || return 0
   FM_WIP_REFUSAL="work-in-progress cap: $text"
   return 1
 }
@@ -262,19 +249,4 @@ fm_wip_free_json() {  # <config-dir> <state-dir>
     sep=,
   done
   printf '%s}\n' "$out"
-}
-
-fm_wip_bypass_class_valid() {  # <class>
-  case "$1" in
-    captain | outage | security) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-# Append the durable bypass record (BYPASS above). Returns 1 when it could not
-# be written.
-fm_wip_bypass_record() {  # <data-dir> <id> <lane> <class> <occupancy/cap> <reason>
-  local data=$1 log=$1/wip-cap-bypasses.log
-  [ -d "$data" ] && [ ! -L "$log" ] || return 1
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$3" "$4" "$5" "$6" >>"$log"
 }
