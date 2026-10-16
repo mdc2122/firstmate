@@ -171,7 +171,10 @@ CONTROL_LOCK_HELD=1
 META="$STATE/$ID.meta"
 [ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
 TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
-fm_lock_try_acquire "$TASK_SET_LOCK" || { echo "error: another task-set action is running" >&2; exit 1; }
+fm_wip_task_set_lock_acquire "$TASK_SET_LOCK" || {
+  echo "error: another task-set action (a spawn, promotion, PR registration or teardown) held this home's task-set lock for ${FM_WIP_LOCK_WAITED}s; nothing was changed, retry once it finishes" >&2
+  exit 1
+}
 TASK_SET_LOCK_HELD=1
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"

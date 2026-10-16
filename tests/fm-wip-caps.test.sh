@@ -191,9 +191,14 @@ test_promotion_requires_capacity() {
 
   lock=$(fm_task_set_lock_path "$home/state")
   fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
-  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
+  out=$(FM_WIP_LOCK_WAIT=1 run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
   expect_code 1 "$rc" "promotion must serialize with spawn's task-set lock"
   fm_lock_release "$lock"
+  (fm_lock_try_acquire "$lock" && sleep 2 && fm_lock_release "$lock") &
+  sleep 1
+  out=$(FM_WIP_LOCK_WAIT=10 run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
+  wait
+  expect_code 5 "$rc" "promotion that waited out a briefly held task-set lock reaches its capacity check"$'\n'"$out"
   rm "$home/state/validating.meta"
   out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
   expect_code 5 "$rc" "promotion must also respect a full downstream merge lane"$'\n'"$out"
@@ -292,7 +297,9 @@ merge_gh() {
 case "\${1:-} \${2:-}" in
   "pr view")
     case " \$* " in
-      *statusCheckRollup*) printf '%s\n' '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"cccccccccccccccccccccccccccccccccccccccc","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"$conclusion"}]}' ;;
+      *statusCheckRollup*)
+        [ -z "\${FM_TEST_FREE_ON_VIEW:-}" ] || rm -f -- "\$FM_TEST_FREE_ON_VIEW"
+        printf '%s\n' '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"cccccccccccccccccccccccccccccccccccccccc","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"$conclusion"}]}' ;;
       *headRefOid*) printf '%s\n' cccccccccccccccccccccccccccccccccccccccc ;;
     esac
     ;;
@@ -344,6 +351,34 @@ test_a_refused_merge_order_restores_the_queue_and_the_cap() {
   [ "$(cut -f2 "$home/state/.wip-pr-queue")" = $'validating-a\nvalidating-b' ] \
     || fail "a landed merge leaves the queue; got: $(cat "$home/state/.wip-pr-queue")"
   pass "a refused merge order restores merges 5/5, queue a, b, x and no pr=; a landed one records its PR"
+}
+
+# A merge that lands while a refused merge order holds its slot frees a slot
+# the watcher's retry could not pull; the restore hands the slot back and
+# pulls the queue head into it.
+test_a_refused_merge_order_pulls_a_slot_freed_meanwhile() {
+  local home out rc i
+  command -v jq >/dev/null 2>&1 || fail "this case merges through bin/fm-pr-merge.sh, which needs jq"
+  home=$(new_home merge-order-freed)
+  printf 'merges=5\n' > "$home/config/wip-caps"
+  for i in 1 2 3 4 5; do
+    occupy "$home" "merging-$i" "pr=https://github.com/example/repo/pull/$i"
+  done
+  for i in a b x; do
+    occupy "$home" "validating-$i"
+  done
+  run_transition "$home" fm-pr-check.sh validating-a https://github.com/example/repo/pull/11 >/dev/null
+  run_transition "$home" fm-pr-check.sh validating-b https://github.com/example/repo/pull/12 >/dev/null
+  run_transition "$home" fm-pr-check.sh validating-x https://github.com/example/repo/pull/13 >/dev/null
+
+  merge_gh "$home" FAILURE
+  out=$(FM_TEST_FREE_ON_VIEW="$home/state/merging-1.meta" \
+    run_transition "$home" fm-pr-merge.sh validating-x https://github.com/example/repo/pull/13); rc=$?
+  [ "$rc" -ne 0 ] || fail "a merge with a red check must be refused"$'\n'"$out"
+  assert_present "$home/state/validating-a.check.sh" "the restore must pull the queue head into the slot freed meanwhile"$'\n'"$out"
+  [ "$(cut -f2 "$home/state/.wip-pr-queue")" = $'validating-b\nvalidating-x' ] \
+    || fail "only the queue head is pulled; got: $(cat "$home/state/.wip-pr-queue")"
+  pass "a refused merge order hands its slot back and pulls the queue head into a slot freed meanwhile"
 }
 
 test_lanes_are_independent() {
@@ -525,6 +560,7 @@ test_promotion_requires_capacity
 test_registrations_never_exceed_the_merges_cap_at_defaults
 test_registration_and_the_task_set_lock
 test_a_refused_merge_order_restores_the_queue_and_the_cap
+test_a_refused_merge_order_pulls_a_slot_freed_meanwhile
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_log_is_written_only_after_spawn_success

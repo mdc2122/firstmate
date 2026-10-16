@@ -75,8 +75,10 @@
 # so an ordered merge is never refused by the cap; it still holds its slot and
 # leaves the queue. A merge refused before its forge merge call restores the
 # task's prior registration (fm-pr-check.sh --merge-order-restore), putting it
-# back in the queue at its original order. Admission waits at most FM_WIP_LOCK_WAIT seconds
-# (default 20) for the task-set lock and holds it through the pr= publication.
+# back in the queue at its original order, then retries the queue, since the
+# slot it hands back may be the one a merge freed meanwhile. Admission waits at
+# most FM_WIP_LOCK_WAIT seconds (default 20) for the task-set lock, as spawn and
+# promotion also do, and holds it through the pr= publication.
 # A refused or lock-busy registration exits 5, records nothing in the task,
 # arms no poll, and is queued durably in state/.wip-pr-queue, one tab-separated
 # line per task: <order> <task-id> <pr-url> merges. A task has at most one
@@ -328,6 +330,16 @@ fm_wip_free_json() {  # <config-dir> <state-dir>
     sep=,
   done
   printf '%s}\n' "$out"
+}
+
+# Take the home's task-set lock, waiting at most FM_WIP_LOCK_WAIT seconds
+# (default 20; the wait used is left in FM_WIP_LOCK_WAITED). A fresh spawn,
+# a promotion and a PR registration all take it this way, so none fails
+# outright because another briefly holds it.
+fm_wip_task_set_lock_acquire() {  # <lock-path>
+  FM_WIP_LOCK_WAITED=${FM_WIP_LOCK_WAIT:-20}
+  case "$FM_WIP_LOCK_WAITED" in ''|*[!0-9]*|0) FM_WIP_LOCK_WAITED=20 ;; esac
+  fm_lock_acquire_wait_bounded "$1" "$FM_WIP_LOCK_WAITED"
 }
 
 # --- queued PR registrations (REGISTRATION above) -------------------------

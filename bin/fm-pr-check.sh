@@ -129,6 +129,7 @@ if [ "${1:-}" = --merge-order-restore ]; then
     exit 1
   fi
   echo "restored: $ID's refused merge left its PR registration as it was before the merge order" >&2
+  "$0" --retry-queued || true
   exit 0
 fi
 
@@ -262,10 +263,8 @@ if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ] && [ -n "$ME
     > "$MERGE_ORDER_SNAPSHOT" || exit 1
 elif [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ]; then
   TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
-  WIP_LOCK_WAIT=${FM_WIP_LOCK_WAIT:-20}
-  case "$WIP_LOCK_WAIT" in ''|*[!0-9]*|0) WIP_LOCK_WAIT=20 ;; esac
-  if ! fm_lock_acquire_wait_bounded "$TASK_SET_LOCK" "$WIP_LOCK_WAIT"; then
-    wip_queue_refusal "the task-set lock stayed busy for ${WIP_LOCK_WAIT}s, so merges capacity could not be checked"
+  if ! fm_wip_task_set_lock_acquire "$TASK_SET_LOCK"; then
+    wip_queue_refusal "the task-set lock stayed busy for ${FM_WIP_LOCK_WAITED}s, so merges capacity could not be checked"
   fi
   TASK_SET_LOCK_HELD=1
   WIP_STATUS=0
