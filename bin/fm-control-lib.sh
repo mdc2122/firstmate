@@ -50,12 +50,13 @@ fm_control_verbs() {
 interrupt
 exit
 relaunch
+switch-model
 EOF
 }
 
 fm_control_verb_allowed() {  # <verb>
   case "${1-}" in
-    interrupt|exit|relaunch) return 0 ;;
+    interrupt|exit|relaunch|switch-model) return 0 ;;
   esac
   return 1
 }
@@ -188,6 +189,20 @@ fm_control_exit_command() {  # <harness>
   case "${1-}" in
     claude|opencode|grok|kimi|cursor|muse|rovo) printf '/exit' ;;
     codex|pi|pi-signed|omp|gemini|agy) printf '/quit' ;;
+    *) return 1 ;;
+  esac
+}
+
+# The command that switches the model of the RUNNING conversation in place,
+# session-only, so the agent keeps its whole context. Only omp has a verified
+# one: `/switch <provider>/<id>[:level]` (omp 18.4.4) records a model_change
+# entry with role "temporary" in the worktree's session file, plus a
+# thinking_level_change for a level, appends nothing for an unknown model, and
+# its slash popup swallows the first Enter. Every other adapter returns
+# nonzero: changing its model is a relaunch.
+fm_control_switch_command() {  # <harness> <selector>
+  case "${1-}" in
+    omp) printf '/switch %s' "$2" ;;
     *) return 1 ;;
   esac
 }

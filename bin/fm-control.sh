@@ -7,6 +7,8 @@
 #        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>]
 #                                         [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
+#        fm-control.sh <task-id> switch-model --model <provider>/<id>
+#                                         [--effort <level>] --reason <text>
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
 # DATA plane: conversational text for the agent to read, always routing-marked
@@ -52,6 +54,26 @@
 #              the prior durable record in place and reports the concrete
 #              state; it never leaves a half-transitioned task claiming to be
 #              running.
+#   switch-model
+#              Switch the model of the RUNNING agent in place: same process,
+#              same conversation, same endpoint and worktree. Only a harness
+#              with a verified in-place switch command qualifies
+#              (fm_control_switch_command in bin/fm-control-lib.sh: omp's
+#              session-only /switch); any other harness is refused and
+#              changes model through relaunch. The agent must be idle with a
+#              provably empty composer, and its omp session file (under
+#              $HOME/.omp/agent/sessions/<encoded worktree>/) must already
+#              exist, because omp writes nothing to disk before the first
+#              completed turn and the switch could not be proven. --model is
+#              an exact <provider>/<id>; --effort appends omp's :<level>.
+#              Postcondition: omp records a new model_change entry naming
+#              exactly that model. Only then does this verb write the one
+#              standard notice (switch_notice below, the single template
+#              owner) to the worker's steering inbox through bin/fm-send.sh,
+#              naming the previous and new model, the --reason, and that the
+#              worktree and commits are unchanged, and record model= and
+#              effort= in the task's durable record. A refused or unproven
+#              switch sends no notice and leaves the record untouched.
 #
 # Teardown and discard are NOT verbs here and never will be. `exit` stops an
 # agent and preserves everything else; removing a worktree, killing an
@@ -98,7 +120,8 @@
 #   FM_CONTROL_RESTORE_WAIT      bounded muse composer poll proving the restored prompt before the post-interrupt clear decision (2)
 #   FM_CONTROL_EXIT_WAIT         alive->dead wait after the exit command (30)
 #   FM_CONTROL_LAUNCH_WAIT       dead->alive wait after a relaunch (90)
-#   FM_CONTROL_EXIT_RETRIES      Enter retries for the exit command (3)
+#   FM_CONTROL_SWITCH_WAIT       wait for the session file to record a switch (10)
+#   FM_CONTROL_EXIT_RETRIES      Enter retries for the exit and switch commands (3)
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -149,6 +172,7 @@ POLL=${FM_CONTROL_POLL:-0.5}
 SETTLE_WAIT=${FM_CONTROL_SETTLE_WAIT:-5}
 EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}
 LAUNCH_WAIT=${FM_CONTROL_LAUNCH_WAIT:-90}
+SWITCH_WAIT=${FM_CONTROL_SWITCH_WAIT:-10}
 EXIT_RETRIES=${FM_CONTROL_EXIT_RETRIES:-3}
 
 die() {  # <message>
@@ -205,6 +229,8 @@ MODEL_SET=0
 EFFORT_SET=0
 NOTE=
 NOTE_SET=0
+REASON=
+REASON_SET=0
 control_want_value=
 for control_arg in "$@"; do
   if [ -n "$control_want_value" ]; then
@@ -216,6 +242,7 @@ for control_arg in "$@"; do
       model) NEW_MODEL=$control_arg; MODEL_SET=1 ;;
       effort) NEW_EFFORT=$control_arg; EFFORT_SET=1 ;;
       note) NOTE=$control_arg; NOTE_SET=1 ;;
+      reason) REASON=$control_arg; REASON_SET=1 ;;
       note_file)
         [ -f "$control_arg" ] || die "--note-file '$control_arg' is not a readable file"
         NOTE=$(cat "$control_arg")
@@ -234,6 +261,8 @@ for control_arg in "$@"; do
     --effort=*) NEW_EFFORT=${control_arg#--effort=}; EFFORT_SET=1 ;;
     --note) control_want_value=note ;;
     --note=*) NOTE=${control_arg#--note=}; NOTE_SET=1 ;;
+    --reason) control_want_value=reason ;;
+    --reason=*) REASON=${control_arg#--reason=}; REASON_SET=1 ;;
     --note-file) control_want_value=note_file ;;
     --note-file=*)
       [ -f "${control_arg#--note-file=}" ] || die "--note-file '${control_arg#--note-file=}' is not a readable file"
@@ -248,10 +277,33 @@ if [ -n "$control_want_value" ]; then
   die "--$control_want_value requires a value"
 fi
 
-if [ "$VERB" != relaunch ]; then
-  [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
-    || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
-fi
+case "$VERB" in
+  relaunch)
+    [ "$REASON_SET" = 0 ] || die "--reason applies to 'switch-model' only"
+    ;;
+  switch-model)
+    [ "$HARNESS_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
+      || die "--harness and --note apply to 'relaunch' only; switch-model keeps the running harness and its conversation"
+    [ "$MODEL_SET" = 1 ] || die "switch-model requires --model <provider>/<id>"
+    case "$NEW_MODEL" in
+      default|/*|*/|*[[:space:]]*) die "switch-model requires an exact --model <provider>/<id>, not '$NEW_MODEL'" ;;
+      */*) ;;
+      *) die "switch-model requires an exact --model <provider>/<id>, not '$NEW_MODEL'" ;;
+    esac
+    case "$NEW_EFFORT" in
+      ''|low|medium|high|xhigh|max) ;;
+      *) die "switch-model --effort must be one of low, medium, high, xhigh, max" ;;
+    esac
+    REASON=$(printf '%s' "$REASON" | tr '\r\n' '  ')
+    [ -n "$(printf '%s' "$REASON" | tr -d '[:space:]')" ] \
+      || die "switch-model requires a non-empty --reason: it is quoted to the worker in the switch notice"
+    ;;
+  *)
+    [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
+      || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
+    [ "$REASON_SET" = 0 ] || die "--reason applies to 'switch-model' only"
+    ;;
+esac
 [ "$HARNESS_SET" = 0 ] || [ -n "$NEW_HARNESS" ] || die "--harness requires a non-empty value"
 [ "$MODEL_SET" = 0 ] || [ -n "$NEW_MODEL" ] || die "--model requires a non-empty value"
 [ "$EFFORT_SET" = 0 ] || [ -n "$NEW_EFFORT" ] || die "--effort requires a non-empty value"
@@ -1008,6 +1060,165 @@ do_relaunch() {
   echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$BACKEND endpoint=$T worktree=$WT"
 }
 
+# --- in-place model switch --------------------------------------------------
+#
+# The switch is proven only by the harness's own session record, never by the
+# pane: omp appends a model_change entry naming the model it actually selected,
+# and nothing for a selector it refuses. The notice to the worker is written
+# only after that proof, so a refused or unproven switch sends nothing.
+
+# switch_notice: the ONE template for the in-place model-switch notice. No
+# caller composes its own prose; bin/fm-flow-wait.py's SCRIPT_TEMPLATES row
+# matches this exact opening to count it as script-originated.
+switch_notice() {  # <old-model> <new-model> <effort-or-empty> <reason>
+  local to=$2 reason=${4%.}
+  [ -z "$3" ] || to="$2 at $3 effort"
+  printf 'Your model was switched in place from %s to %s. Reason: %s. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next status line.' \
+    "$1" "$to" "$reason"
+}
+
+# omp_session_dir: omp's per-cwd session directory under its default agent
+# dir, reproducing omp 18.4.4's encoding. The worktree's realpath relative to
+# the realpath of $HOME becomes "-<rel>", relative to the temp dir "-tmp-<rel>",
+# and anything else "--<abs without leading />--", with "/" and ":" as "-".
+omp_session_dir() {  # <worktree>
+  local wt home tmp name
+  wt=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  home=$(cd "$HOME" 2>/dev/null && pwd -P) || home=$HOME
+  tmp=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tmp=${TMPDIR:-/tmp}
+  if [ "$wt" = "$home" ]; then
+    name=-
+  elif [ "${wt#"$home"/}" != "$wt" ]; then
+    name="-$(printf '%s' "${wt#"$home"/}" | tr '/:' '--')"
+  elif [ "$wt" = "$tmp" ]; then
+    name=-tmp
+  elif [ "${wt#"$tmp"/}" != "$wt" ]; then
+    name="-tmp-$(printf '%s' "${wt#"$tmp"/}" | tr '/:' '--')"
+  else
+    name="--$(printf '%s' "${wt#/}" | tr '/:' '--')--"
+  fi
+  printf '%s/.omp/agent/sessions/%s' "$HOME" "$name"
+}
+
+# omp_session_file: the most recently written session file for the worktree.
+omp_session_file() {  # <worktree>
+  local dir f newest=
+  dir=$(omp_session_dir "$1") || return 1
+  for f in "$dir"/*.jsonl; do
+    [ -f "$f" ] || continue
+    if [ -z "$newest" ] || [ "$f" -nt "$newest" ]; then
+      newest=$f
+    fi
+  done
+  [ -n "$newest" ] || return 1
+  printf '%s' "$newest"
+}
+
+# session_models <file> [skip]: the model of every model_change entry after
+# the first <skip> of them, one per line, oldest first.
+session_models() {  # <file> [skip]
+  { grep -F '"type":"model_change"' "$1" || true; } \
+    | tail -n +"$(( ${2:-0} + 1 ))" | { jq -r '.model // empty' 2>/dev/null || true; }
+}
+
+record_switched_profile() {
+  local lock tmp
+  lock=$(fm_meta_lock_path "$META") || return 1
+  fm_lock_acquire_wait "$lock"
+  tmp=$(mktemp "$STATE/.fm-control-meta.XXXXXX") || { fm_lock_release "$lock" || true; return 1; }
+  if { grep -v -e '^model=' -e '^effort=' "$META" || [ "$?" -eq 1 ]; } > "$tmp" \
+     && printf 'model=%s\neffort=%s\n' "$NEW_MODEL" "${NEW_EFFORT:-default}" >> "$tmp" \
+     && chmod 0600 "$tmp" && mv -f -- "$tmp" "$META"; then
+    fm_lock_release "$lock" || true
+    return 0
+  fi
+  rm -f -- "$tmp"
+  fm_lock_release "$lock" || true
+  return 1
+}
+
+do_switch_model() {
+  local cmd selector state composer_state session before prior verdict
+  local elapsed=0 seen='' notice out record_ok=1 delivery
+  local -a send_args
+
+  selector=$NEW_MODEL
+  [ -z "$NEW_EFFORT" ] || selector="$NEW_MODEL:$NEW_EFFORT"
+  cmd=$(fm_control_switch_command "$HARNESS" "$selector") \
+    || die "harness $HARNESS has no verified in-place model switch, so task $ID cannot change model without losing its conversation; use 'relaunch --model' with a progress note instead"
+  command -v jq >/dev/null 2>&1 \
+    || die "switch-model needs jq to read omp's session record; nothing was sent"
+
+  state=$(agent_state)
+  case "$state" in
+    alive|unverified) ;;
+    dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to switch in place" ;;
+    *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to type a switch command into an unattributed endpoint" ;;
+  esac
+  case "$(busy_verdict)" in
+    idle*) ;;
+    *) die "task $ID is not provably idle, so a switch command could land mid-turn; interrupt it first, then retry switch-model" ;;
+  esac
+  composer_state=$(fm_backend_composer_state "$BACKEND" "$T" "$LABEL" 2>/dev/null) \
+    || composer_state=unknown
+  [ "$composer_state" = empty ] \
+    || die "task $ID's composer state is '$composer_state', not proven empty; refusing to type the switch command where it could concatenate onto existing text"
+
+  [ -n "$WT" ] && [ -d "$WT" ] \
+    || die "task $ID has no readable recorded worktree, so its omp session record cannot be located"
+  session=$(omp_session_file "$WT") \
+    || die "no omp session record exists yet under $(omp_session_dir "$WT" 2>/dev/null || printf 'the worktree session directory'); omp writes it after the first completed turn, so this switch could not be proven. Nothing was sent"
+  before=$({ grep -cF '"type":"model_change"' "$session" || true; })
+  prior=$(session_models "$session" "$(( before > 0 ? before - 1 : 0 ))")
+  [ -n "$prior" ] || prior=$(fm_meta_get "$META" model)
+  [ -n "$prior" ] || prior=unknown
+  if [ "$prior" = "$NEW_MODEL" ] && [ -z "$NEW_EFFORT" ]; then
+    die "task $ID is already running $NEW_MODEL; nothing was switched"
+  fi
+
+  # A slash command opens a completion popup that swallows the first Enter
+  # (verified omp 18.4.4), so the submit core's retried Enter matters here.
+  verdict=$(fm_backend_send_text_submit "$BACKEND" "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2 "$LABEL") \
+    || die "the switch command could not be sent to task $ID on $BACKEND; no notice was sent"
+  [ "$verdict" != send-failed ] \
+    || die "the switch command could not be sent to task $ID on $BACKEND; no notice was sent"
+
+  while :; do
+    seen=$(session_models "$session" "$before")
+    [ -z "$seen" ] || break
+    awk -v e="$elapsed" -v t="$SWITCH_WAIT" 'BEGIN{exit !(e < t)}' || break
+    sleep "$POLL"
+    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
+  done
+  [ -n "$seen" ] \
+    || die "task $ID's omp session recorded no model change within ${SWITCH_WAIT}s after '$cmd' (submit verdict: $verdict); omp refuses an unknown model without switching, so it is still on $prior and no notice was sent. Check its composer for leftover text before the next steer"
+  seen=$(printf '%s\n' "$seen" | tail -n 1)
+  [ "$seen" = "$NEW_MODEL" ] \
+    || die "task $ID's omp session switched to '$seen', not the requested $NEW_MODEL; no notice was sent, so correct the model and retry"
+
+  record_switched_profile || {
+    record_ok=0
+    echo "error: task $ID switched to $NEW_MODEL but its durable record could not be updated to model=$NEW_MODEL effort=${NEW_EFFORT:-default}" >&2
+  }
+
+  notice=$(switch_notice "$prior" "$NEW_MODEL" "$NEW_EFFORT" "$REASON")
+  send_args=("$ID")
+  [ "$KIND" != secondmate ] \
+    || send_args+=(--fire-and-forget "$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')")
+  send_args+=("$notice")
+  # fm-send takes its own lease guard; release this one first so a supervision
+  # context's retained lease-command lock cannot deadlock the child.
+  fm_lease_guard_release || true
+  if out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-send.sh" "${send_args[@]}" 2>&1); then
+    delivery=inbox
+  else
+    printf '%s\n' "$out" >&2
+    die "task $ID switched to $NEW_MODEL, but its switch notice was not confirmed delivered; resend it with fm-send before anything else"
+  fi
+  echo "switched-model $ID harness=$HARNESS from=$prior to=$NEW_MODEL effort=${NEW_EFFORT:-default} backend=$BACKEND endpoint=$T notice=$delivery"
+  [ "$record_ok" = 1 ] || exit 1
+}
+
 # --- verbs ------------------------------------------------------------------
 
 case "$VERB" in
@@ -1033,5 +1244,8 @@ case "$VERB" in
     ;;
   relaunch)
     do_relaunch
+    ;;
+  switch-model)
+    do_switch_model
     ;;
 esac

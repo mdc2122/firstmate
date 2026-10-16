@@ -15,10 +15,10 @@ The failure repeated across harnesses and homes, and the workaround (remember to
 
 `bin/fm-control-lib.sh` is the single executable owner of three capability tables, with no side effects, so it can be read as a contract:
 
-- The **verb allowlist**: `interrupt`, `exit`, `relaunch`.
+- The **verb allowlist**: `interrupt`, `exit`, `relaunch`, `switch-model`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
-- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, whether the composer needs clearing afterwards, the command that exits the agent, and which task kinds the adapter is verified to run.
+- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, whether the composer needs clearing afterwards, the command that exits the agent, the command that switches the running conversation's model in place where one is verified, and which task kinds the adapter is verified to run.
   These were previously carried only in the [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md) skill's tool references, which now point here.
   `bin/fm-send.sh`'s `--key` path reads the composer-clear table from this owner too, rather than keeping a second copy of it.
 - **Per-backend capability**: which named keys a runtime backend can deliver, and whether it has a recovery-grade agent-state classifier able to prove an agent stopped.
@@ -33,6 +33,7 @@ A recorded `harness=` is not always an exact adapter name: a task launched from 
 | `interrupt` | Deliver the harness's verified interrupt sequence while leaving the agent running. | Delivery succeeds while the endpoint still exists and the agent is still alive where the backend can classify that; cancellation is confirmed only from an adapter-owned acknowledgement and otherwise reports `cancel=unconfirmed`. |
 | `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | The backend's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
 | `relaunch` | Replace the running agent with a new one in the same endpoint and worktree, on the exact recorded adapter or an explicitly chosen harness, model, and effort. | The new agent is alive on the recorded endpoint, and the durable record names the harness that is actually running. |
+| `switch-model` | Switch the running agent's model in place, keeping its process, conversation, endpoint, and worktree, then write one standard notice to its steering inbox. Only omp has a verified in-place switch (its session-only `/switch`); every other harness is refused and changes model through `relaunch`. | omp's own session record gains a `model_change` entry naming exactly the requested `<provider>/<id>`. Only then is the notice sent and `model=`/`effort=` recorded; a refused or unproven switch sends no notice and changes no record. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
 Interrupt never rewrites busy state as proof of its own success.
@@ -44,6 +45,11 @@ Fresh input or a provably empty composer skips the clear, so the captain's input
 The clear is refused before anything is sent when the recorded backend cannot deliver it.
 
 `exit` reads the composer's state before typing the exit command and requires the exact `empty` verdict; a `pending` verdict refuses by naming the pending text, and any other verdict (`unknown`, `pending-unproven`, or an unreadable read) refuses as not proven empty, matching the fail-safe contract every other consumer that can overwrite composer input follows.
+
+`switch-model` requires `--model <provider>/<id>` and `--reason <text>`, plus optional `--effort`, and refuses unless the agent is provably idle with a provably empty composer.
+It locates omp's session file under `$HOME/.omp/agent/sessions/` from the recorded worktree; omp writes that file only after the agent's first completed turn, so a switch before then refuses because it could not be proven.
+The worker notice is one template owned by `switch_notice` in `bin/fm-control.sh`: it names the previous and new model, the reason, and that the worktree, branch, and commits are unchanged, and it goes through `bin/fm-send.sh`, so no caller composes switch prose by hand.
+`bin/fm-flow-wait.py` counts that template as script-originated rather than a supervisor touch.
 
 **Teardown and discard are not verbs and will not become verbs.**
 `exit` stops an agent and preserves everything else.
