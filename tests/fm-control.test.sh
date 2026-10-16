@@ -975,8 +975,7 @@ test_fm_send_still_marks_the_same_secondmate_task() {
 # --- 7. in-place model switch and its notice --------------------------------
 
 # switch_case <name> <harness> -> echoes a case dir whose idle agent has an omp
-# session record with one launch-time model_change, placed where omp keeps it:
-# under $HOME/.omp/agent/sessions/-<worktree path relative to $HOME>.
+# session record with one launch-time model_change.
 switch_case() {
   local dir gen
   dir=$(new_case "$1")
@@ -984,16 +983,17 @@ switch_case() {
   alive_as "$dir" "$2"
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1 --state idle --source fm-spawn --event seed)
   printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
-  mkdir -p "$dir/.omp/agent/sessions/-wt-t1"
+  printf 'spawn_gen=test-spawn\n' >> "$dir/home/state/t1.meta"
+  mkdir -p "$dir/home/state/t1.omp-sessions/test-spawn"
   printf '{"type":"model_change","model":"old-provider/old-model"}\n' \
-    > "$dir/.omp/agent/sessions/-wt-t1/s.jsonl"
+    > "$dir/home/state/t1.omp-sessions/test-spawn/s.jsonl"
   printf '%s\n' "$dir"
 }
 
 run_switch() {  # <case-dir> <args...>
   local dir=$1; shift
   env PATH="$dir/fakebin:$PATH" HOME="$dir" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
-    FM_FAKE_OMP_SESSION="$dir/.omp/agent/sessions/-wt-t1/s.jsonl" \
+    FM_FAKE_OMP_SESSION="$dir/home/state/t1.omp-sessions/test-spawn/s.jsonl" \
     FM_FAKE_OMP_REFUSE="${FM_FAKE_OMP_REFUSE:-}" FM_CONTROL_POLL=0.01 \
     FM_CONTROL_SWITCH_WAIT=0.05 FM_SEND_SETTLE=0 FM_ROOT_OVERRIDE="$dir/home" \
     "$CONTROL" t1 switch-model "$@" 2>&1
@@ -1040,6 +1040,24 @@ test_switch_model_without_effort_keeps_recorded_effort() {
     || fail "a switch without --effort must keep the recorded effort, got: $(fm_meta_get "$meta" effort)"
   assert_contains "$out" "effort=high" "the success line should report the effort actually recorded"
   pass "fm-control switch-model: a switch without --effort keeps the recorded effort"
+}
+
+test_switch_model_refuses_historical_session() {
+  local dir out rc model
+  for model in old-provider/old-model new-provider/new-model; do
+    dir=$(switch_case historical omp)
+    mkdir -p "$dir/.omp/agent/sessions/-wt-t1"
+    cp "$dir/home/state/t1.omp-sessions/test-spawn/s.jsonl" "$dir/.omp/agent/sessions/-wt-t1/s.jsonl"
+    printf 'spawn_gen=replacement\n' > "$dir/meta.gen"
+    grep -v '^spawn_gen=' "$dir/home/state/t1.meta" >> "$dir/meta.gen"
+    mv "$dir/meta.gen" "$dir/home/state/t1.meta"
+    out=$(run_switch "$dir" --model "$model" --reason quota); rc=$?
+    expect_code 1 "$rc" "a replacement without its own session must refuse"
+    assert_contains "$out" "current spawn" "historical sessions must not identify the running model"
+    [ -z "$(literals "$dir")" ] || fail "a historical session must not permit typing"
+    [ -z "$(inbox_records "$dir")" ] || fail "a historical session must not permit a notice"
+  done
+  pass "fm-control switch-model: historical sessions never identify a replacement"
 }
 
 test_failed_switch_model_emits_no_notice() {
@@ -1101,4 +1119,5 @@ test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task
 test_switch_model_emits_exactly_one_notice_naming_both_models
 test_switch_model_without_effort_keeps_recorded_effort
+test_switch_model_refuses_historical_session
 test_failed_switch_model_emits_no_notice

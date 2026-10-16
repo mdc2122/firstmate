@@ -62,7 +62,7 @@
 #              session-only /switch); any other harness is refused and
 #              changes model through relaunch. The agent must be idle with a
 #              provably empty composer, and its omp session file (under
-#              $HOME/.omp/agent/sessions/<encoded worktree>/) must already
+#              the current spawn's isolated session directory) must already
 #              exist, because omp writes nothing to disk before the first
 #              completed turn and the switch could not be proven. --model is
 #              an exact <provider>/<id>; --effort appends omp's :<level>.
@@ -1077,41 +1077,18 @@ switch_notice() {  # <old-model> <new-model> <effort-or-empty> <reason>
     "$1" "$to" "$reason"
 }
 
-# omp_session_dir: omp's per-cwd session directory under its default agent
-# dir, reproducing omp 18.4.4's encoding. The worktree's realpath relative to
-# the realpath of $HOME becomes "-<rel>", relative to the temp dir "-tmp-<rel>",
-# and anything else "--<abs without leading />--", with "/" and ":" as "-".
-omp_session_dir() {  # <worktree>
-  local wt home tmp name
-  wt=$(cd "$1" 2>/dev/null && pwd -P) || return 1
-  home=$(cd "$HOME" 2>/dev/null && pwd -P) || home=$HOME
-  tmp=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tmp=${TMPDIR:-/tmp}
-  if [ "$wt" = "$home" ]; then
-    name=-
-  elif [ "${wt#"$home"/}" != "$wt" ]; then
-    name="-$(printf '%s' "${wt#"$home"/}" | tr '/:' '--')"
-  elif [ "$wt" = "$tmp" ]; then
-    name=-tmp
-  elif [ "${wt#"$tmp"/}" != "$wt" ]; then
-    name="-tmp-$(printf '%s' "${wt#"$tmp"/}" | tr '/:' '--')"
-  else
-    name="--$(printf '%s' "${wt#/}" | tr '/:' '--')--"
-  fi
-  printf '%s/.omp/agent/sessions/%s' "$HOME" "$name"
-}
-
-# omp_session_file: the most recently written session file for the worktree.
-omp_session_file() {  # <worktree>
-  local dir f newest=
-  dir=$(omp_session_dir "$1") || return 1
+omp_session_file() {
+  local gen dir f session=
+  gen=$(fm_meta_get "$META" spawn_gen)
+  case "$gen" in ''|*[!a-zA-Z0-9._-]*) return 1 ;; esac
+  dir="$STATE/$ID.omp-sessions/$gen"
   for f in "$dir"/*.jsonl; do
     [ -f "$f" ] || continue
-    if [ -z "$newest" ] || [ "$f" -nt "$newest" ]; then
-      newest=$f
-    fi
+    [ -z "$session" ] || return 1
+    session=$f
   done
-  [ -n "$newest" ] || return 1
-  printf '%s' "$newest"
+  [ -n "$session" ] || return 1
+  printf '%s' "$session"
 }
 
 # session_models <file> [skip]: the model of every model_change entry after
@@ -1166,8 +1143,8 @@ do_switch_model() {
 
   [ -n "$WT" ] && [ -d "$WT" ] \
     || die "task $ID has no readable recorded worktree, so its omp session record cannot be located"
-  session=$(omp_session_file "$WT") \
-    || die "no omp session record exists yet under $(omp_session_dir "$WT" 2>/dev/null || printf 'the worktree session directory'); omp writes it after the first completed turn, so this switch could not be proven. Nothing was sent"
+  session=$(omp_session_file) \
+    || die "no unique omp session record is bound to task $ID's current spawn; launch it with the current fm-spawn and complete its first turn before switching. Nothing was sent"
   before=$({ grep -cF '"type":"model_change"' "$session" || true; })
   prior=$(session_models "$session" "$(( before > 0 ? before - 1 : 0 ))")
   [ -n "$prior" ] || prior=$(fm_meta_get "$META" model)

@@ -47,7 +47,7 @@ The clear is refused before anything is sent when the recorded backend cannot de
 `exit` reads the composer's state before typing the exit command and requires the exact `empty` verdict; a `pending` verdict refuses by naming the pending text, and any other verdict (`unknown`, `pending-unproven`, or an unreadable read) refuses as not proven empty, matching the fail-safe contract every other consumer that can overwrite composer input follows.
 
 `switch-model` requires `--model <provider>/<id>` and `--reason <text>`, plus optional `--effort` (omitting it sends no `:<level>` and keeps the recorded `effort=`), and refuses unless the agent is provably idle with a provably empty composer.
-It locates omp's session file under `$HOME/.omp/agent/sessions/` from the recorded worktree; omp writes that file only after the agent's first completed turn, so a switch before then refuses because it could not be proven.
+Each omp launch uses `--session-dir state/<id>.omp-sessions/<spawn_gen>`, isolating its conversation from previous incarnations. Switching requires exactly one session file in the current spawn's directory; missing or ambiguous records refuse before typing. omp writes that file only after the agent's first completed turn, so a switch before then refuses because it could not be proven. Agents launched before this binding was introduced must be relaunched before using `switch-model`.
 The worker notice is one template owned by `switch_notice` in `bin/fm-control.sh`: it names the previous and new model, the reason, and that the worktree, branch, and commits are unchanged, and it goes through `bin/fm-send.sh`, so no caller composes switch prose by hand.
 `bin/fm-flow-wait.py` counts that template as script-originated rather than a supervisor touch.
 
