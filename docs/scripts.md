@@ -146,7 +146,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-pr-reviewers.sh`     | Read-only: suggest reviewers from GitHub's own author mapping of recent commits on a pull request's changed files, never requesting one |
 | `fm-merge-outcome-lib.sh` | Publish a confirmed merge's durable, role-routed supervision outcome                 |
 | `fm-merge-authority-lib.sh` | Resolve merge authority at the gate, persist it against the accepted canonical PR, and identity-check its later poll consumption |
-| `fm-merge-line.sh`       | Own per-repository merge lines: declare, move a PR to the head (`front`), and the head-only gate the yolo merge poll, behind-base rerun steer, and `fm-pr-merge.sh` obey |
+| `fm-merge-line.sh`       | Own per-repository merge lines: declare, move a PR to the head (`front`), the head-only gate the yolo merge poll, behind-base rerun steer, and `fm-pr-merge.sh` obey, and the queue window a merge-queue-app base opens behind a queued head |
 | `fm-merge-path-stats.py` | Read-only re-measurement of one repository's merge path per stage (no-mistakes steps, CI duration per runner, merge-line handoff gap, merge to release join and to live), writing only its `--out` directory |
 | `fm-flow-wait.py`        | Read-only weekly readout of a home's dispatch-to-live flow: the zero-human-touch share of settled tasks and wait hours by class (decision park, human answer, CI, merge queue, release, worker stall), writing only its `--out` directory and caches |
 | `fm-action-ledger-lib.sh` | Single owner of the append-only supervisor action ledger `state/supervisor-actions.jsonl` that the supervisor verbs record into and `fm-flow-wait.py` reads |
