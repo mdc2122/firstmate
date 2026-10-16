@@ -247,6 +247,9 @@ $intent
 
 ## Firstmate spec
 Exercise the spawn behavior under test.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 
