@@ -47,6 +47,7 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-wip-caps-lib.sh
 . "$SCRIPT_DIR/fm-wip-caps-lib.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
@@ -181,7 +182,7 @@ if ! fm_backlog_record_present "$META" "task record" "$STATE"; then
 fi
 grep -qx 'kind=scout' "$META" || { echo "error: task $ID is not a scout task (kind=scout not in meta)" >&2; exit 1; }
 
-IFS='|' read -r WIP_KIND WIP_PR WIP_LANE <<EOF
+IFS='|' read -r _WIP_KIND WIP_PR WIP_LANE _WIP_BYPASS <<EOF
 $(fm_wip_meta_fields "$META")
 EOF
 WIP_STATUS=0

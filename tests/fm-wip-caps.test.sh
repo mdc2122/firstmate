@@ -10,8 +10,10 @@ set -u
 
 # shellcheck source=tests/fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
-. "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-wip-caps-lib.sh"
-. "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-wake-lib.sh"
+# shellcheck source=bin/fm-wip-caps-lib.sh
+. "$ROOT/bin/fm-wip-caps-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$ROOT/bin/fm-wake-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-wip-caps)
 mkdir -p "$TMP_ROOT"
@@ -208,6 +210,44 @@ test_lane_transitions_require_capacity() {
   pass "PR registration and promotion require capacity without blocking same-lane registration"
 }
 
+# The review finding's sequence at the measured defaults: four merges and
+# three admitted validations. Each validation registering its PR may take only
+# the one free merges slot; the rest queue without arming, and each registers
+# once a merges slot frees, so the merges lane never holds a sixth PR.
+test_registrations_never_exceed_the_merges_cap_at_defaults() {
+  local home out rc i armed merges
+  home=$(new_home finding-sequence)
+  for i in 1 2 3 4; do occupy "$home" "merging-$i" "pr=https://github.com/example/repo/pull/$i"; done
+  for i in 1 2 3; do occupy "$home" "validating-$i"; done
+
+  armed=0
+  for i in 1 2 3; do
+    out=$(run_transition "$home" fm-pr-check.sh "validating-$i" "https://github.com/example/repo/pull/1$i"); rc=$?
+    if [ "$rc" -eq 0 ]; then
+      armed=$((armed + 1))
+    else
+      expect_code 5 "$rc" "registration of validating-$i into a full merges lane"$'\n'"$out"
+      assert_contains "$out" "lane merges is at its cap of 5 with 5 in flight" "the queued registration must name lane, cap, and occupancy"
+      assert_absent "$home/state/validating-$i.check.sh" "a queued registration must not arm a merge poll"
+    fi
+  done
+  [ "$armed" = 1 ] || fail "only the one free merges slot may be taken; $armed registrations armed"
+  fm_wip_caps_load "$home/config"
+  fm_wip_scan "$home/state"
+  merges=FM_WIP_COUNT_merges
+  [ "${!merges}" = 5 ] || fail "the merges lane must hold exactly its cap of 5, got ${!merges}"
+
+  # One merge finishes: exactly one queued registration may now go through.
+  rm -f "$home/state/merging-1.meta"
+  out=$(run_transition "$home" fm-pr-check.sh validating-2 https://github.com/example/repo/pull/12); rc=$?
+  expect_code 0 "$rc" "an admitted validation registers its PR once a merges slot frees"$'\n'"$out"
+  out=$(run_transition "$home" fm-pr-check.sh validating-3 https://github.com/example/repo/pull/13); rc=$?
+  expect_code 5 "$rc" "the next registration waits for the next finish"
+  fm_wip_scan "$home/state"
+  [ "${!merges}" = 5 ] || fail "the merges lane must never exceed its cap, got ${!merges}"
+  pass "at the defaults, 4 merges + 3 validations never yield a 6th armed merge, and a queued registration goes through once a slot frees"
+}
+
 test_lanes_are_independent() {
   local home out rc
   home=$(new_home independent)
@@ -245,6 +285,42 @@ test_bypass_records_itself_and_still_holds_its_slot() {
   expect_code 5 "$rc" "a dispatch after the bypass"
   assert_contains "$out" "urgent-b [bypass: security]" "the bypassed task must still hold its slot"
   pass "a bypass records itself in the task record and the bypass log, and still holds its slot"
+}
+
+# The bypass log line is written only once the spawn succeeds: a spawn that
+# passes admission under a bypass and then fails leaves no line, and its
+# successful retry leaves exactly one.
+test_bypass_log_is_written_only_after_spawn_success() {
+  local home out rc proj wt log
+  home=$(new_home bypass-fail)
+  printf 'validations=1\n' > "$home/config/wip-caps"
+  occupy "$home" ship-a
+  log="$home/data/wip-cap-bypasses.log"
+  proj="$home/proj-urgent-f"
+  wt="$home/wt-urgent-f"
+  fm_test_spawn_brief "$home" urgent-f
+  fm_git_worktree "$proj" "$wt" wt-urgent-f >/dev/null 2>&1
+
+  # The pane reports the spawning project itself, never an isolated worktree,
+  # so the spawn fails after the cap check has admitted it under the bypass.
+  # A no-op sleep keeps the 60-poll worktree wait instant.
+  mkdir -p "$home/fail-fake"
+  cp "$home/fake/fakebin/"* "$home/fail-fake/"
+  fm_test_fake_sleep_noop "$home/fail-fake"
+  out=$(FM_FAKE_LAUNCH_LOG="$home/launch-urgent-f.log" \
+    fm_test_run_spawn "$home" "$proj" "$home/fail-fake" urgent-f "$proj" --harness codex \
+      --mode no-mistakes --yolo on --cap-bypass outage --cap-bypass-reason "prod renderer down"); rc=$?
+  [ "$rc" -ne 0 ] || fail "the spawn should fail when the pane never reaches an isolated worktree"$'\n'"$out"
+  assert_contains "$out" "bypasses the work-in-progress cap" "the failing spawn must have passed admission under its bypass"
+  assert_absent "$log" "a spawn that fails after admission must leave no bypass log line"
+
+  out=$(FM_FAKE_LAUNCH_LOG="$home/launch-urgent-f.log" \
+    fm_test_run_spawn "$home" "$wt" "$home/fake/fakebin" urgent-f "$proj" --harness codex \
+      --mode no-mistakes --yolo on --cap-bypass outage --cap-bypass-reason "prod renderer down"); rc=$?
+  expect_code 0 "$rc" "the retried bypassed spawn"$'\n'"$out"
+  [ "$(wc -l < "$log" | tr -d ' ')" = 1 ] || fail "a failed spawn and its successful retry must leave exactly one line; got: $(cat "$log")"
+  assert_grep "urgent-f	validations	outage	1/1	prod renderer down" "$log" "the one line must describe the successful spawn"
+  pass "the bypass log line is written only after spawn success: none on failure, exactly one after a retry"
 }
 
 test_bypass_needs_a_known_class_and_a_reason() {
@@ -348,8 +424,10 @@ test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_merge_notification_is_scoped_to_the_current_pr
 test_lane_transitions_require_capacity
+test_registrations_never_exceed_the_merges_cap_at_defaults
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
+test_bypass_log_is_written_only_after_spawn_success
 test_bypass_needs_a_known_class_and_a_reason
 test_secondmate_spawn_is_exempt_and_refuses_bypass_flags
 test_invalid_caps_refuse_instead_of_defaulting

@@ -17,6 +17,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-wip-caps-lib.sh
 . "$SCRIPT_DIR/fm-wip-caps-lib.sh"
 # shellcheck source=bin/fm-parent-channel-lib.sh
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
@@ -118,7 +119,7 @@ META_LOCK_HELD=1
 META_DEVICE=$(fm_pr_file_device "$META") || exit 1
 STATE_DEVICE=$(fm_pr_file_device "$STATE") || exit 1
 [ "$META_DEVICE" = "$STATE_DEVICE" ] || { echo "error: task metadata is unavailable" >&2; exit 1; }
-IFS='|' read -r WIP_KIND WIP_PR WIP_LANE <<EOF
+IFS='|' read -r WIP_KIND _WIP_PR WIP_LANE _WIP_BYPASS <<EOF
 $(fm_wip_meta_fields "$META")
 EOF
 WIP_STATUS=0

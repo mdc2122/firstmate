@@ -71,11 +71,12 @@
 # never queued behind a cap.
 # Bypass: a captain's direct dispatch order (class captain) and outage or
 # security work (classes outage, security) pass --cap-bypass <class>
-# --cap-bypass-reason <why>. A bypassed task still holds its slot. The bypass
-# is recorded before anything is created, as wip_cap_bypass=<class> in the
-# task record and one tab-separated line in data/wip-cap-bypasses.log
-# (<utc> <id> <lane> <class> <occupancy>/<cap> <reason>); a bypass that cannot
-# be recorded refuses the spawn.
+# --cap-bypass-reason <why>. A bypassed task still holds its slot. Before
+# anything is created, the spawn proves the bypass log is writable and refuses
+# otherwise; the task record then carries wip_cap_bypass=<class>, and only once
+# the spawn has succeeded is one tab-separated line appended to
+# data/wip-cap-bypasses.log (<utc> <id> <lane> <class> <occupancy>/<cap>
+# <reason>), so a failed spawn leaves no line and a retry leaves exactly one.
 #
 # PULL (bin/fm-queue-zero.sh). Each ready backlog row enters the lane its kind
 # names (review -> reviews, scout -> investigations, anything else is dispatched
@@ -86,6 +87,7 @@
 # read lists every ready row plus one error row naming config/wip-caps.
 
 if ! declare -F fm_pr_url_parse >/dev/null; then
+  # shellcheck source=bin/fm-pr-lib.sh
   . "$(dirname "${BASH_SOURCE[0]}")/fm-pr-lib.sh"
 fi
 
@@ -299,10 +301,18 @@ fm_wip_bypass_class_valid() {  # <class>
   esac
 }
 
-# Append the durable bypass record (BYPASS above). Returns 1 when it could not
-# be written.
-fm_wip_bypass_record() {  # <data-dir> <id> <lane> <class> <occupancy/cap> <reason>
+# True when the bypass log can be appended: <data-dir> is a writable directory
+# and the log is absent or a writable regular file (not a symlink).
+fm_wip_bypass_log_writable() {  # <data-dir>
   local data=$1 log=$1/wip-cap-bypasses.log
-  [ -d "$data" ] && [ ! -L "$log" ] || return 1
+  [ -d "$data" ] && [ -w "$data" ] && [ ! -L "$log" ] || return 1
+  [ ! -e "$log" ] || { [ -f "$log" ] && [ -w "$log" ]; }
+}
+
+# Append the durable bypass record (BYPASS above), after a successful spawn.
+# Returns 1 when it could not be written.
+fm_wip_bypass_record() {  # <data-dir> <id> <lane> <class> <occupancy/cap> <reason>
+  local log=$1/wip-cap-bypasses.log
+  fm_wip_bypass_log_writable "$1" || return 1
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$3" "$4" "$5" "$6" >>"$log"
 }

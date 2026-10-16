@@ -40,9 +40,10 @@
 #   Queued, and names each full lane, its cap, and every task occupying it.
 #   A captain's direct dispatch order or outage/security work passes
 #   --cap-bypass <captain|outage|security> with a non-empty
-#   --cap-bypass-reason; the bypass is recorded (wip_cap_bypass= in the task
-#   record and a line in data/wip-cap-bypasses.log) before anything is
-#   created, and the task still holds its slot. --secondmate spawns and
+#   --cap-bypass-reason; the task record carries wip_cap_bypass= and, only
+#   once the spawn succeeds, one line is appended to data/wip-cap-bypasses.log
+#   (an unwritable log refuses before anything is created). The task still
+#   holds its slot. --secondmate spawns and
 #   --relaunch are exempt and refuse the bypass flags, so recovery is never
 #   queued behind a cap. A scout dispatched from a backlog item of kind review
 #   records wip_lane=reviews.
@@ -3029,11 +3030,16 @@ if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
       echo "refused: $ID was not dispatched; $FM_WIP_REFUSAL. Its backlog item stays Queued: pull it when one of these finishes, or pass --cap-bypass <captain|outage|security> --cap-bypass-reason <why> for a captain's direct order or outage/security work." >&2
       exit 5
     fi
-    if ! fm_wip_bypass_record "$DATA" "$ID" "${FM_WIP_BINDING%% *}" "$CAP_BYPASS" "${FM_WIP_BINDING#* }" "$CAP_BYPASS_REASON"; then
+    # The log line is written only once the spawn succeeds (below), so a failed
+    # spawn leaves none and a retry leaves exactly one; prove now that it can
+    # be written, so an unrecordable bypass refuses before anything exists.
+    if ! fm_wip_bypass_log_writable "$DATA"; then
       echo "error: the work-in-progress cap bypass for $ID could not be recorded in $DATA/wip-cap-bypasses.log; refusing rather than bypassing unrecorded" >&2
       exit 1
     fi
     WIP_BYPASSED=$CAP_BYPASS
+    WIP_BYPASS_LANE=${FM_WIP_BINDING%% *}
+    WIP_BYPASS_OCCUPANCY=${FM_WIP_BINDING#* }
     echo "notice: $ID bypasses the work-in-progress cap ($CAP_BYPASS: $CAP_BYPASS_REASON); $FM_WIP_REFUSAL" >&2
     ;;
   *)
@@ -4681,4 +4687,8 @@ SPAWN_META_LOCK_HELD=0
 
 SPAWN_DELIVERY=
 [ -z "$MODE" ] || SPAWN_DELIVERY=" mode=$MODE yolo=$YOLO"
+if [ -n "$WIP_BYPASSED" ] &&
+  ! fm_wip_bypass_record "$DATA" "$ID" "$WIP_BYPASS_LANE" "$WIP_BYPASSED" "$WIP_BYPASS_OCCUPANCY" "$CAP_BYPASS_REASON"; then
+  echo "warning: $ID launched under a $WIP_BYPASSED cap bypass, but its line could not be appended to $DATA/wip-cap-bypasses.log; the task record still carries wip_cap_bypass=$WIP_BYPASSED" >&2
+fi
 echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"
