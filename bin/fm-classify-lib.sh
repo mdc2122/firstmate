@@ -1082,6 +1082,27 @@ EOF
   printf '0'
 }
 
+# status_presented_outcome_covers <status-file>
+# The ONE durable presented-outcome record shared by every surface that can
+# re-announce a finished worker's terminal outcome: the .status-presentation-cursor
+# manifest row this status log already committed through the drain's status
+# presentation (status_commit_presentation_snapshot). 0 when the manifest's
+# presented byte offset covers the file's current size AND its recorded
+# identity matches the file's current identity, meaning every byte of the log
+# - including its latest captain-facing line - was already presented to
+# firstmate. Any other answer (no manifest row, stale identity, truncated
+# coverage, or an unreadable file) returns 1 so callers keep their ordinary
+# surface rather than silently swallowing a real outcome.
+status_presented_outcome_covers() {  # <status-file>
+  local f=$1 offset size
+  offset=$(status_presentation_cursor_offset "$f") || return 1
+  case "$offset" in ''|*[!0-9]*|0) return 1 ;; esac
+  size=$(_fm_status_file_size "$f") || return 1
+  size=${size//[[:space:]]/}
+  case "$size" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$offset" -ge "$size" ]
+}
+
 status_signal_seen_marker_path() {  # <state> <task-id>
   printf '%s/.seen-%s' "$1" "$(printf '%s.status' "$2" | tr '.' '_')"
 }

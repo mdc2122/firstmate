@@ -501,6 +501,14 @@ ok - unacknowledged recovery is announced at most once per generation and the su
 FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=59357
 ```
 
+Routine-wake coalescing, cross-surface presented-outcome dedupe, the idle-after-done stale class, and the stranded operational-draft ring recovery were verified on 2026-10-16 with a real `bin/fm-watch.sh` subprocess against fake tmux, the real drain, and the real inactive-outcome scanner:
+
+```sh
+tests/fm-wake-coalesce.test.sh
+```
+
+Observed guarantee: a bare turn-end batch whose durable queue already holds an unheld row appends its rows, leaves them durable, and does not deliver its own close (while an empty-queue routine batch still wakes exactly once, and any `.status`, `check`, `stale`, or `heartbeat` wake is never batched); a mid-burst `--ack-through` consumes only its own rows and its monotonic replay can never consume a higher wake; an already-presented terminal outcome queues no second `inactive-outcome` wake, while an unpresented one still surfaces; a cleanup-pending `done:` pane takes one low-priority recheck and never a wedge escalation; and an inbox doorbell over a composer holding only a `FIRSTMATE_OP`/legacy watcher draft submits exactly Enter and returns 4, while human text, near-miss prose, and non-operational pending text are left untouched with the escalation named `delivery-blocked`.
+
 Deterministic entry points:
 
 ```sh
@@ -510,6 +518,7 @@ tests/fm-watcher-lock.test.sh
 tests/fm-watch-arm.test.sh
 tests/fm-watch-recovery-loop.test.sh
 tests/fm-wake-queue.test.sh
+tests/fm-wake-coalesce.test.sh
 tests/fm-subagent-pretool-check.test.sh
 tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh

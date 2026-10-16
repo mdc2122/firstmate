@@ -520,6 +520,18 @@ reconcile_direct_child_locked() { # <id> <meta> <secondmate-id-or-empty> <timeou
     fi
     return 0
   fi
+  # Cross-surface outcome dedupe: this task's terminal outcome may already have
+  # been presented to firstmate through the wake-queue status surface (a signal
+  # row's annotation, the STATUS OUTCOME BACKSTOP section, or the UNREAD STATUS
+  # section), which commits byte coverage through .status-presentation-cursor.
+  # That manifest row is the ONE durable presented-outcome record both surfaces
+  # consult; when it already covers the log's current end, queueing a second
+  # check wake for the same completion would be a repeat notice, so mark the
+  # receipt presented directly instead of asking for a turn.
+  if status_presented_outcome_covers "$status" 2>/dev/null; then
+    mv -f "$RECORD_PENDING" "$(record_path "$fingerprint" presented)" || return 1
+    return 0
+  fi
   record_phase_set "$RECORD_PENDING" presentation || return 1
   payload="inactive terminal outcome awaiting captain presentation: child=$id state=$state"
   [ -z "$pr" ] || payload="$payload pr=$pr"

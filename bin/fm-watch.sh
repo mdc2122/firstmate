@@ -207,6 +207,14 @@
 #                          rows do not feed this escalation, observation is
 #                          read-only, and one parent notification covers each
 #                          no-progress episode
+# Coalescing and outcome dedupe: a bare turn-end-only signal batch is not
+# closed when the durable queue already holds an unheld row (the pending wake
+# covers it; docs/watcher-continuity.md "Routine-wake coalescing and
+# cross-surface outcome dedupe"), a terminal done/failed pane whose outcome was
+# already presented is bounded to one low-priority recheck instead of the
+# ordinary stale close and never wedge-escalated, and an inbox doorbell whose
+# composer holds only a stranded operational draft is recovered by submitting
+# that draft instead of skipping.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -564,7 +572,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # too: their pane-staleness exemption is about quiet panes being healthy,
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state capture_rc
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state capture_rc inbox_cstate
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -602,6 +610,12 @@ inbox_steer_check() {  # <window> <task>
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
         return 0
       fi
+      if [ "$ring_rc" -eq 4 ]; then
+        # A stranded operational draft sat in the composer and was submitted
+        # by the ring, freeing it; the record still owns the ladder so the
+        # ordinary doorbell re-rings next due.
+        triage_log "steer-inbox: submitted a stranded operational draft blocking $task's composer; doorbell re-rings on the next due tick"
+      fi
       if ! fm_task_inbox_record_ring "$STATE" "$task" "$rec"; then
         if [ ! -f "$rec" ]; then
           fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
@@ -617,6 +631,15 @@ inbox_steer_check() {  # <window> <task>
       ;;
     escalate)
       reason="stale: $w (unread firstmate instruction: $rec still unhandled after $count doorbell delivery attempts with an idle pane; inspect the worker)"
+      # Delivery-blocked distinction: when the composer's pending text is
+      # neither a recoverable operational draft nor provably empty, the worker
+      # is fine - the steer is stranded behind unsubmitted text in the input
+      # box. Name that instead of generic worker-stale so the caller knows to
+      # clear the composer rather than recover the agent.
+      inbox_cstate=$(fm_backend_composer_state "$backend" "$w" "$(window_label "$w")" 2>/dev/null || printf 'unknown')
+      if [ "$inbox_cstate" = pending ]; then
+        reason="stale: $w (delivery-blocked: $rec still unhandled after $count doorbell attempts - the composer's unsubmitted text blocks every doorbell and is not a recoverable operational draft; clear or submit the composer's pending text so steers can reach the worker)"
+      fi
       if [ ! -d "${rec%/*}" ] || [ ! -f "$rec" ]; then
         fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
         return 0
@@ -1609,6 +1632,27 @@ captain_call_stale_bound() {  # <window-key> <task>
   STALE_WAIT_DECLARATION=$(captain_call_declaration "$task" "$CAPTAIN_CALL_IDENTITY")
   afk_record_present && return 0
   stale_wait_throttled "$key" "$STALE_WAIT_DECLARATION"
+}
+
+# Bound a terminal-outcome stale sighting whose completion was already
+# presented to firstmate: the pane is stale only because the task's cleanup is
+# still owed on the firstmate side (teardown refusal, ledger, holds,
+# observation bookkeeping). The worker finished; no wedge is possible, so the
+# caller gives it one bounded low-priority re-surface instead of the wedge
+# timer. Returns 0 when the last status line is a terminal `done:`/`failed:`
+# AND the .status-presentation-cursor record every outcome surface consults
+# already covers the whole log; anything else - a still-unpresented terminal
+# line, a non-terminal line, or any unreadable record - keeps ordinary
+# surfacing. status_is_terminal_verb deliberately excludes `blocked` and
+# `needs-decision`, whose captain-facing wait keeps the captain_call_stale_bound
+# path.
+done_outcome_stale_bound() {  # <window> <task> <window-key>
+  local win=$1 task=$2 key=$3 last verb
+  [ -n "$task" ] || return 1
+  last=$(last_status_line "$STATE/$task.status")
+  verb=$(status_line_verb "$last")
+  case "$verb" in done|failed) ;; *) return 1 ;; esac
+  status_presented_outcome_covers "$STATE/$task.status"
 }
 
 # Surface a stale pane no classifier could resolve, so firstmate inspects it: it
@@ -3391,6 +3435,37 @@ EOF
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
+      # Routine-signal coalescing: when every signaled file is a bare
+      # .turn-ended marker (no .status span, no needs-decision payload) and the
+      # durable queue already holds unhandled rows, this batch's delivery is
+      # redundant: the wake already delivered or in flight for those rows names
+      # the same drain instruction, and the drain will claim and present every
+      # queued row - including the ones this batch appends below - in one
+      # presentation (claim_main_rows_locked re-claims all unclaimed rows at
+      # drain time). Capture the unheld count BEFORE appending so the batch's
+      # own new rows cannot prove coverage for themselves; per-row ack-through
+      # semantics are untouched. Only bare turn-ends are routine: any .status
+      # file, check, stale, or heartbeat keeps the ordinary wake because it may
+      # carry captain-facing content a turn must see (enumerated, never
+      # heuristic).
+      routine_only=0
+      case "$reason" in
+        "signal:"*)
+          routine_only=1
+          for f in $files; do
+            case "$f" in *.turn-ended) ;; *) routine_only=0; break ;; esac
+          done
+          if [ "$routine_only" -eq 1 ] && [ -n "$FM_SIGNAL_NEEDS_DECISION_FILES" ]; then
+            routine_only=0
+          fi
+          ;;
+      esac
+      _coalesce_seq='' _coalesce_n=0
+      if [ "$routine_only" -eq 1 ]; then
+        read -r _coalesce_seq _coalesce_n <<EOF
+$(wake_queue_unheld_oldest)
+EOF
+      fi
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"
@@ -3423,6 +3498,14 @@ EOF
       done <<EOF
 $FM_SIGNAL_SURFACE_ENDPOINTS
 EOF
+      # A routine bare-turn-end batch with unheld rows already queued is
+      # delivered by the wake those rows are waiting on; skip this batch's own
+      # close (the cycle keeps polling and the rows stay durable for the next
+      # drain) rather than paying one whole wake-turn per routine signal.
+      if [ "${_coalesce_n:-0}" -gt 0 ]; then
+        triage_log "coalesced routine $reason into ${_coalesce_n} already-queued wake row(s); one delivery covers the batch"
+        continue
+      fi
       wake "$reason"
     else
       while IFS=$(printf '\t') read -r sf sig f; do
@@ -3557,6 +3640,22 @@ EOF
               rm -f "$ssf"
               clear_write_tracking "$key"
               triage_log "absorbed stale (open captain call already surfaced for this status): $w"
+            elif done_outcome_stale_bound "$w" "$task" "$key"; then
+              # A terminal `done:`/`failed:` status already presented to
+              # firstmate (the .status-presentation-cursor coverage record
+              # every outcome surface consults) whose pane is stale only
+              # because cleanup is still owed: teardown refusal on an
+              # unresolved follow-up ledger, a captain hold, or observation
+              # bookkeeping. It is not a wedge - the worker finished - so it
+              # gets one bounded low-priority re-surface per
+              # PAUSE_RESURFACE_SECS and never an escalation timer.
+              printf '%s' "$h" > "$sf"
+              rm -f "$ssf"
+              clear_write_tracking "$key"
+              resurface_absorbed "$w" "$STATE/.done-stale-resurfaced-$key" 999999 \
+                "stale: $w (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)" \
+                'done-stale' "$PAUSE_RESURFACE_SECS"
+              triage_log "absorbed stale (done outcome already presented; cleanup-pending, not wedgeable): $w"
             else
               fm_wake_append stale "$w" "stale: $w" || exit 1
               stale_wait_record "$key"
