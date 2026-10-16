@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2034 # FM_WIP_* outputs are read by the sourcing caller.
 # fm-wip-caps-lib.sh - single owner of per-lane work-in-progress caps.
 # Usage: . bin/fm-wip-caps-lib.sh (sourced by bin/fm-spawn.sh,
-# bin/fm-pr-check.sh, bin/fm-promote.sh, and bin/fm-queue-zero.sh;
+# bin/fm-promote.sh, and bin/fm-queue-zero.sh;
 # it has no command of its own).
 #
 # WHY. Throughput comes from completion rate, not start rate. The baseline week
@@ -61,12 +61,14 @@
 # names each full lane, its cap, and every task occupying it with its newest
 # status event. Admission runs under the home's task-set lock, so two spawns
 # cannot both take the last slot.
-# Lane transitions also run under that lock: bin/fm-pr-check.sh checks before
-# recording a PR, and bin/fm-promote.sh checks before changing a scout to ship.
-# A transition into a different lane uses the same admission checks,
-# excluding the task's own record; an unchanged lane or no-slot outcome needs
-# no admission. Refusal exits 5 without changing task metadata or the scout's
-# brief, so finish existing work and retry the registration or promotion.
+# Promotion also runs under that lock: bin/fm-promote.sh checks before
+# changing a scout to ship. A transition into a different lane uses the same
+# admission checks, excluding the task's own record; an unchanged lane or
+# no-slot outcome needs no admission. Refusal exits 5 without changing task
+# metadata or the scout's brief, so finish existing work and retry.
+# Entering merges is never refused: a ship registering its green PR
+# (bin/fm-pr-check.sh) is finishing admitted work, and the merges cap already
+# gated its dispatch, so registration and merging never wait on a cap.
 # Exempt, never checked: a secondmate spawn and any relaunch, so recovery is
 # never queued behind a cap.
 # Bypass: a captain's direct dispatch order (class captain) and outage or
@@ -274,7 +276,7 @@ fm_wip_transition_admit() {
   current=$FM_WIP_TASK_LANE
   fm_wip_record_lane "$state" "$id" "$kind" "$pr" "$wlane"
   target=$FM_WIP_TASK_LANE
-  [ -n "$target" ] && [ "$target" != "$current" ] || return 0
+  [ -n "$target" ] && [ "$target" != "$current" ] && [ "$target" != merges ] || return 0
   fm_wip_admit "$config" "$state" "$id" "$target"
 }
 

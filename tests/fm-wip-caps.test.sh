@@ -37,6 +37,13 @@ occupy() {
     "worktree=/nonexistent/$id" "harness=codex" "kind=ship" "mode=no-mistakes" "yolo=on" "$@"
 }
 
+# ship_brief <home> <id>: a spawn brief with the completion observation a
+# fresh ship needs.
+ship_brief() {
+  fm_test_spawn_brief "$1" "$2"
+  printf '\n# Completion observation\nverify: the fixture worker is running in its own endpoint\n' >> "$1/data/$2/brief.md"
+}
+
 # spawn_task <home> <id> [fm-spawn args...]: brief, isolated worktree, and one
 # real fm-spawn of <id>. Prints combined output; returns fm-spawn's status.
 spawn_task() {
@@ -44,7 +51,7 @@ spawn_task() {
   shift 2
   proj="$home/proj-$id"
   wt="$home/wt-$id"
-  fm_test_spawn_brief "$home" "$id"
+  ship_brief "$home" "$id"
   fm_git_worktree "$proj" "$wt" "wt-$id" >/dev/null 2>&1
   FM_FAKE_LAUNCH_LOG="$home/launch-$id.log" \
     fm_test_run_spawn "$home" "$wt" "$home/fake/fakebin" "$id" "$proj" --harness codex "$@"
@@ -169,8 +176,8 @@ run_transition() {
     PATH="$home/fake/fakebin:$PATH" "$ROOT/bin/$command" "$@" 2>&1
 }
 
-test_lane_transitions_require_capacity() {
-  local home out rc
+test_promotion_requires_capacity() {
+  local home out rc lock
   home=$(new_home transitions)
   printf 'validations=1\nmerges=1\n' > "$home/config/wip-caps"
   occupy "$home" merging "pr=https://github.com/example/repo/pull/1"
@@ -178,74 +185,56 @@ test_lane_transitions_require_capacity() {
   occupy "$home" scouting kind=scout
   fm_test_spawn_brief "$home" scouting
 
-  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
-  expect_code 5 "$rc" "PR registration into a full merges lane"$'\n'"$out"
-  assert_not_contains "$(fm_wip_meta_fields "$home/state/validating.meta")" "https://" "refusal must not register the PR"
-  assert_absent "$home/state/validating.check.sh" "refusal must not arm a poll"
-  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
   expect_code 5 "$rc" "promotion into a full validations lane"$'\n'"$out"
   assert_grep 'kind=scout' "$home/state/scouting.meta" "refused promotion must retain scout kind"
 
-  occupy "$home" waiting
-  local lock
   lock=$(fm_task_set_lock_path "$home/state")
   fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
-  out=$(run_transition "$home" fm-pr-check.sh waiting https://github.com/example/repo/pull/3); rc=$?
-  expect_code 1 "$rc" "registration must serialize with spawn's task-set lock"
-  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
   expect_code 1 "$rc" "promotion must serialize with spawn's task-set lock"
   fm_lock_release "$lock"
-  rm "$home/state/waiting.meta"
-  rm "$home/state/merging.meta"
-  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
-  expect_code 0 "$rc" "PR registration after a merge slot frees"$'\n'"$out"
-  out=$(run_transition "$home" fm-pr-check.sh validating https://github.com/example/repo/pull/2); rc=$?
-  expect_code 0 "$rc" "re-registration in the same full lane"$'\n'"$out"
-  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
-  expect_code 5 "$rc" "promotion must also respect a full downstream merge lane"$'\n'"$out"
   rm "$home/state/validating.meta"
-  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off); rc=$?
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
+  expect_code 5 "$rc" "promotion must also respect a full downstream merge lane"$'\n'"$out"
+  rm "$home/state/merging.meta"
+  out=$(run_transition "$home" fm-promote.sh scouting --mode local-only --yolo off --verify "the promoted worker is running"); rc=$?
   expect_code 0 "$rc" "promotion after destination capacity frees"$'\n'"$out"
   assert_grep 'kind=ship' "$home/state/scouting.meta" "successful promotion must publish ship kind"
-  pass "PR registration and promotion require capacity without blocking same-lane registration"
+  pass "scout promotion requires a free validations slot and a merges lane below its cap"
 }
 
 # The review finding's sequence at the measured defaults: four merges and
-# three admitted validations. Each validation registering its PR may take only
-# the one free merges slot; the rest queue without arming, and each registers
-# once a merges slot frees, so the merges lane never holds a sixth PR.
-test_registrations_never_exceed_the_merges_cap_at_defaults() {
-  local home out rc i armed merges
+# three admitted validations all go green. Every PR registers and arms its
+# merge poll, even while a spawn holds the task-set lock, because the merges
+# cap already gated their dispatch; the over-full merge line instead refuses
+# the next ship until merges finish.
+test_green_prs_always_register_and_the_merge_line_gates_new_ships() {
+  local home out rc i lock merges
   home=$(new_home finding-sequence)
   for i in 1 2 3 4; do occupy "$home" "merging-$i" "pr=https://github.com/example/repo/pull/$i"; done
   for i in 1 2 3; do occupy "$home" "validating-$i"; done
 
-  armed=0
+  lock=$(fm_task_set_lock_path "$home/state")
+  fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
   for i in 1 2 3; do
     out=$(run_transition "$home" fm-pr-check.sh "validating-$i" "https://github.com/example/repo/pull/1$i"); rc=$?
-    if [ "$rc" -eq 0 ]; then
-      armed=$((armed + 1))
-    else
-      expect_code 5 "$rc" "registration of validating-$i into a full merges lane"$'\n'"$out"
-      assert_contains "$out" "lane merges is at its cap of 5 with 5 in flight" "the queued registration must name lane, cap, and occupancy"
-      assert_absent "$home/state/validating-$i.check.sh" "a queued registration must not arm a merge poll"
-    fi
+    expect_code 0 "$rc" "registration of green validating-$i"$'\n'"$out"
+    [ -f "$home/state/validating-$i.check.sh" ] || fail "a registered PR must arm its merge poll"
   done
-  [ "$armed" = 1 ] || fail "only the one free merges slot may be taken; $armed registrations armed"
+  fm_lock_release "$lock"
   fm_wip_caps_load "$home/config"
   fm_wip_scan "$home/state"
   merges=FM_WIP_COUNT_merges
-  [ "${!merges}" = 5 ] || fail "the merges lane must hold exactly its cap of 5, got ${!merges}"
+  [ "${!merges}" = 7 ] || fail "every registered PR must hold a merges slot, got ${!merges}"
 
-  # One merge finishes: exactly one queued registration may now go through.
-  rm -f "$home/state/merging-1.meta"
-  out=$(run_transition "$home" fm-pr-check.sh validating-2 https://github.com/example/repo/pull/12); rc=$?
-  expect_code 0 "$rc" "an admitted validation registers its PR once a merges slot frees"$'\n'"$out"
-  out=$(run_transition "$home" fm-pr-check.sh validating-3 https://github.com/example/repo/pull/13); rc=$?
-  expect_code 5 "$rc" "the next registration waits for the next finish"
-  fm_wip_scan "$home/state"
-  [ "${!merges}" = 5 ] || fail "the merges lane must never exceed its cap, got ${!merges}"
-  pass "at the defaults, 4 merges + 3 validations never yield a 6th armed merge, and a queued registration goes through once a slot frees"
+  out=$(spawn_ship "$home" next-ship); rc=$?
+  expect_code 5 "$rc" "a new ship while the merge line is over its cap"
+  assert_contains "$out" "lane merges is at its cap of 5 with 7 in flight" "the refusal must name the full merge line"
+  for i in 1 2 3; do rm -f "$home/state/merging-$i.meta"; done
+  out=$(spawn_ship "$home" next-ship); rc=$?
+  expect_code 0 "$rc" "a new ship once merges finish below the cap"$'\n'"$out"
+  pass "green PRs always register; the merges cap gates new ship dispatch instead"
 }
 
 test_lanes_are_independent() {
@@ -298,7 +287,7 @@ test_bypass_log_is_written_only_after_spawn_success() {
   log="$home/data/wip-cap-bypasses.log"
   proj="$home/proj-urgent-f"
   wt="$home/wt-urgent-f"
-  fm_test_spawn_brief "$home" urgent-f
+  ship_brief "$home" urgent-f
   fm_git_worktree "$proj" "$wt" wt-urgent-f >/dev/null 2>&1
 
   # The pane reports the spawning project itself, never an isolated worktree,
@@ -423,8 +412,8 @@ test_at_cap_refusal_names_lane_cap_and_occupants_and_creates_nothing
 test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_merge_notification_is_scoped_to_the_current_pr
-test_lane_transitions_require_capacity
-test_registrations_never_exceed_the_merges_cap_at_defaults
+test_promotion_requires_capacity
+test_green_prs_always_register_and_the_merge_line_gates_new_ships
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_log_is_written_only_after_spawn_success
