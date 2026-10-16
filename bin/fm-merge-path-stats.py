@@ -238,7 +238,7 @@ def main():
     rel = releases(rows, a.repo_dir)
     stats = dict(no_mistakes=nm, github=gh, ci=ci, release=rel)
     with open(os.path.join(a.out, "pr_stage_table.csv"), "w") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else [])
         w.writeheader()
         w.writerows(rows)
     json.dump(stats, open(os.path.join(a.out, "stats.json"), "w"), indent=1)
