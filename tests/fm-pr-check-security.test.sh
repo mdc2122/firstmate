@@ -3889,6 +3889,10 @@ prune_reads() {  # <dir>
   [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
   cat > "$dir/fakebin/gh" <<SH
 #!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.hang" ]; then
+  printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
+  sleep 60
+fi
 if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.json" ]; then
   printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
   cat "$dir/prune/\${3##*/}.json"
@@ -3984,6 +3988,34 @@ test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head() {
   ! grep -lF "$url" "$state"/*.pr-poll >/dev/null 2>&1 || fail "prune armed an unowned entry"
   [ -z "$(forge_merges "$dir")" ] || fail "prune merged an unowned entry: $(forge_merges "$dir")"
   pass "an unowned open merge-line entry wakes once per head and is never armed or merged"
+}
+
+# A read that hangs is cut at FM_MERGE_LINE_PRUNE_READ_TIMEOUT and ends that
+# sweep's reads, but prune still drops the entries it did read; the entries
+# left unread are read and pruned by a later sweep.
+test_merge_line_prune_read_timeout_keeps_partial_progress() {
+  local dir n
+  dir=$(make_case merge-line-prune-read-timeout)
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
+  for n in 1 2 3; do
+    merge_line "$dir" enqueue "https://github.com/o/r/pull/$n" || fail "could not enqueue pull/$n"
+  done
+  add_stop_custom_check "$dir"
+  prune_reads "$dir"
+  prune_read "$dir" 1 MERGED
+  prune_read "$dir" 2 CLOSED
+  : > "$dir/prune/2.hang"
+  prune_read "$dir" 3 CLOSED
+  FM_MERGE_LINE_PRUNE_READ_TIMEOUT=1 merge_line_cycle "$dir" c1
+  [ "$(line_entries "$dir")" = 'https://github.com/o/r/pull/2 https://github.com/o/r/pull/3 ' ] \
+    || fail "prune did not drop the entry it read before the timed-out read: $(line_entries "$dir")"
+  ! grep -qF 'pr view https://github.com/o/r/pull/3 --json state,headRefOid' "$dir/gh.log" \
+    || fail "prune kept reading after a read timed out"
+  rm -f "$dir/prune/2.hang"
+  FM_MERGE_LINE_PRUNE_READ_TIMEOUT=1 merge_line_cycle "$dir" c2
+  [ -z "$(line_entries "$dir")" ] || fail "a later sweep did not prune the entries left unread: $(line_entries "$dir")"
+  pass "a timed-out prune read stops that sweep's reads but the entries already read are pruned, and the rest are pruned next sweep"
 }
 
 # An open entry its live task's poll arms is left alone; once cleanup retires
@@ -4204,6 +4236,7 @@ test_merge_line_gate_serializes_without_queue_and_probe_hands_off
 test_merge_line_prune_drops_a_merged_head_and_the_next_lands_the_same_sweep
 test_merge_line_prune_drops_a_closed_non_head_entry
 test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head
+test_merge_line_prune_read_timeout_keeps_partial_progress
 test_merge_line_prune_leaves_an_owned_open_entry_and_wakes_once_it_loses_its_poll
 test_merge_line_queue_window_arms_green_entries_in_line_order
 test_merge_line_queue_window_waits_for_an_earlier_green_entry

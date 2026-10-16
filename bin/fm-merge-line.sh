@@ -78,8 +78,12 @@
 # read merged or closed, the head included, under the lock below, so a landed
 # or closed head never holds the PRs behind it: the next listed entry is the
 # head for the rest of that sweep. A closed head also queues one wake. An entry
-# whose read fails stays listed. Prune never removes an open entry and never
-# reorders a line. A listed open entry with no armed owner (no task's
+# whose read fails stays listed. Each read is bounded by
+# FM_MERGE_LINE_PRUNE_READ_TIMEOUT (default 20 seconds); once one read times
+# out, prune reads no further entries that sweep and acts under the lock on the
+# entries it did read, so a slow forge or a long line still makes progress
+# every sweep, and the unread entries wait for a later sweep. Prune never
+# removes an open entry and never reorders a line. A listed open entry with no armed owner (no task's
 # state/<id>.pr-poll names it, or that task has no state/<id>.meta) queues one
 # wake per PR and PR head commit naming it, and is never armed here: arming
 # needs merge authority. stdout carries one "pruned merged|closed <url>" line
@@ -142,6 +146,11 @@ FM_MERGE_LINE_HELD=3
 . "$FM_MERGE_LINE_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$FM_MERGE_LINE_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-timeout-lib.sh
+. "$FM_MERGE_LINE_DIR/fm-timeout-lib.sh"
+
+PRUNE_READ_TIMEOUT=${FM_MERGE_LINE_PRUNE_READ_TIMEOUT:-20}
+case "$PRUNE_READ_TIMEOUT" in ''|*[!0-9]*|0) PRUNE_READ_TIMEOUT=20 ;; esac
 
 die() { printf 'fm-merge-line: %s\n' "$*" >&2; exit "${2:-1}"; }
 usage() {
@@ -569,23 +578,25 @@ cmd_probe() {
 }
 
 # One forge read for prune: "merged", "closed", or "open <head-commit>";
-# nothing when the PR cannot be read.
+# nothing when the PR cannot be read, and exit 124 when the read timed out.
 pr_state_head() {  # <url>
-  local json fields
+  local json fields rc=0
   fm_pr_url_parse "$1" || return 0
   command -v jq >/dev/null 2>&1 || return 0
   case "$FM_PR_PROVIDER" in
     github)
       command -v gh >/dev/null 2>&1 || return 0
-      json=$(gh pr view "$FM_PR_URL" --json state,headRefOid 2>/dev/null </dev/null) || return 0
+      json=$(fm_run_timed "$PRUNE_READ_TIMEOUT" gh pr view "$FM_PR_URL" --json state,headRefOid 2>/dev/null </dev/null) || rc=$?
+      [ "$rc" -eq 0 ] || { [ "$rc" -ne 124 ] || return 124; return 0; }
       fields=$(printf '%s' "$json" | jq -r 'if type == "object"
         then ({"MERGED":"merged","CLOSED":"closed","OPEN":"open"}[.state // ""] // empty) + " " + ((.headRefOid // "") | tostring)
         else empty end' 2>/dev/null) || return 0
       ;;
     gitlab)
       command -v glab >/dev/null 2>&1 || return 0
-      json=$(GITLAB_HOST="$FM_PR_HOST" glab mr view "$FM_PR_NUMBER" \
-        -R "https://$FM_PR_HOST/$FM_PR_PATH" -F json 2>/dev/null </dev/null) || return 0
+      json=$(fm_run_timed "$PRUNE_READ_TIMEOUT" env GITLAB_HOST="$FM_PR_HOST" glab mr view "$FM_PR_NUMBER" \
+        -R "https://$FM_PR_HOST/$FM_PR_PATH" -F json 2>/dev/null </dev/null) || rc=$?
+      [ "$rc" -eq 0 ] || { [ "$rc" -ne 124 ] || return 124; return 0; }
       fields=$(printf '%s' "$json" | jq -r 'if type == "object"
         then ({"merged":"merged","closed":"closed","opened":"open"}[.state // ""] // empty) + " " + ((.sha // "") | tostring)
         else empty end' 2>/dev/null) || return 0
@@ -646,7 +657,7 @@ unowned_record_write() {  # <content>
 # so a slow forge never holds the merge authority lock; under the lock each
 # line is re-read and only entries still listed are dropped.
 cmd_prune() {
-  local f e st head reads='' old kept='' rc line_head reason
+  local f e st head reads='' old kept='' rc line_head reason timed_out=0
   local -a files=() out=() gone=()
   [ -d "$LINES" ] && [ ! -L "$LINES" ] || return 0
   for f in "$LINES"/*@*@*; do
@@ -654,7 +665,14 @@ cmd_prune() {
     read_line || continue
     files+=("$f")
     for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
-      st=$(pr_state_head "$e")
+      [ "$timed_out" -eq 0 ] || break
+      rc=0
+      st=$(pr_state_head "$e") || rc=$?
+      if [ "$rc" -eq 124 ]; then
+        timed_out=1
+        printf 'fm-merge-line: reading %s timed out; the remaining entries are read next sweep\n' "$e" >&2
+        break
+      fi
       [ -z "$st" ] || reads="$reads$e $st"$'\n'
     done
   done
