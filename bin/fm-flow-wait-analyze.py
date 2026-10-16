@@ -6,7 +6,9 @@ directory and prints JSON: touch categories, tasks touched per category, zero-to
 counterfactuals (which touch categories, if removed, would flip how many live tasks to
 zero-touch), touches per ship and scout, decision answers (no-mistakes ask-user gate
 answers are the ones naming a run key nm-<ULID>), per-item wait distributions for
-merge_queue, release, and ci, and per-day hours by class. Read-only; writes nothing.
+merge_queue, release, and ci, and per-day hours by class. Rows with a non-empty excluded
+field are dropped, as in summary.json. touches.csv, waits.csv, and steers.csv carry no home
+column, so task ids are assumed unique across the accounted homes. Read-only; writes nothing.
 
 Usage:
   bin/fm-flow-wait-analyze.py RUN_DIR > RUN_DIR/analysis.json
@@ -16,8 +18,8 @@ import argparse, collections, csv, json, re, statistics, sys
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("run", metavar="RUN_DIR", help="a bin/fm-flow-wait.py --out directory")
 run = ap.parse_args().run
-T = {(x["home"], x["task"]): x for x in csv.DictReader(open(f"{run}/tasks.csv")) if not x["excluded"]}
-ids = {x["task"] for x in T.values()}
+T = {x["task"]: x for x in csv.DictReader(open(f"{run}/tasks.csv")) if not x["excluded"]}
+ids = set(T)
 TO = [x for x in csv.DictReader(open(f"{run}/touches.csv")) if x["task"] in ids]
 W = [x for x in csv.DictReader(open(f"{run}/waits.csv")) if x["task"] in ids]
 S = [x for x in csv.DictReader(open(f"{run}/steers.csv")) if x["task"] in ids]
