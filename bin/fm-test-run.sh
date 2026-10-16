@@ -770,7 +770,6 @@ tests/fm-composer-codex-idle-live-e2e.test.sh 96
 tests/fm-composer-matrix-live-e2e.test.sh 23
 tests/fm-contributions.test.sh 40416
 tests/fm-control-relaunch.test.sh 48210
-tests/fm-control-switch-model-live-e2e.test.sh 90
 tests/fm-control.test.sh 54301
 tests/fm-cursor-harness.test.sh 30103
 tests/fm-cursor-primary-live-e2e.test.sh 21
