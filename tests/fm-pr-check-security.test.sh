@@ -3426,7 +3426,6 @@ test_merge_line_merged_head_clears_every_stall_record_with_one_wake() {
   merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
   fake_line_head "$dir" "$head" OPEN FAILURE
   printf '%s %s %s 1\n' https://github.com/o/r/pull/5 "$other" "$(date +%s)" > "$state/task-x.merge-line-stall"
-  printf '%s %s %s 1\n' "$other" 0123456789abcdef0123456789abcdef01234567 "$(date +%s)" > "$state/task-x.queue-stall"
 
   FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c1
   FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c2
@@ -3447,8 +3446,6 @@ test_merge_line_merged_head_clears_every_stall_record_with_one_wake() {
     || fail "another held task kept a stall record naming the merged head: $(cat "$state/task-z.merge-line-stall")"
   grep -qF " $other " "$state/task-x.merge-line-stall" \
     || fail "a stall record naming a still-open head was touched"
-  grep -qF "$other " "$state/task-x.queue-stall" \
-    || fail "a queue stall record for a still-open PR was touched"
 
   FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c4
   ! grep -qF 'stall alarms stale' "$dir/c4.out" || fail "one cleared episode was corrected twice: $(cat "$dir/c4.out")"

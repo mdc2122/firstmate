@@ -166,10 +166,10 @@
 #                          the head of a held PR's merge line closed without
 #                          merging; it was dropped from the line at once
 #   check: <check>: stall alarms stale: <url> merged, so <n> earlier stall alarm(s) naming it no longer hold: ...
-#                          a PR that earlier merge-line-stalled or
-#                          merge-queue-stalled wakes named merged; every stall
-#                          record naming it was cleared, and this one wake per
-#                          cleared set says those alarms are stale
+#                          a PR that earlier merge-line-stalled wakes named
+#                          as the head merged; every stall record naming it
+#                          was cleared, and this one wake per cleared set says
+#                          those alarms are stale
 #                          (stall_records_retire_landed)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
@@ -2455,11 +2455,10 @@ retire_merged_pr_poll() {  # <id> <url> <check-path>
   stall_records_retire_landed "$c" "$url"
 }
 
-# A merged PR ends every stall episode that names it, whichever task's record
-# holds it: each state/<id>.merge-line-stall whose head is the merged PR
-# (merge_line_stall_tick) and each state/<id>.queue-stall for the merged PR
-# itself (pr_queue_merge_tick). Every such record is removed; a record naming
-# any other PR is left alone. When any removed record had already raised its
+# A merged PR ends every merge-line stall episode that names it as the head,
+# whichever task's record holds it: each state/<id>.merge-line-stall whose head
+# is the merged PR (merge_line_stall_tick) is removed; a record naming any
+# other head is left alone. When any removed record had already raised its
 # stall wake, one corrective row names every alarm the landing made stale, and
 # its reason is left in STALL_CORRECTION_REASON (empty when nothing needed
 # correcting) for the caller to deliver with wake(). The row is queued before
@@ -2470,21 +2469,15 @@ stall_records_retire_landed() {  # <check-path> <merged-url>
   local c=$1 landed=$2 f rec_url rec_head first alerted stale='' n=0
   local -a matched=()
   STALL_CORRECTION_REASON=
-  for f in "$STATE"/*.merge-line-stall "$STATE"/*.queue-stall; do
+  for f in "$STATE"/*.merge-line-stall; do
     [ -f "$f" ] && [ ! -L "$f" ] || continue
     rec_url='' rec_head='' first='' alerted=''
     read -r rec_url rec_head first alerted < "$f" || true
-    case "$f" in
-      *.merge-line-stall)
-        [ "$rec_head" = "$landed" ] || continue
-        [ "$alerted" != 1 ] || stale="$stale; merge-line stalled for green $rec_url behind it"
-        ;;
-      *)
-        [ "$rec_url" = "$landed" ] || continue
-        [ "$alerted" != 1 ] || stale="$stale; merge-queue stalled at head $rec_head"
-        ;;
-    esac
-    [ "$alerted" != 1 ] || n=$((n + 1))
+    [ "$rec_head" = "$landed" ] || continue
+    if [ "$alerted" = 1 ]; then
+      stale="$stale; merge-line stalled for green $rec_url behind it"
+      n=$((n + 1))
+    fi
     matched+=("$f")
   done
   [ "${#matched[@]}" -gt 0 ] || return 0
