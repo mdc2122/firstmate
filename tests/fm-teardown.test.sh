@@ -4142,7 +4142,7 @@ test_teardown_retires_the_resume_watch() {
   FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" FM_RESUME_WATCH_INTERVAL=3600 \
     "$ROOT/bin/fm-resume-watch.sh" arm task-x1 https://github.com/example/repo/pull/7 >/dev/null \
     || fail "resume-watch-retire: could not arm the resume watch"
-  name=$(FM_STATE_OVERRIDE="$case_dir/state" "$ROOT/bin/fm-resume-watch.sh" name task-x1)
+  name=$(sed -n 's/^name=//p' "$case_dir/state/task-x1.resume-watch")
   sid="when-$name"
   assert_present "$case_dir/state/procevent/$sid.source" "resume-watch-retire: the watch was not registered"
 

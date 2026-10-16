@@ -7,8 +7,6 @@
 # Usage:
 #   fm-resume-watch.sh arm    <task-id> <pr-url> [merged|live]
 #   fm-resume-watch.sh retire <task-id>
-#   fm-resume-watch.sh form   <task-id> <pr-url>
-#   fm-resume-watch.sh name   <task-id>
 #
 # arm     Bind watch `resume-<home>-<task-id>`, where <home> is the first 8 hex
 #         of a SHA-256 of this home's physical state directory: process-event
@@ -36,15 +34,15 @@
 #         outcome is terminal, so the runner retires its registration as soon
 #         as it captures the outcome; retire then only clears the private
 #         records left behind.
-# form    Print the form the selection rule picks for this task and PR.
-# name    Print the watch name (the `when` name, without the `when-` prefix).
 #
 # Selection rule. `live` applies only to a PR whose repository has a configured
-# release pointer AND whose task brief's `verify:` line (bin/fm-dod-lib.sh
-# fm_brief_verify_observation, read from data/<task-id>/brief.md) names a live
-# surface: one of the whole words production, prod, deployed, or live, in any
-# case. Every other PR uses `merged`. An explicit `live` for a repository with
-# no configured pointer is refused.
+# release pointer, whose merge commit this host can read (`gh` for GitHub,
+# `glab` and `jq` for GitLab), AND whose task brief's `verify:` line
+# (bin/fm-dod-lib.sh fm_brief_verify_observation, read from
+# data/<task-id>/brief.md) names production: the whole word `production`, in
+# any case. Every other PR uses `merged`. An explicit `live` for a repository
+# with no configured pointer, or on a host that cannot read its merge commit,
+# is refused.
 #
 # Release pointers come from config/resume-live-pointers, whose schema
 # docs/configuration.md "Resume watch release pointers" owns.
@@ -82,7 +80,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-1}"; }
-usage() { sed -n '2,69p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,67p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 
 RECORD_VERSION=fm-resume-watch-v1
 
@@ -167,15 +165,25 @@ pointer_for() {
   return 1
 }
 
-# verify_names_live <task-id>: 0 when the brief's verify observation names a
-# live surface (see the selection rule in the header).
+# verify_names_live <task-id>: 0 when the brief's verify observation names
+# production (see the selection rule in the header).
 verify_names_live() {
   local brief="$DATA/$1/brief.md" observation
   [ -f "$brief" ] || return 1
   # shellcheck source=bin/fm-dod-lib.sh
   . "$SCRIPT_DIR/fm-dod-lib.sh"
   observation=$(fm_brief_verify_observation "$brief") || return 1
-  printf '%s\n' "$observation" | LC_ALL=C grep -qiE '(^|[^[:alnum:]_])(production|prod|deployed|live)([^[:alnum:]_]|$)'
+  printf '%s\n' "$observation" | LC_ALL=C grep -qiE '(^|[^[:alnum:]_])production([^[:alnum:]_]|$)'
+}
+
+# merge_commit_readable: 0 when this host has the tools bin/fm-resume-cond.sh
+# pr-live needs to read the merge commit of the PR fm_pr_url_parse just parsed.
+merge_commit_readable() {
+  case "$FM_PR_PROVIDER" in
+    github) command -v gh >/dev/null 2>&1 ;;
+    gitlab) command -v glab >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
 }
 
 parse_task_and_url() {  # <task-id> <pr-url>
@@ -184,7 +192,7 @@ parse_task_and_url() {  # <task-id> <pr-url>
 }
 
 select_form() {  # <task-id>  (after parse_task_and_url)
-  if pointer_for "$(repo_url)" && verify_names_live "$1"; then
+  if pointer_for "$(repo_url)" && merge_commit_readable && verify_names_live "$1"; then
     printf 'live\n'
   else
     printf 'merged\n'
@@ -229,6 +237,7 @@ cmd_arm() {
   if [ "$form" = live ]; then
     pointer_for "$(repo_url)" \
       || die "no release pointer is configured for $(repo_url) in $CONFIG/resume-live-pointers; a live watch needs one"
+    merge_commit_readable || die "this host cannot read the merge commit of $url; a live watch needs one"
   fi
   name=$(watch_name "$id") || die "cannot derive the watch name for $id"
   home=$(cd "$FM_HOME" 2>/dev/null && pwd -P) || die "home is unavailable: $FM_HOME"
@@ -282,22 +291,8 @@ cmd_retire() {
   printf 'retired: resume watch for %s\n' "$id"
 }
 
-cmd_form() {
-  [ "$#" -eq 2 ] || usage
-  parse_task_and_url "$1" "$2"
-  select_form "$1"
-}
-
-cmd_name() {
-  [ "$#" -eq 1 ] || usage
-  fm_pr_task_id_valid "$1" || die "invalid task id: $1" 2
-  watch_name "$1"
-}
-
 case "${1-}" in
   arm)    shift; cmd_arm "$@" ;;
   retire) shift; cmd_retire "$@" ;;
-  form)   shift; cmd_form "$@" ;;
-  name)   shift; cmd_name "$@" ;;
   *) usage ;;
 esac
