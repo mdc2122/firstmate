@@ -1,0 +1,25 @@
+# sandbox home: /tmp/fmlive.dON2/a (tmux isolated via TMUX_TMPDIR=/tmp/fmlive.dON2/tmux)
+$ fm-send.sh task-a1 "go ahead"
+fm-send: doorbell not typed because the agent in nm-sandbox-zz:fm-task-a1 has exited; the steer is durably recorded at /tmp/fmlive.dON2/a/state/task-a1.inbox/001.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+$ fm-send.sh task-a1 (body with quotes, backslash, newline)
+fm-send: doorbell not typed because the agent in nm-sandbox-zz:fm-task-a1 has exited; the steer is durably recorded at /tmp/fmlive.dON2/a/state/task-a1.inbox/002.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+$ fm-send.sh $'odd"tar\get' x   (target with quote/backslash; resolves to no task)
+error: target 'odd"tar\get' is not resolvable (tried meta=/tmp/fmlive.dON2/a/state/odd"tar\get.meta; metadata window/terminal lookup; backend=none). Use fm-odd"tar\get for a recorded task/lane, or pass a well-formed explicit backend target such as session:window.
+$ fm-control.sh task-a1 relaunch   (fixture endpoint; refused after attempt)
+error: task task-a1 records harness 'none', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command
+$ fm-merge-line.sh show   (read-only)
+$ fm-captain-hold.sh open task-a1   (read-only)
+
+--- state/supervisor-actions.jsonl (raw) ---
+{"at":"2026-10-16T09:12:35Z","epoch":1792141955,"task":"task-a1","verb":"send","action":"steer","target":"task-a1","origin":"direct"}
+{"at":"2026-10-16T09:12:37Z","epoch":1792141957,"task":"task-a1","verb":"send","action":"steer","target":"task-a1","origin":"direct"}
+{"at":"2026-10-16T09:12:38Z","epoch":1792141958,"task":"task-a1","verb":"control","action":"relaunch","target":"task-a1","origin":"direct"}
+--- parsed (jq) ---
+{"at":"2026-10-16T09:12:35Z","epoch":1792141955,"verb":"send","action":"steer","task":"task-a1","target":"task-a1","origin":"direct"}
+{"at":"2026-10-16T09:12:37Z","epoch":1792141957,"verb":"send","action":"steer","task":"task-a1","target":"task-a1","origin":"direct"}
+{"at":"2026-10-16T09:12:38Z","epoch":1792141958,"verb":"control","action":"relaunch","task":"task-a1","target":"task-a1","origin":"direct"}
+rows=3
+--- steers delivered to inbox ---
+001.msg
+002.msg
+handled

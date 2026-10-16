@@ -1,0 +1,22 @@
+## A. escape characters in recorded fields (captain-hold batch intake records its args as given)
+$ fm-captain-hold.sh answers 'q"uo	e' $'tab	here' $'nl
+x'
+the record; bin/fm-inactive-reconcile.sh's diagnostics name a broken binding.
+$ fm-captain-hold.sh bind 'id"x'
+fm-captain-hold: source-id must be a non-empty privacy-safe slug: id"x
+--- ledger lines:
+       2
+--- parsed with jq (fails if any row is invalid JSON):
+{"verb":"captain-hold","action":"answers","task":"","target":"q\"uo\\te tab\there nl\nx"}
+{"verb":"captain-hold","action":"bind","task":"","target":"id\"x"}
+jq rc=0
+
+## B. ledger path is a symlink -> verb still works, nothing written through the link
+fm-send rc=0
+bytes written through symlink: 0
+/tmp/fmlive.dON2/c/state/task-a1.inbox/001.msg
+
+## C. ledger path is a directory (unwritable) -> verb succeeds, no ledger noise on output
+fm-send rc=0
+lines mentioning supervisor-actions: 0
+/tmp/fmlive.dON2/d/state/task-a1.inbox/001.msg

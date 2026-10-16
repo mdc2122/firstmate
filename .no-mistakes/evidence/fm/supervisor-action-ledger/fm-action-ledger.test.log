@@ -1,0 +1,4 @@
+ok - send, control, merge-line, pr-merge, and captain-hold each leave exactly one direct ledger row
+ok - fm-pr-check leaves one direct row, and the merge-line enqueue it runs names fm-pr-check.sh as its origin and the armed task
+ok - read-only queries and usage errors leave no ledger row
+ok - an unwritable ledger neither fails nor blocks the verb that records it

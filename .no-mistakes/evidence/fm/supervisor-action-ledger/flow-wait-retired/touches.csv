@@ -1,0 +1,3 @@
+task,at,type,detail,source,classified_by
+steered,2026-10-12T10:30:00Z,steer,[unclassified/firstmate] Answer to your question: take option B and continue.,live-inbox,rule
+relaunch,2026-10-12T11:10:00Z,relaunch,fm-control relaunch,supervisor,rule

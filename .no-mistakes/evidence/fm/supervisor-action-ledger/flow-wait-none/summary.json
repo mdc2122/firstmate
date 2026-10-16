@@ -1,0 +1,80 @@
+{
+ "window": [
+  "2026-10-12",
+  "2026-10-13"
+ ],
+ "generated": "2026-10-16T09:13:21Z",
+ "now_cap": "2026-10-12T23:00:00Z",
+ "tasks_spawned": 3,
+ "excluded": 0,
+ "measured": 3,
+ "settled": 3,
+ "live_proven": 3,
+ "closed_not_live": 0,
+ "in_flight": 0,
+ "zero_touch_live": 3,
+ "zero_touch_share_of_settled_pct": 100.0,
+ "zero_touch_share_of_live_pct": 100.0,
+ "in_flight_untouched_so_far": 0,
+ "upper_bound_if_all_untouched_inflight_land_pct": 100.0,
+ "by_kind": {
+  "scout": {
+   "settled": 3,
+   "zero_touch_live": 3,
+   "live": 3
+  }
+ },
+ "touches_total": 0,
+ "touches_by_type": {},
+ "steer_purposes": {},
+ "steer_answerers": {},
+ "script_steers_excluded": 0,
+ "flash_classified_rows": {
+  "steers": 0,
+  "pauses": 0
+ },
+ "wait_hours_by_class": {
+  "decision_park": 0.0,
+  "human_answer": 0.5,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.2,
+  "of_which_handoff_idle": 0.0
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 0.0,
+  "human_answer": 0.5,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.2
+ },
+ "top_tasks_by_class": {
+  "decision_park": [],
+  "human_answer": [
+   {
+    "task": "steered",
+    "hours": 0.5
+   }
+  ],
+  "ci": [],
+  "merge_queue": [],
+  "release": [],
+  "worker_stall": [
+   {
+    "task": "relaunch",
+    "hours": 0.25
+   }
+  ],
+  "handoff_idle": []
+ },
+ "coverage": {
+  "supervisor_transcripts": [],
+  "supervisor_unresolved_variable_targets": {},
+  "backlog_rows_closed_in_window_without_worker_transcript": [],
+  "owned_prs_unresolved": {},
+  "gh_cache_entries": 0,
+  "releases_indexed": 0
+ }
+}

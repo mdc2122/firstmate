@@ -1,0 +1,32 @@
+ok - teardown archives the status log and the whole steering inbox into data/<id>/ before cleanup
+ok - teardown stops with every record retained when the evidence archive cannot be written
+ok - retiring a secondmate home archives its ledger and child evidence, and keeps the home when it cannot
+ok - local-only worktree with HEAD on a fork remote is torn down and the home summary is refreshed
+ok - teardown closes its own backlog item before reporting success
+ok - teardown honors config/backlog-backend=manual and still finishes cleanly
+ok - local-only worktree with truly unpushed work is refused (safety preserved)
+ok - local-only worktree with work merged into local main is torn down (no regression)
+ok - no-mistakes worktree with HEAD on origin is torn down (no regression)
+ok - no-mistakes worktree with genuinely unlanded work is refused (safety preserved)
+ok - local-only worktree with unpushed work is torn down under --force (escape hatch)
+ok - ship teardown refuses until the brief's verify observation is recorded; legacy briefs keep their contract
+ok - a scout whose report cites a worktree-only file is refused until that file is copied into data/<id>/
+ok - a plain report-only scout tears down despite small scratch, dependency trees, and gitignored output
+ok - a scout worktree holding a large untracked artifact directory is refused unless --force discards it
+ok - a scout whose report cites a file added then moved only in local commits is refused
+ok - an uncited embedded repository holding worktree-only files refuses scout teardown
+ok - a scout worktree whose state/ holds only omp runtime markers tears down cleanly
+ok - a scout report citing a state/ that holds only omp runtime markers tears down cleanly
+ok - the omp marker exemption holds regardless of markers in the caller's working directory
+ok - an omp marker the report cites by its own path still refuses scout teardown
+ok - a project scout citing a file under its own state/extensions/ still refuses teardown
+ok - omp runtime markers do not mask a report-cited worktree-only file: teardown still refuses
+ok - a firstmate-repo worktree's omp extension runtime is exempt by shape, so no extension marker name can refuse scout cleanup
+ok - the omp runtime exemption does not mask other work under a firstmate-repo worktree's state/
+ok - fm-pr-check publishes the PR-ready line on a secondmate's parent channel once
+ok - a secondmate home's teardown delivers the child's final line or refuses until it can
+ok - teardown completes when an exact busy-state sidecar is already absent
+ok - herdr teardown removes pane-owned escalation dedupe state
+ok - herdr flat teardown refuses before returning the isolated copy under lock contention and the retry completes cleanly
+ok - herdr flat teardown never erases records when pane presence is unparseable
+not ok - herdr-preflight-missing-adapter: teardown continued without its required preflight
