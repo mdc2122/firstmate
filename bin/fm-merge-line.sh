@@ -62,16 +62,43 @@
 # merged out of order.
 #
 # LEAVING. A PR leaves its line, sticky or not, when it merges (the watcher
-# removes it when its poll retires on a landed merge, or when `probe` reads the
-# head merged), when it closes unmerged (the watcher drops a closed head and
-# wakes firstmate at once), or by `remove`. The next listed entry becomes the
-# head, and a merged head hands off at once: bin/fm-watch.sh's
-# merge_line_handoff runs the new head's yolo merge attempt in the same sweep
-# that saw the old head land, through the same gate, so the order and
-# one-at-a-time landing are unchanged and only the idle wait for a later sweep
-# goes. bin/fm-watch.sh's merge_line_stall_tick owns the stall wake: once per
-# episode when a PR held behind the head is green and that head has not
-# changed for FM_MERGE_LINE_STALL_SECS (default 30 minutes).
+# removes it when its poll retires on a landed merge), when the sweep's `prune`
+# reads it merged or closed (PRUNE below), or by `remove`. The next listed
+# entry becomes the head, and a head landed by its own poll hands off at once:
+# bin/fm-watch.sh's merge_line_handoff runs the new head's yolo merge attempt in
+# the same sweep that saw the old head land, through the same gate, so the
+# order and one-at-a-time landing are unchanged and only the idle wait for a
+# later sweep goes. bin/fm-watch.sh's merge_line_stall_tick owns the stall
+# wake: once per episode when a PR held behind the head is green and that head
+# has not changed for FM_MERGE_LINE_STALL_SECS (default 30 minutes).
+#
+# PRUNE. bin/fm-watch.sh runs `prune` once per check sweep, before any merge
+# poll, so the sweep's polls see the pruned line. It reads every listed entry
+# of every line from its forge once, unlocked, then removes each entry that
+# read merged or closed, the head included, under the lock below, so a landed
+# or closed head never holds the PRs behind it: the next listed entry is the
+# head for the rest of that sweep. A closed head also queues one wake. An entry
+# whose read fails stays listed. Each read is bounded by
+# FM_MERGE_LINE_PRUNE_READ_TIMEOUT (default 20 seconds), and all of one run's
+# reads together by two thirds of FM_MERGE_LINE_PRUNE_TIMEOUT (default 90; the
+# watcher passes its own bound for the whole command), each read cut to what is
+# left of that budget. Once one read times out or the budget is spent, prune
+# starts no further read that sweep, logs one line counting the entries left
+# unread, and still acts under the lock on the entries it did read, so a slow
+# forge or a long line makes progress every sweep and the unread entries stay
+# listed for a later sweep. Prune never removes an open entry and never
+# reorders a line. A listed open entry with no armed owner (no task's
+# state/<id>.pr-poll names it, or that task has no state/<id>.meta) queues one
+# wake per PR and PR head commit naming it, and is never armed here: arming
+# needs merge authority. stdout carries one "pruned merged|closed <url>" line
+# per removed entry (the watcher retires stall records naming a merged one) and
+# each queued wake's reason line; every other line is a diagnostic.
+# UNOWNED RECORD (state/merge-lines/.unowned-woken; private, mode 0600,
+# atomically replaced; written only by `prune`): one "<url> <head>" line per
+# listed open unowned entry already woken for at that head. Each prune rewrites
+# it with the entries that are still listed, open, and unowned, so an entry that
+# gains an owner, leaves its line, or moves to a new head wakes afresh when it
+# is unowned again; an entry whose read failed keeps its line.
 #
 # LOCK. Every mutation holds the away-posture record's cross-subsystem
 # authority lock (bin/fm-afk-contract.sh owns it). bin/fm-pr-merge.sh already
@@ -105,6 +132,9 @@
 #   fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
 #                                               merged, closed, green (open, every check
 #                                               green), or open; nothing when unknown
+#   fm-merge-line.sh prune                      watcher sweep (PRUNE above): drop every
+#                                               merged or closed entry of every line and
+#                                               wake once per unowned open entry and head
 set -u
 
 FM_MERGE_LINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -120,6 +150,15 @@ FM_MERGE_LINE_HELD=3
 . "$FM_MERGE_LINE_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$FM_MERGE_LINE_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-timeout-lib.sh
+. "$FM_MERGE_LINE_DIR/fm-timeout-lib.sh"
+
+PRUNE_READ_TIMEOUT=${FM_MERGE_LINE_PRUNE_READ_TIMEOUT:-20}
+case "$PRUNE_READ_TIMEOUT" in ''|*[!0-9]*|0) PRUNE_READ_TIMEOUT=20 ;; esac
+PRUNE_READ_BUDGET=${FM_MERGE_LINE_PRUNE_TIMEOUT:-90}
+case "$PRUNE_READ_BUDGET" in ''|*[!0-9]*|0) PRUNE_READ_BUDGET=90 ;; esac
+PRUNE_READ_BUDGET=$((PRUNE_READ_BUDGET * 2 / 3))
+[ "$PRUNE_READ_BUDGET" -gt 0 ] || PRUNE_READ_BUDGET=1
 
 die() { printf 'fm-merge-line: %s\n' "$*" >&2; exit "${2:-1}"; }
 usage() {
@@ -546,6 +585,187 @@ cmd_probe() {
   esac
 }
 
+# One forge read for prune: "merged", "closed", or "open <head-commit>";
+# nothing when the PR cannot be read, and exit 124 when the read timed out.
+pr_state_head() {  # <url> <seconds>
+  local json fields rc=0
+  fm_pr_url_parse "$1" || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  case "$FM_PR_PROVIDER" in
+    github)
+      command -v gh >/dev/null 2>&1 || return 0
+      json=$(fm_run_timed "$2" gh pr view "$FM_PR_URL" --json state,headRefOid 2>/dev/null </dev/null) || rc=$?
+      [ "$rc" -eq 0 ] || { [ "$rc" -ne 124 ] || return 124; return 0; }
+      fields=$(printf '%s' "$json" | jq -r 'if type == "object"
+        then ({"MERGED":"merged","CLOSED":"closed","OPEN":"open"}[.state // ""] // empty) + " " + ((.headRefOid // "") | tostring)
+        else empty end' 2>/dev/null) || return 0
+      ;;
+    gitlab)
+      command -v glab >/dev/null 2>&1 || return 0
+      json=$(fm_run_timed "$2" env GITLAB_HOST="$FM_PR_HOST" glab mr view "$FM_PR_NUMBER" \
+        -R "https://$FM_PR_HOST/$FM_PR_PATH" -F json 2>/dev/null </dev/null) || rc=$?
+      [ "$rc" -eq 0 ] || { [ "$rc" -ne 124 ] || return 124; return 0; }
+      fields=$(printf '%s' "$json" | jq -r 'if type == "object"
+        then ({"merged":"merged","closed":"closed","opened":"open"}[.state // ""] // empty) + " " + ((.sha // "") | tostring)
+        else empty end' 2>/dev/null) || return 0
+      ;;
+    *) return 0 ;;
+  esac
+  case "$fields" in
+    'merged '*|'closed '*) printf '%s\n' "${fields%% *}" ;;
+    'open '*) fm_pr_head_valid "${fields#open }" && printf '%s\n' "$fields" ;;
+  esac
+  return 0
+}
+
+# Point the repository globals at one line file, accepting it only when its
+# own repository line names exactly the path it is stored at.
+line_file_select() {  # <line-file>
+  local f=$1 version repo
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  { IFS= read -r version; IFS= read -r repo; } < "$f" || return 1
+  [ "$version" = fm-merge-line-v1 ] || return 1
+  read -r REPO_PROVIDER REPO_HOST REPO_PATH <<< "$repo"
+  [ -n "$REPO_PROVIDER" ] && [ -n "$REPO_HOST" ] && [ -n "$REPO_PATH" ] || return 1
+  LINE_FILE="$LINES/$REPO_PROVIDER@$REPO_HOST@${REPO_PATH//\//%2F}"
+  [ "$LINE_FILE" = "$f" ]
+}
+
+# A listed PR's owner is the task whose merge poll arms it, while that task's
+# record still exists. Needs load_armed.
+owned() {  # <url>
+  local id
+  id=$(armed_task "$1")
+  [ -n "$id" ] && [ -f "$STATE/$id.meta" ] && [ ! -L "$STATE/$id.meta" ]
+}
+
+UNOWNED_RECORD="$LINES/.unowned-woken"
+
+unowned_record_lines() {
+  local state_device
+  [ -e "$UNOWNED_RECORD" ] || return 0
+  state_device=$(fm_pr_file_device "$STATE") || return 0
+  fm_pr_private_file_valid "$UNOWNED_RECORD" 600 "$state_device" || return 0
+  cat "$UNOWNED_RECORD" 2>/dev/null || true
+}
+
+unowned_record_write() {  # <content>
+  local tmp state_device
+  state_device=$(fm_pr_file_device "$STATE") || return 1
+  fm_pr_regular_destination_on_device_or_absent "$UNOWNED_RECORD" "$state_device" || return 1
+  umask 077
+  tmp=$(mktemp "$LINES/.unowned.XXXXXX") || return 1
+  if ! printf '%s' "$1" > "$tmp" || ! chmod 0600 "$tmp" || ! mv -f -- "$tmp" "$UNOWNED_RECORD"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+}
+
+# The PRUNE contract in the header. Every forge read happens before the lock,
+# so a slow forge never holds the merge authority lock; under the lock each
+# line is re-read and only entries still listed are dropped.
+cmd_prune() {
+  local f e st head reads='' old kept='' rc line_head reason stop='' unread=0 left start=$SECONDS
+  local -a files=() out=() gone=()
+  [ -d "$LINES" ] && [ ! -L "$LINES" ] || return 0
+  for f in "$LINES"/*@*@*; do
+    line_file_select "$f" || continue
+    read_line || continue
+    files+=("$f")
+    for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+      left=$((PRUNE_READ_BUDGET - (SECONDS - start)))
+      [ -n "$stop" ] || [ "$left" -gt 0 ] || stop='the read budget was spent'
+      if [ -n "$stop" ]; then
+        unread=$((unread + 1))
+        continue
+      fi
+      [ "$left" -le "$PRUNE_READ_TIMEOUT" ] || left=$PRUNE_READ_TIMEOUT
+      rc=0
+      st=$(pr_state_head "$e" "$left") || rc=$?
+      if [ "$rc" -eq 124 ]; then
+        stop="reading $e timed out"
+        unread=$((unread + 1))
+        continue
+      fi
+      [ -z "$st" ] || reads="$reads$e $st"$'\n'
+    done
+  done
+  [ "$unread" -eq 0 ] \
+    || printf 'fm-merge-line: %s merge-line entries not read this sweep (%s); they stay listed for the next sweep\n' "$unread" "$stop" >&2
+  [ "${#files[@]}" -gt 0 ] || return 0
+  lock_line
+  old=$(unowned_record_lines)
+  for f in "${files[@]}"; do
+    [ -e "$f" ] || continue
+    rc=0
+    line_file_select "$f" || rc=1
+    [ "$rc" -ne 0 ] || read_line || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      [ "$rc" -eq 2 ] || printf 'fm-merge-line: the merge line at %s became unreadable; not pruned this sweep\n' "$f" >&2
+      kept="$kept$old"$'\n'
+      continue
+    fi
+    load_armed
+    line_head=$(effective_head) || line_head=
+    out=()
+    gone=()
+    for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+      st=$(printf '%s' "$reads" | awk -v u="$e" '$1 == u { print $2; exit }')
+      case "$st" in
+        merged|closed)
+          gone+=("$st $e")
+          FRONTED=${FRONTED/ $e / }
+          ;;
+        *) out+=("$e") ;;
+      esac
+    done
+    if [ "${#gone[@]}" -gt 0 ]; then
+      ENTRIES=(${out[@]+"${out[@]}"})
+      write_line || die "could not write the pruned merge line for $(repo_label)"
+      for e in "${gone[@]}"; do
+        ledger_record prune "${e#* }"
+        if [ "${e#* }" != "$line_head" ]; then
+          printf 'pruned %s\n' "$e"
+          continue
+        fi
+        printf 'pruned %s head\n' "$e"
+        [ "${e%% *}" = closed ] || continue
+        reason="check: merge-line-prune: merge-line head $line_head closed unmerged; dropped from its line for $(repo_label), so the PRs behind it move up"
+        if fm_wake_append check "merge-line-prune-$line_head" "$reason"; then
+          printf '%s\n' "$reason"
+        else
+          printf 'fm-merge-line: could not queue the closed-head wake for %s\n' "$line_head" >&2
+        fi
+      done
+    fi
+    for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+      st=$(printf '%s' "$reads" | awk -v u="$e" '$1 == u { print $2 " " $3; exit }')
+      if [ -z "$st" ]; then
+        # Unread this sweep: an earlier wake for it still stands.
+        kept="$kept$(printf '%s\n' "$old" | awk -v u="$e" '$1 == u')"$'\n'
+        continue
+      fi
+      owned "$e" && continue
+      head=${st#open }
+      if printf '%s\n' "$old" | grep -qxF "$e $head"; then
+        kept="$kept$e $head"$'\n'
+        continue
+      fi
+      reason="check: merge-line-prune: $e is listed open in the merge line for $(repo_label) at head $head, but no live task's merge poll arms it, so the line never merges it; arm it with bin/fm-pr-check.sh <task> $e once its merge is authorized, or drop it with bin/fm-merge-line.sh remove $e"
+      if fm_wake_append check "merge-line-prune-$e" "$reason"; then
+        printf '%s\n' "$reason"
+        kept="$kept$e $head"$'\n'
+      else
+        printf 'fm-merge-line: could not queue the unowned-entry wake for %s; retried next sweep\n' "$e" >&2
+      fi
+    done
+  done
+  kept=$(printf '%s\n' "$kept" | awk 'NF == 2 && !seen[$0]++')
+  [ "$kept" = "$old" ] && return 0
+  unowned_record_write "${kept:+$kept$'\n'}" \
+    || printf 'fm-merge-line: could not write %s; an unowned entry may wake again\n' "$UNOWNED_RECORD" >&2
+}
+
 cmd_show_one() {
   local e i=1 task head
   load_armed
@@ -615,6 +835,7 @@ main() {
     declare|undeclare|front|enqueue|remove|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
     show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
+    prune) [ "$#" -eq 0 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -631,6 +852,7 @@ main() {
     head) cmd_head "$@" ;;
     probe) cmd_probe "$@" ;;
     show) cmd_show "$@" ;;
+    prune) cmd_prune ;;
   esac
 }
 

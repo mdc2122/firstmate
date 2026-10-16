@@ -23,7 +23,8 @@
 #   verb      send | control | pr-check | pr-merge | merge-line | captain-hold
 #   action    send: steer | key; control: interrupt | exit | relaunch;
 #             pr-check: arm; pr-merge: merge; merge-line: declare | undeclare |
-#             front | enqueue | remove; captain-hold: hold | answer | answers |
+#             front | enqueue | remove | prune (one row per entry a sweep
+#             drops); captain-hold: hold | answer | answers |
 #             bind | unbind | complete | reconcile-requests | reconcile-close |
 #             reconcile-note.
 #   target    what the action names: the PR or repository URL for the PR verbs
