@@ -8,6 +8,7 @@
 #   fm-procevent-when.sh arm <name> [options] --condition <argv>... --action <argv>...
 #   fm-procevent-when.sh classify <result-file>
 #   fm-procevent-when.sh terminal <result-file>
+#   fm-procevent-when.sh silent <result-file>
 #   fm-procevent-when.sh source-id <name>
 #   fm-procevent-when.sh retire <name>
 #   fm-procevent-when.sh rebind-all
@@ -45,6 +46,12 @@
 # terminal   Exit 0 when the captured result ends this source. Every when
 #            outcome is terminal because the pair fires at most once; the
 #            generic runner then retires the registration itself.
+# silent     Exit 0 only for a `fired` outcome of a watch whose trust-validated
+#            spec names this repo's bin/fm-resume-action.sh as its action: a
+#            resume steer that landed is a routine success the runner records
+#            handled without waking firstmate (bin/fm-resume-watch.sh owns the
+#            resume watch). Every other outcome, every other watch, and any
+#            result or spec that cannot be read exits 1, so it wakes.
 # source-id  Print the canonical source id for <name>.
 # retire     Stop the watch: retire the registration and remove the spec, trust
 #            record, and fired marker. Idempotent. Captured results and their
@@ -107,7 +114,7 @@ WHEN_DIR="$STATE/when"
 OUTPUT_TAIL_BYTES=${FM_WHEN_OUTPUT_TAIL_BYTES:-8192}
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '2,72p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,82p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 
 spec_file()  { printf '%s/%s.spec\n' "$WHEN_DIR" "$1"; }
 trust_file() { printf '%s/%s.trust\n' "$WHEN_DIR" "$1"; }
@@ -502,6 +509,22 @@ cmd_terminal() {
   [ "$(cmd_classify "$file")" != unknown ]
 }
 
+cmd_silent() {
+  local file=${1-} sid bin_real
+  [ -n "$file" ] || usage
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  [ "$(cmd_classify "$file")" = fired ] || return 1
+  sid=$(awk '
+    $0 == "output:" { exit }
+    /^when: / { sub(/^when: /, ""); print; exit }
+  ' "$file")
+  fm_procevent_source_id_valid "$sid" || return 1
+  [ "$sid" = "$(fm_procevent_result_source_id "$file")" ] || return 1
+  spec_load "$sid" || return 1
+  bin_real=$(cd "$SCRIPT_DIR" 2>/dev/null && pwd -P) || return 1
+  [ "${ACT_ARGV[0]-}" = "$bin_real/fm-resume-action.sh" ]
+}
+
 # --- rebind-all ---------------------------------------------------------------
 
 # publish_spec <sid> <device> <action_hash>: write and hash-bind a spec from
@@ -630,6 +653,7 @@ case "${1-}" in
   run)       shift; [ "$#" -eq 1 ] || usage; cmd_run "$@" ;;
   classify)  shift; cmd_classify "$@" ;;
   terminal)  shift; cmd_terminal "$@" ;;
+  silent)    shift; cmd_silent "$@" ;;
   source-id) shift; cmd_source_id "$@" ;;
   retire)    shift; cmd_retire "$@" ;;
   rebind-all) shift; cmd_rebind_all "$@" ;;

@@ -84,6 +84,9 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-procevent-remote-reply.sh` | Relay the remote-secondmate status stream through non-destructive process-event deltas |
 | `fm-procevent-quota.sh`  | Wake Firstmate when tracked quota drops below a threshold, is exhausted, or cannot be polled |
 | `fm-procevent-when.sh`   | Fire a trust-bound deterministic action at most once when its registered condition holds, then wake with the outcome |
+| `fm-resume-watch.sh`     | Arm (from `fm-pr-check.sh`) and retire (at teardown) a task's resume watch, which sends a worker waiting on its own PR one resume steer when the PR merges or goes live, with no firstmate turn |
+| `fm-resume-cond.sh`      | Read-only exact condition reads for a resume watch: PR merged, PR merge live behind a release pointer, durable-job verdict, and whether a task is still waiting on its PR |
+| `fm-resume-action.sh`    | Re-check that a task is still waiting on its PR, then send its one fixed-template `Resume fact (watch):` steer through `fm-send.sh` |
 | `fm-gate-refuse-lib.sh`  | Shared no-mistakes gate-context refusal for fleet lifecycle entrypoints               |
 | `fm-watch-arm.sh`        | Verified home-scoped watcher arm wrapper with loud cycle endings and bounded lifecycle ledger |
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |
@@ -137,7 +140,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-pr-lib.sh`           | Own canonical task and PR validation, the GitHub check-green rule and the queue-aware pull request outcome read shared by `fm-pr-merge.sh` and `fm-pr-green-blocked.sh`, the base-branch required-check reading `fm-pr-green-blocked.sh` uses, plus private atomic PR-poll publication, merge-notification identity, and retirement |
 | `fm-pr-poll.sh`          | Provide the byte-static watcher program for validated PR/MR-poll sidecars           |
 | `fm-contributions.sh`    | Observe owned publications, retain exact-head judgments, measure required actors, and wake on maintainer signals |
-| `fm-pr-check.sh`         | Record validated `pr=` and `pr_head=` values, then atomically arm a static merge poll |
+| `fm-pr-check.sh`         | Record validated `pr=` and `pr_head=` values, then atomically arm a static merge poll and the task's resume watch |
 | `fm-pr-merge.sh`         | Record PR metadata, merge a task's canonical full GitHub or GitLab URL (through GitHub auto-merge when the base branch requires a merge-queue app's own check), then refuse an outcome it cannot prove landed, queued, or handed to that queue |
 | `fm-pr-state.sh`         | Read-only: print one line per GitHub pull-request blocker it can see, reporting on checks that have reported rather than verdicting merge-readiness |
 | `fm-pr-green-blocked.sh` | Read-only probe the watcher runs beside a GitHub merge poll: reports whether a green pull request still cannot merge, and why, for the yolo behind-base rerun steer and the 30-minute green-but-unmergeable wake |
