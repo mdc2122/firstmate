@@ -1,7 +1,8 @@
 # shellcheck shell=bash disable=SC2034 # FM_WIP_* outputs are read by the sourcing caller.
 # fm-wip-caps-lib.sh - single owner of per-lane work-in-progress caps.
-# Usage: . bin/fm-wip-caps-lib.sh (sourced by bin/fm-spawn.sh and
-# bin/fm-queue-zero.sh; it has no command of its own).
+# Usage: . bin/fm-wip-caps-lib.sh (sourced by bin/fm-spawn.sh,
+# bin/fm-pr-check.sh, bin/fm-promote.sh, and bin/fm-queue-zero.sh;
+# it has no command of its own).
 #
 # WHY. Throughput comes from completion rate, not start rate. The baseline week
 # (2026-10-09..16, the flow-wait-accounting report in the primary home's
@@ -17,7 +18,8 @@
 #                   implementing and validating, up to the green PR
 #   merges          a ship task whose pull request is recorded (pr= set by
 #                   bin/fm-pr-check.sh at its ready line) and whose merge outcome
-#                   has not been delivered (no state/<id>.pr-poll-merge-notified)
+#                   has not been delivered for that canonical PR identity
+#                   (bin/fm-pr-lib.sh's merge-notified marker helpers)
 #   reviews         a scout recorded with wip_lane=reviews, which bin/fm-spawn.sh
 #                   writes for a scout dispatched from a backlog item of kind
 #                   review
@@ -59,6 +61,12 @@
 # names each full lane, its cap, and every task occupying it with its newest
 # status event. Admission runs under the home's task-set lock, so two spawns
 # cannot both take the last slot.
+# Lane transitions also run under that lock: bin/fm-pr-check.sh checks before
+# recording a PR, and bin/fm-promote.sh checks before changing a scout to ship.
+# A transition into a different lane uses the same admission checks,
+# excluding the task's own record; an unchanged lane or no-slot outcome needs
+# no admission. Refusal exits 5 without changing task metadata or the scout's
+# brief, so finish existing work and retry the registration or promotion.
 # Exempt, never checked: a secondmate spawn and any relaunch, so recovery is
 # never queued behind a cap.
 #
@@ -243,8 +251,8 @@ fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
   return 1
 }
 
-# Free slots per lane as one JSON object for bin/fm-queue-zero.sh, or 1 with
-# FM_WIP_ERROR when the caps cannot be read.
+# Admit a proposed kind/PR/lane change only when it enters a different lane
+# (ADMISSION above); return codes match fm_wip_admit.
 fm_wip_transition_admit() {
   local config=$1 state=$2 id=$3 kind=$4 pr=$5 wlane=$6 current target
   fm_wip_task_lane "$state" "$id"
@@ -255,6 +263,8 @@ fm_wip_transition_admit() {
   fm_wip_admit "$config" "$state" "$id" "$target"
 }
 
+# Free slots per lane as one JSON object for bin/fm-queue-zero.sh, or 1 with
+# FM_WIP_ERROR when the caps cannot be read.
 fm_wip_free_json() {  # <config-dir> <state-dir>
   local lane count free sep='' out='{'
   fm_wip_caps_load "$1" || return 1
