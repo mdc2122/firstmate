@@ -35,6 +35,11 @@ PROVIDER=$FM_PR_PROVIDER
 HOST=$FM_PR_HOST
 PROJECT_PATH=$FM_PR_PATH
 NUMBER=$FM_PR_NUMBER
+# One supervisor action ledger row per arm (bin/fm-action-ledger-lib.sh owns
+# the format); best-effort, never blocking.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+. "$SCRIPT_DIR/fm-action-ledger-lib.sh"
+fm_action_ledger_record pr-check arm "$ID" "$URL"
 
 # Task-derived paths are constructed only after the canonical ID validation.
 META="$STATE/$ID.meta"

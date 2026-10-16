@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Tear down a finished task: return the treehouse worktree, release the Orca
 # worktree, or retire a secondmate home; kill the recorded runtime endpoint,
-# clear volatile state, and transition this home's backlog item for ship and
-# scout tasks before reporting success (a secondmate teardown transitions none,
-# since secondmates are not backlog items), then refresh/prune the project's
-# clone for PR-based ship tasks.
+# archive the task's status log and steering inbox into data/<id>/ and a
+# retiring secondmate home's action ledger and child evidence into
+# data/retired-secondmates/<id>/ (a failed archive stops before any task record
+# or home is removed), clear volatile state, and
+# transition this home's backlog item for ship and scout tasks before reporting
+# success (a secondmate teardown transitions none, since secondmates are not
+# backlog items), then refresh/prune the project's clone for PR-based ship tasks.
 # An endpoint whose close could not do its job REFUSES before any record naming
 # it is removed: those records are the only thing that names what survived, so
 # reporting such a close as a completed cleanup strands the endpoint instead of
@@ -849,6 +852,71 @@ remote_outbox_cleanup() {
   )
 }
 
+# Keep the task's wait evidence: copy its status log and steering inbox
+# (pending and handled/ records alike) into data/<id>/ as data/<id>/status and
+# data/<id>/inbox/, before the cleanup below removes the state copies. Runs
+# after the endpoint is closed, so nothing appends behind the copy. Both
+# sources only grow, so a rerun after an interrupted teardown refreshes the
+# archive to a superset. A failed copy returns 1 and the caller stops with
+# every state record retained, because evidence is never deleted unarchived.
+archive_task_evidence() {  # <state-dir> <data-dir> <task-id>
+  local state_dir=$1 data_dir=$2 id=$3 dest tmp
+  dest="$data_dir/$id"
+  if [ ! -e "$state_dir/$id.status" ] && [ ! -d "$state_dir/$id.inbox" ]; then
+    return 0
+  fi
+  mkdir -p "$dest" || return 1
+  if [ -f "$state_dir/$id.status" ] && [ ! -L "$state_dir/$id.status" ]; then
+    tmp="$dest/.status.tmp.$$"
+    if cp -p "$state_dir/$id.status" "$tmp" && mv -f "$tmp" "$dest/status"; then
+      :
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  if [ -d "$state_dir/$id.inbox" ] && [ ! -L "$state_dir/$id.inbox" ]; then
+    mkdir -p "$dest/inbox" || return 1
+    cp -Rp "$state_dir/$id.inbox/." "$dest/inbox/" || return 1
+  fi
+}
+
+# Keep a retiring secondmate home's wait evidence before the home is removed:
+# its supervisor action ledger and every child's archived data/<id>/status and
+# data/<id>/inbox/ land under this home's data/retired-secondmates/<id>/, beside
+# a home file naming the retired path (bin/fm-flow-wait.py reads both). Archives
+# that home itself kept for its own retired secondmates move up beside it. A
+# failed copy returns 1 and the caller keeps the home.
+archive_firstmate_home_evidence() {  # <home> <home-id>
+  local home=$1 id=$2 dest dir child tmp
+  dest="$DATA/retired-secondmates/$id"
+  mkdir -p "$dest/data" || return 1
+  printf '%s\n' "$home" > "$dest/home.tmp.$$" && mv -f "$dest/home.tmp.$$" "$dest/home" || return 1
+  if [ -f "$home/state/supervisor-actions.jsonl" ] && [ ! -L "$home/state/supervisor-actions.jsonl" ]; then
+    tmp="$dest/.supervisor-actions.jsonl.tmp.$$"
+    if cp -p "$home/state/supervisor-actions.jsonl" "$tmp" && mv -f "$tmp" "$dest/supervisor-actions.jsonl"; then
+      :
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  for dir in "$home/data"/*/; do
+    [ -d "$dir" ] && [ ! -L "${dir%/}" ] || continue
+    child=$(basename "$dir")
+    [ "$child" != retired-secondmates ] || continue
+    if [ -f "$dir/status" ] && [ ! -L "$dir/status" ]; then
+      mkdir -p "$dest/data/$child" && cp -p "$dir/status" "$dest/data/$child/status" || return 1
+    fi
+    if [ -d "$dir/inbox" ] && [ ! -L "$dir/inbox" ]; then
+      mkdir -p "$dest/data/$child/inbox" && cp -Rp "$dir/inbox/." "$dest/data/$child/inbox/" || return 1
+    fi
+  done
+  if [ -d "$home/data/retired-secondmates" ] && [ ! -L "$home/data/retired-secondmates" ]; then
+    cp -Rp "$home/data/retired-secondmates/." "$DATA/retired-secondmates/" || return 1
+  fi
+}
+
 remote_secondmate_teardown() {
   local remote_host remote_root remote_home kind route_host route_root route_home out rc tmp rec phase task_id
   remote_host=$(fm_meta_get "$META" remote_host)
@@ -920,6 +988,10 @@ remote_secondmate_teardown() {
   tmp="$SECONDMATE_REG.tmp.$$"
   grep -vE "^- $ID( |$)" "$SECONDMATE_REG" > "$tmp" || true
   mv -f -- "$tmp" "$SECONDMATE_REG"
+  archive_task_evidence "$STATE" "$DATA" "$ID" || {
+    echo "error: $ID's status log could not be archived into $DATA/$ID; preserving the local route for retry" >&2
+    return 1
+  }
   status_retire_presentation_task "$STATE" "$ID" || return 1
   fm_backlog_atomic_transition remove "$STATE/$ID.meta" "task record" "$STATE" || return 1
   rm -f -- "$STATE/$ID.turn-ended" "$STATE/$ID.progress"
@@ -2843,6 +2915,10 @@ remove_firstmate_home() {
   [ -e "$home" ] || return 0
   abs_home_path=$(validate_firstmate_home_for_removal "$home" "$label" "$expected_id") || return 1
   [ -n "$abs_home_path" ] || return 0
+  archive_firstmate_home_evidence "$abs_home_path" "$expected_id" || {
+    echo "error: $label $abs_home_path's action ledger and task evidence could not be archived into $DATA/retired-secondmates/$expected_id; keeping the home" >&2
+    return 1
+  }
   process_event_backup=$(snapshot_firstmate_home_process_events "$abs_home_path" "$label") || return 1
   if ! cleanup_firstmate_home_process_events "$abs_home_path" "$label"; then
     restore_firstmate_home_process_events "$abs_home_path" "$label" "$process_event_backup" || return $?
@@ -3487,6 +3563,10 @@ cleanup_firstmate_home_children() {
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
     fi
     retire_busy_state "$sub_state" "$child_id" "$child_busy_gen" || return 1
+    archive_task_evidence "$sub_state" "$home/data" "$child_id" || {
+      echo "error: child $child_id's status log and steering inbox could not be archived into $home/data/$child_id; retaining that child's records" >&2
+      return 1
+    }
     status_retire_presentation_task "$sub_state" "$child_id" || return 1
     fm_backlog_atomic_transition remove "$sub_state/$child_id.meta" "task record" "$sub_state" || return 1
     rm -f "$sub_state/$child_id.turn-ended" "$sub_state/$child_id.progress" \
@@ -3915,6 +3995,8 @@ if [ "$KIND" != secondmate ]; then
     exit 1
   fi
 fi
+archive_task_evidence "$STATE" "$DATA" "$ID" \
+  || { echo "error: $ID's status log and steering inbox could not be archived into $DATA/$ID; retaining every durable task record so a rerun can retry the archive" >&2; exit 1; }
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT
   handoff_wake_retire_stage \
@@ -3954,7 +4036,8 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
 [ -z "$T" ] || watch_window_markers_retire "$STATE" "$(window_key "$T")" || true
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
 # retired endpoint; teardown only runs after landing is confirmed, so any
-# leftover unhandled steer here is moot rather than unlanded work.
+# leftover unhandled steer here is moot rather than unlanded work. Its records
+# were archived into data/<id>/inbox/ above.
 rm -rf "$STATE/$ID.inbox"
 # The record is gone, so the backlog must not still show this task in flight
 # when teardown reports success. Still under this task's meta lock, so a steer

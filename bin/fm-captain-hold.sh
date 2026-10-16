@@ -2086,6 +2086,24 @@ command_open() {  # <task-id> [--identity] [--distinguish-absent]
   exit 2
 }
 
+# One supervisor action ledger row per mutating invocation
+# (bin/fm-action-ledger-lib.sh owns the format); read-only queries write none.
+# A batch intake (answers, reconcile-requests) is one invocation with no single
+# task. Best-effort, never blocking the command.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/fm-action-ledger-lib.sh"
+case "${1:-}" in
+  hold|answer|complete) fm_action_ledger_record captain-hold "$1" "${2:-}" "${2:-}" ;;
+  bind|unbind) fm_action_ledger_record captain-hold "$1" '' "${2:-}" ;;
+  answers|reconcile-requests) fm_action_ledger_record captain-hold "$1" '' "${*:2}" ;;
+  reconcile)
+    case "${2:-}" in
+      close|note) fm_action_ledger_record captain-hold "reconcile-$2" "${3:-}" "${3:-}" ;;
+    esac
+    ;;
+esac
+
 case "${1:-}" in
   hold) shift; command_hold "$@" ;;
   answer) shift; command_answer "$@" ;;

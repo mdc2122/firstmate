@@ -561,6 +561,18 @@ while :; do
   esac
 done
 
+# One supervisor action ledger row per steer (bin/fm-action-ledger-lib.sh owns
+# the format); best-effort, so it can never fail or block the send.
+# shellcheck source=bin/fm-action-ledger-lib.sh
+. "$SCRIPT_DIR/fm-action-ledger-lib.sh"
+FM_SEND_LEDGER_TASK=
+[ -z "$TARGET_META" ] || FM_SEND_LEDGER_TASK=$(fm_send_id_from_meta "$TARGET_META")
+if [ "${1:-}" = "--key" ]; then
+  fm_action_ledger_record send key "$FM_SEND_LEDGER_TASK" "$RAW_TARGET"
+else
+  fm_action_ledger_record send steer "$FM_SEND_LEDGER_TASK" "$RAW_TARGET"
+fi
+
 if [ "$TARGET_BACKEND" != remote ]; then
   fm_backend_validate "$TARGET_BACKEND" || exit 1
 fi

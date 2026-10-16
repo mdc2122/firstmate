@@ -4093,6 +4093,109 @@ test_ship_teardown_requires_the_recorded_verify_observation() {
   pass "ship teardown refuses until the brief's verify observation is recorded; legacy briefs keep their contract"
 }
 
+# Teardown keeps a task's wait evidence: its status log and its steering inbox,
+# pending and handled records alike, land under data/<id>/ before the state
+# copies are removed.
+test_teardown_archives_status_and_inbox_into_data() {
+  local case_dir rc
+  case_dir=$(make_case evidence-archive)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed work"
+  add_fork_with_pushed_branch "$case_dir"
+  printf '%s\n' 'working: setup done' 'done: shipped' \
+    > "$case_dir/state/task-x1.status"
+  mkdir -p "$case_dir/state/task-x1.inbox/handled"
+  printf 'schema=fm-task-inbox.v1\nat=2026-10-16T04:00:00Z\n--\nfirst steer\n' \
+    > "$case_dir/state/task-x1.inbox/handled/001.msg"
+  printf 'schema=fm-task-inbox.v1\nat=2026-10-16T04:30:00Z\n--\nsecond steer\n' \
+    > "$case_dir/state/task-x1.inbox/002.msg"
+  cp "$case_dir/state/task-x1.status" "$case_dir/expected.status"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "evidence-archive: teardown of landed work should succeed ($(cat "$case_dir/stderr"))"
+  assert_absent "$case_dir/state/task-x1.status" "evidence-archive: the live status log was not retired"
+  assert_absent "$case_dir/state/task-x1.inbox" "evidence-archive: the live steering inbox was not retired"
+  cmp -s "$case_dir/expected.status" "$case_dir/data/task-x1/status" \
+    || fail "evidence-archive: data/task-x1/status is not the task's full status log"
+  assert_grep 'first steer' "$case_dir/data/task-x1/inbox/handled/001.msg" \
+    "evidence-archive: the handled steer was not archived under data/task-x1/inbox/handled/"
+  assert_grep 'second steer' "$case_dir/data/task-x1/inbox/002.msg" \
+    "evidence-archive: the pending steer was not archived under data/task-x1/inbox/"
+  pass "teardown archives the status log and the whole steering inbox into data/<id>/ before cleanup"
+}
+
+# An archive that cannot be written stops teardown before any evidence is lost.
+test_teardown_refuses_to_delete_unarchived_evidence() {
+  local case_dir rc
+  case_dir=$(make_case evidence-archive-blocked)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed work"
+  add_fork_with_pushed_branch "$case_dir"
+  printf '%s\n' 'done: shipped' > "$case_dir/state/task-x1.status"
+  # A file where the task's data directory belongs makes the archive fail.
+  printf 'not a directory\n' > "$case_dir/data/task-x1"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  [ "$rc" -ne 0 ] || fail "evidence-archive-blocked: teardown succeeded although the archive could not be written"
+  grep -F 'could not be archived' "$case_dir/stderr" >/dev/null \
+    || fail "evidence-archive-blocked: teardown did not stop on the archive failure: $(grep -v '^●' "$case_dir/stderr")"
+  assert_present "$case_dir/state/task-x1.status" \
+    "evidence-archive-blocked: the status log was deleted although it was never archived"
+  assert_present "$case_dir/state/task-x1.meta" \
+    "evidence-archive-blocked: the task record was removed although the archive failed"
+  pass "teardown stops with every record retained when the evidence archive cannot be written"
+}
+
+# Retiring a secondmate home keeps its wait evidence: the home's action ledger,
+# a live child's status log, and an earlier child's archived status and inbox
+# land under the parent's data/retired-secondmates/<id>/ before the home goes;
+# an archive that cannot be written keeps the home.
+test_secondmate_retire_archives_home_evidence() {
+  local case_dir home keep rc
+  case_dir=$(make_case retire-evidence)
+  write_meta "$case_dir" local-only secondmate
+  configure_secondmate_with_tmux_children "$case_dir"
+  home="$case_dir/secondmate-home"
+  keep="$case_dir/data/retired-secondmates/task-x1"
+  printf '%s\n' '{"verb":"send","task":"child-a"}' > "$home/state/supervisor-actions.jsonl"
+  printf '%s\n' 'working: child a' > "$home/state/child-a.status"
+  mkdir -p "$home/data/old-child/inbox/handled"
+  printf '%s\n' 'done: old child shipped' > "$home/data/old-child/status"
+  printf 'schema=fm-task-inbox.v1\nat=2026-10-16T04:00:00Z\n--\nold steer\n' \
+    > "$home/data/old-child/inbox/handled/001.msg"
+
+  mkdir -p "$case_dir/data"
+  printf 'blocked\n' > "$case_dir/data/retired-secondmates"
+  rc=0
+  run_teardown "$case_dir" --force > "$case_dir/blocked.stdout" 2> "$case_dir/blocked.stderr" || rc=$?
+  [ "$rc" -ne 0 ] || fail "retire-evidence: the home was retired although its evidence could not be archived"
+  assert_present "$home/state/supervisor-actions.jsonl" "retire-evidence: the home ledger was deleted unarchived"
+  assert_present "$case_dir/state/task-x1.meta" "retire-evidence: the secondmate record was removed although the archive failed"
+
+  rm -f "$case_dir/data/retired-secondmates"
+  rc=0
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  expect_code 0 "$rc" "retire-evidence: forced retire should succeed ($(cat "$case_dir/stderr"))"
+  [ ! -d "$home" ] || fail "retire-evidence: the secondmate home was not removed"
+  assert_grep '"task":"child-a"' "$keep/supervisor-actions.jsonl" "retire-evidence: the home ledger was not archived"
+  assert_grep "$home" "$keep/home" "retire-evidence: the archive does not name the retired home"
+  assert_grep 'working: child a' "$keep/data/child-a/status" "retire-evidence: the live child's status log was not archived"
+  assert_grep 'old child shipped' "$keep/data/old-child/status" "retire-evidence: an earlier child's archived status was lost"
+  assert_grep 'old steer' "$keep/data/old-child/inbox/handled/001.msg" "retire-evidence: an earlier child's archived inbox was lost"
+  pass "retiring a secondmate home archives its ledger and child evidence, and keeps the home when it cannot"
+}
+
+test_teardown_archives_status_and_inbox_into_data
+test_teardown_refuses_to_delete_unarchived_evidence
+test_secondmate_retire_archives_home_evidence
 test_local_only_fork_remote_allows
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
