@@ -3547,6 +3547,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
     "$head" > "$dir/b-pending.json"
   printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
     "$head" > "$dir/b-red.json"
+  printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"CANCELLED","startedAt":"2026-01-01T00:00:00Z"},{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null,"startedAt":"2026-01-01T00:05:00Z"}]}\n' \
+    "$head" > "$dir/b-rerun.json"
 
   fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-pending.json"
   queue_line_cycle "$dir" c1
@@ -3554,6 +3556,13 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
     || fail "an entry was handed to the queue past an earlier pending one: $(grep '^pr merge' "$dir/gh.log")"
   [ ! -e "$state/task-b.queue-merge" ] && [ ! -e "$state/task-c.queue-merge" ] \
     || fail "a window entry was queued while pull/2 was pending"
+
+  # A run cancelled when the base moved, beside its still-running re-run, is
+  # pending by the re-run, not red by the cancelled run.
+  fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-rerun.json"
+  queue_line_cycle "$dir" c1b
+  [ "$(forge_merges "$dir")" = '' ] \
+    || fail "an entry was handed to the queue past an earlier one whose re-run is pending: $(grep '^pr merge' "$dir/gh.log")"
 
   fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-red.json"
   queue_line_cycle "$dir" c2
@@ -3564,7 +3573,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
 }
 
 # A window entry queued behind the line's head waits on the tests ahead of it,
-# so its queue-stall clock starts only once it becomes the head.
+# so its queue-stall clock starts only once every entry ahead of it is gone or
+# ejected from the queue.
 test_merge_line_window_entry_queue_stall_starts_at_the_head() {
   local dir state head=0123456789abcdef0123456789abcdef01234567
   dir=$(queue_line_case queue-window-stall 2)
@@ -3581,13 +3591,18 @@ test_merge_line_window_entry_queue_stall_starts_at_the_head() {
   case "$(cat "$dir/c3.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a window entry behind the head raised a queue stall: $(cat "$dir/c3.out")" ;; esac
   [ ! -e "$state/task-b.queue-stall" ] || fail "a window entry behind the head kept a queue-stall clock"
 
-  merge_line "$dir" remove https://github.com/o/r/pull/1 || fail "could not drop the old head"
+  # The queue ejects pull/1, which stays the line's head; pull/2's clock runs.
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    "$head" > "$dir/a-ejected.json"
+  fake_auto_per_url "$dir" https://github.com/o/r/pull/1 "$dir/a-ejected.json"
   FM_MERGE_LINE_STALL_SECS=0 queue_line_cycle "$dir" c4
-  case "$(cat "$dir/c4.out")" in
+  case "$(cat "$dir/c4.out")" in *"task-a.check.sh: merge-queue ejected"*) ;; *) fail "the head's ejection did not wake: $(cat "$dir/c4.out")" ;; esac
+  FM_MERGE_LINE_STALL_SECS=0 queue_line_cycle "$dir" c5
+  case "$(cat "$dir/c5.out")" in
     *"task-b.check.sh: merge-queue stalled: merge queue has not picked up or finished https://github.com/o/r/pull/2 after 0 min at head $head") ;;
-    *) fail "the new head's queue stall did not wake: $(cat "$dir/c4.out")" ;;
+    *) fail "the entry behind an ejected head raised no queue stall: $(cat "$dir/c5.out")" ;;
   esac
-  pass "a window entry's queue-stall clock starts only once it is the line's head"
+  pass "a window entry's queue-stall clock starts only once it is the line's first entry not ejected"
 }
 
 # The window never opens on its own: without a queued head the gate holds

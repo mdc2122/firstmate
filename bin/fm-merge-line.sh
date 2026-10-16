@@ -96,8 +96,11 @@
 #                                               armed entries); exit 3 and
 #                                               print why when it is held;
 #                                               exit 1 on an unreadable line
-#   fm-merge-line.sh head <pr-or-repo-url>      print the effective head URL (empty when none);
-#                                               exit 2 without a line, 1 on an unreadable line
+#   fm-merge-line.sh head [--window] <pr-or-repo-url>
+#                                               print the effective head URL (empty when none),
+#                                               or with --window the first window entry, which
+#                                               skips an ejected head; exit 2 without a line,
+#                                               1 on an unreadable line
 #   fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
 #                                               merged, closed, green (open, every check
 #                                               green), or open; nothing when unknown
@@ -393,7 +396,11 @@ window_entries() {
 
 # Whether a window entry ahead of another must reach the queue first: it reads
 # open with every check green or still pending, or it cannot be read. A red,
-# closed, or merged entry does not.
+# closed, or merged entry does not. A not-green check name is pending when its
+# current run is: a status context still PENDING or EXPECTED with no failed
+# context of that name, or a check run not yet completed that started after
+# every completed red run of that name (one not yet started counts as newest),
+# so a run cancelled before its re-run does not mark the re-run red.
 window_waits_for() {  # <url>
   local json state red names pending
   fm_pr_url_parse "$1" && [ "$FM_PR_PROVIDER" = github ] || return 0
@@ -407,7 +414,23 @@ window_waits_for() {  # <url>
   red=$(fm_pr_github_checks_not_green "$json") || return 0
   [ -n "$red" ] || return 0
   names=$(printf '%s\n' "$red" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null) || return 0
-  pending=$(fm_pr_github_checks_pending "$json" "$names") || return 0
+  pending=$(printf '%s' "$json" | jq -r --argjson names "$names" '
+    .statusCheckRollup as $reported
+    | $names[]
+    | . as $name
+    | [$reported[] | select((if .__typename == "CheckRun" then .name else .context end) == $name)] as $runs
+    | ([$runs[] | select(.__typename == "CheckRun" and .status == "COMPLETED"
+          and ((.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") | not))
+        | (.startedAt // "")] | max // "") as $last_red
+    | select(
+        ([$runs[] | select(.__typename != "CheckRun"
+            and .state != "SUCCESS" and .state != "PENDING" and .state != "EXPECTED")] | length) == 0
+        and any($runs[];
+          if .__typename == "CheckRun"
+          then .status != "COMPLETED" and ((.startedAt // "~") > $last_red)
+          else .state == "PENDING" or .state == "EXPECTED" end))
+    | $name
+  ' 2>/dev/null) || return 0
   red=$(printf '%s\n' "$red" | awk -v pending="$pending" '
     BEGIN { n = split(pending, p, "\n"); for (i = 1; i <= n; i++) skip[p[i]] = 1 }
     !($0 in skip)')
@@ -460,13 +483,21 @@ cmd_gate() {  # [--window] <url>
   return "$FM_MERGE_LINE_HELD"
 }
 
-cmd_head() {
-  local rc=0
+cmd_head() {  # [--window] <url>
+  local rc=0 window=''
+  if [ "${1-}" = --window ]; then
+    window=1
+    shift
+  fi
   resolve_repo "${1-}" || die "not a canonical PR or repository URL: ${1-}" 2
   read_line || rc=$?
   [ "$rc" -eq 0 ] || return "$rc"
   load_armed
-  effective_head || true
+  if [ -n "$window" ]; then
+    window_entries | sed -n 1p | tr -d '\n'
+  else
+    effective_head || true
+  fi
   printf '\n'
 }
 
@@ -554,10 +585,10 @@ main() {
   [ -n "$cmd" ] || { usage >&2; exit 2; }
   shift
   case "$cmd" in
-    gate)
+    gate|head)
       { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$1" = --window ]; }; } \
         || { usage >&2; exit 2; } ;;
-    declare|undeclare|front|enqueue|remove|head|probe)
+    declare|undeclare|front|enqueue|remove|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
     show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;

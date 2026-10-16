@@ -2689,9 +2689,10 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # the hold drops; that retirement wakes once (the record it retires is the
 # per-head guard), and a yolo poll re-verifies the new head from scratch on its
 # next cycle. While the queue holds the same head past MERGE_LINE_STALL_SECS,
-# counted from when the pull request became its merge line's head (a window
-# entry queued behind that head waits on the tests ahead of it, so it keeps no
-# episode, and one whose head changes ahead of it starts over), one wake per
+# counted from when the pull request became its merge line's first entry not
+# ejected from the queue (a window entry queued behind that entry waits on the
+# tests ahead of it, so it keeps no episode, and one whose first entry changes
+# ahead of it starts over), one wake per
 # pull request and head says the queue has not picked it up or finished; state/<id>.queue-stall keeps that episode as "<url> <head>
 # <first-seen-epoch> <alerted>" and retires with the merged poll and at
 # teardown. The record retires with the merged poll and at teardown. Called
@@ -2754,7 +2755,7 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
           requested "$FM_PR_QUEUE_MERGE_CHECKS" || true
       stall="$STATE/$id.queue-stall"
       line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-        "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null) || line_head=$url
+        "$SCRIPT_DIR/fm-merge-line.sh" head --window "$url" 2>/dev/null) || line_head=$url
       if [ -n "$line_head" ] && [ "$line_head" != "$url" ]; then
         rm -f "$stall"
         return 0
@@ -3177,16 +3178,18 @@ while :; do
           # on it must be released first and retaken afterwards. A confirmed
           # landing is recognized by the merge-notified marker the merge path
           # commits with its durable outcome, which also covers a queued or
-          # unconfirmed acceptance that must keep polling. A line-held PR is
-          # attempted only when the line's windowed gate - a cheap local check
-          # of the same record the merge path enforces again live - admits it:
+          # unconfirmed acceptance that must keep polling. A yolo=on line-held
+          # PR is attempted only when the line's windowed gate - which the
+          # merge path enforces again, and which reads earlier window entries'
+          # checks from the forge, so it is bounded like any check - admits it:
           # on a merge-queue-app base whose head is queued, the queue orders
           # the entry, and on every other base the plain hold above stands.
           line_window=0
-          if [ "$pr_line_held" -eq 1 ] \
-            && FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-              "$SCRIPT_DIR/fm-merge-line.sh" gate --window "$url" >/dev/null 2>&1; then
-            line_window=1
+          if [ -z "$out" ] && [ "$pr_line_held" -eq 1 ] \
+            && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
+            FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+              run_action_capture "$CHECK_TIMEOUT" "$SCRIPT_DIR/fm-merge-line.sh" gate --window "$url" || exit 1
+            [ "$FM_ACTION_STATUS" -ne 0 ] || line_window=1
           fi
           if [ -z "$out" ] && [ "$PR_QUEUE_HOLD" -eq 0 ] && { [ "$pr_line_held" -eq 0 ] || [ "$line_window" -eq 1 ]; } \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
