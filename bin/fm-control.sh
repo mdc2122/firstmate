@@ -61,11 +61,11 @@
 #              (fm_control_switch_command in bin/fm-control-lib.sh: omp's
 #              session-only /switch); any other harness is refused and
 #              changes model through relaunch. The agent must be idle with a
-#              provably empty composer, and its omp session file (under
-#              $HOME/.omp/agent/sessions/<encoded worktree>/) must already
-#              exist, because omp writes nothing to disk before the first
-#              completed turn and the switch could not be proven. --model is
-#              an exact <provider>/<id>; --effort appends omp's :<level>.
+#              provably empty composer, and its omp session record must be
+#              uniquely attributable to the current spawn (selection contract:
+#              docs/agent-control.md). --model is an exact <provider>/<id>;
+#              --effort appends omp's :<level>; omitting it keeps the recorded
+#              effort unchanged.
 #              Postcondition: omp records a new model_change entry naming
 #              exactly that model. Only then does this verb write the one
 #              standard notice (switch_notice below, the single template
