@@ -1,0 +1,55 @@
+armed: resume watch when-resume-6a2d3bf1-t1 for t1 on https://github.com/o/r/pull/7 (merged)
+== B1 spec for when-resume-6a2d3bf1-t1 (default cadence) ==
+fm-when-spec-v1
+armed=1792162108
+interval=60
+stable=2
+deadline=172800
+condition_timeout=60
+action_timeout=1800
+error_budget=5
+action_sha256=88628bd861bd7b91369aa63f7d50a6956c9467a24bf915f5c82fd07af3e206ea
+condition_argc=3
+action_argc=6
+argv:
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52ERNB8HYD15MTDDPXJH73A/bin/fm-resume-cond.sh
+pr-merged
+https://github.com/o/r/pull/7
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52ERNB8HYD15MTDDPXJH73A/bin/fm-resume-action.sh
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-resume-watch-tests.yFEFBf/defaults
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-resume-watch-tests.yFEFBf/defaults/state
+t1
+https://github.com/o/r/pull/7
+merged
+
+== B2 arm output for 75-char id ==
+armed: resume watch when-resume-e1e79ff6-task-xxxxxxxxxxxxxxxxxxxxx-6c12062ee1ad8f00 for task-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx on https://github.com/o/r/pull/7 (merged)
+source id: when-resume-e1e79ff6-task-xxxxxxxxxxxxxxxxxxxxx-6c12062ee1ad8f00 (length 64)
+inbox records:        1
+schema=fm-task-inbox.v1
+at=2026-10-16T14:48:32Z
+--
+Resume fact (watch): PR https://github.com/o/r/pull/7 merged. The wait you declared has cleared; continue with the next step your brief or your own last status line already names, and append working: when you resume.
+ok - long id resumes
+== B3 generic watch ==
+classify: fired
+silent exit: 1
+wake rows: 1
+ok - a generic fired watch still wakes firstmate
+== B4 ==
+outcome: fired  wake rows: 0
+-- inbox message --
+schema=fm-task-inbox.v1
+at=2026-10-16T14:48:37Z
+--
+Resume fact (watch): PR https://github.com/o/r/pull/7 merged. The wait you declared has cleared; continue with the next step your brief or your own last status line already names, and append working: when you resume.
+-- ledger rows --
+{"at":"2026-10-16T14:48:37Z","epoch":1792162117,"task":"t1","verb":"send","action":"steer","target":"t1","origin":"fm-resume-action.sh"}
+Traceback (most recent call last):
+  File "<stdin>", line 5, in <module>
+  File "/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52ERNB8HYD15MTDDPXJH73A/bin/fm-flow-wait.py", line 122, in <module>
+    CODE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                                                                ^^^^^^^^
+NameError: name '__file__' is not defined. Did you mean: '__name__'?
+ok - flow-wait classifies the delivered record as script:resume-watch
+B4 flow-wait live_inbox -> 1 msg; SCRIPT_TEMPLATES match: resume-watch

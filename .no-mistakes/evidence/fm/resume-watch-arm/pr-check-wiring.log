@@ -1,0 +1,24 @@
+== fm-pr-check task-a pull/37: exit 0 ==
+armed: state/task-a.check.sh
+-- state/task-a.resume-watch --
+fm-resume-watch-v1
+name=resume-d0e25304-task-a
+url=https://github.com/o/r/pull/37
+form=merged
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.VbwdmC/resume-wiring/home/state/procevent/when-resume-d0e25304-task-a.source
+/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.VbwdmC/resume-wiring/home/state/when/when-resume-d0e25304-task-a.spec
+argv:
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52ERNB8HYD15MTDDPXJH73A/bin/fm-resume-cond.sh
+pr-merged
+https://github.com/o/r/pull/37
+== fm-pr-check task-a pull/38 (new PR): exit 0 ==
+-- state/task-a.resume-watch --
+fm-resume-watch-v1
+name=resume-d0e25304-task-a
+url=https://github.com/o/r/pull/38
+form=merged
+https://github.com/o/r/pull/38
+https://github.com/o/r/pull/38
+specs:        1
+ok - fm-pr-check arms the resume watch and a new PR replaces it
+tests/.tmp-prcheck-resume.test.sh: line 4261: ${$(basename "$f" .source)#when-}: bad substitution
