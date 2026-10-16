@@ -96,6 +96,9 @@ Exercise primary-home Herdr placement.
 
 ## Firstmate spec
 Verify the crewmate uses its primary home's workspace.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 
 SM_HOME="$TMP_ROOT/secondmate-home"
@@ -111,6 +114,9 @@ Exercise secondmate-owned Herdr placement.
 
 ## Firstmate spec
 Verify the crewmate uses its secondmate home's workspace.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 
 make_scratch_project() {  # <dir>

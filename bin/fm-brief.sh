@@ -58,6 +58,12 @@
 # "Delivery contract: mode=<mode>" line. bin/fm-spawn.sh reads that line and refuses
 # to launch a ship task whose explicit --mode disagrees, so an adjusted brief and the
 # recorded task metadata cannot drift apart.
+# Ship briefs end with bin/fm-dod-lib.sh's `# Completion observation` section,
+# whose `verify: {VERIFY}` line Firstmate replaces with the live end state the
+# worker will observe (deployed, running, measured). That library owns the
+# section, what counts as a resting state, and the recording teardown requires;
+# bin/fm-spawn.sh refuses a ship brief whose observation is missing, unfilled,
+# or names only merged or checks-green.
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
 # --mode is refused on scout and secondmate scaffolds: a scout's deliverable is a
 # report rather than a merge, and a charter is not a delivery contract.
@@ -469,6 +475,7 @@ RULE1=$(fm_ship_rule_one "$MODE" "$ID") || exit 1
 DOD_PAUSE=
 [ "$PAUSE_BEFORE_VALIDATE" -eq 0 ] || DOD_PAUSE='pause-before-validate'
 DOD=$(fm_dod_block "$MODE" "$ID" "$DOD_PAUSE") || exit 1
+VERIFY_SECTION=$(fm_verify_block '')
 
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -536,5 +543,7 @@ If you touch a project \`AGENTS.md\`, follow \`$FM_ROOT/bin/fm-ensure-agents-md.
 Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced no durable project knowledge.
 
 $DOD
+
+$VERIFY_SECTION
 EOF
-echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK} and {FIRSTMATE_SPEC})"
+echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK}, {FIRSTMATE_SPEC}, and {VERIFY})"

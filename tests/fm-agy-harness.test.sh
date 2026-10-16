@@ -563,6 +563,9 @@ Exercise Antigravity dispatch.
 
 ## Firstmate spec
 Verify launch and delivery behavior.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
   printf 'agy\n' > "$home/config/crew-harness"
   mkdir -p "$home/.gemini/antigravity-cli"

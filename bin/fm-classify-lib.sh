@@ -391,7 +391,9 @@ status_line_note() {  # <status-line> -> text after the first colon, trimmed
 # a line that is no ready signal. The ready signal is a `done: PR <url> ...`
 # line (bin/fm-dod-lib.sh owns its worker-facing wording): the URL is the first
 # whitespace-delimited token after `PR `, minus trailing `,;).`, so trailing
-# prose such as `checks green` is ignored. Any other `done:` line that mentions
+# prose such as `checks green` is ignored. A `done: verified:` line records a
+# made completion observation (bin/fm-dod-lib.sh) and is never a ready signal,
+# even when its evidence cites a PR. Any other `done:` line that mentions
 # `PR http` prints its whole note, which never parses as a URL, so the caller
 # reports it instead of dropping it. Callers validate the result with
 # bin/fm-pr-lib.sh's fm_pr_url_parse before acting on it.
@@ -400,6 +402,7 @@ status_line_ready_pr_url() {  # <status-line> -> url
   [ "$(status_line_verb "$1")" = "done" ] || return 1
   note=$(status_line_note "$1")
   case "$note" in
+    verified:*) return 1 ;;
     "PR "*)
       url=${note#PR }
       url=${url#"${url%%[![:space:]]*}"}

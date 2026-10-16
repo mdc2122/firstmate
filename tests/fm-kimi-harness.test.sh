@@ -154,6 +154,9 @@ Exercise Kimi dispatch.
 
 ## Firstmate spec
 Verify launch and delivery behavior.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
   printf 'kimi\n' > "$home/config/crew-harness"
   fm_git_worktree "$proj" "$wt" "wt-$name"

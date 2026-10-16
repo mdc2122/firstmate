@@ -97,6 +97,9 @@ Exercise Herdr backend auto-detection.
 
 ## Firstmate spec
 Verify the real spawn path selects Herdr.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 
 PROJ="$TMP_ROOT/scratch-project"

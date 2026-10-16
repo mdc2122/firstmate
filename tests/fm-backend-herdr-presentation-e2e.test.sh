@@ -403,6 +403,9 @@ $description
 
 ## Firstmate spec
 Verify projected workspace behavior for $id.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 
