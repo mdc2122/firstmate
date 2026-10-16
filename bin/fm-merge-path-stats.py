@@ -41,6 +41,8 @@ Every stage is {n, p50, p90, max, sum_h}: p50/p90/max in minutes, sum in hours.
                                  github-hosted) and per triggering event
   release.merged_to_release_join merge -> first release ticket covering it joins
   release.merged_to_live         merge -> that release ticket done
+  release.canary_to_promote      release ticket canary step -> promote step
+  release.deploy_to_done         release ticket deploy step -> done
 """
 import argparse, base64, csv, json, os, re, sqlite3, statistics as st, subprocess, time
 from concurrent.futures import ThreadPoolExecutor
