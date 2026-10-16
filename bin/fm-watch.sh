@@ -2497,6 +2497,11 @@ retire_merged_pr_poll() {  # <id> <url> <check-path>
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$url" \
     >/dev/null 2>&1 || triage_log "merged PR $url could not leave its merge line"
   stall_records_retire_landed "$c" "$url"
+  # A merges slot just freed: queued PR registrations retry in order
+  # (bin/fm-wip-caps-lib.sh REGISTRATION); each one armed queues its own wake.
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    fm_run_timed "$PR_AUTOARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" --retry-queued >/dev/null 2>&1 \
+    || triage_log "queued PR registrations could not be retried after $id merged"
 }
 
 # A merged PR ends every merge-line stall episode that names it as the head,

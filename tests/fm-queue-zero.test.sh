@@ -191,6 +191,40 @@ test_inflight_row_without_a_live_task_is_named_orphan() {
   pass "an in-flight backlog row with no live task is named instead of left as a silent warning"
 }
 
+# Pull (bin/fm-wip-caps-lib.sh): a ready row is listed for dispatch only while
+# its lane has a free work-in-progress slot, in backlog order; the rest wait in
+# their lane, owned, and a finish frees exactly one listing.
+test_ready_rows_are_pulled_only_into_free_lane_slots() {
+  local home out
+  home=$(make_home wip-pull)
+  mkdir -p "$home/config"
+  printf 'validations=2\ninvestigations=1\n' > "$home/config/wip-caps"
+  axi "$home" add ship-1 "first ship" --kind ship
+  axi "$home" add ship-2 "second ship" --kind ship
+  axi "$home" add dig-1 "first scout" --kind scout
+  axi "$home" add dig-2 "second scout" --kind scout
+  set_since "$home" ship-2 2026-09-20
+  set_since "$home" dig-2 2026-09-20
+  printf 'kind=ship\n' > "$home/state/live-ship.meta"
+
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue ready ship-1" "the first ship should fill the one free validations slot"
+  assert_not_contains "$out" "ship-2" "a ship beyond the free slots must wait in its lane, neither ready nor unowned"
+  assert_contains "$out" "queue ready dig-1" "the first scout should fill the free investigations slot"
+  assert_not_contains "$out" "dig-2" "a scout beyond the free slots must wait in its lane"
+
+  rm -f "$home/state/live-ship.meta"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue ready ship-2" "a finish frees one slot for the next ship"
+  assert_not_contains "$out" "dig-2" "a ship finishing must not free a scout slot"
+
+  printf 'validations=two\n' > "$home/config/wip-caps"
+  out=$(qz "$home" scan --local) || fail "scan failed: $out"
+  assert_contains "$out" "queue error wip-caps" "unreadable caps must be named, not silently ignored"
+  assert_contains "$out" "queue ready dig-2" "with unreadable caps every ready row is listed"
+  pass "ready rows are pulled only into free lane slots, in order, and a finish frees one listing"
+}
+
 # A genuine captain call (a captain hold whose reason does not begin "owner:")
 # gets bin/fm-far-holds.sh's two days, aged from its hold-set stamp or a lapsed
 # date, before it is named nocheck. An "owner:" captain hold is not a captain
@@ -847,6 +881,7 @@ test_paperclip_release_is_guarded() {
 test_ready_and_unowned_rows_are_named_and_owned_rows_are_not
 test_unowned_row_flagged_and_each_running_owner_clears_it
 test_inflight_row_without_a_live_task_is_named_orphan
+test_ready_rows_are_pulled_only_into_free_lane_slots
 test_captain_calls_get_the_far_holds_window_and_owner_holds_do_not
 test_empty_queue_is_silent_and_unpaired_state_is_silent
 test_failed_crew_read_is_unknown_not_ownerless

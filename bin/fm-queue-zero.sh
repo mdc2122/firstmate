@@ -36,6 +36,8 @@
 #               begin "owner:"
 #   blocked-by  an unresolved blocked-by edge to a row that itself has an owner
 #               (followed transitively)
+#   lane        a ready row waiting for a free work-in-progress slot in its
+#               lane (see `ready` below)
 # Anything else - a dated hold, an "owner: firstmate" hold, a row waiting on
 # nothing - is owned only by the supervisor, which is to say by nobody.
 #
@@ -58,7 +60,10 @@
 #
 # Rows from this home's backlog (source "queue"):
 #   ready    queued, every blocker done, no active hold or its date has passed
-#            (exactly bin/fm-tasks-axi.sh ready), excluding captain holds
+#            (exactly bin/fm-tasks-axi.sh ready), excluding captain holds, and
+#            within its lane's free work-in-progress slots
+#            (bin/fm-wip-caps-lib.sh owns lanes, caps, and the pull order); a
+#            ready row beyond them waits for a finish and is not listed
 #   redated  an open row re-dated twice running with no new evidence; listed
 #            until it gains evidence, gets a running owner, is held undated
 #            for the captain's decision, or is closed
@@ -129,6 +134,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 RECORD="$STATE/.queue-zero"
 RECORD_SCHEMA=fm-queue-zero-v1
 LEDGER="$STATE/.queue-zero-holds.json"
@@ -250,23 +256,34 @@ evidence_json() {  # <snapshot>
 MODEL=
 MODEL_ERROR=
 build_model() {
-  local input ready_out ready_ids prev_ledger='{}' prev_crew=null events='[]'
+  local input ready_out ready_ids ready_rows free prev_ledger='{}' prev_crew=null events='[]'
   MODEL=
   MODEL_ERROR=
   if [ ! -f "$DATA/backlog.md" ]; then
     input='{"backlog":{"records":[]},"tasks":[]}'
     ready_ids='[]'
+    ready_rows='[]'
   else
     input=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" FM_SNAPSHOT_NOW="$NOW" \
       "$SCRIPT_DIR/fm-fleet-snapshot.sh" --contribution-input 2>/dev/null) \
       || { MODEL_ERROR="the backlog could not be parsed"; return 1; }
     ready_out=$(FM_HOME="$FM_HOME" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-tasks-axi.sh" ready 2>&1) \
       || { MODEL_ERROR="tasks-axi ready failed: $(printf '%s' "$ready_out" | head -n 1)"; return 1; }
-    # Rows of the TOON ready[N]{id,...} table: two-space indent, id first.
-    ready_ids=$(printf '%s\n' "$ready_out" \
-      | awk '/^ready\[[0-9]+\]/ { t = 1; next } t && /^  / { sub(/^  /, ""); split($0, f, ","); print f[1]; next } { t = 0 }' \
-      | json_lines)
+    # Rows of the TOON ready[N]{id,...,kind,...} table (two-space indent), in
+    # tasks-axi ready order, with the kind column located from the header.
+    ready_rows=$(printf '%s\n' "$ready_out" \
+      | awk '/^ready\[[0-9]+\]\{/ { h = $0; sub(/^[^{]*\{/, "", h); sub(/\}.*$/, "", h); n = split(h, c, ","); k = 0
+               for (i = 1; i <= n; i++) if (c[i] == "kind") k = i; t = 1; next }
+             t && /^  / { sub(/^  /, ""); split($0, f, ","); print f[1] "\t" (k ? f[k] : ""); next } { t = 0 }' \
+      | jq -Rsc 'split("\n") | map(select(. != "") | split("\t") | {id:.[0], kind:((.[1] // "") | ltrimstr("\"") | rtrimstr("\""))})')
+    ready_ids=$(printf '%s' "$ready_rows" | jq -c 'map(.id)')
   fi
+  # Free work-in-progress slots per lane, or null when the caps cannot be read
+  # (every ready row is then listed, beside one error row).
+  # shellcheck source=bin/fm-wip-caps-lib.sh
+  . "$SCRIPT_DIR/fm-wip-caps-lib.sh"
+  wip_error=
+  free=$(fm_wip_free_json "$CONFIG" "$STATE") || { free=null; wip_error=$FM_WIP_ERROR; }
   if [ -f "$LEDGER" ] && jq -e --arg s "$LEDGER_SCHEMA" '.schema == $s' "$LEDGER" >/dev/null 2>&1; then
     prev_ledger=$(jq -c '.rows // {}' "$LEDGER")
     prev_crew=$(jq -c '.crew // null' "$LEDGER")
@@ -275,11 +292,12 @@ build_model() {
     events=$(jq -sc '.' "$EVENTS" 2>/dev/null) || events='[]'
   fi
   MODEL=$(printf '%s' "$input" | jq -c \
-    --argjson ready "$ready_ids" --argjson ledger "$prev_ledger" --argjson events "$events" \
+    --argjson ready "$ready_ids" --argjson ready_rows "$ready_rows" --argjson free "$free" \
+    --argjson ledger "$prev_ledger" --argjson events "$events" \
     --argjson evidence "$(evidence_json "$input")" --argjson crew_read "$(crew_ids)" \
     --argjson prev_crew "$prev_crew" \
     --argjson mates "$(secondmate_ids)" --argjson watches "$(watch_names)" \
-    --arg today "$TODAY" --arg now "$NOW" --argjson now_epoch "$NOW_EPOCH" \
+    --arg today "$TODAY" --arg now "$NOW" --argjson now_epoch "$NOW_EPOCH" --arg wip_error "$wip_error" \
     --argjson age_days "$AGE_DAYS" --argjson captain_days "$CAPTAIN_DAYS" '
     # A failed crew read is unknown, never empty: fall back to the last good
     # read while it is under a day old, else mark the crew unknown so this
@@ -312,6 +330,18 @@ build_model() {
     | ([.backlog.records[] | select(.structured == true)]) as $all
     | ([$all[] | {key:.id, value:.}] | from_entries) as $by_id
     | [$all[] | select(.state != "done")] as $open
+    # Pull (bin/fm-wip-caps-lib.sh): each dispatchable ready row enters the
+    # lane its kind names, in ready order; a row beyond the free slots of that
+    # lane waits there, owned by the lane, until a finish frees one.
+    | def wip_lane: if . == "review" then "reviews" elif . == "scout" then "investigations" else "validations" end;
+    ($ready_rows
+      | map(select(($by_id[.id] // {}) as $b | $b.state == "queued" and $b.hold_kind != "captain"))
+      | reduce .[] as $c ({used:{}, admit:[], wait:[]};
+          ($c.kind | wip_lane) as $l
+          | if $free == null then .admit += [$c.id]
+            elif (.used[$l] // 0) < $free[$l] and ($l != "validations" or $free.merges > 0) then
+              .used[$l] = ((.used[$l] // 0) + 1) | .admit += [$c.id]
+            else .wait += [$c.id] end)) as $pull
     # Fold the ledger: a moved hold-until date is a re-date, scored against
     # the evidence fingerprint stored when the previous date was set. New
     # evidence since that date, a running owner, or an undated captain call
@@ -323,7 +353,8 @@ build_model() {
            deferrals:([($r.body_lines // [])[] | select(test("^Captain deferral until [0-9-]+:$"))] | length)} as $fp
         | ($ledger[$r.id]) as $prev
         | ($r.hold_until // "") as $until
-        | ($r | owner($live; $by_id; [$r.id])) as $owner
+        | (($r | owner($live; $by_id; [$r.id]))
+           // (if ($pull.wait | index($r.id)) != null then "lane" else null end)) as $owner
         | ((if $prev == null then {entry:{until:$until, fp:$fp, strikes:0}, event:null}
            elif $until != "" and ($prev.until // "") != "" and $until != $prev.until then
              (if any(($r.body_lines // [])[]; . == "Captain deferral until \($until):") then "captain"
@@ -354,7 +385,8 @@ build_model() {
         | (($r.since | day_epoch) as $s | $s != null and ($t - $s) >= ($age_days * 86400)) as $aged
         | ($ready | index($r.id)) as $is_ready
         | {source:"queue", ref:$r.id, title:($r.title // "")}
-          + if $r.state == "queued" and $is_ready != null and $r.hold_kind != "captain" then
+          + if $r.state == "queued" and $is_ready != null and $r.hold_kind != "captain"
+               and ($pull.admit | index($r.id)) != null then
               {class:"ready", detail:("filed " + ($r.since // "undated"))}
             elif ($f.entry.strikes // 0) >= 2 then
               {class:"redated",
@@ -385,6 +417,10 @@ build_model() {
         . + [{source:"queue", class:"error", ref:"beads-crew", title:"could not read",
               detail:"the beads crew queue read failed or timed out and no read from the last 24 h is"
                      + " kept, so no row is named unowned this pass"}] end
+    | if $free != null then . else
+        . + [{source:"queue", class:"error", ref:"wip-caps", title:"could not read",
+              detail:("the work-in-progress caps could not be read (" + $wip_error
+                      + "), so every ready row is listed regardless of its lane")}] end
     | map(.title |= (gsub("\\s+"; " ") | if length > 70 then .[:69] + "…" else . end)) as $rows
     | ([$folded[] | select(.owner == null)]) as $unowned
     | ([$unowned[] | select(.entry.unowned_since != null

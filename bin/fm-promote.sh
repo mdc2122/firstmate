@@ -47,6 +47,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-wip-caps-lib.sh
+. "$SCRIPT_DIR/fm-wip-caps-lib.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-backlog-transition-lib.sh
@@ -131,6 +133,8 @@ CONTROL_LOCK="$STATE/.control-$ID.lock"
 CONTROL_LOCK_HELD=0
 META_LOCK=
 META_LOCK_HELD=0
+TASK_SET_LOCK=
+TASK_SET_LOCK_HELD=0
 TMP=
 META=
 SCOUT_BRIEF=
@@ -147,6 +151,10 @@ promote_cleanup() {
     META_LOCK_HELD=0
     fm_lock_release "$META_LOCK" || true
   fi
+  if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+    TASK_SET_LOCK_HELD=0
+    fm_lock_release "$TASK_SET_LOCK" || true
+  fi
   if [ "$CONTROL_LOCK_HELD" = 1 ]; then
     CONTROL_LOCK_HELD=0
     fm_lock_release "$CONTROL_LOCK" || true
@@ -162,6 +170,12 @@ CONTROL_LOCK_HELD=1
 "$FM_ROOT/bin/fm-guard.sh" || true
 META="$STATE/$ID.meta"
 [ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
+TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
+fm_wip_task_set_lock_acquire "$TASK_SET_LOCK" || {
+  echo "error: another task-set action (a spawn, promotion, PR registration or teardown) held this home's task-set lock for ${FM_WIP_LOCK_WAITED}s; nothing was changed, retry once it finishes" >&2
+  exit 1
+}
+TASK_SET_LOCK_HELD=1
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"
 META_LOCK_HELD=1
@@ -170,6 +184,17 @@ if ! fm_backlog_record_present "$META" "task record" "$STATE"; then
   exit 1
 fi
 grep -qx 'kind=scout' "$META" || { echo "error: task $ID is not a scout task (kind=scout not in meta)" >&2; exit 1; }
+
+IFS='|' read -r _WIP_KIND WIP_PR WIP_LANE _WIP_BYPASS <<EOF
+$(fm_wip_meta_fields "$META")
+EOF
+WIP_STATUS=0
+fm_wip_transition_admit "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" "$STATE" "$ID" ship "$WIP_PR" "$WIP_LANE" || WIP_STATUS=$?
+case "$WIP_STATUS" in
+  0) ;;
+  1) echo "refused: $FM_WIP_REFUSAL" >&2; exit 5 ;;
+  *) echo "error: $FM_WIP_ERROR" >&2; exit 1 ;;
+esac
 
 SCOUT_BRIEF="$DATA/$ID/brief.md"
 if fm_brief_task_placeholders_present "$SCOUT_BRIEF"; then
@@ -304,6 +329,8 @@ rm -f -- "$BRIEF_ORIGINAL" 2>/dev/null || true
 BRIEF_ORIGINAL=
 fm_lock_release "$META_LOCK"
 META_LOCK_HELD=0
+fm_lock_release "$TASK_SET_LOCK"
+TASK_SET_LOCK_HELD=0
 
 HOME_Q=$(printf '%q' "$FM_HOME")
 INSTRUCTIONS_Q=$(printf '%q' "$INSTRUCTIONS")

@@ -2592,7 +2592,7 @@ EOF
     || fail "could not stage a held task-set lock"
   holder=${held%% *}
   lock=${held#* }
-  if FM_HOME="$subhome" FM_SPAWN_NO_GUARD=1 \
+  if FM_HOME="$subhome" FM_SPAWN_NO_GUARD=1 FM_WIP_LOCK_WAIT=1 \
     "$ROOT/bin/fm-spawn.sh" newtask "$subhome/projects/alpha" --scout >/dev/null 2>"$err"; then
     kill "$holder" 2>/dev/null || true
     fail "a fresh spawn published a task while a forced teardown owned the set"
@@ -2620,7 +2620,7 @@ test_fresh_remote_secondmate_spawn_refuses_while_task_set_is_owned() {
     || fail "could not stage a held remote-spawn task-set lock"
   holder=${held%% *}
   lock=${held#* }
-  if FM_HOME="$home" FM_SPAWN_NO_GUARD=1 \
+  if FM_HOME="$home" FM_SPAWN_NO_GUARD=1 FM_WIP_LOCK_WAIT=1 \
     "$ROOT/bin/fm-spawn.sh" remote-new --secondmate >/dev/null 2>"$err"; then
     kill "$holder" 2>/dev/null || true
     fail "a fresh remote secondmate spawn published while the task set was owned"

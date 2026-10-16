@@ -973,6 +973,42 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   pass "fm-spawn --relaunch: with no explicit harness it reuses the task's recorded one, never the crew default"
 }
 
+# Work-in-progress caps (bin/fm-wip-caps-lib.sh) never gate recovery: a
+# relaunch replaces the agent of a task that already holds its own slot, so a
+# full lane - even one over its cap - must not queue it.
+test_relaunch_is_never_refused_by_a_full_lane() {
+  local dir out rc other
+  dir=$(new_case wipcap rl40)
+  add_ship_task "$dir" rl40 claude
+  mkdir -p "$dir/home/config"
+  printf 'validations=1\nmerges=1\n' > "$dir/home/config/wip-caps"
+  for other in rl41 rl42; do
+    printf 'kind=ship\nworktree=/nonexistent/%s\n' "$other" > "$dir/home/state/$other.meta"
+  done
+  printf 'kind=ship\npr=https://github.com/example/repo/pull/3\n' > "$dir/home/state/rl43.meta"
+  printf 'zsh' > "$dir/fake/command"
+  out=$(run_spawn "$dir" rl40 --relaunch); rc=$?
+  expect_code 0 "$rc" "a direct relaunch with its lane over cap"$'\n'"$out"
+  assert_not_contains "$out" "work-in-progress cap" "a relaunch must never consult a cap"
+
+  printf 'claude' > "$dir/fake/command"
+  out=$(run_control "$dir" rl40 relaunch --note "recover past a full lane"); rc=$?
+  expect_code 0 "$rc" "an fm-control relaunch with its lane over cap"$'\n'"$out"
+  assert_not_contains "$out" "work-in-progress cap" "a control-plane relaunch must never consult a cap"
+  pass "work-in-progress caps never refuse a relaunch, direct or through fm-control"
+}
+
+test_relaunch_refuses_a_cap_bypass_flag() {
+  local dir out rc
+  dir=$(new_case wipbypass rl44)
+  add_ship_task "$dir" rl44 claude
+  printf 'zsh' > "$dir/fake/command"
+  out=$(run_spawn "$dir" rl44 --relaunch --cap-bypass captain --cap-bypass-reason x); rc=$?
+  expect_code 1 "$rc" "a relaunch carrying a cap bypass"
+  assert_contains "$out" "exempt from work-in-progress caps" "the refusal should say relaunch is exempt"
+  pass "fm-spawn --relaunch: refuses a cap bypass flag, since a relaunch is never capped"
+}
+
 test_promoted_scout_relaunch_receives_the_current_delivery_contract() {
   local dir home id brief launch out mode rule
   for mode in no-mistakes direct-PR local-only; do
@@ -1959,6 +1995,8 @@ test_secondmate_relaunch_onto_a_crewmate_only_adapter_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one
+test_relaunch_is_never_refused_by_a_full_lane
+test_relaunch_refuses_a_cap_bypass_flag
 test_promoted_scout_relaunch_receives_the_current_delivery_contract
 test_prefixed_prior_harness_wiring_is_still_retired
 test_muse_session_binding_is_retired_on_a_harness_switch
