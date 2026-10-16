@@ -73,7 +73,7 @@ Refresh the hints whenever the serial lane gains scripts, rather than waiting fo
 `bin/fm-test-run.sh` owns the per-shard packing, so its `--check-coverage` output is the current account of lane size, shard composition, and balance rather than a copied table.
 Run 34342484144 observed a shard reach about 20 minutes of passing work; by 2026-09-29 the slowest shard ran past 27 minutes, so the job cap keeps hang-tripwire margin for job setup and runner-speed spread; the [Timeouts](#timeouts) section points to the current bound.
 
-The single longest script, `tests/fm-watch-triage.test.sh` at 262626 ms, is the floor for any shard count.
+The largest individual hint in `portable_serial_weight_hints` sets the estimated floor for any serial shard count.
 
 Refresh the CI-derived hints by downloading the per-shard timing artifacts from several green CI runs and replacing the `portable_serial_weight_hints` table in `bin/fm-test-run.sh` with the slowest measured `duration_ms` per `path`:
 

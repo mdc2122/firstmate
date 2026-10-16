@@ -3016,9 +3016,14 @@ test_a_secondmate_home_keeps_its_own_books() {
   # paired with no remote parent involved. A seeded mate home still carries a
   # local parent binding: teardown now delivers the finished child's terminal
   # outcome through it (bin/fm-inactive-reconcile.sh report), and a binding
-  # under the case dir keeps that report on this host.
+  # under the case dir keeps that report on this host. Teardown resolves a
+  # local binding only when the parent's own records name this child back, so
+  # the parent carries the child's meta and registry line too.
   parent="$case_dir/parent-home"
-  mkdir -p "$parent/state"
+  mkdir -p "$parent/state" "$parent/data"
+  fm_write_meta "$parent/state/mate-h1.meta" "kind=secondmate" "home=$(home_of "$case_dir")"
+  printf -- '- mate-h1 - fixture mate (home: %s; scope: fixture; projects: ; added 2026-10-16)\n' \
+    "$(home_of "$case_dir")" > "$parent/data/secondmates.md"
   printf '%s\n' mate-h1 > "$(home_of "$case_dir")/.fm-secondmate-home"
   printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$parent" \
     > "$(home_of "$case_dir")/.fm-secondmate-parent"
