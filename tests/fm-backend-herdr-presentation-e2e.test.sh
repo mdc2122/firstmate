@@ -395,7 +395,9 @@ make_project() {  # <dir>
 
 write_ship_brief() {  # <home> <id> [description]
   local home=$1 id=$2 description=${3:-Herdr presentation fixture $2}
-  mkdir -p "$home/data/$id"
+  mkdir -p "$home/data/$id" "$home/config"
+  # This suite deliberately keeps many endpoints alive to assert ordering.
+  printf 'validations=20\n' > "$home/config/wip-caps"
   cat > "$home/data/$id/brief.md" <<EOF
 # Task
 ## Captain's intent
