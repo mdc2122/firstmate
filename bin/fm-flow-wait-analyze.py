@@ -16,10 +16,11 @@ import argparse, collections, csv, json, re, statistics, sys
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 ap.add_argument("run", metavar="RUN_DIR", help="a bin/fm-flow-wait.py --out directory")
 run = ap.parse_args().run
-T = {x["task"]: x for x in csv.DictReader(open(f"{run}/tasks.csv"))}
-TO = list(csv.DictReader(open(f"{run}/touches.csv")))
-W = list(csv.DictReader(open(f"{run}/waits.csv")))
-S = list(csv.DictReader(open(f"{run}/steers.csv")))
+T = {(x["home"], x["task"]): x for x in csv.DictReader(open(f"{run}/tasks.csv")) if not x["excluded"]}
+ids = {x["task"] for x in T.values()}
+TO = [x for x in csv.DictReader(open(f"{run}/touches.csv")) if x["task"] in ids]
+W = [x for x in csv.DictReader(open(f"{run}/waits.csv")) if x["task"] in ids]
+S = [x for x in csv.DictReader(open(f"{run}/steers.csv")) if x["task"] in ids]
 settled = [x for x in T.values() if x["outcome"] != "in-flight"]
 live = [x for x in settled if x["outcome"] == "live-proven"]
 by = collections.defaultdict(list)
@@ -69,8 +70,8 @@ for cls in ("merge_queue", "release", "ci"):
     owner = {}
     for w in W:
         if w["cls"] == cls:
-            m = re.search(r"pull/(\d+)", w["ref"])
-            k = m.group(1) if m else "paused:" + w["task"]
+            m = re.search(r"github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)", w["ref"])
+            k = f"{m.group(1)}#{m.group(2)}" if m else "paused:" + w["task"]
             d[k] += float(w["hours"])
             owner[k] = w["task"]
     v = sorted(d.values())

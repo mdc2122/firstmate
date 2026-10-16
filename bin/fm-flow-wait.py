@@ -473,11 +473,16 @@ class GH:
 # ---------------------------------------------------------------- releases (R)
 def releases(home):
     if not os.path.exists(RELEASE_QUEUE):
+        print(f"warning: release queue {RELEASE_QUEUE} missing; every merged {VM_REPO} ship stays in-flight", file=sys.stderr)
         return [], {}
     repo_dir = RELEASE_REPO_DIR or os.path.join(home, "projects", VM_REPO.split("/")[1])
     since = "30 days ago" if AS_OF is None else iso(AS_OF - 30 * 86400)
-    main = subprocess.run(["git", "-C", repo_dir, "rev-list", "--first-parent", "origin/main", f"--since={since}"],
-                          capture_output=True, text=True).stdout.split()
+    rl = subprocess.run(["git", "-C", repo_dir, "rev-list", "--first-parent", "origin/main", f"--since={since}"],
+                        capture_output=True, text=True)
+    main = rl.stdout.split()
+    if rl.returncode or not main:
+        print(f"warning: no first-parent origin/main commits in {repo_dir} since {since} ({rl.stderr.strip() or 'empty'}); "
+              f"every merged {VM_REPO} ship stays in-flight", file=sys.stderr)
     idx = {s: i for i, s in enumerate(reversed(main))}
     tickets = defaultdict(list)
     for line in open(RELEASE_QUEUE):
@@ -668,11 +673,6 @@ def build(args):
         if a["kind"] in ("pr_check", "pr_merge"):
             sup_by_url[g[1]].append(dict(a, task=tid))
 
-    def sup_task_key(tid):
-        if tid in sup_by_task:
-            return tid
-        return None
-
     # One owner per PR. Claim strength: 3 = no-mistakes run on branch fm/<task>,
     # 2 = the task's own `done: PR <url>` line, 1 = supervisor fm-pr-check or meta pr=.
     # Highest strength wins; ties go to the earliest claim. A PR merely mentioned
@@ -704,6 +704,7 @@ def build(args):
     task_rows, touch_rows, wait_rows, steer_rows = [], [], [], []
     flash_items = []
     pending = []   # (task record, prepared data) for second pass after flash
+    unresolved_prs = defaultdict(list)
 
     for (home, tid), t in tasks.items():
         if not (since <= t["spawn"] < until):
@@ -742,8 +743,7 @@ def build(args):
                 steers[round(e[0])] = dict(at=e[0], body="", ff=False, src="doorbell-only")
             last_bell = e[0]
         # supervisor-side sends with no worker-side record within 10 min
-        sk = sup_task_key(tid)
-        for a in sup_by_task.get(sk, []) if sk else []:
+        for a in sup_by_task.get(tid, []):
             if a["kind"] == "send" and not any(abs(s["at"] - a["t"]) < 600 for s in steers.values()):
                 steers[round(a["t"])] = dict(at=a["t"], body="", ff=False, src="supervisor-fm-send")
 
@@ -753,7 +753,9 @@ def build(args):
         prs = {}
         for u in sorted(urls):
             p = gh.pr(u)
-            if p:
+            if not p:
+                unresolved_prs[tid].append(u)
+            else:
                 rr = [r for r in runs if r["pr_url"] == u]
                 p["nm_start"] = min((r["created_at"] for r in rr), default=None)
                 # earliest green signal: the worker's own "done: PR <url> ... green" line,
@@ -805,6 +807,10 @@ def build(args):
             if st[1] == "paused" and not any(rx.search(st[3]) for _, rx in PAUSE_RULES):
                 flash_items.append((key_of("pause", st[4]), pause_prompt(st[4])))
 
+    if unresolved_prs:
+        print(f"warning: {sum(map(len, unresolved_prs.values()))} owned PR(s) of {len(unresolved_prs)} task(s) did not resolve "
+              "(gh error, uncached under --no-github, or created after --as-of); see summary coverage.owned_prs_unresolved",
+              file=sys.stderr)
     print(f"flash: {len(set(k for k, _ in flash_items))} ambiguous records", file=sys.stderr)
     fl = flash.classify(list(dict(flash_items).items()))
     gh.save()
@@ -1024,6 +1030,7 @@ def build(args):
                 k for k, v in backlog.items() if v.get("close") and v["close"][0] in ("done", "merged", "reported")
                 and args.since <= v["close"][1] < args.until and v.get("kind") in ("ship", "scout")
                 and not any(k == r["task"] for r in task_rows)),
+            owned_prs_unresolved=dict(sorted(unresolved_prs.items())),
             gh_cache_entries=len(gh.cache), releases_indexed=len(rels)),
     )
     return task_rows, touch_rows, wait_rows, steer_rows, summary
