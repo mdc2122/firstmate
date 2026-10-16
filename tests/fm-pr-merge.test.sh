@@ -540,8 +540,8 @@ test_github_verified_merge_requires_poll_recording() {
     "github-poll-recording-fails: poll setup failure was not reported"
   assert_no_grep 'verified: ' "$case_dir/stdout" \
     "github-poll-recording-fails: failed poll setup was reported as a verified merge"
-  assert_grep 'pr=https://github.com/example/repo/pull/55' "$case_dir/state/task-x1.meta" \
-    "github-poll-recording-fails: metadata was not retained for the attempted merge"
+  assert_no_grep 'pr=https://github.com/example/repo/pull/55' "$case_dir/state/task-x1.meta" \
+    "github-poll-recording-fails: a merge refused before the forge call must restore the task's prior registration"
   assert_absent "$case_dir/state/task-x1.check.sh" \
     "github-poll-recording-fails: the failed poll setup left a runnable poll"
   pass "fm-pr-merge refuses to claim a merge when poll recording fails"
@@ -1642,8 +1642,8 @@ test_gitlab_merge_failure_propagates() {
 
 # Each pre-merge condition, driven one at a time, so no condition can be
 # carried by another. The refusal names that condition, no merge is attempted,
-# and pr= is still recorded and the poll still armed exactly as the GitHub path
-# leaves them when live verification or the gh merge fails.
+# and the task's prior registration is restored: a task that held no PR before
+# the merge order holds none after it, and no merge poll is left armed.
 test_gitlab_each_condition_refuses_independently() {
   local case_dir rc name expected spec
   set -- \
@@ -1673,10 +1673,10 @@ test_gitlab_each_condition_refuses_independently() {
       "gitlab-refuse-$name: refusal did not name the failing condition"
     [ -z "$(glab_merge_line "$case_dir/glab.log")" ] \
       || fail "gitlab-refuse-$name: a merge was attempted despite the refusal"
-    assert_grep "pr=$MR_URL" "$case_dir/state/task-x1.meta" \
-      "gitlab-refuse-$name: a refusal should still leave the recorded PR reference"
-    assert_present "$case_dir/state/task-x1.check.sh" \
-      "gitlab-refuse-$name: a refusal should still leave the merge poll armed"
+    assert_no_grep "pr=$MR_URL" "$case_dir/state/task-x1.meta" \
+      "gitlab-refuse-$name: a refusal should restore the task's prior registration"
+    assert_absent "$case_dir/state/task-x1.check.sh" \
+      "gitlab-refuse-$name: a refusal should disarm the merge poll it armed"
   done
   pass "fm-pr-merge refuses on each GitLab pre-merge condition independently"
 }

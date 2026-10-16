@@ -283,24 +283,67 @@ test_registration_and_the_task_set_lock() {
   pass "a same-lane re-registration never waits on the task-set lock; a busy lock queues an entering registration"
 }
 
+# merge_gh <home> <check-conclusion>: a gh whose PR reads open and mergeable
+# with one check of <check-conclusion> at a fixed head, and whose merge lands.
+merge_gh() {
+  local home=$1 conclusion=$2
+  cat > "$home/fake/fakebin/gh" <<SH
+#!/usr/bin/env bash
+case "\${1:-} \${2:-}" in
+  "pr view")
+    case " \$* " in
+      *statusCheckRollup*) printf '%s\n' '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"cccccccccccccccccccccccccccccccccccccccc","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"$conclusion"}]}' ;;
+      *headRefOid*) printf '%s\n' cccccccccccccccccccccccccccccccccccccccc ;;
+    esac
+    ;;
+  "pr merge") printf 'merged\n' ;;
+  "api graphql") printf '%s\n' state=MERGED merged=true queued=false base=main ;;
+  api\ *) case " \$* " in *" --jq "*) ;; *) printf '[]\n' ;; esac ;;
+esac
+exit 0
+SH
+  chmod +x "$home/fake/fakebin/gh"
+}
+
 # A merge order (bin/fm-pr-merge.sh registers with --merge-order) completes
-# work, so it is never queued behind a full merges lane: it arms, takes its
-# merges slot, and leaves the queue it was waiting in.
-test_a_merge_order_registers_past_a_full_merges_lane() {
-  local home out rc
+# work, so it is never queued behind a full merges lane. A merge it then
+# refuses before the forge merge call restores the registration exactly: the
+# lane stays at its cap, the task holds no PR, and it is back in the queue at
+# its original place. A merge that lands keeps its recorded PR.
+test_a_refused_merge_order_restores_the_queue_and_the_cap() {
+  local home out rc i merges=FM_WIP_COUNT_merges
+  command -v jq >/dev/null 2>&1 || fail "this case merges through bin/fm-pr-merge.sh, which needs jq"
   home=$(new_home merge-order)
-  printf 'merges=1\n' > "$home/config/wip-caps"
-  occupy "$home" merging-a "pr=https://github.com/example/repo/pull/31"
-  occupy "$home" validating-b
-  out=$(run_transition "$home" fm-pr-check.sh validating-b https://github.com/example/repo/pull/32); rc=$?
-  expect_code 5 "$rc" "an ordinary registration into a full merges lane"$'\n'"$out"
-  assert_grep "validating-b" "$home/state/.wip-pr-queue" "the ordinary registration is queued"
-  out=$(run_transition "$home" fm-pr-check.sh --merge-order validating-b https://github.com/example/repo/pull/32); rc=$?
-  expect_code 0 "$rc" "a merge-order registration into a full merges lane"$'\n'"$out"
-  assert_present "$home/state/validating-b.check.sh" "a merge order arms its poll"
-  assert_grep "pr=https://github.com/example/repo/pull/32" "$home/state/validating-b.meta" "a merge order records its PR"
-  assert_absent "$home/state/.wip-pr-queue" "a merge order leaves the registration queue"
-  pass "a merge order registers past a full merges lane and leaves the queue"
+  printf 'merges=5\n' > "$home/config/wip-caps"
+  for i in 1 2 3 4 5; do
+    occupy "$home" "merging-$i" "pr=https://github.com/example/repo/pull/$i"
+  done
+  for i in a b x; do
+    occupy "$home" "validating-$i"
+  done
+  run_transition "$home" fm-pr-check.sh validating-a https://github.com/example/repo/pull/11 >/dev/null
+  run_transition "$home" fm-pr-check.sh validating-b https://github.com/example/repo/pull/12 >/dev/null
+  run_transition "$home" fm-pr-check.sh validating-x https://github.com/example/repo/pull/13 >/dev/null
+  [ "$(cut -f1,2 "$home/state/.wip-pr-queue")" = $'1\tvalidating-a\n2\tvalidating-b\n3\tvalidating-x' ] \
+    || fail "setup must queue a, b and x in that order; got: $(cat "$home/state/.wip-pr-queue")"
+
+  merge_gh "$home" FAILURE
+  out=$(run_transition "$home" fm-pr-merge.sh validating-x https://github.com/example/repo/pull/13); rc=$?
+  [ "$rc" -ne 0 ] || fail "a merge with a red check must be refused"$'\n'"$out"
+  [ "$(cut -f1,2 "$home/state/.wip-pr-queue")" = $'1\tvalidating-a\n2\tvalidating-b\n3\tvalidating-x' ] \
+    || fail "a refused merge must leave the queue a, b, x at their original orders; got: $(cat "$home/state/.wip-pr-queue")"
+  assert_no_grep 'pr=' "$home/state/validating-x.meta" "a refused merge must not leave a pr= on its task"
+  assert_absent "$home/state/validating-x.check.sh" "a refused merge must disarm the poll it armed"
+  fm_wip_scan "$home/state"
+  [ "${!merges}" = 5 ] || fail "a refused merge must leave merges at 5/5, got ${!merges}"
+
+  merge_gh "$home" SUCCESS
+  out=$(run_transition "$home" fm-pr-merge.sh validating-x https://github.com/example/repo/pull/13); rc=$?
+  expect_code 0 "$rc" "a merge order with every check green"$'\n'"$out"
+  assert_grep 'pr=https://github.com/example/repo/pull/13' "$home/state/validating-x.meta" "a landed merge keeps its recorded PR"
+  [ "$(cut -f2 "$home/state/.wip-pr-queue")" = $'validating-a\nvalidating-b' ] \
+    || fail "a landed merge leaves the queue; got: $(cat "$home/state/.wip-pr-queue")"
+  pass "a refused merge order restores merges 5/5, queue a, b, x and no pr=; a landed one records its PR"
 }
 
 test_lanes_are_independent() {
@@ -481,7 +524,7 @@ test_merge_notification_is_scoped_to_the_current_pr
 test_promotion_requires_capacity
 test_registrations_never_exceed_the_merges_cap_at_defaults
 test_registration_and_the_task_set_lock
-test_a_merge_order_registers_past_a_full_merges_lane
+test_a_refused_merge_order_restores_the_queue_and_the_cap
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_log_is_written_only_after_spawn_success

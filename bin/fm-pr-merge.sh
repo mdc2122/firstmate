@@ -367,9 +367,16 @@ MERGE_EXPECTED_SPAWN_GEN=$FM_BACKLOG_META_SPAWN_GEN
 
 MERGE_CONTROL_LOCK=
 MERGE_META_LOCK=
+MERGE_ORDER_SNAPSHOT=
+MERGE_ORDER_ROLLBACK=0
 merge_control_cleanup() {
   [ -z "$MERGE_META_LOCK" ] || fm_lock_release "$MERGE_META_LOCK" || true
   fm_afk_contract_lock_release || true
+  if [ "$MERGE_ORDER_ROLLBACK" = 1 ]; then
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+      "$SCRIPT_DIR/fm-pr-check.sh" --merge-order-restore "$MERGE_ORDER_SNAPSHOT" "$ID" || true
+  fi
+  [ -z "$MERGE_ORDER_SNAPSHOT" ] || rm -f -- "$MERGE_ORDER_SNAPSHOT"
   [ -z "$MERGE_CONTROL_LOCK" ] || fm_lock_release "$MERGE_CONTROL_LOCK" || true
 }
 trap merge_control_cleanup EXIT
@@ -775,8 +782,13 @@ METHODS
   fi
 }
 
+# A merge order registers past the merges cap (bin/fm-pr-check.sh
+# --merge-order). Until the forge merge command runs, any refusal restores the
+# registration state that snapshot recorded (merge_control_cleanup).
 record_pr_metadata() {
-  if ! "$SCRIPT_DIR/fm-pr-check.sh" --merge-order "$ID" "$URL"; then
+  MERGE_ORDER_SNAPSHOT=$(mktemp "$STATE/.fm-merge-order.XXXXXX") || return 1
+  MERGE_ORDER_ROLLBACK=1
+  if ! "$SCRIPT_DIR/fm-pr-check.sh" --merge-order "$MERGE_ORDER_SNAPSHOT" "$ID" "$URL"; then
     return 1
   fi
   grep -qxF "pr=$URL" "$META" || {
@@ -1121,6 +1133,7 @@ case "$PROVIDER" in
     # The windowed gate is legal only here: this branch proved the base
     # merges through a merge-queue app, so the queue serializes, not the line.
     require_merge_line_head "$queue_app" || exit 1
+    MERGE_ORDER_ROLLBACK=0
     merge_status=0
     merge_output=$(gh pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" \
       --match-head-commit "$FM_PR_MERGE_HEAD" \
@@ -1204,6 +1217,7 @@ case "$PROVIDER" in
     require_current_away_authority || away_status=$?
     [ "$away_status" -eq 0 ] || exit "$away_status"
     require_merge_line_head || exit 1
+    MERGE_ORDER_ROLLBACK=0
     merge_status=0
     gitlab_merge_args=()
     if [ "$FM_PR_AWAY_POSTURE" = true ]; then

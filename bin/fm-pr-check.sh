@@ -5,7 +5,8 @@
 # live only in a private sidecar and are never interpolated into shell source.
 # A GitHub pull request URL and a GitLab merge request URL are both accepted,
 # including a merge request on a self-hosted GitLab instance.
-# Usage: fm-pr-check.sh [--merge-order] <task-id> <pr-url>
+# Usage: fm-pr-check.sh [--merge-order <snapshot>] <task-id> <pr-url>
+#        fm-pr-check.sh --merge-order-restore <snapshot> <task-id>
 #        fm-pr-check.sh --retry-queued
 # Work-in-progress cap (bin/fm-wip-caps-lib.sh REGISTRATION owns the rule): a
 # ship whose PR would enter the merges lane is admitted only under the home's
@@ -17,6 +18,12 @@
 # re-registration needs no admission and takes no lock, and neither does
 # --merge-order, which bin/fm-pr-merge.sh passes so an ordered merge completes
 # work instead of being queued behind the cap; it still takes its merges slot.
+# When that skips admission, the task's prior registration state (queue order,
+# pr=, pr_head=, armed poll, merge-line entry) is written to <snapshot>, a
+# private file the caller created; otherwise <snapshot> is left empty. When the
+# merge is then refused before any forge merge call, the caller runs
+# --merge-order-restore with the same snapshot, which puts every one of those
+# back, so a refused merge leaves the cap and the queue order as they were.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,10 +64,81 @@ EOF
   exit 0
 fi
 
-MERGE_ORDER=0
+merge_order_snapshot_valid() {  # <snapshot>
+  [ -f "$1" ] && [ ! -L "$1" ] && [ "$(fm_pr_file_link_count "$1")" = 1 ]
+}
+
+if [ "${1:-}" = --merge-order-restore ]; then
+  [ "$#" -eq 3 ] && merge_order_snapshot_valid "$2" && fm_pr_task_id_valid "$3" \
+    || { echo "error: invalid PR check request" >&2; exit 2; }
+  SNAPSHOT=$2
+  ID=$3
+  [ -s "$SNAPSHOT" ] || exit 0
+  snapshot_field() { grep "^$1=" "$SNAPSHOT" | tail -1 | cut -d= -f2- || true; }
+  SNAP_URL=$(snapshot_field url)
+  PRIOR_PR=$(snapshot_field pr)
+  PRIOR_HEAD=$(snapshot_field pr_head)
+  QUEUE_ORDER=$(snapshot_field queue_order)
+  QUEUE_URL=$(snapshot_field queue_url)
+  PRIOR_POLL=$(snapshot_field poll)
+  PRIOR_LISTED=$(snapshot_field merge_line)
+  if [ "$(snapshot_field id)" != "$ID" ] || ! fm_pr_url_parse "$SNAP_URL" \
+    || { [ -n "$PRIOR_PR" ] && ! fm_pr_url_parse "$PRIOR_PR"; } \
+    || { [ -n "$PRIOR_HEAD" ] && ! fm_pr_head_valid "$PRIOR_HEAD"; } \
+    || { [ -n "$QUEUE_ORDER" ] && { case "$QUEUE_ORDER" in *[!0-9]*) true ;; *) false ;; esac \
+      || ! fm_pr_url_parse "$QUEUE_URL"; }; } \
+    || { [ "$PRIOR_POLL" != 0 ] && [ "$PRIOR_POLL" != 1 ]; } \
+    || { [ "$PRIOR_LISTED" != 0 ] && [ "$PRIOR_LISTED" != 1 ]; }; then
+    echo "error: $ID's merge-order snapshot is unreadable; its registration was not restored" >&2
+    exit 1
+  fi
+  RESTORE_FAILED=0
+  META="$STATE/$ID.meta"
+  if [ -f "$META" ] && [ ! -L "$META" ]; then
+    META_LOCK=$(fm_meta_lock_path "$META") || exit 1
+    fm_lock_acquire_wait "$META_LOCK"
+    META_TMP=$(mktemp "$STATE/.fm-pr-meta.XXXXXX") || { fm_lock_release "$META_LOCK"; exit 1; }
+    if grep -v -e '^pr=' -e '^pr_head=' "$META" > "$META_TMP" || [ "$?" -eq 1 ]; then
+      { [ -z "$PRIOR_PR" ] || printf 'pr=%s\n' "$PRIOR_PR"; } >> "$META_TMP" \
+        && { [ -z "$PRIOR_HEAD" ] || printf 'pr_head=%s\n' "$PRIOR_HEAD"; } >> "$META_TMP" \
+        && chmod 0600 "$META_TMP" && mv -f -- "$META_TMP" "$META" || RESTORE_FAILED=1
+    else
+      RESTORE_FAILED=1
+    fi
+    rm -f -- "$META_TMP"
+    fm_lock_release "$META_LOCK" || true
+  fi
+  if [ "$PRIOR_POLL" = 0 ]; then
+    # shellcheck disable=SC2034 # Read by fm_pr_poll_revoke_final.
+    FM_PR_POLL_CHECK_DEST="$STATE/$ID.check.sh"
+    # shellcheck disable=SC2034 # Read by fm_pr_poll_revoke_final.
+    FM_PR_POLL_REG_DEST="$STATE/$ID.pr-poll-registration"
+    # shellcheck disable=SC2034 # Read by fm_pr_poll_revoke_final.
+    FM_PR_POLL_DATA_DEST="$STATE/$ID.pr-poll"
+    fm_pr_poll_revoke_final || RESTORE_FAILED=1
+  fi
+  if [ "$PRIOR_LISTED" = 0 ]; then
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$SNAP_URL" \
+      || RESTORE_FAILED=1
+  fi
+  if [ -n "$QUEUE_ORDER" ]; then
+    fm_wip_queue_restore "$STATE" "$QUEUE_ORDER" "$ID" "$QUEUE_URL" || RESTORE_FAILED=1
+  fi
+  if [ "$RESTORE_FAILED" = 1 ]; then
+    echo "actionable: $ID's refused merge could not fully restore its prior PR registration; check its pr=, merge poll, merge line and $STATE/$FM_WIP_PR_QUEUE_NAME entry" >&2
+    exit 1
+  fi
+  echo "restored: $ID's refused merge left its PR registration as it was before the merge order" >&2
+  exit 0
+fi
+
+MERGE_ORDER_SNAPSHOT=
 if [ "${1:-}" = --merge-order ]; then
-  MERGE_ORDER=1
-  shift
+  [ "$#" -ge 2 ] && merge_order_snapshot_valid "$2" \
+    || { echo "error: invalid PR check request" >&2; exit 2; }
+  MERGE_ORDER_SNAPSHOT=$2
+  shift 2
+  : > "$MERGE_ORDER_SNAPSHOT"
 fi
 if [ "$#" -ne 2 ]; then
   echo "error: invalid PR check request" >&2
@@ -169,7 +247,20 @@ EOF
 fm_wip_task_lane "$STATE" "$ID"
 WIP_CURRENT=$FM_WIP_TASK_LANE
 fm_wip_record_lane "$STATE" "$ID" "$WIP_KIND" "$URL" "$WIP_LANE"
-if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ] && [ "$MERGE_ORDER" = 0 ]; then
+if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ] && [ -n "$MERGE_ORDER_SNAPSHOT" ]; then
+  SNAP_QUEUED=$(fm_wip_queue_list "$STATE" | awk -F'\t' -v id="$ID" '$2 == id { print $1 "\t" $3; exit }')
+  SNAP_LISTED=0
+  if FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" show "$URL" 2>/dev/null \
+    | awk -v u="$URL" '$2 == u { f = 1 } END { exit !f }'; then
+    SNAP_LISTED=1
+  fi
+  SNAP_POLL=0
+  [ ! -e "$STATE/$ID.check.sh" ] || SNAP_POLL=1
+  printf 'id=%s\nurl=%s\nqueue_order=%s\nqueue_url=%s\npr=%s\npr_head=%s\npoll=%s\nmerge_line=%s\n' \
+    "$ID" "$URL" "${SNAP_QUEUED%%$'\t'*}" "${SNAP_QUEUED#*$'\t'}" "$_WIP_PR" \
+    "$(grep '^pr_head=' "$META" | tail -1 | cut -d= -f2- || true)" "$SNAP_POLL" "$SNAP_LISTED" \
+    > "$MERGE_ORDER_SNAPSHOT" || exit 1
+elif [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ]; then
   TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
   WIP_LOCK_WAIT=${FM_WIP_LOCK_WAIT:-20}
   case "$WIP_LOCK_WAIT" in ''|*[!0-9]*|0) WIP_LOCK_WAIT=20 ;; esac
