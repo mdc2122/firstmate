@@ -14,8 +14,10 @@
 #                                                         human_answer wait
 #   relaunch one fm-control relaunch                   -> 1 relaunch touch
 # plus one automation row (origin fm-watch.sh) that must never count as a touch.
-# A third run with neither the ledger nor the archive proves the fixture
-# actually depends on both.
+# A run where the three tasks belonged to a since-retired secondmate home, whose
+# ledger and archived inbox survive only under the primary's
+# data/retired-secondmates/<id>/, must classify the same. A run with neither
+# the ledger nor the archive proves the fixture actually depends on both.
 set -u
 
 # shellcheck source=tests/lib.sh disable=SC1091
@@ -28,7 +30,9 @@ FLOW="$ROOT/bin/fm-flow-wait.py"
 # Build one fixture world under <root>: a fake ~ holding the omp session tree
 # and the firstmate home at <root>/home/fm.
 # <supervisor-source> is "ledger" (state/supervisor-actions.jsonl), "transcript"
-# (the home's omp supervisor session), or "none" (neither, and no archive).
+# (the home's omp supervisor session), "retired" (the ledger and archive of a
+# retired secondmate home, kept under data/retired-secondmates/mate/), or
+# "none" (neither, and no archive).
 make_world() {  # <root> <supervisor-source>
   local root=$1 source=$2
   mkdir -p "$root/home/fm/state" "$root/home/fm/data"
@@ -38,6 +42,12 @@ root, source = sys.argv[1], sys.argv[2]
 home = os.path.join(root, "home")
 fm = os.path.join(home, "fm")
 sess = os.path.join(home, ".omp", "agent", "sessions")
+# Where the workers' status logs and the supervisor's ledger and archive live.
+owner = os.path.join(home, "mate") if source == "retired" else fm
+keep = os.path.join(fm, "data", "retired-secondmates", "mate") if source == "retired" else None
+if keep:
+    os.makedirs(keep)
+    open(os.path.join(keep, "home"), "w").write(owner + "\n")
 
 def iso(h, m, s=0):
     return f"2026-10-12T{h:02d}:{m:02d}:{s:02d}Z"
@@ -56,13 +66,13 @@ def user(t, text):
     return {"type": "message", "timestamp": t, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
 
 def status(t, task, line, stop="toolUse"):
-    cmd = f"echo \"{line}\" >> '{fm}/state/{task}.status'"
+    cmd = f"echo \"{line}\" >> '{owner}/state/{task}.status'"
     return {"type": "message", "timestamp": t, "message": {"role": "assistant", "stopReason": stop,
             "content": [{"type": "toolCall", "arguments": {"command": cmd}}]}}
 
 def brief(task):
     return ("\u2063FIRSTMATE_OP: v1 launch-brief: # Task\nThis is a SCOUT task.\n"
-            f"echo \"{{state}}: {{note}}\" >> '{fm}/state/{task}.status'\n")
+            f"echo \"{{state}}: {{note}}\" >> '{owner}/state/{task}.status'\n")
 
 steer_body = "Answer to your question: take option B and continue."
 msg = f"schema=fm-task-inbox.v1\nat={iso(10, 30)}\n--\n{steer_body}\n"
@@ -78,14 +88,15 @@ for task, rows in workers.items():
     write(os.path.join(sess, f"-orca-workspaces-{task}", "w.jsonl"), rows)
 
 # The steered task is torn down: its inbox lives only in the teardown archive.
-os.makedirs(os.path.join(fm, "data", "steered", "inbox", "handled"))
-open(os.path.join(fm, "data", "steered", "inbox", "handled", "001.msg"), "w").write(msg)
+data = os.path.join(keep, "data") if keep else os.path.join(fm, "data")
+os.makedirs(os.path.join(data, "steered", "inbox", "handled"))
+open(os.path.join(data, "steered", "inbox", "handled", "001.msg"), "w").write(msg)
 
 actions = [("send", "steer", "steered", "steered", epoch(10, 30), "direct"),
            ("control", "relaunch", "relaunch", "relaunch", epoch(11, 10), "direct"),
            ("pr-check", "arm", "quiet", "https://github.com/example/repo/pull/9", epoch(9, 2), "fm-watch.sh")]
-if source == "ledger":
-    write(os.path.join(fm, "state", "supervisor-actions.jsonl"),
+if source in ("ledger", "retired"):
+    write(os.path.join(keep or os.path.join(fm, "state"), "supervisor-actions.jsonl"),
           [{"at": "", "epoch": e, "task": task, "verb": v, "action": a, "target": tgt, "origin": o}
            for v, a, task, tgt, e, o in actions])
 elif source == "transcript":
@@ -134,8 +145,8 @@ PY
 }
 
 test_ledger_and_transcript_classify_the_same() {
-  local w ledger_out transcript_out none_out got want
-  for w in ledger transcript none; do
+  local w ledger_out transcript_out retired_out none_out got want
+  for w in ledger transcript retired none; do
     mkdir -p "$TMP_ROOT/$w"
     make_world "$TMP_ROOT/$w" "$w"
     make_nm_db "$TMP_ROOT/$w/nm.sqlite"
@@ -144,12 +155,14 @@ test_ledger_and_transcript_classify_the_same() {
   done
   ledger_out=$(classification "$TMP_ROOT/ledger/out")
   transcript_out=$(classification "$TMP_ROOT/transcript/out")
+  retired_out=$(classification "$TMP_ROOT/retired/out")
   none_out=$(classification "$TMP_ROOT/none/out")
   want='quiet live-proven 0 - True human_answer=0.0
 relaunch live-proven 1 relaunch:1 False human_answer=0.0
 steered live-proven 1 steer:1 False human_answer=0.33'
   assert_equals "$want" "$ledger_out" "ledger-sourced classification"
   assert_equals "$transcript_out" "$ledger_out" "the ledger must classify the window exactly as the transcript baseline does"
+  assert_equals "$ledger_out" "$retired_out" "a retired secondmate's archived ledger and inbox must classify the window as the live ledger does"
   assert_not_equals "$ledger_out" "$none_out" "the fixture must depend on the ledger and the archive"
   got=$(jq -r '.zero_touch_live, .settled, .zero_touch_share_of_settled_pct' "$TMP_ROOT/ledger/out/summary.json" | tr '\n' ' ')
   assert_equals '1 3 33.3 ' "$got" "zero-touch share read from the ledger"

@@ -89,17 +89,16 @@ if [ ! -d "$(dirname "$DESTINATION")" ]; then
 fi
 
 token=$(fm_pending_reply_corr_token "$CORR")
-# The line carries its write-time stamp (bin/fm-status-stamp-lib.sh).
 if [ "$DOC_MODE" = 1 ]; then
   DOC_PATH=$1
   shift
   NOTE=$*
   if [ -n "$NOTE" ]; then
-    fm_status_append "$DESTINATION" "$VERB [$token]: $NOTE ($DOC_PATH via-helper)"
+    printf '%s [%s]: %s (%s via-helper)\n' "$VERB" "$token" "$NOTE" "$DOC_PATH" >> "$DESTINATION"
   else
-    fm_status_append "$DESTINATION" "$VERB [$token]: $DOC_PATH (via-helper)"
+    printf '%s [%s]: %s (via-helper)\n' "$VERB" "$token" "$DOC_PATH" >> "$DESTINATION"
   fi
 else
   NOTE=$*
-  fm_status_append "$DESTINATION" "$VERB [$token]: $NOTE (via-helper)"
+  printf '%s [%s]: %s (via-helper)\n' "$VERB" "$token" "$NOTE" >> "$DESTINATION"
 fi

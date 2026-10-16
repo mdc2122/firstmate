@@ -17,11 +17,11 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           kind), every status append the worker made (tool-call
                           timestamp), every steering-inbox message body it read
                           (schema=fm-task-inbox.v1 at=...), doorbells, turn ends, relaunches.
-                          Needed because a worker's own state/<id>.status lines carry no
-                          timestamp (only lines firstmate scripts append are stamped).
+                          Needed because state/<id>.status lines carry no timestamp.
   S  supervisor actions   the action ledger <home>/state/supervisor-actions.jsonl of --home and
-                          of every local secondmate home registered in <home>/data/secondmates.md
-                          (format: bin/fm-action-ledger-lib.sh): every fm-send / fm-control /
+                          of every local secondmate home registered in <home>/data/secondmates.md,
+                          and the copy teardown archived of every retired one under
+                          <home>/data/retired-secondmates/<id>/ (format: bin/fm-action-ledger-lib.sh): every fm-send / fm-control /
                           fm-pr-check / fm-pr-merge / fm-merge-line / fm-captain-hold invocation
                           with its time. A row whose origin is a firstmate script rather than
                           "direct" is automation, never a touch. Before a home's first ledger
@@ -30,7 +30,8 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           (omp names it "-" + the cwd relative to ~, "/" -> "-"), which also
                           always supplies the fm-spawn / fm-teardown calls.
   L  live state           <home>/state/<id>.meta (in-flight set, yolo), steering-inbox records:
-                          live under state/<id>.inbox/, archived by teardown under data/<id>/inbox/.
+                          live under state/<id>.inbox/, archived by teardown under data/<id>/inbox/
+                          (for a retired secondmate's tasks, under its retired-secondmates/<id>/data/).
   B  backlog              <home>/data/backlog.md + done-archive.md (kind, close state).
   N  no-mistakes ledger   --nm-db (default ~/.no-mistakes/state.sqlite, opened mode=ro):
                           runs by branch, pr_url, created_at, ci_ready_at, parked_ms.
@@ -312,6 +313,19 @@ def local_secondmate_homes(home):
     return [m.group(1).strip() for m in (re.search(r"\(home: ([^;]+); scope: ", ln) for ln in lines) if m]
 
 
+def retired_secondmate_homes(home):
+    """{retired secondmate home path: its teardown archive dir} under <home>/data/retired-secondmates/."""
+    out = {}
+    for d in sorted(glob.glob(os.path.join(home, "data", "retired-secondmates", "*", ""))):
+        try:
+            path = open(os.path.join(d, "home"), errors="replace").read().strip()
+        except OSError:
+            continue
+        if path:
+            out[os.path.realpath(path)] = d.rstrip("/")
+    return out
+
+
 # Action ledger rows (bin/fm-action-ledger-lib.sh) -> the act shapes SUP_PATTERNS produce,
 # so every touch and wait rule reads both sources identically. merge-line undeclare and
 # the captain-hold intakes have no transcript pattern and stay out, as before.
@@ -335,9 +349,8 @@ def ledger_act(row):
     return None
 
 
-def read_ledger(home):
-    """(first row epoch or None, [direct-origin acts by --as-of], row count) for one home."""
-    path = os.path.join(home, "state", "supervisor-actions.jsonl")
+def read_ledger(home, path):
+    """(first row epoch or None, [direct-origin acts by --as-of], row count) for one home's ledger at <path>."""
     first, acts, n = None, [], 0
     try:
         fh = open(path, errors="replace")
@@ -360,17 +373,18 @@ def read_ledger(home):
     return first, acts, n
 
 
-def scan_supervisors(since_mtime, home):
+def scan_supervisors(since_mtime, home, retired):
     """Supervisor actions by --as-of, plus every fm-teardown call after it (task -> times).
     Per home, the action ledger owns every verb it records from its first row on; that
     home's transcripts supply those verbs only before it, and fm-spawn / fm-teardown always."""
     acts = []
     coverage = []
     late_teardowns = defaultdict(list)
-    homes = list(dict.fromkeys(os.path.realpath(p) for p in [home] + local_secondmate_homes(home)))
+    homes = list(dict.fromkeys([os.path.realpath(p) for p in [home] + local_secondmate_homes(home)] + list(retired)))
     ledger_from = {}
     for h_ in homes:
-        first, rows, n = read_ledger(h_)
+        first, rows, n = read_ledger(h_, os.path.join(retired[h_] if h_ in retired else os.path.join(h_, "state"),
+                                                      "supervisor-actions.jsonl"))
         acts.extend(rows)
         if n:
             ledger_from[session_dir(h_)] = first
@@ -457,10 +471,14 @@ def read_meta(path):
     return out
 
 
-def live_inbox(home, task):
-    """Steering-inbox records still in state/ and those teardown archived into data/<id>/inbox/."""
+def live_inbox(home, task, retired):
+    """Steering-inbox records still in state/ and those teardown archived into data/<id>/inbox/,
+    including a retired secondmate home's archive."""
     msgs = {}
-    for d in (os.path.join(home, "state", f"{task}.inbox"), os.path.join(home, "data", task, "inbox")):
+    dirs = [os.path.join(home, "state", f"{task}.inbox"), os.path.join(home, "data", task, "inbox")]
+    if os.path.realpath(home) in retired:
+        dirs.append(os.path.join(retired[os.path.realpath(home)], "data", task, "inbox"))
+    for d in dirs:
         for p in glob.glob(os.path.join(d, "*.msg")) + glob.glob(os.path.join(d, "handled", "*.msg")):
             try:
                 txt = open(p, errors="replace").read()
@@ -698,7 +716,8 @@ def build(args):
     sessions = scan_workers(scan_from)
     print(f"  {len(sessions)} launch-brief sessions", file=sys.stderr)
     print("scanning supervisor transcripts ...", file=sys.stderr)
-    acts, sup_cov, late_teardowns = scan_supervisors(scan_from, args.home)
+    retired = retired_secondmate_homes(args.home)
+    acts, sup_cov, late_teardowns = scan_supervisors(scan_from, args.home, retired)
     backlog = read_backlog(args.home)
     runs = nm_runs()
     gh = GH(os.path.join(args.cache_dir, "gh_cache.json"), not args.no_github)
@@ -799,7 +818,7 @@ def build(args):
                 cur = steers.get(round(at))
                 if cur is None or len(body) > len(cur["body"]):
                     steers[round(at)] = dict(at=at, body=body, ff="fire-and-forget" in hdr, src="worker-transcript")
-        for at, hdr, body in live_inbox(home, tid):
+        for at, hdr, body in live_inbox(home, tid, retired):
             if at and round(at) not in steers:
                 steers[round(at)] = dict(at=at, body=body, ff="fire-and-forget" in hdr, src="live-inbox")
         steer_ats = sorted(s["at"] for s in steers.values())

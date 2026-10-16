@@ -59,8 +59,6 @@
 _FM_PARENT_CHANNEL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-secondmate-parent-lib.sh
 . "$_FM_PARENT_CHANNEL_LIB_DIR/fm-secondmate-parent-lib.sh"
-# shellcheck source=bin/fm-status-stamp-lib.sh
-. "$_FM_PARENT_CHANNEL_LIB_DIR/fm-status-stamp-lib.sh"
 
 # shellcheck disable=SC2034 # Output globals read by sourcing callers.
 FM_PARENT_CHANNEL_ID=
@@ -130,17 +128,18 @@ fm_parent_channel_clean_note() {  # <text>
   printf '%s' "$1" | LC_ALL=C tr '\t\r\n' '   ' | cut -c1-1200
 }
 
-# Append <line> to <path> with its write-time stamp unless that line is already
-# there, stamped or not (bin/fm-status-stamp-lib.sh).
+# Append <line> to <path> unless that exact line is already there.
 fm_parent_channel_append_once() {  # <path> <line>
-  local path=$1 line=$2 rc=0
+  local path=$1 line=$2
   if [ -e "$path" ] || [ -L "$path" ]; then
     [ -f "$path" ] && [ ! -L "$path" ] || return 1
   else
     mkdir -p "$(dirname "$path")" || return 1
   fi
-  fm_status_append_once "$path" "$line" || rc=$?
-  [ "$rc" -ne 2 ]
+  if grep -Fqx -- "$line" "$path" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s\n' "$line" >> "$path"
 }
 
 # Publish one parent-facing line from <home>. See the return codes above.

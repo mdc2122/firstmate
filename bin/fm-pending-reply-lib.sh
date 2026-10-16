@@ -115,8 +115,6 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-tmux-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-classify-lib.sh"
-# shellcheck source=bin/fm-status-stamp-lib.sh
-. "$_FM_PENDING_REPLY_LIB_DIR/fm-status-stamp-lib.sh"
 
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
@@ -1100,18 +1098,15 @@ fm_pending_reply_escalation_payload() {  # <record-path> <kind>
 # that exact escalation remains open. If an unrelated decision has since taken
 # over that key, the close is withheld so the unrelated decision is not cleared.
 fm_pending_reply_escalation_line() {  # <status-file> <record-path> <corr_id>
-  local status_file=$1 rec=$2 corr=$3 line bare found='' kind payload own_key
+  local status_file=$1 rec=$2 corr=$3 line found='' kind payload own_key
   [ -f "$status_file" ] || return 0
   [ "$(fm_pending_reply_get "$rec" corr_id)" = "$corr" ] || return 0
   own_key=$(fm_pending_reply_escalation_key "$corr")
   while IFS= read -r line || [ -n "$line" ]; do
     [ "$(status_line_verb "$line")" = blocked ] || continue
-    # Match the event without its write-time stamp; print the line as written
-    # so its note still equals the open-decision fold's note for that line.
-    bare=$(fm_status_unstamp "$line")
     for kind in missed delivery-unknown recovery-delivery; do
       payload=$(fm_pending_reply_escalation_payload "$rec" "$kind") || continue
-      case "$bare" in
+      case "$line" in
         "blocked [key=$own_key]: $payload"|"blocked: $payload") found=$line; break ;;
         "blocked [key=$own_key]: $payload "*|"blocked: $payload "*) found=$line; break ;;
       esac
@@ -1213,7 +1208,7 @@ fm_pending_reply_maybe_escalate() {  # <state-dir> <corr_id>
 _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   local state=$1 corr=$2
   local rec phase completed now payload parent_status line kind first display
-  local delivered task_id meta sm_home remote_host append_rc
+  local delivered task_id meta sm_home remote_host
   rec=$(fm_pending_reply_path "$state" "$corr")
   [ -f "$rec" ] || return 1
   phase=$(fm_pending_reply_get "$rec" phase)
@@ -1265,9 +1260,9 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   [ -n "$parent_status" ] || return 1
   mkdir -p "$(dirname "$parent_status")" 2>/dev/null || return 1
   line="blocked [key=$(fm_pending_reply_escalation_key "$corr")]: $payload"
-  append_rc=0
-  fm_status_append_once "$parent_status" "$line" 2>/dev/null || append_rc=$?
-  [ "$append_rc" -ne 2 ] || return 1
+  if ! grep -Fqx "$line" "$parent_status" 2>/dev/null; then
+    printf '%s\n' "$line" >> "$parent_status" 2>/dev/null || return 1
+  fi
   now=$(fm_pending_reply_now)
   fm_pending_reply_set "$rec" escalated_epoch "$now" || return 1
   fm_pending_reply_set "$rec" phase escalated || return 1

@@ -481,8 +481,6 @@ fi
 . "$SCRIPT_DIR/fm-ff-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
-# shellcheck source=bin/fm-status-stamp-lib.sh
-. "$SCRIPT_DIR/fm-status-stamp-lib.sh"
 fm_backlog_directory_present "$STATE" "state directory" || {
   echo "error: spawn refused: $FM_BACKLOG_TRANSITION_ERROR" >&2
   exit 1
@@ -3313,7 +3311,7 @@ kimi_wait_for_delivery() {
 }
 
 kimi_spawn_fail() { # <detail>
-  fm_status_append "$STATE/$ID.status" "failed: $1"
+  printf 'failed: %s\n' "$1" >>"$STATE/$ID.status"
   echo "error: $1; inspect window $T" >&2
 }
 
@@ -3381,7 +3379,7 @@ rovo_wait_for_delivery() {
 }
 
 rovo_spawn_fail() { # <detail>
-  fm_status_append "$STATE/$ID.status" "failed: $1"
+  printf 'failed: %s\n' "$1" >>"$STATE/$ID.status"
   echo "error: $1; inspect window $T" >&2
   rovo_endpoint_cleanup
 }
@@ -3454,7 +3452,7 @@ agy_wait_for_working() {
 }
 
 agy_spawn_fail() {  # <detail>
-  fm_status_append "$STATE/$ID.status" "failed: $1"
+  printf 'failed: %s\n' "$1" >> "$STATE/$ID.status"
   echo "error: $1; inspect window $T" >&2
   rovo_endpoint_cleanup
 }
