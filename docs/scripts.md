@@ -149,10 +149,11 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-merge-line.sh`       | Own per-repository merge lines: declare, move a PR to the head (`front`), and the head-only gate the yolo merge poll, behind-base rerun steer, and `fm-pr-merge.sh` obey |
 | `fm-merge-path-stats.py` | Read-only re-measurement of one repository's merge path per stage (no-mistakes steps, CI duration per runner, merge-line handoff gap, merge to release join and to live), writing only its `--out` directory |
 | `fm-flow-wait.py`        | Read-only weekly readout of a home's dispatch-to-live flow: the zero-human-touch share of settled tasks and wait hours by class (decision park, human answer, CI, merge queue, release, worker stall), writing only its `--out` directory and caches |
+| `fm-action-ledger-lib.sh` | Single owner of the append-only supervisor action ledger `state/supervisor-actions.jsonl` that the supervisor verbs record into and `fm-flow-wait.py` reads |
 | `fm-flow-wait-analyze.py` | Derive touch categories, zero-touch counterfactuals, and per-item wait distributions from one `fm-flow-wait.py` output directory |
 | `fm-parent-channel-lib.sh` | Resolve a secondmate home's parent channel and append a captain-facing outcome line to it at most once |
 | `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode and a required live `--verify` observation, write the ship instructions carrying that mode's definition of done, and supersede the task's brief so a later relaunch cannot revive stale scout delivery text |
-| `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees after their recorded verify observation, require completed scout deliverables, retire secondmate homes |
+| `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees after their recorded verify observation, require completed scout deliverables, retire secondmate homes, and archive each task's status log and steering inbox (and a retired local secondmate home's action ledger and child evidence) into `data/` |
 | `fm-harness.sh`          | Detect the running harness, resolve crew or secondmate harness, model, and effort, and validate the native-only `ultra` effort |
 | `fm-lock.sh`             | Per-home firstmate session lock                                                      |
 | `fm-x-lib.sh`            | Shared Relay config, relay, and reply-threading helpers                              |
