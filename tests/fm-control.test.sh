@@ -1025,6 +1025,23 @@ test_switch_model_emits_exactly_one_notice_naming_both_models() {
   pass "fm-control switch-model: a proven switch writes one notice naming both models and updates the record"
 }
 
+test_switch_model_without_effort_keeps_recorded_effort() {
+  local dir out rc meta
+  dir=$(switch_case keep-effort omp)
+  meta="$dir/home/state/t1.meta"
+  { grep -v '^effort=' "$meta"; echo "effort=high"; } > "$meta.new" && mv "$meta.new" "$meta"
+  out=$(run_switch "$dir" --model new-provider/new-model --reason "quota"); rc=$?
+  expect_code 0 "$rc" "a switch without --effort should succeed"$'\n'"$out"
+  [ "$(literals "$dir" | head -n 1)" = "/switch new-provider/new-model" ] \
+    || fail "a switch without --effort should send no thinking level, got: $(literals "$dir")"
+  [ "$(fm_meta_get "$meta" model)" = new-provider/new-model ] \
+    || fail "the durable record should name the new model"
+  [ "$(fm_meta_get "$meta" effort)" = high ] \
+    || fail "a switch without --effort must keep the recorded effort, got: $(fm_meta_get "$meta" effort)"
+  assert_contains "$out" "effort=high" "the success line should report the effort actually recorded"
+  pass "fm-control switch-model: a switch without --effort keeps the recorded effort"
+}
+
 test_failed_switch_model_emits_no_notice() {
   local dir out rc
   dir=$(switch_case refused omp)
@@ -1083,4 +1100,5 @@ test_grok_idle_footer_does_not_confirm_cancellation
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task
 test_switch_model_emits_exactly_one_notice_naming_both_models
+test_switch_model_without_effort_keeps_recorded_effort
 test_failed_switch_model_emits_no_notice

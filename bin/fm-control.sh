@@ -1121,13 +1121,13 @@ session_models() {  # <file> [skip]
     | tail -n +"$(( ${2:-0} + 1 ))" | { jq -r '.model // empty' 2>/dev/null || true; }
 }
 
-record_switched_profile() {
+record_switched_profile() {  # <effort>
   local lock tmp
   lock=$(fm_meta_lock_path "$META") || return 1
   fm_lock_acquire_wait "$lock"
   tmp=$(mktemp "$STATE/.fm-control-meta.XXXXXX") || { fm_lock_release "$lock" || true; return 1; }
   if { grep -v -e '^model=' -e '^effort=' "$META" || [ "$?" -eq 1 ]; } > "$tmp" \
-     && printf 'model=%s\neffort=%s\n' "$NEW_MODEL" "${NEW_EFFORT:-default}" >> "$tmp" \
+     && printf 'model=%s\neffort=%s\n' "$NEW_MODEL" "$1" >> "$tmp" \
      && chmod 0600 "$tmp" && mv -f -- "$tmp" "$META"; then
     fm_lock_release "$lock" || true
     return 0
@@ -1139,7 +1139,7 @@ record_switched_profile() {
 
 do_switch_model() {
   local cmd selector state composer_state session before prior verdict
-  local elapsed=0 seen='' notice out record_ok=1 delivery
+  local elapsed=0 seen='' notice out record_ok=1 delivery effort
   local -a send_args
 
   selector=$NEW_MODEL
@@ -1196,9 +1196,11 @@ do_switch_model() {
   [ "$seen" = "$NEW_MODEL" ] \
     || die "task $ID's omp session switched to '$seen', not the requested $NEW_MODEL; no notice was sent, so correct the model and retry"
 
-  record_switched_profile || {
+  effort=${NEW_EFFORT:-$(fm_meta_get "$META" effort)}
+  effort=${effort:-default}
+  record_switched_profile "$effort" || {
     record_ok=0
-    echo "error: task $ID switched to $NEW_MODEL but its durable record could not be updated to model=$NEW_MODEL effort=${NEW_EFFORT:-default}" >&2
+    echo "error: task $ID switched to $NEW_MODEL but its durable record could not be updated to model=$NEW_MODEL effort=$effort" >&2
   }
 
   notice=$(switch_notice "$prior" "$NEW_MODEL" "$NEW_EFFORT" "$REASON")
@@ -1215,7 +1217,7 @@ do_switch_model() {
     printf '%s\n' "$out" >&2
     die "task $ID switched to $NEW_MODEL, but its switch notice was not confirmed delivered; resend it with fm-send before anything else"
   fi
-  echo "switched-model $ID harness=$HARNESS from=$prior to=$NEW_MODEL effort=${NEW_EFFORT:-default} backend=$BACKEND endpoint=$T notice=$delivery"
+  echo "switched-model $ID harness=$HARNESS from=$prior to=$NEW_MODEL effort=$effort backend=$BACKEND endpoint=$T notice=$delivery"
   [ "$record_ok" = 1 ] || exit 1
 }
 
