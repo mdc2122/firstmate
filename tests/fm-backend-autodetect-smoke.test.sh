@@ -165,6 +165,8 @@ pass "real herdr: the auto-detected spawn's launch command actually ran in the h
 
 # --- teardown completes the trivial spawn/teardown cycle --------------------
 
+# The capture above proved the completion observation on the live endpoint.
+printf 'done: verified: autodetect-smoke-ok ran in the auto-detected Herdr pane\n' >> "$STATE/$ID.status"
 TEARDOWN_OUT="$TMP_ROOT/teardown.out"
 FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
   FM_CONFIG_OVERRIDE="$CONFIG" \
