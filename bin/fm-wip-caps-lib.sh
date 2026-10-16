@@ -69,8 +69,6 @@
 # as ready to dispatch; the rest wait in their lane unlisted, so the queue-zero
 # wake names the next row only when a finish frees a slot. A cap that cannot be
 # read lists every ready row plus one error row naming config/wip-caps.
-# Promotion (bin/fm-promote.sh) is not a dispatch: the promoted task moves from
-# its scout lane to validations without an admission check.
 
 if ! declare -F fm_pr_url_parse >/dev/null; then
   . "$(dirname "${BASH_SOURCE[0]}")/fm-pr-lib.sh"
@@ -165,6 +163,11 @@ fm_wip_task_lane() {  # <state-dir> <id>
   IFS='|' read -r kind pr wlane <<EOF
 $(fm_wip_meta_fields "$state/$id.meta")
 EOF
+  fm_wip_record_lane "$state" "$id" "$kind" "$pr" "$wlane"
+}
+
+fm_wip_record_lane() {
+  local state=$1 id=$2 kind=$3 pr=$4 wlane=$5
   FM_WIP_TASK_LANE=
   case "$kind" in
     secondmate) ;;
@@ -242,6 +245,16 @@ fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
 
 # Free slots per lane as one JSON object for bin/fm-queue-zero.sh, or 1 with
 # FM_WIP_ERROR when the caps cannot be read.
+fm_wip_transition_admit() {
+  local config=$1 state=$2 id=$3 kind=$4 pr=$5 wlane=$6 current target
+  fm_wip_task_lane "$state" "$id"
+  current=$FM_WIP_TASK_LANE
+  fm_wip_record_lane "$state" "$id" "$kind" "$pr" "$wlane"
+  target=$FM_WIP_TASK_LANE
+  [ -n "$target" ] && [ "$target" != "$current" ] || return 0
+  fm_wip_admit "$config" "$state" "$id" "$target"
+}
+
 fm_wip_free_json() {  # <config-dir> <state-dir>
   local lane count free sep='' out='{'
   fm_wip_caps_load "$1" || return 1
