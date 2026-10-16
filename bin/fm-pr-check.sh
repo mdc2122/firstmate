@@ -69,8 +69,10 @@ merge_order_snapshot_valid() {  # <snapshot>
 }
 
 if [ "${1:-}" = --merge-order-restore ]; then
-  [ "$#" -eq 3 ] && merge_order_snapshot_valid "$2" && fm_pr_task_id_valid "$3" \
-    || { echo "error: invalid PR check request" >&2; exit 2; }
+  if ! { [ "$#" -eq 3 ] && merge_order_snapshot_valid "$2" && fm_pr_task_id_valid "$3"; }; then
+    echo "error: invalid PR check request" >&2
+    exit 2
+  fi
   SNAPSHOT=$2
   ID=$3
   [ -s "$SNAPSHOT" ] || exit 0
@@ -135,8 +137,10 @@ fi
 
 MERGE_ORDER_SNAPSHOT=
 if [ "${1:-}" = --merge-order ]; then
-  [ "$#" -ge 2 ] && merge_order_snapshot_valid "$2" \
-    || { echo "error: invalid PR check request" >&2; exit 2; }
+  if ! { [ "$#" -ge 2 ] && merge_order_snapshot_valid "$2"; }; then
+    echo "error: invalid PR check request" >&2
+    exit 2
+  fi
   MERGE_ORDER_SNAPSHOT=$2
   shift 2
   : > "$MERGE_ORDER_SNAPSHOT"
