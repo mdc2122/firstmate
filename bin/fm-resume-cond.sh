@@ -35,10 +35,9 @@
 #              it has not recorded `done: verified:` (bin/fm-dod-lib.sh
 #              fm_verify_recorded), and its newest status line is either its
 #              ready line naming exactly <pr-url> (`done: PR <pr-url> ...`) or a
-#              `paused:` line naming exactly <pr-url>. Anything else - a
-#              `working:`, `needs-decision:`, or `blocked:` line, a pause about
-#              something else, a pause that names no PR - is 3, so a worker that
-#              moved on or is parked on a different wait is never resumed.
+#              `paused:` line. Anything else - a `working:`, `needs-decision:`,
+#              or `blocked:` line, or a ready line for another PR - is 3, so a
+#              worker that already resumed or moved on is never resumed again.
 #              bin/fm-resume-action.sh re-checks it immediately before sending.
 #
 # Every form is read-only and idempotent; nothing here writes state.
@@ -49,7 +48,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 
-usage() { sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,43p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 
 # pr_record <pr-url>: set FM_PR_RECORD_STATE and FM_PR_RECORD_MERGED from the
 # forge; return 1 on any read failure or a URL that is not canonical.
@@ -79,7 +78,8 @@ pr_merged() {  # <pr-url>
 
 # merge_commit <pr-url>: print the 40-hex commit the merge put on the base
 # branch (GitHub's merge commit, which is the squash commit for a squash merge;
-# GitLab's merge commit, else its squash commit). Return 1 when it cannot be read.
+# GitLab's merge commit, else its squash commit, else for a fast-forward merge
+# the MR's head commit). Return 1 when it cannot be read.
 merge_commit() {
   local sha=''
   case "$FM_PR_PROVIDER" in
@@ -94,7 +94,7 @@ merge_commit() {
     gitlab)
       command -v glab >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || return 1
       sha=$(GITLAB_HOST="$FM_PR_HOST" glab mr view "$FM_PR_NUMBER" -R "https://$FM_PR_HOST/$FM_PR_PATH" -F json 2>/dev/null \
-        | jq -r 'if type == "object" then (.merge_commit_sha // .squash_commit_sha // "") else "" end' 2>/dev/null) || return 1
+        | jq -r 'if type == "object" then (.merge_commit_sha // .squash_commit_sha // .sha // "") else "" end' 2>/dev/null) || return 1
       ;;
     *) return 1 ;;
   esac
@@ -140,21 +140,6 @@ verdict() {  # <result-file>
   return 2
 }
 
-# note_names_url <note> <url>: 0 when one whitespace-delimited token of the
-# note, minus surrounding punctuation, is exactly <url>, so .../pull/85 never
-# matches a note naming .../pull/852.
-note_names_url() {
-  local token
-  for token in $1; do
-    token=${token#[(<\"\']}
-    while :; do
-      case "$token" in *[,\;\).:\>\"\']) token=${token%?} ;; *) break ;; esac
-    done
-    [ "$token" = "$2" ] && return 0
-  done
-  return 1
-}
-
 task_waiting() {  # <state-dir> <task-id> <pr-url>
   local state=$1 id=$2 url=$3 status meta line last='' verb
   fm_pr_task_id_valid "$id" || return 2
@@ -177,9 +162,7 @@ task_waiting() {  # <state-dir> <task-id> <pr-url>
     [ "$(status_line_ready_pr_url "$last" 2>/dev/null)" = "$url" ] && return 0
     return 3
   fi
-  if status_is_paused "$last"; then
-    note_names_url "$(status_line_note "$last")" "$url" && return 0
-  fi
+  status_is_paused "$last" && return 0
   return 3
 }
 

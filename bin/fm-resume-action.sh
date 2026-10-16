@@ -10,8 +10,8 @@
 #
 # Immediately before sending, it re-runs `bin/fm-resume-cond.sh task-waiting`:
 # a task whose record is gone, that recorded `done: verified:`, or whose newest
-# status line is not its ready line or a `paused:` line naming exactly
-# <pr-url> is not resumed - nothing is sent and the exit is 3 ("not sent: ..."),
+# status line is neither its ready line for <pr-url> nor a `paused:` line is
+# not resumed - nothing is sent and the exit is 3 ("not sent: ..."),
 # so the watch's outcome reads action-failed and firstmate decides.
 #
 # Otherwise it sends exactly one steer through bin/fm-send.sh, called by its
@@ -51,7 +51,7 @@ waiting_rc=0
 case "$waiting_rc" in
   0) ;;
   3)
-    echo "not sent: $task is no longer waiting on $url (its newest status line is not its ready line or a paused: line naming that PR, or it already recorded done: verified:)"
+    echo "not sent: $task is no longer waiting on $url (its newest status line is neither its ready line for that PR nor a paused: line, or it already recorded done: verified:)"
     exit 3
     ;;
   *) echo "not sent: could not read whether $task is waiting on $url (rc=$waiting_rc)"; exit 2 ;;

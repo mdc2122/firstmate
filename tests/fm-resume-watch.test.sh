@@ -73,7 +73,7 @@ in_home() {  # <home> <command...>
 }
 
 watch() { local h=$1; shift; in_home "$h" "$ROOT/bin/fm-resume-watch.sh" "$@"; }
-sid_of() { printf 'when-%s\n' "$(watch "$1" name t1)"; }
+sid_of() { printf 'when-%s\n' "$(sed -n 's/^name=//p' "$1/state/t1.resume-watch")"; }
 
 start_runner() { in_home "$1" "$ROOT/bin/fm-procevent.sh" reconcile >/dev/null 2>&1; }
 
@@ -130,23 +130,22 @@ start_runner "$H"; sleep 0.5
 assert_equals 1 "$(inbox_count "$H")" "re-arming after the fire sends no second record"
 pass "a merged PR lands exactly one silent resume record, attributed to the watch"
 
-# --- a paused worker naming its PR resumes; one naming another PR does not ----
-H=$(make_home paused-own "done: PR $URL checks green" "paused: waiting for $URL to merge, then I run the proof")
-printf 'merged\n' > "$H/pr-state"
-watch "$H" arm t1 "$URL" >/dev/null || fail "arm failed"
-start_runner "$H"
-R=$(wait_result "$H") || fail "no outcome for the paused worker"
-assert_equals fired "$(outcome "$H" "$R")" "a pause naming the PR is resumed"
-assert_equals 1 "$(inbox_count "$H")" "the paused worker gets one record"
-H=$(make_home paused-other "done: PR $URL checks green" "paused: waiting for https://github.com/o/r/pull/70 to merge")
-printf 'merged\n' > "$H/pr-state"
-watch "$H" arm t1 "$URL" >/dev/null || fail "arm failed"
-start_runner "$H"
-R=$(wait_result "$H") || fail "no outcome for the other-wait worker"
-assert_equals action-failed "$(outcome "$H" "$R")" "a pause on another PR is not resumed"
-assert_equals 0 "$(inbox_count "$H")" "a worker paused on something else gets nothing"
-assert_equals 1 "$(wake_rows "$H")" "an unsent resume wakes firstmate"
-pass "only a pause naming the watched PR is resumed"
+# --- a paused worker resumes whether or not its pause names the PR -----------
+for case in named bare; do
+  case "$case" in
+    named) last="paused: waiting for $URL to merge, then I run the proof" ;;
+    bare) last="paused: waiting for my PR to merge, then I verify" ;;
+  esac
+  H=$(make_home "paused-$case" "done: PR $URL checks green" "$last")
+  printf 'merged\n' > "$H/pr-state"
+  watch "$H" arm t1 "$URL" >/dev/null || fail "arm failed ($case)"
+  start_runner "$H"
+  R=$(wait_result "$H") || fail "no outcome for the paused worker ($case)"
+  assert_equals fired "$(outcome "$H" "$R")" "a $case pause is resumed"
+  assert_equals 1 "$(inbox_count "$H")" "the paused worker gets one record ($case)"
+  assert_equals 0 "$(wake_rows "$H")" "a resumed pause wakes nobody ($case)"
+done
+pass "a paused worker is resumed whether or not its pause names the PR"
 
 # --- a worker that already moved on, or recorded its observation, gets none ----
 for case in working needs-decision verified; do
@@ -192,8 +191,8 @@ printf 'rel-1\n' > "$H/deployed_tag"
 printf 'https://github.com/o/r %s %s\n' "$REPO" "$H/deployed_tag" > "$H/config/resume-live-pointers"
 printf '# Completion observation\nverify: the fix is visible in production\n' > "$H/data/t1/brief.md"
 printf 'merged\n' > "$H/pr-state"
-assert_equals live "$(watch "$H" form t1 "$URL")" "a pointer plus a production verify line selects live"
-watch "$H" arm t1 "$URL" >/dev/null || fail "live arm failed"
+out=$(watch "$H" arm t1 "$URL") || fail "live arm failed: $out"
+assert_contains "$out" "(live)" "a pointer plus a production verify line selects live"
 start_runner "$H"
 sleep 0.8
 assert_equals 0 "$(inbox_count "$H")" "a merge not yet in the live tag sends nothing"
@@ -202,9 +201,35 @@ printf 'rel-2\n' > "$H/deployed_tag"
 R=$(wait_result "$H") || fail "no outcome once the release contained the merge"
 assert_equals fired "$(outcome "$H" "$R")" "the live watch fires once the tag contains the merge"
 assert_contains "$(cat "$H/state/t1.inbox/"*.msg)" "PR $URL live in production." "the live record names the live fact"
-printf '# Completion observation\nverify: the new test passes in the suite\n' > "$H/data/t1/brief.md"
-assert_equals merged "$(watch "$H" form t1 "$URL")" "a verify line naming no live surface stays merged"
 pass "a live watch fires only once the release pointer contains the merge"
+
+# A GitLab fast-forward merge records no merge or squash commit; the MR's head
+# commit is what landed, so pr-live reads it rather than failing every poll.
+cat > "$H/fakebin/glab" <<SH
+#!/usr/bin/env bash
+printf '{"state":"merged","merge_commit_sha":null,"squash_commit_sha":null,"sha":"%s"}\n' "$MERGE_SHA"
+SH
+chmod +x "$H/fakebin/glab"
+rc=0
+in_home "$H" "$ROOT/bin/fm-resume-cond.sh" pr-live https://gitlab.com/o/r/-/merge_requests/7 "$REPO" "$H/deployed_tag" || rc=$?
+assert_equals 0 "$rc" "a fast-forward GitLab merge in the live tag reads live"
+pass "pr-live reads a GitLab fast-forward merge through the MR head commit"
+
+# --- only a verify line naming production selects live ------------------------
+for case in staging preview suite; do
+  case "$case" in
+    staging) verify="the fix is deployed to staging" ;;
+    preview) verify="the live preview shows the new banner" ;;
+    suite) verify="the new test passes in the suite" ;;
+  esac
+  H=$(make_home "select-$case" "done: PR $URL checks green")
+  printf 'https://github.com/o/r %s %s\n' "$H" "$H/deployed_tag" > "$H/config/resume-live-pointers"
+  printf '# Completion observation\nverify: %s\n' "$verify" > "$H/data/t1/brief.md"
+  out=$(watch "$H" arm t1 "$URL") || fail "arm failed ($case): $out"
+  assert_contains "$out" "(merged)" "a verify line not naming production stays merged ($case)"
+  assert_grep "form=merged" "$H/state/t1.resume-watch" "the record carries the merged form ($case)"
+done
+pass "a verify line that does not name production keeps the merged form"
 
 # --- arming a new PR replaces the old watch, and retire removes it ------------
 H=$(make_home replace "done: PR $URL checks green")
