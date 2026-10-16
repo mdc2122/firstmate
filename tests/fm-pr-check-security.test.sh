@@ -249,8 +249,8 @@ write_task_meta() {
     "mode=no-mistakes"
 }
 
-# Extra "field=value" arguments are written before pr=, because
-# fm_pr_metadata_identity_parse rejects an unrecognised line after it.
+# Extra "field=value" arguments are written before pr=, the order
+# bin/fm-pr-check.sh itself leaves.
 write_poll_meta() {
   local state=$1 id=$2 url=$3
   shift 3
@@ -2675,12 +2675,13 @@ assert_poll_armed_for() {  # <state> <url> <label>
     || fail "$label: a successful arm queued a failure row"
 }
 
-test_ready_line_arms_merge_poll_once_and_rearms_on_change() {
-  local dir state url_a url_b before
+test_ready_line_never_rebinds_away_from_an_armed_open_pr() {
+  local dir state url_a url_b before closed_json
   url_a=https://github.com/o/r/pull/395
   url_b=https://github.com/o/r/pull/396
   dir=$(make_case ready-line-autoarm)
   state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
   write_task_meta "$dir" task-a
   printf 'working: validating\ndone: PR %s checks green\n' "$url_a" > "$state/task-a.status"
 
@@ -2695,10 +2696,73 @@ test_ready_line_arms_merge_poll_once_and_rearms_on_change() {
     || fail "a repeated ready line for the armed PR re-registered its poll"
   ack_watcher_cycle "$state" || fail "repeat ready-line wake acknowledgement failed"
 
+  # The armed PR is still open, so a later PR's ready line must neither steal
+  # the task's one poll slot nor pass silently.
   printf 'done: PR %s\n' "$url_b" >> "$state/task-a.status"
-  run_ready_signal_cycle "$dir" changed
-  assert_poll_armed_for "$state" "$url_b" "direct-PR ready line for a new PR"
-  pass "a ready line arms its merge poll once, a repeat is a no-op, and a new PR re-arms"
+  run_ready_signal_cycle "$dir" second-pr
+  [ "$(poll_artifact_snapshot "$state" task-a)" = "$before" ] \
+    || fail "a second PR's ready line re-bound the task away from its armed open PR"
+  grep -F "check: merge poll not armed for task-a $url_b: the task already polls $url_a (still open)" \
+    "$state/.wake-queue" >/dev/null \
+    || fail "the refused re-bind queued no wake: $(cat "$state/.wake-queue" 2>/dev/null)"
+  ack_watcher_cycle "$state" || fail "second-PR wake acknowledgement failed"
+
+  # Once the armed PR is closed unmerged nothing is left to watch there, so the
+  # next ready line moves the poll.
+  closed_json="$dir/closed.json"
+  printf '%s\n' '{"state":"CLOSED","statusCheckRollup":[]}' > "$closed_json"
+  printf 'done: PR %s\n' "$url_b" >> "$state/task-a.status"
+  FM_TEST_GH_VIEW_JSON="$closed_json" run_ready_signal_cycle "$dir" after-close
+  assert_poll_armed_for "$state" "$url_b" "ready line after the armed PR closed"
+  pass "a ready line arms once, a repeat is a no-op, an open armed PR is never re-bound, and a closed one is"
+}
+
+test_ready_span_with_several_prs_keeps_the_first_armed_and_wakes_for_the_rest() {
+  local dir state url_a url_b url_c url
+  url_a=https://github.com/o/r/pull/401
+  url_b=https://github.com/o/r/pull/402
+  url_c=https://github.com/o/other/pull/7
+  dir=$(make_case ready-span-several-prs)
+  state="$dir/home/state"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  write_task_meta "$dir" task-a
+  printf 'done: PR %s checks green\ndone: PR %s checks green\ndone: PR %s checks green\n' \
+    "$url_a" "$url_b" "$url_c" > "$state/task-a.status"
+
+  run_ready_signal_cycle "$dir" several
+  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" || fail "no authenticated merge poll was armed"
+  [ "$FM_PR_DATA_URL" = "$url_a" ] \
+    || fail "a multi-PR span armed $FM_PR_DATA_URL instead of keeping its first PR $url_a"
+  for url in "$url_b" "$url_c"; do
+    grep -F "check: merge poll not armed for task-a $url: the task already polls $url_a" \
+      "$state/.wake-queue" >/dev/null \
+      || fail "$url was left unwatched without a wake: $(cat "$state/.wake-queue" 2>/dev/null)"
+  done
+  pass "a span naming several PRs keeps the first armed and wakes once for each other PR"
+}
+
+# Other writers legitimately append to a task record after fm-pr-check.sh put
+# pr= last: a relaunch records its transaction id and the captain-call
+# completion gate records its attestation. The armed poll must stay
+# authenticated and still deliver its merge.
+test_poll_survives_keys_appended_after_pr_metadata() {
+  local dir state url
+  url=https://github.com/o/r/pull/811
+  dir=$(make_case poll-after-appended-meta)
+  state="$dir/home/state"
+  write_task_meta "$dir" task-a
+  run_check_entry "$dir" task-a "$url" >/dev/null 2> "$dir/seed.err" \
+    || fail "could not arm the merge poll: $(cat "$dir/seed.err")"
+  printf 'control_relaunch_tx=80855.20261015T171018Z.5470\n' >> "$state/task-a.meta"
+  printf 'decisions_reviewed=1\ndecision_keys=\n' >> "$state/task-a.meta"
+
+  run_merged_poll_cycle "$dir"
+  ! grep -F 'rejected unauthenticated state checks' "$state/.wake-queue" >/dev/null 2>&1 \
+    || fail "a legitimately armed poll was rejected after other keys were appended: $(cat "$state/.wake-queue")"
+  [ "$(merged_ledger_row "$state" task-a)" = "check: merge landed: task-a $url external" ] \
+    || fail "the armed poll did not deliver its merge: $(cat "$state/.wake-queue" 2>/dev/null)"
+  assert_poll_absent "$state" task-a
+  pass "an armed poll stays authenticated when later keys follow its pr= record"
 }
 
 test_ready_line_with_trailing_prose_arms() {
@@ -3261,6 +3325,8 @@ merge_line_cycle() {  # <dir> <label>
   rc=$?
   set -e
   [ "$rc" -eq 0 ] || fail "$label watcher failed (rc=$rc): $(cat "$dir/$label.err")"
+  # Every row the cycle queued, kept before acknowledgement drains them.
+  cp "$dir/home/state/.wake-queue" "$dir/$label.queue" 2>/dev/null || : > "$dir/$label.queue"
   ack_watcher_cycle "$dir/home/state" || fail "$label acknowledgement failed"
 }
 
@@ -3418,6 +3484,52 @@ test_merge_line_closed_head_is_dropped_and_wakes() {
   [ "$(forge_merges "$dir")" = '1 2 ' ] \
     || fail "the line did not land in order after the closed head left: $(forge_merges "$dir")"
   pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
+}
+
+# A head that merges outside its poll ends every held PR's stall episode at
+# once, not only the episode of the held task whose tick probed it, and the
+# alarms those episodes raised are corrected by exactly one queued row. A stall
+# record naming a head that is still open is left alone. The held yolo PRs
+# behind the merged head are handed off in that same sweep, so the cycle's
+# delivered wake is their landing; the correction still reaches firstmate as
+# its own durable row.
+test_merge_line_merged_head_clears_every_stall_record_with_one_wake() {
+  local dir state head=https://github.com/o/r/pull/679 other=https://github.com/o/r/pull/900
+  dir=$(make_case merge-line-merged-head)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" OPEN FAILURE
+  printf '%s %s %s 1\n' https://github.com/o/r/pull/5 "$other" "$(date +%s)" > "$state/task-x.merge-line-stall"
+
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c1
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c2
+  case "$(cat "$dir/c1.out") $(cat "$dir/c2.out")" in
+    *"green https://github.com/o/r/pull/2 has waited"*"green https://github.com/o/r/pull/1 has waited"*) ;;
+    *) fail "both held PRs did not raise their stall alarms: $(cat "$dir/c1.out" "$dir/c2.out")" ;;
+  esac
+
+  fake_line_head "$dir" "$head" MERGED SUCCESS
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c3
+  case "$(cut -f5 "$dir/c3.queue")" in
+    *"stall alarms stale: $head merged, so 2 earlier stall alarm(s) naming it no longer hold"*pull/2*pull/1*) ;;
+    *"stall alarms stale: $head merged, so 2 earlier stall alarm(s) naming it no longer hold"*pull/1*pull/2*) ;;
+    *) fail "a merged head did not correct both alarms naming it in one row: $(cat "$dir/c3.queue")" ;;
+  esac
+  [ "$(grep -cF 'stall alarms stale' "$dir/c3.queue")" -eq 1 ] \
+    || fail "the cleared episodes were corrected by more than one row: $(cat "$dir/c3.queue")"
+  [ "$(forge_merges "$dir")" = '1 2 ' ] \
+    || fail "the held PRs were not handed off in order once the head merged: $(forge_merges "$dir")"
+  [ ! -e "$state/task-a.merge-line-stall" ] || fail "the probing task kept a stall record naming the merged head"
+  [ ! -e "$state/task-z.merge-line-stall" ] \
+    || fail "another held task kept a stall record naming the merged head: $(cat "$state/task-z.merge-line-stall")"
+  grep -qF " $other " "$state/task-x.merge-line-stall" \
+    || fail "a stall record naming a still-open head was touched"
+
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c4
+  ! grep -qF 'stall alarms stale' "$dir/c4.out" "$dir/c4.queue" \
+    || fail "one cleared episode was corrected twice: $(cat "$dir/c4.out" "$dir/c4.queue")"
+  pass "a merged head clears every stall record naming it with one corrective row and leaves open heads' records alone"
 }
 
 # A repository whose base branch has no merge-queue app merges directly, so
@@ -3642,13 +3754,16 @@ test_merge_line_front_lands_an_unarmed_attended_merge
 test_merge_line_holds_behind_rerun_for_non_head
 test_repo_without_merge_line_is_unchanged
 test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
+test_merge_line_merged_head_clears_every_stall_record_with_one_wake
 test_merge_line_closed_head_is_dropped_and_wakes
 test_merge_line_gate_serializes_without_queue_and_probe_hands_off
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
 test_merged_poll_row_names_no_authority_when_no_record_grants_one
-test_ready_line_arms_merge_poll_once_and_rearms_on_change
+test_ready_line_never_rebinds_away_from_an_armed_open_pr
+test_ready_span_with_several_prs_keeps_the_first_armed_and_wakes_for_the_rest
+test_poll_survives_keys_appended_after_pr_metadata
 test_ready_line_with_trailing_prose_arms
 test_valid_ready_line_wins_over_later_unparseable_mention
 test_unparseable_pr_mention_queues_notice

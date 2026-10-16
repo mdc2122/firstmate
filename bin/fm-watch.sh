@@ -105,8 +105,13 @@
 #                          a worker's `done: PR <url>` ready line named a
 #                          canonical PR, but arming its merge poll through
 #                          bin/fm-pr-check.sh was refused or timed out
-#                          (ready_pr_polls_arm); queued beside that line's own
-#                          signal, which a successful arm leaves unchanged
+#                          (ready_pr_poll_arm_one); queued beside that line's
+#                          own signal, which a successful arm leaves unchanged
+#   check: merge poll not armed for <task> <url>: the task already polls <url> (<state>) ...
+#                          a ready line named a different PR while the task's
+#                          one merge poll still watches a PR that is not
+#                          closed, so the poll was kept and this PR was not
+#                          armed (ready_pr_poll_arm_one); one row per PR
 #   check: merge poll not armed for <task>: ready line names no canonical PR URL: <text>
 #                          a worker's `done:` line mentions a PR but names no
 #                          URL fm_pr_url_parse accepts, so nothing was armed
@@ -165,6 +170,12 @@
 #   check: <check>: merge-line head <head> closed unmerged; ...
 #                          the head of a held PR's merge line closed without
 #                          merging; it was dropped from the line at once
+#   check: <check>: stall alarms stale: <url> merged, so <n> earlier stall alarm(s) naming it no longer hold: ...
+#                          a PR that earlier merge-line-stalled wakes named
+#                          as the head merged; every stall record naming it
+#                          was cleared, and this one wake per cleared set says
+#                          those alarms are stale
+#                          (stall_records_retire_landed)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: queue-zero: ... queued rows or Paperclip items that must leave the
@@ -2035,17 +2046,14 @@ signal_files_actionable() {  # <status-file> ...
 # only the newly appended span [classified position, captured endpoint), so a
 # line is considered exactly once and an interrupted cycle re-reads it.
 # For each ordinary task (scouts and secondmates never deliver a PR this way)
-# whose span holds a ready line naming a canonical PR URL, it takes the last
-# such line and runs
-# bin/fm-pr-check.sh, the single owner of validation, metadata, sidecar, and
-# registration, unless that exact PR is already armed or its merge was already
-# delivered. A ready line naming a different PR re-arms through the same owner.
-# A span whose ready lines name no URL that parses, and a refused or expired arm, are
-# each queued as their own check row beside the signal, so firstmate learns the
-# poll is missing instead of assuming it. Never wakes by itself: the ready line
-# still reaches firstmate through the ordinary signal.
+# every distinct canonical PR its span's ready lines name, in log order, goes
+# through ready_pr_poll_arm_one. A span whose ready lines name no URL that
+# parses is queued as its own check row beside the signal, so firstmate learns
+# the poll is missing instead of assuming it. Never wakes by itself: the ready
+# line still reaches firstmate through the ordinary signal.
 ready_pr_polls_arm() {
-  local f task meta start end ident url urls candidate kind out provider host path number
+  local f task meta start end ident url urls candidate kind
+  local -a canonical
   while IFS=$(printf '\t') read -r f end ident; do
     [ -n "$f" ] || continue
     task=$(basename "$f"); task=${task%.status}
@@ -2056,43 +2064,85 @@ ready_pr_polls_arm() {
     case "$kind" in scout|secondmate) continue ;; esac
     start=$(fm_wake_signal_seen_size "$STATE" "$f")
     urls=$(status_span_ready_pr_urls "$f" "$start" "$end") || continue
-    url=
+    canonical=()
     while IFS= read -r candidate; do
-      fm_pr_url_parse "$candidate" && url=$candidate
+      fm_pr_url_parse "$candidate" || continue
+      case " ${canonical[*]-} " in *" $FM_PR_URL "*) continue ;; esac
+      canonical+=("$FM_PR_URL")
     done <<< "$urls"
-    if [ -z "$url" ]; then
+    if [ "${#canonical[@]}" -eq 0 ]; then
       url=${urls##*$'\n'}
       triage_log "ready line for $task names no canonical PR URL; merge poll not armed: $url"
       fm_wake_append check "pr-autoarm-$task" \
         "check: merge poll not armed for $task: ready line names no canonical PR URL: $url" || exit 1
       continue
     fi
-    fm_pr_url_parse "$url" || continue
-    provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
-    # The validity check re-parses the armed sidecar, so the ready line's own
-    # identity is compared from the locals captured above.
-    if fm_pr_poll_artifacts_valid "$STATE" "$task" "$SCRIPT_DIR/fm-pr-poll.sh" \
-      && [ "$FM_PR_DATA_PROVIDER" = "$provider" ] && [ "$FM_PR_DATA_HOST" = "$host" ] \
-      && [ "$FM_PR_DATA_PATH" = "$path" ] && [ "$FM_PR_DATA_NUMBER" = "$number" ]; then
-      continue
-    fi
-    if fm_pr_poll_merge_already_notified "$STATE" "$task" "$provider" "$host" "$path" "$number"; then
-      triage_log "ready line for $task names $url, whose merge was already delivered; not re-arming"
-      continue
-    fi
-    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
-      run_action_capture "$PR_AUTOARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" "$task" "$url" || exit 1
-    out=$(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')
-    if [ "$FM_ACTION_STATUS" -eq 0 ]; then
-      triage_log "armed merge poll for $task from its ready line: $url"
-    else
-      triage_log "merge poll for $task not armed from its ready line (rc=$FM_ACTION_STATUS): $out"
-      fm_wake_append check "pr-autoarm-$task" \
-        "check: merge poll not armed for $task $url (rc=$FM_ACTION_STATUS): $out" || exit 1
-    fi
+    for url in "${canonical[@]}"; do
+      ready_pr_poll_arm_one "$task" "$url"
+    done
   done <<EOF
 $FM_SIGNAL_SURFACE_ENDPOINTS
 EOF
+}
+
+# Arm one canonical PR from a task's ready span through bin/fm-pr-check.sh, the
+# single owner of validation, metadata, sidecar, and registration, unless that
+# exact PR is already armed or its merge was already delivered. A task holds one
+# merge poll, so a PR other than the one it already polls never takes that slot
+# while the polled PR may still land: the slot moves only when the polled PR
+# reads closed unmerged. Open, merged-but-not-yet-delivered, or unreadable keeps
+# the existing poll and queues a check row naming both PRs, the same rule
+# bin/fm-pr-sweep.sh applies, so neither PR is ever left silently unwatched.
+# A refused or expired arm is queued the same way. Each row is keyed by PR, so
+# several PRs in one span each reach firstmate.
+ready_pr_poll_arm_one() {  # <task> <canonical-url>
+  local task=$1 url=$2 provider host path number key armed='' verdict note out
+  fm_pr_url_parse "$url" || return 0
+  provider=$FM_PR_PROVIDER; host=$FM_PR_HOST; path=$FM_PR_PATH; number=$FM_PR_NUMBER
+  key="pr-autoarm-$task-$provider-$host/$path/$number"
+  # The validity check re-parses the armed sidecar, so the ready line's own
+  # identity is compared from the locals captured above.
+  if fm_pr_poll_artifacts_valid "$STATE" "$task" "$SCRIPT_DIR/fm-pr-poll.sh"; then
+    if [ "$FM_PR_DATA_PROVIDER" = "$provider" ] && [ "$FM_PR_DATA_HOST" = "$host" ] \
+      && [ "$FM_PR_DATA_PATH" = "$path" ] && [ "$FM_PR_DATA_NUMBER" = "$number" ]; then
+      return 0
+    fi
+    armed=$FM_PR_DATA_URL
+  fi
+  if fm_pr_poll_merge_already_notified "$STATE" "$task" "$provider" "$host" "$path" "$number"; then
+    triage_log "ready line for $task names $url, whose merge was already delivered; not re-arming"
+    return 0
+  fi
+  if [ -n "$armed" ]; then
+    run_check_capture "$SCRIPT_DIR/fm-merge-line.sh" probe "$armed" || exit 1
+    verdict=${FM_CHECK_RESULT%%$'\n'*}
+    case "$verdict" in
+      closed)
+        triage_log "ready line for $task names $url; its polled PR $armed closed unmerged, so the poll moves"
+        ;;
+      *)
+        case "$verdict" in
+          open|green) note='still open' ;;
+          merged) note='merged, and its poll has not delivered that merge yet' ;;
+          *) note='its state could not be read' ;;
+        esac
+        triage_log "ready line for $task names $url, but the task already polls $armed ($note); merge poll not moved"
+        fm_wake_append check "$key" \
+          "check: merge poll not armed for $task $url: the task already polls $armed ($note); a task holds one merge poll, so arm $url with bin/fm-pr-check.sh $task $url once $armed merges or closes" || exit 1
+        return 0
+        ;;
+    esac
+  fi
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$PR_AUTOARM_TIMEOUT" "$SCRIPT_DIR/fm-pr-check.sh" "$task" "$url" || exit 1
+  out=$(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')
+  if [ "$FM_ACTION_STATUS" -eq 0 ]; then
+    triage_log "armed merge poll for $task from its ready line: $url"
+  else
+    triage_log "merge poll for $task not armed from its ready line (rc=$FM_ACTION_STATUS): $out"
+    fm_wake_append check "$key" \
+      "check: merge poll not armed for $task $url (rc=$FM_ACTION_STATUS): $out" || exit 1
+  fi
 }
 
 # Surfaced-marker bookkeeping for the heartbeat backstop is owned by
@@ -2427,9 +2477,13 @@ fi
 # the retirement sequence (bin/fm-pr-lib.sh) is stated once. The green-
 # unmergeable episode record (pr_green_blocked_tick below) retires with the
 # poll: a merged pull request never reaches the tick's clear reading, so
-# nothing else would end its episode before task teardown.
-retire_merged_pr_poll() {  # <id> <url>
-  local id=$1 url=$2
+# nothing else would end its episode before task teardown. The task's own
+# stall records retire silently here because the merged outcome itself
+# supersedes their alarms; other tasks' records naming the landed PR go
+# through stall_records_retire_landed, which leaves any corrective reason in
+# STALL_CORRECTION_REASON for the caller to deliver.
+retire_merged_pr_poll() {  # <id> <url> <check-path>
+  local id=$1 url=$2 c=$3
   if fm_pr_poll_retirement_publish "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" merged; then
     fm_pr_poll_retirement_recover_one "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" \
       || triage_log "merged PR poll retirement remains recoverable for $id"
@@ -2442,6 +2496,41 @@ retire_merged_pr_poll() {  # <id> <url>
   # head (bin/fm-merge-line.sh; a no-op without a line).
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$url" \
     >/dev/null 2>&1 || triage_log "merged PR $url could not leave its merge line"
+  stall_records_retire_landed "$c" "$url"
+}
+
+# A merged PR ends every merge-line stall episode that names it as the head,
+# whichever task's record holds it: each state/<id>.merge-line-stall whose head
+# is the merged PR (merge_line_stall_tick) is removed; a record naming any
+# other head is left alone. When any removed record had already raised its
+# stall wake, one corrective row names every alarm the landing made stale, and
+# its reason is left in STALL_CORRECTION_REASON (empty when nothing needed
+# correcting) for the caller to deliver with wake(). The row is queued before
+# the records are removed, preferring a rare duplicate over silence; removing
+# them is what keeps a later sweep from correcting the same episode again.
+STALL_CORRECTION_REASON=
+stall_records_retire_landed() {  # <check-path> <merged-url>
+  local c=$1 landed=$2 f rec_url rec_head first alerted stale='' n=0
+  local -a matched=()
+  STALL_CORRECTION_REASON=
+  for f in "$STATE"/*.merge-line-stall; do
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    rec_url='' rec_head='' first='' alerted=''
+    read -r rec_url rec_head first alerted < "$f" || true
+    [ "$rec_head" = "$landed" ] || continue
+    if [ "$alerted" = 1 ]; then
+      stale="$stale; merge-line stalled for green $rec_url behind it"
+      n=$((n + 1))
+    fi
+    matched+=("$f")
+  done
+  [ "${#matched[@]}" -gt 0 ] || return 0
+  if [ "$n" -gt 0 ]; then
+    STALL_CORRECTION_REASON="check: $c: stall alarms stale: $landed merged, so $n earlier stall alarm(s) naming it no longer hold: ${stale#; }"
+    fm_wake_append check "$c" "$STALL_CORRECTION_REASON" || exit 1
+  fi
+  rm -f -- "${matched[@]}"
+  triage_log "merged $landed retired ${#matched[@]} stall record(s) naming it, $n of them alerted"
 }
 
 # A green pull request that cannot merge raises no merge poll output, so an
@@ -2736,13 +2825,15 @@ pr_queue_away_refused_tick() {  # <id> <check-path> <url> <merge-output>
 # line hand-off below. The caller holds <id>'s control lock and a poll
 # snapshot naming <url>. The landing's outcome is published under its
 # persisted merge authority (external without one), the authority record and
-# the poll retire, and a landed line head hands the line to the next PR
-# before anything wakes. A poll result whose outcome was already recorded
-# returns 1 so the sweep goes on; <self-merged> 1 marks a landing this sweep's
-# own merge made, which always wakes firstmate, as does any first record.
+# the poll retire with every stall record naming the landed PR, and a landed
+# line head hands the line to the next PR before anything wakes. A poll
+# result whose outcome was already recorded wakes only for a stall correction
+# and otherwise returns 1 so the sweep goes on; <self-merged> 1 marks a
+# landing this sweep's own merge made, which always wakes firstmate, as does
+# any first record.
 pr_poll_merged() {  # <id> <check-path> <url> <provider> <host> <path> <number> <self-merged: 0|1>
   local id=$1 c=$2 url=$3 provider=$4 host=$5 path=$6 number=$7 self=$8
-  local authority identity rc=0 handoff=0 recorded
+  local authority identity rc=0 handoff=0 recorded correction
   if ! fm_merge_authority_read "$STATE" "$id" "$provider" "$host" "$path" "$number"; then
     triage_log "no matching persisted merge authority for $id; recording an external merge outcome"
   fi
@@ -2762,12 +2853,16 @@ pr_poll_merged() {  # <id> <check-path> <url> <provider> <host> <path> <number> 
   fi
   [ "$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null)" != "$url" ] || handoff=1
-  retire_merged_pr_poll "$id" "$url"
+  retire_merged_pr_poll "$id" "$url" "$c"
+  # The hand-off can handle another landing, which resets this global; the
+  # correction row itself is already queued durably.
+  correction=$STALL_CORRECTION_REASON
   pr_poll_control_release || exit 1
   touch "$STATE/.last-check"
   [ "$handoff" -eq 0 ] || merge_line_handoff "$url"
   if [ "$recorded" = true ] && [ "$self" -eq 0 ]; then
     triage_log "absorbed duplicate merged PR poll result for $id"
+    [ -z "$correction" ] || wake "$correction"
     return 1
   fi
   wake "check: $c: merged"
@@ -2831,14 +2926,17 @@ merge_line_handoff() {  # <landed-url>
 # holds (bin/fm-merge-line.sh owns the line, its head, and the read-only forge
 # probe), this reads the head first: a head closed unmerged is dropped from
 # the line and wakes firstmate at once, and a head that merged outside its poll
-# is dropped silently and hands off to the next PR (merge_line_handoff). Otherwise, while the
-# held PR reads green, state/<id>.merge-line-stall records "<held-url>
-# <head-url> <first-seen-epoch> <alerted>" and one wake fires per episode once
-# that same head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR
-# that is no longer green, or its landing starts over. An unknown read changes
-# nothing. Retired with the merged poll and at teardown.
+# is dropped so the next PR becomes the head, retiring every task's stall
+# record that names it with one corrective wake for any alarm already raised
+# (stall_records_retire_landed), and hands the line to that next PR in the
+# same sweep (merge_line_handoff). Otherwise, while the held PR reads green,
+# state/<id>.merge-line-stall records "<held-url> <head-url>
+# <first-seen-epoch> <alerted>" and one wake fires per episode once that same
+# head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR that is no
+# longer green, or its landing starts over. An unknown read changes nothing.
+# Retired with the merged poll and at teardown.
 merge_line_stall_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file line_head verdict now age reason
+  local id=$1 c=$2 url=$3 file line_head verdict now age reason correction
   local rec_url='' rec_head='' first='' alerted=''
   file="$STATE/$id.merge-line-stall"
   line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
@@ -2853,14 +2951,21 @@ merge_line_stall_tick() {  # <id> <check-path> <url>
         triage_log "merge line head $line_head reads $verdict but could not be dropped"
         return 0
       fi
-      rm -f "$file"
       triage_log "merge line head $line_head reads $verdict; dropped from its line"
       if [ "$verdict" = merged ]; then
+        stall_records_retire_landed "$c" "$line_head"
+        rm -f "$file"
+        # The hand-off can land and handle another poll, which resets the
+        # correction global; its row is already queued durably.
+        correction=$STALL_CORRECTION_REASON
         merge_line_handoff "$line_head"
-        return 0
+        [ -n "$correction" ] || return 0
+        reason=$correction
+      else
+        rm -f "$file"
+        reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
+        fm_wake_append check "$c" "$reason" || exit 1
       fi
-      reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
-      fm_wake_append check "$c" "$reason" || exit 1
       pr_poll_control_release || exit 1
       touch "$STATE/.last-check"
       wake "$reason"
