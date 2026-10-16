@@ -70,8 +70,10 @@
 # REGISTRATION (bin/fm-pr-check.sh). A ship entering merges by registering its
 # PR is admitted only while the merges lane has a slot that no earlier queued
 # registration claims. A same-lane registration (re-recording the PR of a task
-# already in merges, as bin/fm-pr-merge.sh does before every merge) needs no
-# admission and takes no lock. Admission waits at most FM_WIP_LOCK_WAIT seconds
+# already in merges) needs no admission and takes no lock, and neither does
+# the registration bin/fm-pr-merge.sh makes before every merge (--merge-order),
+# so an ordered merge is never refused by the cap; it still holds its slot and
+# leaves the queue. Admission waits at most FM_WIP_LOCK_WAIT seconds
 # (default 20) for the task-set lock and holds it through the pr= publication.
 # A refused or lock-busy registration exits 5, records nothing in the task,
 # arms no poll, and is queued durably in state/.wip-pr-queue, one tab-separated

@@ -283,6 +283,26 @@ test_registration_and_the_task_set_lock() {
   pass "a same-lane re-registration never waits on the task-set lock; a busy lock queues an entering registration"
 }
 
+# A merge order (bin/fm-pr-merge.sh registers with --merge-order) completes
+# work, so it is never queued behind a full merges lane: it arms, takes its
+# merges slot, and leaves the queue it was waiting in.
+test_a_merge_order_registers_past_a_full_merges_lane() {
+  local home out rc
+  home=$(new_home merge-order)
+  printf 'merges=1\n' > "$home/config/wip-caps"
+  occupy "$home" merging-a "pr=https://github.com/example/repo/pull/31"
+  occupy "$home" validating-b
+  out=$(run_transition "$home" fm-pr-check.sh validating-b https://github.com/example/repo/pull/32); rc=$?
+  expect_code 5 "$rc" "an ordinary registration into a full merges lane"$'\n'"$out"
+  assert_grep "validating-b" "$home/state/.wip-pr-queue" "the ordinary registration is queued"
+  out=$(run_transition "$home" fm-pr-check.sh --merge-order validating-b https://github.com/example/repo/pull/32); rc=$?
+  expect_code 0 "$rc" "a merge-order registration into a full merges lane"$'\n'"$out"
+  assert_present "$home/state/validating-b.check.sh" "a merge order arms its poll"
+  assert_grep "pr=https://github.com/example/repo/pull/32" "$home/state/validating-b.meta" "a merge order records its PR"
+  assert_absent "$home/state/.wip-pr-queue" "a merge order leaves the registration queue"
+  pass "a merge order registers past a full merges lane and leaves the queue"
+}
+
 test_lanes_are_independent() {
   local home out rc
   home=$(new_home independent)
@@ -461,6 +481,7 @@ test_merge_notification_is_scoped_to_the_current_pr
 test_promotion_requires_capacity
 test_registrations_never_exceed_the_merges_cap_at_defaults
 test_registration_and_the_task_set_lock
+test_a_merge_order_registers_past_a_full_merges_lane
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_log_is_written_only_after_spawn_success

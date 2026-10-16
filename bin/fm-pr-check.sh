@@ -5,7 +5,7 @@
 # live only in a private sidecar and are never interpolated into shell source.
 # A GitHub pull request URL and a GitLab merge request URL are both accepted,
 # including a merge request on a self-hosted GitLab instance.
-# Usage: fm-pr-check.sh <task-id> <pr-url>
+# Usage: fm-pr-check.sh [--merge-order] <task-id> <pr-url>
 #        fm-pr-check.sh --retry-queued
 # Work-in-progress cap (bin/fm-wip-caps-lib.sh REGISTRATION owns the rule): a
 # ship whose PR would enter the merges lane is admitted only under the home's
@@ -14,7 +14,9 @@
 # and queues the registration in state/.wip-pr-queue. --retry-queued re-runs
 # queued registrations in order, stopping at the first still refused, and
 # queues one `check: wip-queue:` wake for each it arms. A same-lane
-# re-registration needs no admission and takes no lock.
+# re-registration needs no admission and takes no lock, and neither does
+# --merge-order, which bin/fm-pr-merge.sh passes so an ordered merge completes
+# work instead of being queued behind the cap; it still takes its merges slot.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,6 +57,11 @@ EOF
   exit 0
 fi
 
+MERGE_ORDER=0
+if [ "${1:-}" = --merge-order ]; then
+  MERGE_ORDER=1
+  shift
+fi
 if [ "$#" -ne 2 ]; then
   echo "error: invalid PR check request" >&2
   exit 2
@@ -144,8 +151,9 @@ fm_pr_poll_prepare "$STATE" "$ID" "$PROVIDER" "$URL" "$HOST" "$PROJECT_PATH" "$N
 
 # Work-in-progress registration admission (header; bin/fm-wip-caps-lib.sh
 # REGISTRATION). Only a ship entering merges from another lane is admitted;
-# re-recording a PR for a task already in merges takes no lock and waits on
-# nothing, so a merge never stalls behind a spawn.
+# re-recording a PR for a task already in merges, or any --merge-order
+# registration, takes no lock and waits on nothing, so a merge never stalls
+# behind a spawn or the cap.
 wip_queue_refusal() {  # <why>
   if ! fm_wip_queue_add "$STATE" "$ID" "$URL"; then
     echo "error: $ID's PR registration was refused ($1) and could not be queued in $STATE/$FM_WIP_PR_QUEUE_NAME" >&2
@@ -161,7 +169,7 @@ EOF
 fm_wip_task_lane "$STATE" "$ID"
 WIP_CURRENT=$FM_WIP_TASK_LANE
 fm_wip_record_lane "$STATE" "$ID" "$WIP_KIND" "$URL" "$WIP_LANE"
-if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ]; then
+if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ] && [ "$MERGE_ORDER" = 0 ]; then
   TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
   WIP_LOCK_WAIT=${FM_WIP_LOCK_WAIT:-20}
   case "$WIP_LOCK_WAIT" in ''|*[!0-9]*|0) WIP_LOCK_WAIT=20 ;; esac
