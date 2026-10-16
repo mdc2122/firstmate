@@ -165,6 +165,12 @@
 #   check: <check>: merge-line head <head> closed unmerged; ...
 #                          the head of a held PR's merge line closed without
 #                          merging; it was dropped from the line at once
+#   check: <check>: stall alarms stale: <url> merged, so <n> earlier stall alarm(s) naming it no longer hold: ...
+#                          a PR that earlier merge-line-stalled or
+#                          merge-queue-stalled wakes named merged; every stall
+#                          record naming it was cleared, and this one wake per
+#                          cleared set says those alarms are stale
+#                          (stall_records_retire_landed)
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
 #   check: queue-zero: ... queued rows or Paperclip items that must leave the
@@ -2427,9 +2433,13 @@ fi
 # the retirement sequence (bin/fm-pr-lib.sh) is stated once. The green-
 # unmergeable episode record (pr_green_blocked_tick below) retires with the
 # poll: a merged pull request never reaches the tick's clear reading, so
-# nothing else would end its episode before task teardown.
-retire_merged_pr_poll() {  # <id> <url>
-  local id=$1 url=$2
+# nothing else would end its episode before task teardown. The task's own
+# stall records retire silently here because the merged outcome itself
+# supersedes their alarms; other tasks' records naming the landed PR go
+# through stall_records_retire_landed, which leaves any corrective reason in
+# STALL_CORRECTION_REASON for the caller to deliver.
+retire_merged_pr_poll() {  # <id> <url> <check-path>
+  local id=$1 url=$2 c=$3
   if fm_pr_poll_retirement_publish "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" merged; then
     fm_pr_poll_retirement_recover_one "$STATE" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" \
       || triage_log "merged PR poll retirement remains recoverable for $id"
@@ -2442,6 +2452,48 @@ retire_merged_pr_poll() {  # <id> <url>
   # head (bin/fm-merge-line.sh; a no-op without a line).
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" remove "$url" \
     >/dev/null 2>&1 || triage_log "merged PR $url could not leave its merge line"
+  stall_records_retire_landed "$c" "$url"
+}
+
+# A merged PR ends every stall episode that names it, whichever task's record
+# holds it: each state/<id>.merge-line-stall whose head is the merged PR
+# (merge_line_stall_tick) and each state/<id>.queue-stall for the merged PR
+# itself (pr_queue_merge_tick). Every such record is removed; a record naming
+# any other PR is left alone. When any removed record had already raised its
+# stall wake, one corrective row names every alarm the landing made stale, and
+# its reason is left in STALL_CORRECTION_REASON (empty when nothing needed
+# correcting) for the caller to deliver with wake(). The row is queued before
+# the records are removed, preferring a rare duplicate over silence; removing
+# them is what keeps a later sweep from correcting the same episode again.
+STALL_CORRECTION_REASON=
+stall_records_retire_landed() {  # <check-path> <merged-url>
+  local c=$1 landed=$2 f rec_url rec_head first alerted stale='' n=0
+  local -a matched=()
+  STALL_CORRECTION_REASON=
+  for f in "$STATE"/*.merge-line-stall "$STATE"/*.queue-stall; do
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
+    rec_url='' rec_head='' first='' alerted=''
+    read -r rec_url rec_head first alerted < "$f" || true
+    case "$f" in
+      *.merge-line-stall)
+        [ "$rec_head" = "$landed" ] || continue
+        [ "$alerted" != 1 ] || stale="$stale; merge-line stalled for green $rec_url behind it"
+        ;;
+      *)
+        [ "$rec_url" = "$landed" ] || continue
+        [ "$alerted" != 1 ] || stale="$stale; merge-queue stalled at head $rec_head"
+        ;;
+    esac
+    [ "$alerted" != 1 ] || n=$((n + 1))
+    matched+=("$f")
+  done
+  [ "${#matched[@]}" -gt 0 ] || return 0
+  if [ "$n" -gt 0 ]; then
+    STALL_CORRECTION_REASON="check: $c: stall alarms stale: $landed merged, so $n earlier stall alarm(s) naming it no longer hold: ${stale#; }"
+    fm_wake_append check "$c" "$STALL_CORRECTION_REASON" || exit 1
+  fi
+  rm -f -- "${matched[@]}"
+  triage_log "merged $landed retired ${#matched[@]} stall record(s) naming it, $n of them alerted"
 }
 
 # A green pull request that cannot merge raises no merge poll output, so an
@@ -2736,12 +2788,14 @@ pr_queue_away_refused_tick() {  # <id> <check-path> <url> <merge-output>
 # holds (bin/fm-merge-line.sh owns the line, its head, and the read-only forge
 # probe), this reads the head first: a head closed unmerged is dropped from
 # the line and wakes firstmate at once, and a head that merged outside its poll
-# is dropped silently so the next PR becomes the head. Otherwise, while the
-# held PR reads green, state/<id>.merge-line-stall records "<held-url>
-# <head-url> <first-seen-epoch> <alerted>" and one wake fires per episode once
-# that same head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR
-# that is no longer green, or its landing starts over. An unknown read changes
-# nothing. Retired with the merged poll and at teardown.
+# is dropped so the next PR becomes the head, retiring every task's stall
+# record that names it with one corrective wake for any alarm already raised
+# (stall_records_retire_landed). Otherwise, while the held PR reads green,
+# state/<id>.merge-line-stall records "<held-url> <head-url>
+# <first-seen-epoch> <alerted>" and one wake fires per episode once that same
+# head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR that is no
+# longer green, or its landing starts over. An unknown read changes nothing.
+# Retired with the merged poll and at teardown.
 merge_line_stall_tick() {  # <id> <check-path> <url>
   local id=$1 c=$2 url=$3 file line_head verdict now age reason
   local rec_url='' rec_head='' first='' alerted=''
@@ -2758,11 +2812,17 @@ merge_line_stall_tick() {  # <id> <check-path> <url>
         triage_log "merge line head $line_head reads $verdict but could not be dropped"
         return 0
       fi
-      rm -f "$file"
       triage_log "merge line head $line_head reads $verdict; dropped from its line"
-      [ "$verdict" = closed ] || return 0
-      reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
-      fm_wake_append check "$c" "$reason" || exit 1
+      if [ "$verdict" = merged ]; then
+        stall_records_retire_landed "$c" "$line_head"
+        rm -f "$file"
+        [ -n "$STALL_CORRECTION_REASON" ] || return 0
+        reason=$STALL_CORRECTION_REASON
+      else
+        rm -f "$file"
+        reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
+        fm_wake_append check "$c" "$reason" || exit 1
+      fi
       pr_poll_control_release || exit 1
       touch "$STATE/.last-check"
       wake "$reason"
@@ -3048,12 +3108,13 @@ EOF
             triage_log "published merge outcome for $id but could not retire its authority record"
             exit 1
           fi
-          retire_merged_pr_poll "$id" "$url"
+          retire_merged_pr_poll "$id" "$url" "$c"
           pr_poll_control_release || exit 1
           touch "$STATE/.last-check"
           if [ "$FM_MERGE_OUTCOME_ALREADY_RECORDED" = true ] \
             && [ "$pr_poll_self_merged" -eq 0 ]; then
             triage_log "absorbed duplicate merged PR poll result for $id"
+            [ -z "$STALL_CORRECTION_REASON" ] || wake "$STALL_CORRECTION_REASON"
             continue
           fi
           wake "$reason"
