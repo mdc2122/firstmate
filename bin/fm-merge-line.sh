@@ -96,11 +96,12 @@
 #                                               armed entries); exit 3 and
 #                                               print why when it is held;
 #                                               exit 1 on an unreadable line
-#   fm-merge-line.sh head [--window] <pr-or-repo-url>
+#   fm-merge-line.sh head [--queued] <pr-or-repo-url>
 #                                               print the effective head URL (empty when none),
-#                                               or with --window the first window entry, which
-#                                               skips an ejected head; exit 2 without a line,
-#                                               1 on an unreadable line
+#                                               or with --queued the first listed entry its
+#                                               task's queue record shows handed to the merge
+#                                               queue; exit 2 without a line, 1 on an
+#                                               unreadable line
 #   fm-merge-line.sh probe <pr-url>             read-only forge read printing one word:
 #                                               merged, closed, green (open, every check
 #                                               green), or open; nothing when unknown
@@ -399,7 +400,8 @@ window_entries() {
 # closed, or merged entry does not. A not-green check name is pending when its
 # current run is: a status context still PENDING or EXPECTED with no failed
 # context of that name, or a check run not yet completed that started after
-# every completed red run of that name (one not yet started counts as newest),
+# every completed red run of that name (one not yet started, whose startedAt
+# is missing or GitHub's zero time, counts as newest),
 # so a run cancelled before its re-run does not mark the re-run red.
 window_waits_for() {  # <url>
   local json state red names pending
@@ -427,7 +429,9 @@ window_waits_for() {  # <url>
             and .state != "SUCCESS" and .state != "PENDING" and .state != "EXPECTED")] | length) == 0
         and any($runs[];
           if .__typename == "CheckRun"
-          then .status != "COMPLETED" and ((.startedAt // "~") > $last_red)
+          then .status != "COMPLETED"
+            and ((.startedAt // "") as $s
+              | if $s == "" or ($s | startswith("0001-01-01")) then "~" else $s end) > $last_red
           else .state == "PENDING" or .state == "EXPECTED" end))
     | $name
   ' 2>/dev/null) || return 0
@@ -483,18 +487,20 @@ cmd_gate() {  # [--window] <url>
   return "$FM_MERGE_LINE_HELD"
 }
 
-cmd_head() {  # [--window] <url>
-  local rc=0 window=''
-  if [ "${1-}" = --window ]; then
-    window=1
+cmd_head() {  # [--queued] <url>
+  local rc=0 queued='' e
+  if [ "${1-}" = --queued ]; then
+    queued=1
     shift
   fi
   resolve_repo "${1-}" || die "not a canonical PR or repository URL: ${1-}" 2
   read_line || rc=$?
   [ "$rc" -eq 0 ] || return "$rc"
   load_armed
-  if [ -n "$window" ]; then
-    window_entries | sed -n 1p | tr -d '\n'
+  if [ -n "$queued" ]; then
+    for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
+      queued_head "$e" && { printf '%s' "$e"; break; }
+    done
   else
     effective_head || true
   fi
@@ -585,8 +591,11 @@ main() {
   [ -n "$cmd" ] || { usage >&2; exit 2; }
   shift
   case "$cmd" in
-    gate|head)
+    gate)
       { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$1" = --window ]; }; } \
+        || { usage >&2; exit 2; } ;;
+    head)
+      { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "$1" = --queued ]; }; } \
         || { usage >&2; exit 2; } ;;
     declare|undeclare|front|enqueue|remove|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;

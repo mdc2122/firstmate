@@ -3549,6 +3549,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
     "$head" > "$dir/b-red.json"
   printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"CANCELLED","startedAt":"2026-01-01T00:00:00Z"},{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null,"startedAt":"2026-01-01T00:05:00Z"}]}\n' \
     "$head" > "$dir/b-rerun.json"
+  printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"CANCELLED","startedAt":"2026-01-01T00:00:00Z"},{"__typename":"CheckRun","name":"ci","status":"QUEUED","conclusion":"","startedAt":"0001-01-01T00:00:00Z"}]}\n' \
+    "$head" > "$dir/b-queued-rerun.json"
 
   fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-pending.json"
   queue_line_cycle "$dir" c1
@@ -3564,6 +3566,12 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
   [ "$(forge_merges "$dir")" = '' ] \
     || fail "an entry was handed to the queue past an earlier one whose re-run is pending: $(grep '^pr merge' "$dir/gh.log")"
 
+  # gh reports a re-run still waiting for a runner with the zero startedAt.
+  fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-queued-rerun.json"
+  queue_line_cycle "$dir" c1c
+  [ "$(forge_merges "$dir")" = '' ] \
+    || fail "an entry was handed to the queue past an earlier one whose re-run is queued: $(grep '^pr merge' "$dir/gh.log")"
+
   fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-red.json"
   queue_line_cycle "$dir" c2
   [ "$(forge_merges "$dir")" = '3 ' ] \
@@ -3573,8 +3581,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry() {
 }
 
 # A window entry queued behind the line's head waits on the tests ahead of it,
-# so its queue-stall clock starts only once every entry ahead of it is gone or
-# ejected from the queue.
+# so its queue-stall clock starts only once no entry ahead of it is held by the
+# queue.
 test_merge_line_window_entry_queue_stall_starts_at_the_head() {
   local dir state head=0123456789abcdef0123456789abcdef01234567
   dir=$(queue_line_case queue-window-stall 2)
@@ -3602,7 +3610,31 @@ test_merge_line_window_entry_queue_stall_starts_at_the_head() {
     *"task-b.check.sh: merge-queue stalled: merge queue has not picked up or finished https://github.com/o/r/pull/2 after 0 min at head $head") ;;
     *) fail "the entry behind an ejected head raised no queue stall: $(cat "$dir/c5.out")" ;;
   esac
-  pass "a window entry's queue-stall clock starts only once it is the line's first entry not ejected"
+  pass "a window entry's queue-stall clock starts only once it is the line's first entry the queue holds"
+}
+
+# The line's head landed, the entry now at its head is red and was never
+# handed to the queue, and the entry behind it is the one the queue holds: the
+# queue-stall clock is that queued entry's.
+test_merge_line_queue_stall_skips_an_unqueued_red_head() {
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_line_case queue-stall-red-head 3)
+  state="$dir/home/state"
+  merge_line "$dir" remove https://github.com/o/r/pull/1 || fail "could not drop the landed head"
+  rm -f "$state/task-a.check.sh" "$state/task-a.pr-poll" "$state/task-a.pr-poll-registration"
+  printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    "$head" > "$dir/b-red.json"
+  fake_view_per_url "$dir" https://github.com/o/r/pull/2 "$dir/b-red.json"
+  fm_pr_queue_merge_record_write "$state" task-c https://github.com/o/r/pull/3 "$head" requested '["queue-mq"]' \
+    || fail "could not seed the queued entry"
+
+  FM_MERGE_LINE_STALL_SECS=0 queue_line_cycle "$dir" c1
+  case "$(cat "$dir/c1.out")" in
+    *"task-c.check.sh: merge-queue stalled: merge queue has not picked up or finished https://github.com/o/r/pull/3 after 0 min at head $head") ;;
+    *) fail "the queued entry behind an unqueued red head raised no queue stall: $(cat "$dir/c1.out")" ;;
+  esac
+  [ "$(forge_merges "$dir")" = '' ] || fail "the red head was handed to the queue: $(forge_merges "$dir")"
+  pass "the queue-stall clock belongs to the line's first entry the queue holds, past an unqueued red head"
 }
 
 # The window never opens on its own: without a queued head the gate holds
@@ -4034,6 +4066,7 @@ test_merge_line_queue_window_arms_green_entries_in_line_order
 test_merge_line_queue_window_waits_for_an_earlier_green_entry
 test_merge_line_queue_window_holds_behind_a_pending_entry
 test_merge_line_window_entry_queue_stall_starts_at_the_head
+test_merge_line_queue_stall_skips_an_unqueued_red_head
 test_merge_line_queue_window_gates_without_a_queued_head
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome

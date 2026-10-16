@@ -2689,9 +2689,10 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # the hold drops; that retirement wakes once (the record it retires is the
 # per-head guard), and a yolo poll re-verifies the new head from scratch on its
 # next cycle. While the queue holds the same head past MERGE_LINE_STALL_SECS,
-# counted from when the pull request became its merge line's first entry not
-# ejected from the queue (a window entry queued behind that entry waits on the
-# tests ahead of it, so it keeps no episode, and one whose first entry changes
+# counted from when the pull request became the first entry of its merge line
+# that is handed to the queue (an entry the queue does not hold, for any
+# reason, is skipped; a window entry queued behind another waits on the tests
+# ahead of it, so it keeps no episode, and one whose first queued entry changes
 # ahead of it starts over), one wake per
 # pull request and head says the queue has not picked it up or finished; state/<id>.queue-stall keeps that episode as "<url> <head>
 # <first-seen-epoch> <alerted>" and retires with the merged poll and at
@@ -2755,7 +2756,7 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
           requested "$FM_PR_QUEUE_MERGE_CHECKS" || true
       stall="$STATE/$id.queue-stall"
       line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-        "$SCRIPT_DIR/fm-merge-line.sh" head --window "$url" 2>/dev/null) || line_head=$url
+        "$SCRIPT_DIR/fm-merge-line.sh" head --queued "$url" 2>/dev/null) || line_head=$url
       if [ -n "$line_head" ] && [ "$line_head" != "$url" ]; then
         rm -f "$stall"
         return 0
