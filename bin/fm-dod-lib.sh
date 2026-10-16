@@ -130,11 +130,10 @@ fm_verify_observation_is_resting() {  # <observation>
 
 # Print the first recording of a made verify observation and return 0; return
 # 1 when none exists. A recording is a status line with verb `done` whose note
-# opens `verified:` with text after it, or a report line opening `verified:`
-# with text after it. Callers source bin/fm-classify-lib.sh for the status
-# line parser.
-fm_verify_recorded() {  # <status-file> <report-file>
-  local status=$1 report=$2 line note
+# opens `verified:` with text after it. Callers source bin/fm-classify-lib.sh
+# for the status line parser.
+fm_verify_recorded() {  # <status-file>
+  local status=$1 line note
   if [ -f "$status" ] && [ ! -L "$status" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       [ "$(status_line_verb "$line")" = "done" ] || continue
@@ -143,9 +142,6 @@ fm_verify_recorded() {  # <status-file> <report-file>
         verified:*[![:space:]]*) printf '%s\n' "$line"; return 0 ;;
       esac
     done < "$status"
-  fi
-  if [ -f "$report" ] && [ ! -L "$report" ]; then
-    awk '/^verified:[[:space:]]*[^[:space:]]/ { print; found = 1; exit } END { exit !found }' "$report" && return 0
   fi
   return 1
 }

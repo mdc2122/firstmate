@@ -44,8 +44,8 @@
 # A ship task whose brief carries bin/fm-dod-lib.sh's `# Completion observation`
 # section is not finished at landing: teardown REFUSES, naming the missing
 # recording and the brief's `verify:` observation, until fm_verify_recorded
-# finds the worker's `done: verified: <observation>` status line (or a report
-# `verified:` line). Landed work alone never satisfies it. A brief without the
+# finds the worker's `done: verified: <observation>` status line. Landed work
+# alone never satisfies it. A brief without the
 # section predates that contract and keeps its original Definition of done;
 # only --force with explicit discard authority skips the refusal.
 # REFUSES if the worktree holds work that has not LANDED, because cleanup
@@ -3598,9 +3598,9 @@ fi
 # record never launched a worker that could observe anything.
 if [ "$KIND" = ship ] && [ "$FORCE" != "--force" ] && [ -z "$CLEANUP_RECOVERY" ] \
     && VERIFY_OBSERVATION=$(fm_brief_verify_observation "$DATA/$ID/brief.md"); then
-  if ! fm_verify_recorded "$STATE/$ID.status" "$DATA/$ID/report.md" >/dev/null; then
+  if ! fm_verify_recorded "$STATE/$ID.status" >/dev/null; then
     echo "REFUSED: ship task $ID has not recorded its verify observation, so it is not finished." >&2
-    echo "Missing: a \`done: verified: <what was observed>\` line in $STATE/$ID.status (or a \`verified:\` line in $DATA/$ID/report.md) for: verify: $VERIFY_OBSERVATION" >&2
+    echo "Missing: a \`done: verified: <what was observed>\` line in $STATE/$ID.status for: verify: $VERIFY_OBSERVATION" >&2
     echo "Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval." >&2
     exit 1
   fi

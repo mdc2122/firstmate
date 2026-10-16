@@ -4037,9 +4037,9 @@ EOF
 # A ship task whose brief states a verify observation is not finished when its
 # work lands: teardown refuses, naming the missing recording and the
 # observation, until the worker's `done: verified:` line exists. A ready line
-# that only reports the PR, or a verified line with no observation, does not
-# count. A brief without the section predates the contract and keeps its old
-# Definition of done.
+# that only reports the PR, a verified line with no observation, or a
+# `verified:` line in the report does not count. A brief without the section
+# predates the contract and keeps its old Definition of done.
 test_ship_teardown_requires_the_recorded_verify_observation() {
   local case_dir rc
   case_dir=$(make_case verify-recorded)
@@ -4053,6 +4053,7 @@ test_ship_teardown_requires_the_recorded_verify_observation() {
   printf '%s\n' 'working: committed abc1234; starting validation' \
     'done: PR https://github.com/example/repo/pull/7 checks green' \
     'done: verified:' > "$case_dir/state/task-x1.status"
+  printf '# Findings\nverified: reproduced on main at abc1234\n' > "$case_dir/data/task-x1/report.md"
 
   set +e
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
