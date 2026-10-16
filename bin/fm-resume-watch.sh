@@ -76,8 +76,6 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
-# shellcheck source=bin/fm-wake-lib.sh
-. "$SCRIPT_DIR/fm-wake-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-1}"; }
 usage() { sed -n '2,67p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
@@ -201,6 +199,11 @@ select_form() {  # <task-id>  (after parse_task_and_url)
 
 LOCK=''
 lock_task() {  # <task-id>
+  # Sourced only here: sourcing the wake library creates the state directory,
+  # and a retire with nothing to retire must touch nothing (teardown calls it
+  # after a secondmate's home, which can hold that directory, is removed).
+  # shellcheck source=bin/fm-wake-lib.sh
+  . "$SCRIPT_DIR/fm-wake-lib.sh"
   LOCK="$STATE/.resume-watch-$1.lock"
   fm_lock_acquire_wait "$LOCK" || die "cannot lock the resume watch for $1"
   trap 'fm_lock_release "$LOCK" 2>/dev/null || true' EXIT
