@@ -10,6 +10,7 @@ set -u
 
 # shellcheck source=tests/fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../bin/fm-wip-caps-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-wip-caps)
 mkdir -p "$TMP_ROOT"
@@ -111,10 +112,50 @@ test_a_green_pr_moves_the_ship_from_validations_to_merges() {
     "a full merge line must refuse new ships and name what holds it"
 
   # ship-a's merge outcome is delivered: it holds no slot any more.
-  : > "$home/state/ship-a.pr-poll-merge-notified"
+  fm_pr_poll_merge_mark_notified "$home/state" ship-a github github.com example/repo 1 \
+    || fail "could not record the delivered merge identity"
   out=$(spawn_ship "$home" ship-b); rc=$?
   expect_code 0 "$rc" "a delivered merge frees the merges slot"$'\n'"$out"
   pass "a ship moves validations -> merges at its PR and frees its slot at its merge outcome"
+}
+
+test_merge_notification_is_scoped_to_the_current_pr() {
+  local home out rc provider host path url
+  for provider in github gitlab; do
+    home=$(new_home "replacement-$provider")
+    printf 'validations=1\nmerges=1\n' > "$home/config/wip-caps"
+    if [ "$provider" = github ]; then
+      host=github.com
+      path=example/repo
+      url="https://$host/$path/pull"
+    else
+      host=gitlab.example.com
+      path=group/subgroup/repo
+      url="https://$host/$path/-/merge_requests"
+    fi
+    occupy "$home" ship-a "pr=$url/1"
+    : > "$home/state/ship-a.pr-poll-merge-notified"
+    out=$(spawn_ship "$home" ship-b); rc=$?
+    expect_code 5 "$rc" "an empty marker must not free a merge slot"
+
+    fm_pr_poll_merge_mark_notified "$home/state" ship-a "$provider" "$host" "$path" 1 \
+      || fail "could not record the first merge"
+    out=$(fm_wip_free_json "$home/config" "$home/state")
+    [ "$(printf '%s' "$out" | jq -r '.merges')" = 1 ] || fail "matching marker must free the merge slot"
+
+    printf 'pr=%s/2\n' "$url" >> "$home/state/ship-a.meta"
+    out=$(fm_wip_free_json "$home/config" "$home/state")
+    [ "$(printf '%s' "$out" | jq -r '.merges')" = 0 ] || fail "replacement PR must occupy the merge slot"
+    out=$(spawn_ship "$home" ship-b); rc=$?
+    expect_code 5 "$rc" "a stale notification must not release the replacement PR's slot"
+    assert_contains "$out" "lane merges is at its cap of 1 with 1 in flight: ship-a" "replacement PR must block admission"
+
+    fm_pr_poll_merge_mark_notified "$home/state" ship-a "$provider" "$host" "$path" 2 \
+      || fail "could not record the replacement merge"
+    out=$(spawn_ship "$home" ship-b); rc=$?
+    expect_code 0 "$rc" "the replacement's delivered merge frees its slot"$'\n'"$out"
+  done
+  pass "merge slots release only for a matching current GitHub or GitLab PR identity"
 }
 
 test_lanes_are_independent() {
@@ -213,6 +254,7 @@ test_a_review_scout_enters_the_reviews_lane() {
 test_at_cap_refusal_names_lane_cap_and_occupants_and_creates_nothing
 test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
+test_merge_notification_is_scoped_to_the_current_pr
 test_lanes_are_independent
 test_secondmate_spawn_is_exempt
 test_invalid_caps_refuse_instead_of_defaulting

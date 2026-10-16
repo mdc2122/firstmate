@@ -72,6 +72,10 @@
 # Promotion (bin/fm-promote.sh) is not a dispatch: the promoted task moves from
 # its scout lane to validations without an admission check.
 
+if ! declare -F fm_pr_url_parse >/dev/null; then
+  . "$(dirname "${BASH_SOURCE[0]}")/fm-pr-lib.sh"
+fi
+
 FM_WIP_LANES='validations merges reviews investigations'
 FM_WIP_ERROR=
 FM_WIP_REFUSAL=
@@ -168,7 +172,8 @@ EOF
       if [ "$wlane" = reviews ]; then FM_WIP_TASK_LANE=reviews; else FM_WIP_TASK_LANE=investigations; fi
       ;;
     *)
-      if [ -e "$state/$id.pr-poll-merge-notified" ]; then
+      if (fm_pr_url_parse "$pr" && fm_pr_poll_merge_already_notified "$state" "$id" \
+        "$FM_PR_PROVIDER" "$FM_PR_HOST" "$FM_PR_PATH" "$FM_PR_NUMBER"); then
         :
       elif [ -n "$pr" ]; then
         FM_WIP_TASK_LANE=merges
