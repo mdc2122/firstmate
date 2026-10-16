@@ -2689,8 +2689,10 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # the hold drops; that retirement wakes once (the record it retires is the
 # per-head guard), and a yolo poll re-verifies the new head from scratch on its
 # next cycle. While the queue holds the same head past MERGE_LINE_STALL_SECS,
-# one wake per pull request and head says the queue has not picked it up or
-# finished; state/<id>.queue-stall keeps that episode as "<url> <head>
+# counted from when the pull request became its merge line's head (a window
+# entry queued behind that head waits on the tests ahead of it, so it keeps no
+# episode, and one whose head changes ahead of it starts over), one wake per
+# pull request and head says the queue has not picked it up or finished; state/<id>.queue-stall keeps that episode as "<url> <head>
 # <first-seen-epoch> <alerted>" and retires with the merged poll and at
 # teardown. The record retires with the merged poll and at teardown. Called
 # with the poll's merged verdict too: PR_QUEUE_HOLD stays 1 then unless the
@@ -2698,7 +2700,7 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # and the caller defers that landing rather than credit it.
 PR_QUEUE_HOLD=0
 pr_queue_merge_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file verdict head detail reason stall now age
+  local id=$1 c=$2 url=$3 file verdict head detail reason stall now age line_head
   local rec_url='' rec_head='' first='' alerted=''
 
   PR_QUEUE_HOLD=0
@@ -2751,6 +2753,12 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
         || fm_pr_queue_merge_record_write "$STATE" "$id" "$url" "$FM_PR_QUEUE_MERGE_HEAD" \
           requested "$FM_PR_QUEUE_MERGE_CHECKS" || true
       stall="$STATE/$id.queue-stall"
+      line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+        "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null) || line_head=$url
+      if [ -n "$line_head" ] && [ "$line_head" != "$url" ]; then
+        rm -f "$stall"
+        return 0
+      fi
       now=$(date +%s)
       if [ -f "$stall" ] && [ ! -L "$stall" ]; then
         read -r rec_url rec_head first alerted < "$stall" || true

@@ -20,11 +20,11 @@
 # head may each be handed to the queue as well, in line order, so the queue
 # holds the order and starts each test the moment its predecessor lands.
 # `gate --window` admits exactly those entries, and each only once every
-# earlier entry of the window that reads green (bin/fm-pr-merge.sh's rule: every
-# check green but the queue app's own pending one), or cannot be read, is
-# already queued, so the queue never receives an entry ahead of a green one
-# before it whatever order the watcher visits them in; an earlier red, pending,
-# or ejected entry is skipped. The window opens only behind a
+# earlier entry of the window that reads green or still pending (the queue
+# app's own check included), or cannot be read, is already queued, so the
+# queue never receives an entry ahead of one before it that may yet go green,
+# whatever order the watcher visits them in; only an earlier red, ejected,
+# closed, or merged entry is skipped. The window opens only behind a
 # queued head: with the head not queued, or a window size of 1, the single-head
 # gate above is the whole contract. A fronted entry that no queue holds blocks
 # the window behind it exactly as it blocks the head, so a constraint PR
@@ -392,12 +392,12 @@ window_entries() {
 }
 
 # Whether a window entry ahead of another must reach the queue first: it reads
-# open with every check green but the base's merge-queue app's own pending
-# check, or it cannot be read. A red, pending, closed, or merged entry does not.
+# open with every check green or still pending, or it cannot be read. A red,
+# closed, or merged entry does not.
 window_waits_for() {  # <url>
-  local json state red base pending
+  local json state red names pending
   fm_pr_url_parse "$1" && [ "$FM_PR_PROVIDER" = github ] || return 0
-  json=$(gh pr view "$FM_PR_URL" --json state,baseRefName,statusCheckRollup 2>/dev/null </dev/null) || return 0
+  json=$(gh pr view "$FM_PR_URL" --json state,statusCheckRollup 2>/dev/null </dev/null) || return 0
   state=$(printf '%s' "$json" | jq -r 'if type == "object" then (.state // "") else "" end' 2>/dev/null) || return 0
   case "$state" in
     OPEN) ;;
@@ -406,10 +406,8 @@ window_waits_for() {  # <url>
   esac
   red=$(fm_pr_github_checks_not_green "$json") || return 0
   [ -n "$red" ] || return 0
-  base=$(printf '%s' "$json" | jq -r '.baseRefName // ""' 2>/dev/null) || return 0
-  [ -n "$base" ] || return 0
-  fm_pr_github_read_queue_app_checks "$FM_PR_OWNER" "$FM_PR_REPO" "$base" "$json" </dev/null || return 0
-  pending=$(fm_pr_github_checks_pending "$json" "$FM_PR_GITHUB_QUEUE_APP_CHECKS") || return 0
+  names=$(printf '%s\n' "$red" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null) || return 0
+  pending=$(fm_pr_github_checks_pending "$json" "$names") || return 0
   red=$(printf '%s\n' "$red" | awk -v pending="$pending" '
     BEGIN { n = split(pending, p, "\n"); for (i = 1; i <= n; i++) skip[p[i]] = 1 }
     !($0 in skip)')
