@@ -1,0 +1,19 @@
+ok - at cap: the refusal names the lane, its cap, and its occupants, and nothing is created
+ok - a finish frees exactly one slot: one dispatch is admitted and the next is refused
+ok - a ship moves validations -> merges at its PR and frees its slot at its merge outcome
+ok - merge slots release only for a matching current GitHub or GitLab PR identity
+ok - scout promotion requires a free validations slot and a merges lane below its cap
+ok - at the defaults, 4 merges + 3 validations: the 5th registers, the 6th and 7th queue, and each finish arms exactly one in order
+ok - a same-lane re-registration never waits on the task-set lock; a busy lock queues an entering registration
+ok - a refused merge order restores merges 5/5, queue a, b, x and no pr=; a landed one records its PR
+ok - a refused merge order hands its slot back and pulls the queue head into a slot freed meanwhile
+ok - lanes are independent: a full ship lane does not block a scout, and vice versa
+ok - a bypass records itself in the task record and the bypass log, and still holds its slot
+ok - the bypass log line is written only after spawn success: none on failure, exactly one after a retry
+ok - a bypass is refused without a known class and a non-empty reason
+ok - a secondmate spawn is never capped, and refuses bypass flags it would never use
+ok - an invalid config/wip-caps refuses the dispatch rather than silently using a default
+ok - with no config/wip-caps the measured default caps apply
+ok - a scout from a review backlog item takes the reviews lane, and a refusal leaves it Queued
+# all fm-wip-caps tests passed
+bash tests/$t.test.sh  26.16s user 40.68s system 60% cpu 1:50.33 total

@@ -1,0 +1,18 @@
+$ # config/wip-caps now merges=3 (a, b hold 2; one slot free). Another process holds the task-set lock for 8s.
+holder: task-set lock held
+$ time FM_WIP_LOCK_WAIT=3 fm-pr-check.sh x https://github.com/example/repo/pull/5
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+refused: x's PR registration https://github.com/example/repo/pull/5 is queued, not armed: the task-set lock stayed busy for 3s, so merges capacity could not be checked. It is queued behind 0 earlier registration(s) and arms in order once a merges slot frees.
+exit=5 after 4s
+x pr= lines: 0
+3	x	https://github.com/example/repo/pull/5	merges
+holder: released
+$ # lock freed; holder now holds it only 3s while registration waits up to 20s
+holder: task-set lock held
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+holder: released
+armed: state/x.check.sh
+exit=0 after 3s
+$ cat state/.wip-pr-queue
+(end queue)
+state/x.meta:pr=https://github.com/example/repo/pull/5

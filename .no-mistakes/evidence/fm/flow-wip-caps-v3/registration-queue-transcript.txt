@@ -1,0 +1,74 @@
+$ # disposable home <home>, config/wip-caps: merges=2
+$ fm-pr-check.sh m1 https://github.com/example/repo/pull/1
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  5 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+armed: state/m1.check.sh
+exit=0
+$ fm-pr-check.sh m2 https://github.com/example/repo/pull/2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+armed: state/m2.check.sh
+exit=0
+$ fm-pr-check.sh a https://github.com/example/repo/pull/3
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+refused: a's PR registration https://github.com/example/repo/pull/3 is queued, not armed: work-in-progress cap: lane merges is at its cap of 2 with 2 in flight: m1, m2. It is queued behind 0 earlier registration(s) and arms in order once a merges slot frees.
+exit=5
+$ fm-pr-check.sh b https://github.com/example/repo/pull/4
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+refused: b's PR registration https://github.com/example/repo/pull/4 is queued, not armed: work-in-progress cap: lane merges is at its cap of 2 with 2 in flight: m1, m2; queued ahead of b: a. It is queued behind 1 earlier registration(s) and arms in order once a merges slot frees.
+exit=5
+$ fm-pr-check.sh x https://github.com/example/repo/pull/5
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+refused: x's PR registration https://github.com/example/repo/pull/5 is queued, not armed: work-in-progress cap: lane merges is at its cap of 2 with 2 in flight: m1, m2; queued ahead of x: a, b. It is queued behind 2 earlier registration(s) and arms in order once a merges slot frees.
+exit=5
+$ cat state/.wip-pr-queue
+1	a	https://github.com/example/repo/pull/3	merges
+2	b	https://github.com/example/repo/pull/4	merges
+3	x	https://github.com/example/repo/pull/5	merges
+$ grep ^pr= state/*.meta
+state/m1.meta:pr=https://github.com/example/repo/pull/1
+state/m2.meta:pr=https://github.com/example/repo/pull/2
+$ fm-pr-check.sh --retry-queued   # nothing finished yet
+exit=0
+$ # m1 merge outcome delivered (merge-notified marker)
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M523ES1N183R95M2BASP2BKS/bin/fm-pr-lib.sh:215: parse error near `|'
+(eval):11: command not found: fm_pr_poll_merge_mark_notified
+$ fm-pr-check.sh --retry-queued
+exit=0
+$ cat state/.wip-pr-queue
+1	a	https://github.com/example/repo/pull/3	merges
+2	b	https://github.com/example/repo/pull/4	merges
+3	x	https://github.com/example/repo/pull/5	merges
+$ grep ^pr= state/*.meta
+state/m2.meta:pr=https://github.com/example/repo/pull/2
+state/m1.meta:pr=https://github.com/example/repo/pull/1
+$ fm-pr-check.sh a https://github.com/example/repo/pull/3   # same-lane re-registration
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+refused: a's PR registration https://github.com/example/repo/pull/3 is queued, not armed: work-in-progress cap: lane merges is at its cap of 2 with 2 in flight: m1, m2. It is queued behind 0 earlier registration(s) and arms in order once a merges slot frees.
+exit=5
+$ # m1 merge outcome delivered (merge-notified marker for PR 1)
+marked
+$ fm-pr-check.sh --retry-queued
+check: wip-queue: a's queued PR registration https://github.com/example/repo/pull/3 armed now that a merges slot freed
+exit=0
+$ cat state/.wip-pr-queue
+2	b	https://github.com/example/repo/pull/4	merges
+3	x	https://github.com/example/repo/pull/5	merges
+$ grep ^pr= state/*.meta
+state/a.meta:pr=https://github.com/example/repo/pull/3
+state/m1.meta:pr=https://github.com/example/repo/pull/1
+state/m2.meta:pr=https://github.com/example/repo/pull/2
+$ # m2 finishes: cleanup removes its record
+$ fm-pr-check.sh --retry-queued
+check: wip-queue: b's queued PR registration https://github.com/example/repo/pull/4 armed now that a merges slot freed
+exit=0
+$ cat state/.wip-pr-queue
+3	x	https://github.com/example/repo/pull/5	merges
+$ grep ^pr= state/*.meta
+state/a.meta:pr=https://github.com/example/repo/pull/3
+state/b.meta:pr=https://github.com/example/repo/pull/4
+state/m1.meta:pr=https://github.com/example/repo/pull/1
