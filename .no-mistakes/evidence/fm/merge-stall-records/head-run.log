@@ -1,0 +1,14 @@
+ok - a merged head clears every stall record naming it with one corrective wake and leaves open heads' records alone
+ok - a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands
+ok - a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode
+--- records before merge:
+https://github.com/o/r/pull/2 https://github.com/o/r/pull/679 1792117839 0
+https://github.com/o/r/pull/1 https://github.com/o/r/pull/679 1792117840 0
+--- c2 stdout:
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.PKcqyI/scen-unalerted/home/state/task-z.check.sh: merged
+ok - un-alerted stall records naming a merged head are cleared with no corrective wake
+--- c1 stdout:
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.PKcqyI/scen-own-poll/home/state/task-z.check.sh: merged
+--- deliveries log (stale lines):
+--- wake queue rows:
+not ok - no corrective row queued on own-poll merge

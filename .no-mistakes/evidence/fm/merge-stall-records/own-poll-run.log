@@ -1,0 +1,8 @@
+--- c1 watcher stdout:
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.UI2wWw/scen-own-poll/home/state/task-z.check.sh: merged
+--- firstmate wake drain (what firstmate receives):
+1792117900	1	check	merged-task-z-https://github.com/o/r/pull/1	check: merge landed: task-z https://github.com/o/r/pull/1 yolo
+1792117902	2	check	/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.UI2wWw/scen-own-poll/home/state/task-z.check.sh	check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.UI2wWw/scen-own-poll/home/state/task-z.check.sh: stall alarms stale: https://github.com/o/r/pull/1 merged, so 1 earlier stall alarm(s) naming it no longer hold: merge-line stalled for green https://github.com/o/r/pull/7 behind it
+--- triage log:
+[2026-10-15T21:31:43-0500] merged https://github.com/o/r/pull/1 retired 2 stall record(s) naming it, 1 of them alerted
+ok - own-poll merge retires other tasks' alerted records naming it with one correction and leaves others
