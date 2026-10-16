@@ -35,7 +35,7 @@ SOCKET="fm-switch-live-$$"
 LAB=$(mktemp -d "$HOME/.fm-switch-live.XXXXXX")
 LAB=$(cd "$LAB" && pwd -P)
 VERSION=$(omp --version 2>/dev/null | head -n 1)
-SESSIONS="$LAB/home/state/t1.omp-sessions/live"
+SESSIONS="$HOME/.omp/agent/sessions/-$(printf '%s' "${LAB#"$(cd "$HOME" && pwd -P)"/}/wt" | tr '/:' '--')"
 
 cleanup() {
   local i=0
@@ -59,12 +59,13 @@ printf '#!/usr/bin/env bash\nexec "%s" -L "%s" "$@"\n' "$REAL_TMUX" "$SOCKET" > 
 chmod +x "$SHIM/tmux"
 PATH="$SHIM:$PATH"
 
+SPAWN_EPOCH=$(date +%s)
 git -C "$LAB/wt" init -q && git -C "$LAB/wt" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 tmux new-session -d -s lab -n fm-t1 -x 200 -y 50 -c "$LAB/wt" \
-  "env OMP_SKIP_SETUP=1 FM_OMP_HARNESS=omp omp --config $ROOT/.omp/fm-worker-overlay.yml --cwd $LAB/wt --session-dir $SESSIONS" \
+  "env OMP_SKIP_SETUP=1 FM_OMP_HARNESS=omp omp --config $ROOT/.omp/fm-worker-overlay.yml --cwd $LAB/wt" \
   || bad "could not launch in the isolated tmux server"
-printf 'window=lab:fm-t1\nendpoint_task_id=t1\nworktree=%s\nproject=%s\nharness=omp\nkind=ship\nmodel=default\neffort=default\nspawn_gen=live\n' \
-  "$LAB/wt" "$LAB/wt" > "$LAB/home/state/t1.meta"
+printf 'window=lab:fm-t1\nendpoint_task_id=t1\nworktree=%s\nproject=%s\nharness=omp\nkind=ship\nmodel=default\neffort=default\nspawn_gen=s%s.123.456\n' \
+  "$LAB/wt" "$LAB/wt" "$SPAWN_EPOCH" > "$LAB/home/state/t1.meta"
 printf 'brief\n' > "$LAB/home/data/t1/brief.md"
 
 wait_for() {  # <seconds> <command...>

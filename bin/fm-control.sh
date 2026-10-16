@@ -62,7 +62,7 @@
 #              session-only /switch); any other harness is refused and
 #              changes model through relaunch. The agent must be idle with a
 #              provably empty composer, and its omp session file (under
-#              the current spawn's isolated session directory) must already
+#              $HOME/.omp/agent/sessions/<encoded worktree>/) must already
 #              exist, because omp writes nothing to disk before the first
 #              completed turn and the switch could not be proven. --model is
 #              an exact <provider>/<id>; --effort appends omp's :<level>.
@@ -1077,13 +1077,35 @@ switch_notice() {  # <old-model> <new-model> <effort-or-empty> <reason>
     "$1" "$to" "$reason"
 }
 
+omp_session_dir() {
+  local wt home tmp name
+  wt=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  home=$(cd "$HOME" 2>/dev/null && pwd -P) || home=$HOME
+  tmp=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tmp=${TMPDIR:-/tmp}
+  if [ "$wt" = "$home" ]; then
+    name=-
+  elif [ "${wt#"$home"/}" != "$wt" ]; then
+    name="-$(printf '%s' "${wt#"$home"/}" | tr '/:' '--')"
+  elif [ "$wt" = "$tmp" ]; then
+    name=-tmp
+  elif [ "${wt#"$tmp"/}" != "$wt" ]; then
+    name="-tmp-$(printf '%s' "${wt#"$tmp"/}" | tr '/:' '--')"
+  else
+    name="--$(printf '%s' "${wt#/}" | tr '/:' '--')--"
+  fi
+  printf '%s/.omp/agent/sessions/%s' "$HOME" "$name"
+}
+
 omp_session_file() {
-  local gen dir f session=
+  local gen epoch dir f modified session=
   gen=$(fm_meta_get "$META" spawn_gen)
-  case "$gen" in ''|*[!a-zA-Z0-9._-]*) return 1 ;; esac
-  dir="$STATE/$ID.omp-sessions/$gen"
+  [[ "$gen" =~ ^s([0-9]+)\.[0-9]+\.[0-9]+$ ]] || return 1
+  epoch=${BASH_REMATCH[1]}
+  dir=$(omp_session_dir "$WT") || return 1
   for f in "$dir"/*.jsonl; do
     [ -f "$f" ] || continue
+    modified=$(fm_path_mtime "$f") || return 1
+    [ "$modified" -ge "$epoch" ] || continue
     [ -z "$session" ] || return 1
     session=$f
   done
@@ -1144,7 +1166,7 @@ do_switch_model() {
   [ -n "$WT" ] && [ -d "$WT" ] \
     || die "task $ID has no readable recorded worktree, so its omp session record cannot be located"
   session=$(omp_session_file) \
-    || die "no unique omp session record is bound to task $ID's current spawn; launch it with the current fm-spawn and complete its first turn before switching. Nothing was sent"
+    || die "no unique omp session record is bound to task $ID's current spawn; exactly one record written at or after its spawn epoch is required, so complete its first turn before switching. Nothing was sent"
   before=$({ grep -cF '"type":"model_change"' "$session" || true; })
   prior=$(session_models "$session" "$(( before > 0 ? before - 1 : 0 ))")
   [ -n "$prior" ] || prior=$(fm_meta_get "$META" model)
