@@ -176,6 +176,12 @@ SM_META="$PRIMARY_HOME/state/e2esm1.meta"
 assert_contains_local "$(cat "$SM_META")" "kind=secondmate" "e2esm1 meta missing kind=secondmate"
 assert_contains_local "$(cat "$SM_META")" "backend=herdr" "e2esm1 meta missing backend=herdr"
 assert_contains_local "$(cat "$SM_META")" "home=$SM_HOME" "e2esm1 meta does not record its own home"
+# A seeded secondmate home needs the same durable local parent route as a
+# scaffolded home; the primary's spawn already wrote its child meta record.
+printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$PRIMARY_HOME" \
+  > "$SM_HOME/.fm-secondmate-parent"
+printf -- '- e2esm1 - fixture mate (home: %s; scope: fixture; projects: ; added 2026-10-16)\n' \
+  "$SM_HOME" > "$PRIMARY_HOME/data/secondmates.md"
 SM_PANE=$(grep '^herdr_pane_id=' "$SM_META" | cut -d= -f2-)
 [ -n "$SM_PANE" ] || fail "e2esm1 meta missing herdr_pane_id"
 pass "real herdr E2E: the primary spawns a --secondmate task on the herdr backend"
@@ -230,8 +236,11 @@ pass "real herdr E2E: list_live from the secondmate's own context sees only task
 
 # --- 5. teardown closes the RIGHT tab, and no other ------------------------
 
+# Both captures and workspace checks above proved the completion observations.
+printf 'done: verified: primary-crew-ok ran in the primary workspace\n' >> "$PRIMARY_HOME/state/cm1.status"
+printf 'done: verified: sm-crew-ok ran in the secondmate workspace\n' >> "$SM_HOME/state/cm2.status"
 TD1_OUT="$TMP_ROOT/td1.out"
-FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$PRIMARY_HOME/state" FM_DATA_OVERRIDE="$PRIMARY_HOME/data" \
+FM_HOME="$PRIMARY_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$PRIMARY_HOME/state" FM_DATA_OVERRIDE="$PRIMARY_HOME/data" \
   FM_CONFIG_OVERRIDE="$PRIMARY_HOME/config" \
   "$ROOT/bin/fm-teardown.sh" cm1 >"$TD1_OUT" 2>&1
 rc=$?
@@ -250,12 +259,14 @@ WT1=
 pass "real herdr E2E: tearing down cm1 closes only its own tab - the secondmate's and cm2's tabs survive untouched"
 
 TD2_OUT="$TMP_ROOT/td2.out"
-FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$SM_HOME/state" FM_DATA_OVERRIDE="$SM_HOME/data" \
+FM_HOME="$SM_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$SM_HOME/state" FM_DATA_OVERRIDE="$SM_HOME/data" \
   FM_CONFIG_OVERRIDE="$SM_HOME/config" \
   "$ROOT/bin/fm-teardown.sh" cm2 >"$TD2_OUT" 2>&1
 rc=$?
 [ "$rc" -eq 0 ] || fail "fm-teardown.sh failed for the secondmate-owned crewmate cm2"$'\n'"$(cat "$TD2_OUT")"
 [ -f "$CM2_META" ] && fail "fm-teardown.sh did not remove cm2's meta"
+assert_contains_local "$(cat "$PRIMARY_HOME/state/e2esm1.status")" "child cm2 done:" \
+  "cm2's terminal outcome did not reach its secondmate's parent channel"
 if herdr pane get "$CM2_PANE" --session "$SESSION" >/dev/null 2>&1; then
   fail "fm-teardown.sh did not close cm2's pane"
 fi

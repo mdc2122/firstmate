@@ -268,8 +268,11 @@ per_script_timeout_auto_secs() {  # <script path or basename>
   case "${1##*/}" in
     fm-watch-triage.test.sh) echo 2100 ;;  # slowest 1250s; serial job cap 62m
     fm-backend-herdr-presentation-e2e.test.sh) echo 1000 ;;  # slowest 473s; Herdr step cap 24m
+    # Grew from 51 to 82 cases from 2026-10-12; CI ran 69 of them in 500s
+    # (7.3s each), so the full script needs about 600s.
+    fm-pr-check-security.test.sh) echo 1000 ;;
     fm-captain-hold-lifecycle.test.sh) echo 650 ;;  # slowest 392s
-    fm-pr-check-security.test.sh | fm-session-start.test.sh | \
+    fm-session-start.test.sh | \
       fm-remote-secondmate-lifecycle-e2e.test.sh | fm-procevent.test.sh)
       echo 500 ;;  # slowest 278-309s
     *) echo "$PER_SCRIPT_TIMEOUT_AUTO_DEFAULT_SECS" ;;
@@ -722,6 +725,7 @@ list_portable_serial() {
 # balance rather than coverage. That doc owns the refresh procedure.
 portable_serial_weight_hints() {
   cat <<'EOF'
+tests/fm-action-ledger.test.sh 5437
 tests/fm-agy-harness.test.sh 11000
 tests/fm-agy-signals-live-e2e.test.sh 23
 tests/fm-afk-contract.test.sh 3000
@@ -739,6 +743,8 @@ tests/fm-backend-zellij.test.sh 9418
 tests/fm-backend.test.sh 20061
 tests/fm-backlog-atomicity.test.sh 161989
 tests/fm-backlog-handoff.test.sh 52291
+tests/fm-backlog-read-bound.test.sh 24143
+tests/fm-bearings-board-lavish-live-e2e.test.sh 106
 tests/fm-bearings-board-render.test.sh 1528
 tests/fm-bearings-board.test.sh 4195
 tests/fm-bearings-snapshot.test.sh 116374
@@ -747,15 +753,22 @@ tests/fm-bootstrap.test.sh 25208
 tests/fm-branch-supervision.test.sh 5729
 tests/fm-busy-adapter-wiring.test.sh 49731
 tests/fm-busy-state.test.sh 2926
+tests/fm-calm-claude-mod-live-e2e.test.sh 99
+tests/fm-calm-claude-mod-plugin.test.sh 116
+tests/fm-calm-claude-mod.test.sh 1376
 tests/fm-calm-pi-extension.test.sh 256
 tests/fm-check-unregister.test.sh 481
+tests/fm-ci-workflow.test.sh 1905
 tests/fm-classify-corr-token.test.sh 38742
 tests/fm-classify-decision-key.test.sh 1167
 tests/fm-claude-stop-autoarm-live-e2e.test.sh 21
 tests/fm-claude-stop-autoarm.test.sh 60709
+tests/fm-claude-trust.test.sh 24000
 tests/fm-cmux-claude-composer-live-e2e.test.sh 23
 tests/fm-codex-continuity-live-e2e.test.sh 21
+tests/fm-composer-codex-idle-live-e2e.test.sh 96
 tests/fm-composer-matrix-live-e2e.test.sh 23
+tests/fm-contributions.test.sh 40416
 tests/fm-control-relaunch.test.sh 48210
 tests/fm-control.test.sh 54301
 tests/fm-cursor-harness.test.sh 30103
@@ -763,12 +776,15 @@ tests/fm-cursor-primary-live-e2e.test.sh 21
 tests/fm-cursor-primary.test.sh 54947
 tests/fm-daemon.test.sh 26870
 tests/fm-documentation-audiences.test.sh 732
+tests/fm-durable-job.test.sh 4231
 tests/fm-extension-binding.test.sh 7398
 tests/fm-far-holds.test.sh 7417
 tests/fm-fleet-snapshot-view.test.sh 8547
 tests/fm-fleet-sync.test.sh 37749
+tests/fm-flow-wait-ledger.test.sh 668
 tests/fm-followup-ledger.test.sh 9640
 tests/fm-gate-refuse.test.sh 4977
+tests/fm-gemini-harness.test.sh 1063
 tests/fm-gitignore-config.test.sh 62
 tests/fm-gotmp.test.sh 1310
 tests/fm-grok-continuity-live-e2e.test.sh 20
@@ -777,7 +793,9 @@ tests/fm-guard-stale-banner.test.sh 32981
 tests/fm-harness-adapter-instructions-live-e2e.test.sh 20
 tests/fm-harness-adapter-references.test.sh 55
 tests/fm-harness-liveness-drift-live-e2e.test.sh 21
+tests/fm-harness-precedence.test.sh 3201
 tests/fm-herdr-attached-viewer-live-e2e.test.sh 19000
+tests/fm-herdr-pi-stale-registration-live-e2e.test.sh 119
 tests/fm-herdr-session-cleanup.test.sh 6704
 tests/fm-herdr-submit-confirm-live-e2e.test.sh 23
 tests/fm-herdr-version-floor-live-e2e.test.sh 23
@@ -786,12 +804,17 @@ tests/fm-inactive-reconcile.test.sh 74399
 tests/fm-kimi-harness.test.sh 18015
 tests/fm-lint-workflows.test.sh 855
 tests/fm-live-gate.test.sh 6000
+tests/fm-mail-check.test.sh 6892
+tests/fm-mail.test.sh 10220
 tests/fm-muse-harness.test.sh 55572
 tests/fm-muse-signals-live-e2e.test.sh 23
+tests/fm-nm-test-contract.test.sh 1050
 tests/fm-no-mistakes-required.test.sh 370
 tests/fm-omp-branch-live-e2e.test.sh 91
 tests/fm-omp-branch.test.sh 45072
+tests/fm-omp-calm-install.test.sh 106
 tests/fm-omp-harness.test.sh 59969
+tests/fm-omp-primary-live-e2e.test.sh 117
 tests/fm-on.test.sh 34087
 tests/fm-opencode-primary-live-e2e.test.sh 21
 tests/fm-operational-input.test.sh 231
@@ -800,11 +823,16 @@ tests/fm-pending-reply.test.sh 86711
 tests/fm-pi-branch-extension.test.sh 22239
 tests/fm-pi-branch-live-e2e.test.sh 56
 tests/fm-pi-branch-responsiveness-live-e2e.test.sh 21
+tests/fm-pi-codex-native.test.sh 101
 tests/fm-pi-primary-live-e2e.test.sh 20
 tests/fm-pi-watch-extension.test.sh 42970
 tests/fm-pi-windows-shell-invocation.test.sh 5121
-tests/fm-pr-check-security.test.sh 172215
+tests/fm-pr-check-security.test.sh 603000
+tests/fm-pr-reviewers.test.sh 188
+tests/fm-pr-state-live-e2e.test.sh 104
+tests/fm-pr-state.test.sh 515
 tests/fm-pr-sweep.test.sh 9283
+tests/fm-prime-swarm.test.sh 25908
 tests/fm-procevent-quota.test.sh 1949
 tests/fm-procevent-when.test.sh 17392
 tests/fm-procevent.test.sh 69715
@@ -824,6 +852,8 @@ tests/fm-remote-secondmate-lifecycle-e2e.test.sh 209631
 tests/fm-remote-secondmate-parent-binding.test.sh 29562
 tests/fm-remote-secondmate-trace-context.test.sh 67096
 tests/fm-remote-transport-lanes.test.sh 63976
+tests/fm-rovo-harness.test.sh 13968
+tests/fm-rovo-signals-live-e2e.test.sh 101
 tests/fm-secondmate-harness.test.sh 151589
 tests/fm-secondmate-lifecycle-e2e.test.sh 8793
 tests/fm-secondmate-liveness.test.sh 18146
@@ -831,6 +861,7 @@ tests/fm-secondmate-reconcile.test.sh 62726
 tests/fm-secondmate-restart.test.sh 119085
 tests/fm-secondmate-safety.test.sh 57689
 tests/fm-secondmate-sync.test.sh 17183
+tests/fm-send-agy-confirm.test.sh 4162
 tests/fm-send-inbox-doorbell-live-e2e.test.sh 22
 tests/fm-send-inbox.test.sh 38956
 tests/fm-send-remote-delivery.test.sh 27686
@@ -848,6 +879,7 @@ tests/fm-spawn-pool-base-freshen.test.sh 34920
 tests/fm-spawn-worktree-settle.test.sh 5687
 tests/fm-startup-memory-budget.test.sh 6964
 tests/fm-startup-network.test.sh 62274
+tests/fm-stat-shadowing.test.sh 109
 tests/fm-stow-cascade.test.sh 3101
 tests/fm-stow-trigger.test.sh 22511
 tests/fm-subagent-pretool-check.test.sh 1030
@@ -855,6 +887,7 @@ tests/fm-supervision-events.test.sh 719
 tests/fm-tangle-guard.test.sh 9662
 tests/fm-task-delivery.test.sh 5952
 tests/fm-task-inbox.test.sh 25369
+tests/fm-tasks-axi.test.sh 1968
 tests/fm-teardown-endpoint-safety.test.sh 4620
 tests/fm-teardown.test.sh 97603
 tests/fm-test-fixture-cleanup.test.sh 915
@@ -879,6 +912,7 @@ tests/fm-watch-checkpoint.test.sh 5779
 tests/fm-watch-recovery-loop.test.sh 58731
 tests/fm-watch-triage.test.sh 262626
 tests/fm-watcher-lock.test.sh 88554
+tests/fm-wip-caps.test.sh 54516
 EOF
 }
 

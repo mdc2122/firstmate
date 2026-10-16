@@ -415,8 +415,8 @@ build_model() {
             else empty end ]
     | if $crew_state.known then . else
         . + [{source:"queue", class:"error", ref:"beads-crew", title:"could not read",
-              detail:"the beads crew queue read failed or timed out and no read from the last 24 h is"
-                     + " kept, so no row is named unowned this pass"}] end
+              detail:("the beads crew queue read failed or timed out and no read from the last 24 h is"
+                      + " kept, so no row is named unowned this pass")}] end
     | if $free != null then . else
         . + [{source:"queue", class:"error", ref:"wip-caps", title:"could not read",
               detail:("the work-in-progress caps could not be read (" + $wip_error

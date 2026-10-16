@@ -182,6 +182,10 @@ printf 'trivial e2e secondmate charter: nothing to do.\n' > "$SM2_HOME/data/char
 PRES_HOME="$TMP_ROOT/presentation-home"
 mkdir -p "$PRES_HOME/state" "$PRES_HOME/config"
 : > "$PRES_HOME/config/herdr-presentation-spaces"
+# Keep all placement paths independent of the production three-task WIP cap.
+for home in "$PRIMARY_HOME" "$SM_HOME" "$SM2_HOME" "$PRES_HOME"; do
+  printf 'validations=20\n' > "$home/config/wip-caps"
+done
 
 write_ship_brief() {  # <file> <id>
   cat > "$1" <<EOF
@@ -427,6 +431,9 @@ SM2_WS=$(workspace_of_pane "$SM2_PANE")
 pass "real herdr E2E: a --secondmate launch still stands up that secondmate's own workspace instead of inheriting the launcher's"
 
 # --- 8. teardown closes only the worker's own pane --------------------------
+
+# The exact workspace/pane assertions above established the brief's observation.
+printf 'done: verified: dupC was placed in the launcher workspace\n' >> "$PRIMARY_HOME/state/dupC.status"
 
 FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$PRIMARY_HOME/state" FM_DATA_OVERRIDE="$PRIMARY_HOME/data" \
   FM_CONFIG_OVERRIDE="$PRIMARY_HOME/config" \
