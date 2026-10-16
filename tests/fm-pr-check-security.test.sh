@@ -3414,6 +3414,46 @@ test_merge_line_closed_head_is_dropped_and_wakes() {
   pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
 }
 
+# A head that merges outside its poll ends every held PR's stall episode at
+# once, not only the episode of the held task whose tick probed it, and the
+# alarms those episodes raised are corrected by exactly one wake. A stall
+# record naming a head that is still open is left alone.
+test_merge_line_merged_head_clears_every_stall_record_with_one_wake() {
+  local dir state head=https://github.com/o/r/pull/679 other=https://github.com/o/r/pull/900
+  dir=$(make_case merge-line-merged-head)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  merge_line "$dir" front "$head" >/dev/null || fail "front refused an unarmed PR"
+  fake_line_head "$dir" "$head" OPEN FAILURE
+  printf '%s %s %s 1\n' https://github.com/o/r/pull/5 "$other" "$(date +%s)" > "$state/task-x.merge-line-stall"
+
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c1
+  FM_MERGE_LINE_STALL_SECS=0 merge_line_cycle "$dir" c2
+  case "$(cat "$dir/c1.out") $(cat "$dir/c2.out")" in
+    *"green https://github.com/o/r/pull/2 has waited"*"green https://github.com/o/r/pull/1 has waited"*) ;;
+    *) fail "both held PRs did not raise their stall alarms: $(cat "$dir/c1.out" "$dir/c2.out")" ;;
+  esac
+
+  fake_line_head "$dir" "$head" MERGED SUCCESS
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c3
+  case "$(cat "$dir/c3.out")" in
+    *"stall alarms stale: $head merged, so 2 earlier stall alarm(s) naming it no longer hold"*pull/2*pull/1*) ;;
+    *"stall alarms stale: $head merged, so 2 earlier stall alarm(s) naming it no longer hold"*pull/1*pull/2*) ;;
+    *) fail "a merged head did not correct both alarms naming it in one wake: $(cat "$dir/c3.out")" ;;
+  esac
+  [ ! -e "$state/task-a.merge-line-stall" ] || fail "the probing task kept a stall record naming the merged head"
+  [ ! -e "$state/task-z.merge-line-stall" ] \
+    || fail "another held task kept a stall record naming the merged head: $(cat "$state/task-z.merge-line-stall")"
+  grep -qF " $other " "$state/task-x.merge-line-stall" \
+    || fail "a stall record naming a still-open head was touched"
+
+  FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c4
+  ! grep -qF 'stall alarms stale' "$dir/c4.out" || fail "one cleared episode was corrected twice: $(cat "$dir/c4.out")"
+  [ "$(grep -cF 'stall alarms stale' "$state/.watch-deliveries.log")" -eq 1 ] \
+    || fail "the cleared episodes were corrected more than once: $(grep -F 'stall alarms stale' "$state/.watch-deliveries.log")"
+  pass "a merged head clears every stall record naming it with one corrective wake and leaves open heads' records alone"
+}
+
 test_repo_without_merge_line_is_unchanged() {
   local dir
   dir=$(make_case merge-line-absent)
@@ -3609,6 +3649,7 @@ test_merge_line_front_lands_an_unarmed_attended_merge
 test_merge_line_holds_behind_rerun_for_non_head
 test_repo_without_merge_line_is_unchanged
 test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
+test_merge_line_merged_head_clears_every_stall_record_with_one_wake
 test_merge_line_closed_head_is_dropped_and_wakes
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
