@@ -104,6 +104,16 @@ wake_rows() {
   echo "$n"
 }
 
+# --- retiring without a record must not recreate a removed home or state ----
+H="$TMP_ROOT/removed-home"
+watch "$H" retire t1 >/dev/null || fail "retire failed for a removed home"
+assert_absent "$H" "retire without a watch recreated the removed home"
+mkdir -p "$H/state"
+watch "$H" retire t1 >/dev/null || fail "retire failed without a watch record"
+assert_equals 0 "$(find "$H/state" -mindepth 1 | wc -l | tr -d ' ')" \
+  "retire without a record created state artifacts"
+pass "retire without a watch record touches nothing"
+
 # --- a merged PR resumes a worker on its ready line exactly once, silently ----
 H=$(make_home merged "working: implementing" "done: PR $URL checks green")
 out=$(watch "$H" arm t1 "$URL") || fail "arm failed: $out"
