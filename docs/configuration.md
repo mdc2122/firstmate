@@ -543,6 +543,25 @@ The locked bootstrap inheritance pass uses the same placement-specific behavior;
 That live discovery starts from `state/*.meta` records with `kind=secondmate`; `data/secondmates.md` only backfills `home=` for older or incomplete meta records.
 Skipped items, such as a destination checkout that does not yet gitignore the item, are visible warnings but not hard failures.
 
+## Resume watch release pointers (config/resume-live-pointers)
+
+`config/resume-live-pointers` is an optional local, gitignored file that is not inherited by secondmate homes.
+It lets [`bin/fm-resume-watch.sh`](../bin/fm-resume-watch.sh) wait for a PR's merge to reach a running release instead of only for the merge itself, for a repository whose release is an atomically switched pointer.
+Each line that is not blank and not a `#` comment holds three whitespace-separated fields:
+
+```text
+<repository-url> <repo-dir> <pointer-file>
+```
+
+- `<repository-url>` is the PR URL up to and excluding `/pull/<n>` or `/-/merge_requests/<n>`, such as `https://github.com/owner/repo`.
+- `<repo-dir>` is an absolute path to a git store that holds the released tags and the merged commits.
+- `<pointer-file>` is an absolute path to a file whose first line names the tag currently live.
+
+A PR is live once its merge commit is an ancestor of that tag's commit.
+The first matching line wins, and a matching line that is malformed means no pointer for that repository.
+Without a matching line every resume watch for that repository waits for the merge only, and an explicit `live` arm is refused.
+This section owns the schema; `bin/fm-resume-watch.sh` owns when a watch uses it.
+
 ## Watched tool updates (config/watched-tools.json)
 
 `config/watched-tools.json` is an optional local, gitignored list of the tools this home depends on.
@@ -893,6 +912,7 @@ For built-ins, silence remains independent of the keyed-answer feed below: suppr
 For Lavish that verdict covers exactly one shape - a session the adapter classifies `ended` that carries no queued content block at all, which is a review surface closed with nothing said.
 Any recognized top-level `prompts` or `feedback` block counts as content regardless of its declared count, and a malformed header makes the result indeterminate rather than empty.
 A `Send & End` close carrying the captain's answer arrives as `status: feedback` with `session_ended`, so it classifies `feedback` and is announced unchanged, as is any `ended` result that still carries content, and every `waiting`, `missing`, `unknown`, or unreadable result.
+For the `when` adapter it covers exactly one shape: a `fired` outcome of a watch whose trust-validated spec names this repo's `bin/fm-resume-action.sh` as its action, which is a resume steer already durably recorded in the worker's inbox and the action ledger; every other `when` outcome, and every other watch, still wakes.
 
 Whether a captured result ends its source is adapter knowledge, never the runner's.
 After capture - and after initial `check` publication for the default ordering - the runner asks the immutable captured owner through the built-in `terminal` command or external `result.terminal` operation and retires the registration on exit 0 alone, dropping only the exact registration generation captured by its claim and releasing that claim only after removal succeeds under one source boundary; a missing command, an error, or any other exit keeps the source armed, so an adapter with no notion of ending needs no change.

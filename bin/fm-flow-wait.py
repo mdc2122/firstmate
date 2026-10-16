@@ -139,6 +139,7 @@ SCRIPT_TEMPLATES = [
     ("watcher-behind-rerun", re.compile(r"is green but GitHub refuses the merge because the branch is behind")),
     ("pending-reply-repost", re.compile(r"REPOST REQUIRED: previous marked request")),
     ("config-reread", re.compile(r"\bCONFIG_REREAD:")),
+    ("resume-watch", re.compile(r"^Resume fact \(watch\): ")),
 ]
 
 
