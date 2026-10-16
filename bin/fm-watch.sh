@@ -2965,7 +2965,7 @@ merge_line_prune() {
   MERGE_LINE_PRUNE_WAKE=
   [ -d "$STATE/merge-lines" ] || return 0
   touch "$STATE/.last-watcher-beat"
-  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_MERGE_LINE_PRUNE_TIMEOUT="$MERGE_LINE_PRUNE_TIMEOUT" \
     run_action_capture "$MERGE_LINE_PRUNE_TIMEOUT" "$SCRIPT_DIR/fm-merge-line.sh" prune || exit 1
   touch "$STATE/.last-watcher-beat"
   while IFS= read -r line; do

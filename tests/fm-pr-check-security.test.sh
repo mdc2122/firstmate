@@ -3889,9 +3889,8 @@ prune_reads() {  # <dir>
   [ -e "$dir/fakebin/gh.real" ] || mv "$dir/fakebin/gh" "$dir/fakebin/gh.real"
   cat > "$dir/fakebin/gh" <<SH
 #!/usr/bin/env bash
-if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.hang" ]; then
-  printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
-  sleep 60
+if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.delay" ]; then
+  sleep "\$(cat "$dir/prune/\${3##*/}.delay")"
 fi
 if [ "\${1:-} \${2:-}" = "pr view" ] && [ "\${5:-}" = state,headRefOid ] && [ -f "$dir/prune/\${3##*/}.json" ]; then
   printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
@@ -4005,17 +4004,45 @@ test_merge_line_prune_read_timeout_keeps_partial_progress() {
   prune_reads "$dir"
   prune_read "$dir" 1 MERGED
   prune_read "$dir" 2 CLOSED
-  : > "$dir/prune/2.hang"
+  echo 60 > "$dir/prune/2.delay"
   prune_read "$dir" 3 CLOSED
   FM_MERGE_LINE_PRUNE_READ_TIMEOUT=1 merge_line_cycle "$dir" c1
   [ "$(line_entries "$dir")" = 'https://github.com/o/r/pull/2 https://github.com/o/r/pull/3 ' ] \
     || fail "prune did not drop the entry it read before the timed-out read: $(line_entries "$dir")"
   ! grep -qF 'pr view https://github.com/o/r/pull/3 --json state,headRefOid' "$dir/gh.log" \
     || fail "prune kept reading after a read timed out"
-  rm -f "$dir/prune/2.hang"
+  rm -f "$dir/prune/2.delay"
   FM_MERGE_LINE_PRUNE_READ_TIMEOUT=1 merge_line_cycle "$dir" c2
   [ -z "$(line_entries "$dir")" ] || fail "a later sweep did not prune the entries left unread: $(line_entries "$dir")"
   pass "a timed-out prune read stops that sweep's reads but the entries already read are pruned, and the rest are pruned next sweep"
+}
+
+# Thirty listed PRs whose forge reads each take 3 seconds against the default
+# 90-second prune bound, scaled down by ten: prune stops starting reads once its
+# read budget is spent, prunes the merged entries it read, keeps the rest listed
+# in order, counts them in one diagnostic, and finishes inside its bound.
+test_merge_line_prune_read_budget_prunes_what_it_read() {
+  local dir n left want='' unread
+  dir=$(make_case merge-line-prune-read-budget)
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
+  add_stop_custom_check "$dir"
+  prune_reads "$dir"
+  for n in $(seq 1 30); do
+    merge_line "$dir" enqueue "https://github.com/o/r/pull/$n" || fail "could not enqueue pull/$n"
+    prune_read "$dir" "$n" MERGED
+    echo 0.3 > "$dir/prune/$n.delay"
+  done
+  FM_MERGE_LINE_PRUNE_TIMEOUT=9 merge_line_cycle "$dir" c1
+  left=$(line_entries "$dir")
+  unread=$(printf '%s' "$left" | wc -w | tr -d ' ')
+  [ "$unread" -gt 0 ] && [ "$unread" -lt 30 ] \
+    || fail "prune did not stop at its read budget and prune what it read: $left"
+  for n in $(seq $((31 - unread)) 30); do want="${want}https://github.com/o/r/pull/$n "; done
+  [ "$left" = "$want" ] || fail "prune left other than the unread tail of the line: $left"
+  [ "$(grep -c "merge line prune (rc=0): fm-merge-line: $unread merge-line entries not read this sweep (the read budget was spent)" "$dir/home/state/.watch-triage.log")" -eq 1 ] \
+    || fail "prune did not finish inside its bound with one unread-count diagnostic: $(cat "$dir/home/state/.watch-triage.log")"
+  pass "prune stops reading at its read budget, prunes the merged entries it read, and keeps the unread rest listed"
 }
 
 # An open entry its live task's poll arms is left alone; once cleanup retires
@@ -4237,6 +4264,7 @@ test_merge_line_prune_drops_a_merged_head_and_the_next_lands_the_same_sweep
 test_merge_line_prune_drops_a_closed_non_head_entry
 test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head
 test_merge_line_prune_read_timeout_keeps_partial_progress
+test_merge_line_prune_read_budget_prunes_what_it_read
 test_merge_line_prune_leaves_an_owned_open_entry_and_wakes_once_it_loses_its_poll
 test_merge_line_queue_window_arms_green_entries_in_line_order
 test_merge_line_queue_window_waits_for_an_earlier_green_entry
