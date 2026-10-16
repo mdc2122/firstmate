@@ -1,0 +1,21 @@
+--- fm-merge-line.sh show
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/1 task=task-z head
+  2. https://github.com/o/r/pull/2 task=task-a held
+rc=0
+--- fm-merge-line.sh head --queued https://github.com/o/r
+https://github.com/o/r/pull/1
+rc=0
+--- fm-merge-line.sh gate --window pull/2 (line-level: would admit)
+rc=0
+--- fm-merge-line.sh gate pull/2 (single-head)
+held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+rc=3
+--- attended fm-pr-merge.sh of pull/2 on a non-queue base
+verified: https://github.com/o/r/pull/2 is open and mergeable, with every required check green at head 0123456789abcdef0123456789abcdef01234567
+error: PR merge refused - held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+rc=1
+forge merges issued: []
+--- watcher sweep on the non-queue base (head pull/1 green, yolo on)
+forge merges issued: []
+ok - a non-queue base never widens the line, even with a queued-head record

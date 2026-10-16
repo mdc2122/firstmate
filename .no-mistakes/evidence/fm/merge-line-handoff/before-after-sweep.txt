@@ -1,0 +1,17 @@
+BEFORE (base df7075fa, single-head gate): PRs handed to the merge queue in sweep 1: [1 ]
+    gh pr merge 1 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+    triage: [2026-10-16T04:08:09-0500] merge line holds task-b: held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:08:11-0500] merge line holds task-c: held: https://github.com/o/r/pull/3 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:08:12-0500] merge line holds task-d: held: https://github.com/o/r/pull/4 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+AFTER (de820209, default FM_MERGE_LINE_QUEUE_WINDOW=3): PRs handed to the merge queue in sweep 1: [1 2 3 ]
+    gh pr merge 1 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+    gh pr merge 2 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+    gh pr merge 3 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+    triage: [2026-10-16T04:08:42-0500] merge line holds task-b: held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:08:50-0500] merge line holds task-c: held: https://github.com/o/r/pull/3 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:08:56-0500] merge line holds task-d: held: https://github.com/o/r/pull/4 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+AFTER with FM_MERGE_LINE_QUEUE_WINDOW=1 (opt-out): PRs handed to the merge queue in sweep 1: [1 ]
+    gh pr merge 1 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+    triage: [2026-10-16T04:09:16-0500] merge line holds task-b: held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:09:17-0500] merge line holds task-c: held: https://github.com/o/r/pull/3 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+    triage: [2026-10-16T04:09:18-0500] merge line holds task-d: held: https://github.com/o/r/pull/4 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r

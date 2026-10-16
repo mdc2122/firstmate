@@ -1,0 +1,15 @@
+ok - a queue-app base arms the window's green entries in line order, and an ejection skips forward
+ok - the queue window hands an entry to the queue only after every earlier green entry is queued
+ok - a pending earlier entry holds the queue window behind it, and a red one is skipped
+ok - a window entry's queue-stall clock starts only once it is the line's first entry the queue holds
+ok - the queue-stall clock belongs to the line's first entry the queue holds, past an unqueued red head
+ok - the queue window opens only behind a queued head and ends at a fronted entry
+ok - a declared merge line lands its head first and hands off to the next PR in the same sweep
+ok - without a merge queue the gate holds a PR behind its head, and a head found merged hands off in the same sweep
+ok - a merged head clears every stall record naming it with one corrective row and leaves open heads' records alone
+ok - a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands
+ok - front moves a PR to the head of its merge line in one command
+ok - an attended merge of a fronted, not yet armed PR passes its merge line's gate
+ok - a repository without a declared merge line merges exactly as before
+ok - a queue ejection wakes firstmate once with its reason and the ejected head is not re-queued
+ok - a pull request the queue holds past the stall window wakes firstmate once per head
