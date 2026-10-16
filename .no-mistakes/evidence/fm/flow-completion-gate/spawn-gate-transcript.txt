@@ -1,0 +1,40 @@
+=== 1. Scaffolded ship brief carries a Completion observation section ===
+# Completion observation
+verify: {VERIFY}
+This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
+The ready line the Definition of done asks for (`done: PR ...` or `done: ready in branch ...`) hands the change over for merge; after appending it, end your turn and wait rather than treating the task as complete.
+When firstmate tells you through your instruction inbox that the change has landed, make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
+If the live surface does not show it, append `blocked: verify: {what you saw instead}` and stop; never record `done: verified:` for an observation you did not make.
+Teardown refuses to close this task until that `done: verified:` line exists.
+
+=== 2. Spawn with {VERIFY} unfilled ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s-unfilled/brief.md still contains {VERIFY}; replace it with the live end state the worker will observe (deployed, running, measured) for s-unfilled before spawn
+rc=1 meta_exists=no
+
+=== Spawn with verify: PR merged ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s----merged/brief.md verify observation names only a resting state: verify: PR merged; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s----merged before spawn
+rc=1
+
+=== Spawn with verify: ready for review ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s-ready-for-review/brief.md verify observation names only a resting state: verify: ready for review; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s-ready-for-review before spawn
+rc=1
+
+=== Spawn with verify: CI is passing on main and checks green ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s----is-passing-on-mai/brief.md verify observation names only a resting state: verify: CI is passing on main and checks green; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s----is-passing-on-mai before spawn
+rc=1
+
+=== Spawn with verify: pushed and PR approved ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s-pushed-and----approv/brief.md verify observation names only a resting state: verify: pushed and PR approved; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s-pushed-and----approv before spawn
+rc=1
+
+=== Spawn with verify: v2 deployed to staging and /health returns 200 ===
+notice: s-v2-deployed-to-stagi ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+rc=1
+
+=== Spawn with verify: fm-watch daemon running and logging beats ===
+notice: s-fm-watch-daemon-runn ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+rc=1
+
+=== Spawn with brief lacking the section entirely ===
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive.nfZrYZ/home/data/s-none/brief.md has no verify observation for s-none; add a `# Completion observation` section whose `verify:` line names the live end state the worker will observe (deployed, running, measured), or re-scaffold the brief with bin/fm-brief.sh, before spawn
+rc=1 meta_exists=no

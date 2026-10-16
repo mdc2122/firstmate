@@ -1,0 +1,39 @@
+############ PROMOTE ############
+--- no --verify
+error: promotion requires --verify <observation>; name the live end state the worker will observe (deployed, running, measured) - a ship task that cannot state how completion is observed does not start
+rc=1 meta: window=fm-sc1 kind=scout worktree=/tmp/wt 
+--- --verify 'PR merged and checks green'
+error: --verify verify observation names only a resting state: verify: PR merged and checks green; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured)
+rc=1 meta: window=fm-sc1 kind=scout worktree=/tmp/wt 
+--- --verify ''
+error: --verify has no verify observation; name the live end state the worker will observe (deployed, running, measured)
+rc=1 meta: window=fm-sc1 kind=scout worktree=/tmp/wt 
+--- --verify '{VERIFY}'
+error: --verify still contains {VERIFY}; replace it with the live end state the worker will observe (deployed, running, measured)
+rc=1 meta: window=fm-sc1 kind=scout worktree=/tmp/wt 
+--- --verify 'staging /health returns 200 after deploy'
+promoted sc1 to ship mode=direct-PR yolo=off (teardown protection restored)
+wrote ship instructions for mode=direct-PR: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/phome/data/sc1/ship-instructions.md
+next: FM_HOME=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/phome bin/fm-send.sh fm-sc1 "$(cat /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/phome/data/sc1/ship-instructions.md)"
+rc=0 meta: window=fm-sc1 worktree=/tmp/wt kind=ship mode=direct-PR yolo=off 
+--- delivered ship instructions tail:
+# Completion observation
+verify: staging /health returns 200 after deploy
+This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
+
+############ TEARDOWN ############
+--- work merged, status only has ready line + empty 'done: verified:', report.md has a verified: line
+REFUSED: ship task task-x1 has not recorded its verify observation, so it is not finished.
+Missing: a `done: verified: <what was observed>` line in /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/case/state/task-x1.status for: verify: v2 deployed to staging and /health returns 200
+Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval.
+rc=1 meta_still_present=yes
+--- 'note: verified: ...' (wrong verb) appended
+REFUSED: ship task task-x1 has not recorded its verify observation, so it is not finished.
+Missing: a `done: verified: <what was observed>` line in /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/case/state/task-x1.status for: verify: v2 deployed to staging and /health returns 200
+Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval.
+rc=1 meta_still_present=yes
+--- worker appends 'done: verified: <observation>'
+/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/case/project: synced c0e84e6..2ba05f1
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-dod-drive2.WwwprK/case/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-dod-drive2.WwwprK/case/data/backlog.md). Update /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-dod-drive2.WwwprK/case/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+rc=0 meta_still_present=no

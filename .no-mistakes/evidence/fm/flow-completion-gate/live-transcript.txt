@@ -1,0 +1,123 @@
+
+===== S1 scaffold: fm-brief.sh ship brief tail =====
+scaffolded: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s1/brief.md (ship, mode=direct-PR; replace {TASK}, {FIRSTMATE_SPEC}, and {VERIFY})
+# Completion observation
+verify: {VERIFY}
+This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
+The ready line the Definition of done asks for (`done: PR ...` or `done: ready in branch ...`) hands the change over for merge; after appending it, end your turn and wait rather than treating the task as complete.
+When firstmate tells you through your instruction inbox that the change has landed, make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
+If the live surface does not show it, append `blocked: verify: {what you saw instead}` and stop; never record `done: verified:` for an observation you did not make.
+Teardown refuses to close this task until that `done: verified:` line exists.
+
+===== S2 spawn with {VERIFY} unfilled =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s1/brief.md still contains {VERIFY}; replace it with the live end state the worker will observe (deployed, running, measured) for s1 before spawn
+[exit=1]
+no task meta written
+
+===== S3 spawn with brief lacking Completion observation section =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s3/brief.md has no verify observation for s3; add a `# Completion observation` section whose `verify:` line names the live end state the worker will observe (deployed, running, measured), or re-scaffold the brief with bin/fm-brief.sh, before spawn
+[exit=1]
+no task meta written
+
+===== S4 spawn with verify: PR merged =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s4-1/brief.md verify observation names only a resting state: verify: PR merged; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s4-1 before spawn
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: Merged and checks green =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s4-2/brief.md verify observation names only a resting state: verify: Merged and checks green; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s4-2 before spawn
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: ready for review =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s4-3/brief.md verify observation names only a resting state: verify: ready for review; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s4-3 before spawn
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: CI passing on main, PR approved =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s4-4/brief.md verify observation names only a resting state: verify: CI passing on main, PR approved; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s4-4 before spawn
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: pushed to origin and tests pass =====
+error: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/s4-5/brief.md verify observation names only a resting state: verify: pushed to origin and tests pass; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured) for s4-5 before spawn
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: verify: =====
+notice: s4-6 ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: v2 deployed to staging and /health returns 200 =====
+notice: s4-7 ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+[exit=1]
+(no task meta)
+
+===== S4 spawn with verify: no keychain popups on screen after a fresh login =====
+notice: s4-8 ships mode=direct-PR while the standing posture for proj is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+[exit=1]
+(no task meta)
+
+===== S6 promote scout without --verify / resting / live =====
+-- no --verify
+error: promotion requires --verify <observation>; name the live end state the worker will observe (deployed, running, measured) - a ship task that cannot state how completion is observed does not start
+[exit=1]
+kind=scout
+-- --verify 'PR merged and checks green'
+error: --verify verify observation names only a resting state: verify: PR merged and checks green; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured)
+[exit=1]
+kind=scout
+-- --verify '{VERIFY}'
+error: --verify still contains {VERIFY}; replace it with the live end state the worker will observe (deployed, running, measured)
+[exit=1]
+kind=scout
+-- --verify ''
+error: --verify has no verify observation; name the live end state the worker will observe (deployed, running, measured)
+[exit=1]
+kind=scout
+-- --verify live
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+promoted sc to ship mode=direct-PR yolo=off (teardown protection restored)
+wrote ship instructions for mode=direct-PR: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/sc/ship-instructions.md
+next: FM_HOME=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home bin/fm-send.sh fm-sc "$(cat /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/home/data/sc/ship-instructions.md)"
+[exit=0]
+kind=ship
+-- delivered ship-instructions tail:
+# Completion observation
+verify: widget renders on prod homepage
+This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
+The ready line the Definition of done asks for (`done: PR ...` or `done: ready in branch ...`) hands the change over for merge; after appending it, end your turn and wait rather than treating the task as complete.
+When firstmate tells you through your instruction inbox that the change has landed, make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
+If the live surface does not show it, append `blocked: verify: {what you saw instead}` and stop; never record `done: verified:` for an observation you did not make.
+Teardown refuses to close this task until that `done: verified:` line exists.
+
+===== S7 teardown of a landed ship task =====
+-- status: PR ready + merged/green line only, plus empty verified, plus report.md verified: line
+REFUSED: ship task task-x1 has not recorded its verify observation, so it is not finished.
+Missing: a `done: verified: <what was observed>` line in /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/td/state/task-x1.status for: verify: v2 deployed to staging and /health returns 200
+Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval.
+[exit=1]
+worktree still present
+task meta still present
+-- status gains a non-done 'working: verified: ...' line
+Missing: a `done: verified: <what was observed>` line in /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/td/state/task-x1.status for: verify: v2 deployed to staging and /health returns 200
+Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval.
+[exit=1]
+-- worker records done: verified:
+/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/td/project: already current
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-verify-live.HsmUgv/td/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-verify-live.HsmUgv/td/data/backlog.md). Update /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-verify-live.HsmUgv/td/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+[exit=0]
+worktree still present
+task meta removed
+
+===== S8 classify: done: verified: citing PR is not a ready-signal =====
+done: PR https://github.com/o/r/pull/7 checks green -> https://github.com/o/r/pull/7
+done: verified: PR https://github.com/o/r/pull/7 deployed, /health 200 -> (not a ready signal, rc=1)
