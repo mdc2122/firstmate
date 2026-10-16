@@ -1,0 +1,62 @@
+$ fm-spawn.sh blocked <disposable-project> --mode local-only --yolo off "sleep 120"
+warning: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/data/blocked/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: blocked ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+refused: blocked was not dispatched; work-in-progress cap: lane validations is at its cap of 1 with 1 in flight: busy. Its backlog item stays Queued: pull it when one of these finishes.
+[exit 5]
+$ fm-spawn.sh admitted <disposable-project> --mode local-only --yolo off "sleep 120"
+warning: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/data/admitted/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: admitted ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+spawned admitted harness=sleep kind=ship mode=local-only yolo=off window=firstmate:fm-admitted worktree=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/pool/.treehouse/project-a6d490/1/project
+[exit 0]
+$ fm-spawn.sh blocked-next <disposable-project> --mode local-only --yolo off "sleep 120"
+warning: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/data/blocked-next/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: blocked-next ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+refused: blocked-next was not dispatched; work-in-progress cap: lane validations is at its cap of 1 with 1 in flight: admitted. Its backlog item stays Queued: pull it when one of these finishes.
+[exit 5]
+$ fm-spawn.sh investigate <disposable-project> --scout "sleep 120"
+spawned investigate harness=sleep kind=scout window=firstmate:fm-investigate worktree=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/pool/.treehouse/project-a6d490/2/project
+[exit 0]
+$ fm-spawn.sh investigate-next <disposable-project> --scout "sleep 120"
+refused: investigate-next was not dispatched; work-in-progress cap: lane investigations is at its cap of 1 with 1 in flight: investigate. Its backlog item stays Queued: pull it when one of these finishes.
+[exit 5]
+$ fm-spawn.sh invalid <disposable-project> --mode local-only --yolo off "sleep 120"
+warning: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/data/invalid/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: invalid ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+error: invalid was not dispatched because its work-in-progress caps could not be read: config/wip-caps line 1: the validations cap must be a positive integer, got '0'
+[exit 1]
+$ fm-spawn.sh default-limit <disposable-project> --mode local-only --yolo off "sleep 120"
+warning: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/spawn/data/default-limit/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: default-limit ships mode=local-only while the standing posture for project is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+refused: default-limit was not dispatched; work-in-progress cap: lane validations is at its cap of 3 with 3 in flight: admitted, busy-three, busy-two. Its backlog item stays Queued: pull it when one of these finishes.
+[exit 5]
+Actual tmux pane after admitted launch:
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+Studio2s-Mac-Studio:project studio2$ treehouse get
+🌳 Setting up worktree...
+🌳 Entered worktree at /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD
+/.phase-test/live/spawn/pool/.treehouse/project-a6d490/1/project. Type 'exit' to return.
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+Studio2s-Mac-Studio:project studio2$ export GOTMPDIR=/tmp/fm-admitted/gotmp
+Studio2s-Mac-Studio:project studio2$ export FM_TASK_ID=admitted
+Studio2s-Mac-Studio:project studio2$ sleep 120
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,87 @@
+$ fm-pr-check.sh validating https://github.com/example/repo/pull/2
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  3 task(s) in flight, but no live watcher process holds this home lock (last beat: 0s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+refused: work-in-progress cap: lane merges is at its cap of 1 with 1 in flight: merging
+[exit 5]
+
+$ fm-promote.sh scouting --mode local-only --yolo off
+WARNING: watcher still down (same stale episode; last beat: 1s ago, grace 300s) - full banner already printed this episode.
+refused: work-in-progress cap: lane validations is at its cap of 1 with 1 in flight: validating; lane merges is at its cap of 1 with 1 in flight: merging
+[exit 5]
+
+$ fm-pr-check.sh validating https://github.com/example/repo/pull/2
+WARNING: watcher still down (same stale episode; last beat: 2s ago, grace 300s) - full banner already printed this episode.
+armed: state/validating.check.sh
+[exit 0]
+
+$ fm-pr-check.sh validating https://github.com/example/repo/pull/2
+WARNING: watcher still down (same stale episode; last beat: 4s ago, grace 300s) - full banner already printed this episode.
+armed: state/validating.check.sh
+[exit 0]
+
+$ fm-promote.sh scouting --mode local-only --yolo off
+WARNING: watcher still down (same stale episode; last beat: 6s ago, grace 300s) - full banner already printed this episode.
+refused: work-in-progress cap: lane merges is at its cap of 1 with 1 in flight: validating
+[exit 5]
+
+$ fm-promote.sh scouting --mode local-only --yolo off
+WARNING: watcher still down (same stale episode; last beat: 7s ago, grace 300s) - full banner already printed this episode.
+promoted scouting to ship mode=local-only yolo=off (teardown protection restored)
+wrote ship instructions for mode=local-only: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/transitions/data/scouting/ship-instructions.md
+next: FM_HOME=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/transitions bin/fm-send.sh fm-scouting "$(cat /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/live/transitions/data/scouting/ship-instructions.md)"
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready ship-1 - ship-1 [filed 2026-10-16]
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready ship-1 - ship-1 [filed 2026-10-16]
+queue ready ship-2 - ship-2 [filed 2026-10-16]
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready ship-1 - ship-1 [filed 2026-10-16]
+queue ready ship-2 - ship-2 [filed 2026-10-16]
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-pr-check.sh merging https://github.com/example/repo/pull/2
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 3s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+armed: state/merging.check.sh
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+[exit 0]
+
+$ fm-queue-zero.sh scan --local
+queue ready ship-1 - ship-1 [filed 2026-10-16]
+queue ready ship-2 - ship-2 [filed 2026-10-16]
+queue ready dig-1 - dig-1 [filed 2026-10-16]
+queue ready dig-2 - dig-2 [filed 2026-10-16]
+queue error wip-caps - could not read [the work-in-progress caps could not be read (), so every ready row is listed regardless of its lane]
+[exit 0]
+
+All live CLI assertions passed. No forge poll executed; all task/backlog records disposable.

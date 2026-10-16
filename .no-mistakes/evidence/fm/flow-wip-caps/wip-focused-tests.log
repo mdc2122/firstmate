@@ -1,0 +1,8 @@
+ok - at cap: the refusal names the lane, its cap, and its occupants, and nothing is created
+ok - a finish frees exactly one slot: one dispatch is admitted and the next is refused
+ok - a ship moves validations -> merges at its PR and frees its slot at its merge outcome
+ok - merge slots release only for a matching current GitHub or GitLab PR identity
+ok - PR registration and promotion require capacity without blocking same-lane registration
+ok - lanes are independent: a full ship lane does not block a scout, and vice versa
+not ok - a secondmate spawn with every lane full
+error: secondmate home cannot be inside the firstmate repo: /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M51M19ZW4JQ04JRTA7WMQ8AD/.phase-test/tmp/fm-wip-caps.YqnSqR/secondmate-sm-home: expected exit 0, got 1
