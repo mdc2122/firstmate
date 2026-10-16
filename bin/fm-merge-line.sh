@@ -86,8 +86,8 @@
 # starts no further read that sweep, logs one line counting the entries left
 # unread, and still acts under the lock on the entries it did read, so a slow
 # forge or a long line makes progress every sweep and the unread entries stay
-# listed for a later sweep. Prune never
-# removes an open entry and never reorders a line. A listed open entry with no armed owner (no task's
+# listed for a later sweep. Prune never removes an open entry and never
+# reorders a line. A listed open entry with no armed owner (no task's
 # state/<id>.pr-poll names it, or that task has no state/<id>.meta) queues one
 # wake per PR and PR head commit naming it, and is never armed here: arming
 # needs merge authority. stdout carries one "pruned merged|closed <url>" line
