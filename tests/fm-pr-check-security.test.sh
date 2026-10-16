@@ -3379,16 +3379,20 @@ test_merge_line_lands_head_first_and_hands_off_in_the_same_sweep() {
 # holds the order after that. An entry the queue ejected is skipped by the
 # window, so the entry behind it arms in the next sweep; the ejected entry
 # itself is never re-armed while its record stands.
-queue_line_case() {  # <name> <pr-count>
-  local dir state i id url
+queue_line_case() {  # <name> <pr-count> [<task-id per PR>...]
+  local dir state i id url count=$2 ids
   dir=$(make_case "$1")
+  shift 2
+  ids=("$@")
+  [ "${#ids[@]}" -gt 0 ] || ids=(task-a task-b task-c task-d)
   state="$dir/home/state"
   ln -sf "$REAL_JQ" "$dir/fakebin/jq"
   merge_line "$dir" declare https://github.com/o/r >/dev/null || fail "could not declare the line"
   i=0
-  while [ "$i" -lt "$2" ]; do
+  while [ "$i" -lt "$count" ]; do
     i=$((i + 1))
-    case $i in 1) id=task-a ;; 2) id=task-b ;; 3) id=task-c ;; 4) id=task-d ;; *) fail "no fixture task for PR $i" ;; esac
+    id=${ids[$((i - 1))]-}
+    [ -n "$id" ] || fail "no fixture task for PR $i"
     url=https://github.com/o/r/pull/$i
     write_poll_meta "$state" "$id" "$url" yolo=on
     run_check_entry "$dir" "$id" "$url" >/dev/null 2> "$dir/arm-$id.err" \
@@ -3469,7 +3473,9 @@ test_merge_line_queue_window_arms_green_entries_in_line_order() {
 
   # The queue ejects pull/2: its record stands ejected and auto-merge is off,
   # so the window skips it and pull/4 arms in the next sweep.
-  sed -i '' 's/ requested / ejected /' "$state/task-b.queue-merge"
+  fm_pr_queue_merge_record_write "$state" task-b https://github.com/o/r/pull/2 \
+    0123456789abcdef0123456789abcdef01234567 ejected '["queue-mq"]' \
+    || fail "could not mark pull/2 ejected"
   printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
     0123456789abcdef0123456789abcdef01234567 > "$dir/auto2.json"
   fake_auto_per_url "$dir" https://github.com/o/r/pull/2 "$dir/auto2.json"
@@ -3485,6 +3491,32 @@ test_merge_line_queue_window_arms_green_entries_in_line_order() {
   pass "a queue-app base arms the window's green entries in line order, and an ejection skips forward"
 }
 
+# The watcher visits its polls in task-id order, not line order: with the head
+# queued and the line's next two entries green, aa-c (pull/3) is visited
+# before task-zb (pull/2), and the window holds it until pull/2 is queued.
+test_merge_line_queue_window_waits_for_an_earlier_green_entry() {
+  local dir state
+  dir=$(queue_line_case queue-window-visit-order 3 task-a task-zb aa-c)
+  state="$dir/home/state"
+  fm_pr_queue_merge_record_write "$state" task-a https://github.com/o/r/pull/1 \
+    0123456789abcdef0123456789abcdef01234567 requested '["queue-mq"]' \
+    || fail "could not seed the queued head"
+
+  queue_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "the window handed an entry to the queue ahead of an earlier green one: $(grep '^pr merge' "$dir/gh.log")"
+  [ ! -e "$state/aa-c.queue-merge" ] || fail "pull/3 was queued before pull/2"
+  [ "$(cut -d' ' -f3 "$state/task-zb.queue-merge")" = requested ] \
+    || fail "pull/2's queue hand-off was not recorded: $(cat "$state/task-zb.queue-merge" 2>/dev/null)"
+
+  queue_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '2 3 ' ] \
+    || fail "pull/3 did not arm once pull/2 was queued: $(grep '^pr merge' "$dir/gh.log")"
+  [ "$(cut -d' ' -f3 "$state/aa-c.queue-merge")" = requested ] \
+    || fail "pull/3's queue hand-off was not recorded: $(cat "$state/aa-c.queue-merge" 2>/dev/null)"
+  pass "the queue window hands an entry to the queue only after every earlier green entry is queued"
+}
+
 # The window never opens on its own: without a queued head the gate holds
 # everything behind the head, a fronted entry the queue does not hold ends the
 # window at itself, and an ejected entry is skipped rather than re-armed.
@@ -3492,9 +3524,9 @@ test_merge_line_queue_window_gates_without_a_queued_head() {
   local dir state rc head=0123456789abcdef0123456789abcdef01234567
   dir=$(queue_line_case queue-window-gates 2)
   state="$dir/home/state"
-  fm_pr_queue_merge_record_write "$state" task-z https://github.com/o/r/pull/1 "$head" requested '["queue-mq"]' \
+  fm_pr_queue_merge_record_write "$state" task-a https://github.com/o/r/pull/1 "$head" requested '["queue-mq"]' \
     || fail "could not seed the head's queue record"
-  fm_pr_queue_merge_record_write "$state" task-a https://github.com/o/r/pull/2 "$head" ejected '["queue-mq"]' \
+  fm_pr_queue_merge_record_write "$state" task-b https://github.com/o/r/pull/2 "$head" ejected '["queue-mq"]' \
     || fail "could not seed the ejected record"
 
   set +e
@@ -3517,7 +3549,7 @@ test_merge_line_queue_window_gates_without_a_queued_head() {
   [ "$rc" -eq 0 ] || fail "a fronted entry failed the gate as its own head"
 
   merge_line "$dir" remove https://github.com/o/r/pull/3 || fail "could not remove the fronted PR"
-  rm -f "$state/task-z.queue-merge"
+  rm -f "$state/task-a.queue-merge"
   merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
   rc=$?
   set -e
@@ -3911,6 +3943,7 @@ test_merge_line_merged_head_clears_every_stall_record_with_one_wake
 test_merge_line_closed_head_is_dropped_and_wakes
 test_merge_line_gate_serializes_without_queue_and_probe_hands_off
 test_merge_line_queue_window_arms_green_entries_in_line_order
+test_merge_line_queue_window_waits_for_an_earlier_green_entry
 test_merge_line_queue_window_gates_without_a_queued_head
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome

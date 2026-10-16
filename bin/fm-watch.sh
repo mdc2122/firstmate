@@ -2934,7 +2934,9 @@ merge_line_handoff() {  # <landed-url>
 # <first-seen-epoch> <alerted>" and one wake fires per episode once that same
 # head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR that is no
 # longer green, or its landing starts over. An unknown read changes nothing.
-# Retired with the merged poll and at teardown.
+# Retired with the merged poll and at teardown. Returns 1, with <id>'s control
+# lock released, after a hand-off that did not wake, because the hand-off may
+# have released that lock: the rest of <id>'s sweep waits for the next one.
 merge_line_stall_tick() {  # <id> <check-path> <url>
   local id=$1 c=$2 url=$3 file line_head verdict now age reason correction
   local rec_url='' rec_head='' first='' alerted=''
@@ -2959,7 +2961,10 @@ merge_line_stall_tick() {  # <id> <check-path> <url>
         # correction global; its row is already queued durably.
         correction=$STALL_CORRECTION_REASON
         merge_line_handoff "$line_head"
-        [ -n "$correction" ] || return 0
+        if [ -z "$correction" ]; then
+          pr_poll_control_release || exit 1
+          return 1
+        fi
         reason=$correction
       else
         rm -f "$file"
@@ -3253,7 +3258,7 @@ EOF
         wake "$reason"
       fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$pr_line_held" -eq 1 ]; then
-        merge_line_stall_tick "$id" "$c" "$url"
+        merge_line_stall_tick "$id" "$c" "$url" || continue
       fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
         pr_green_blocked_tick "$id" "$c" "$url" "$pr_line_held"

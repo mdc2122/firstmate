@@ -19,7 +19,12 @@
 # FM_MERGE_LINE_QUEUE_WINDOW (default 3) listed armed entries starting at the
 # head may each be handed to the queue as well, in line order, so the queue
 # holds the order and starts each test the moment its predecessor lands.
-# `gate --window` admits exactly those entries. The window opens only behind a
+# `gate --window` admits exactly those entries, and each only once every
+# earlier entry of the window that reads green (bin/fm-pr-merge.sh's rule: every
+# check green but the queue app's own pending one), or cannot be read, is
+# already queued, so the queue never receives an entry ahead of a green one
+# before it whatever order the watcher visits them in; an earlier red, pending,
+# or ejected entry is skipped. The window opens only behind a
 # queued head: with the head not queued, or a window size of 1, the single-head
 # gate above is the whole contract. A fronted entry that no queue holds blocks
 # the window behind it exactly as it blocks the head, so a constraint PR
@@ -82,7 +87,7 @@
 #   fm-merge-line.sh front <pr-url>             move (or add) the PR to the head
 #   fm-merge-line.sh enqueue <pr-url>           append at the tail if lined and not listed
 #   fm-merge-line.sh remove <pr-url>            drop the PR from its line
-#   fm-merge-line.sh gate <pr-url> [--window] exit 0 when the PR may merge now
+#   fm-merge-line.sh gate [--window] <pr-url> exit 0 when the PR may merge now
 #                                               (no line, the head, or - with
 #                                               --window on a merge-queue-app
 #                                               base whose head is queued -
@@ -386,15 +391,40 @@ window_entries() {
   done
 }
 
-cmd_gate() {  # <url> [--window] in either order
-  local url=${1-} mode=${2-} rc=0 head e admitted='' n=0
-  if [ "$url" = --window ]; then
-    mode=$url
-    url=${2-}
+# Whether a window entry ahead of another must reach the queue first: it reads
+# open with every check green but the base's merge-queue app's own pending
+# check, or it cannot be read. A red, pending, closed, or merged entry does not.
+window_waits_for() {  # <url>
+  local json state red base pending
+  fm_pr_url_parse "$1" && [ "$FM_PR_PROVIDER" = github ] || return 0
+  json=$(gh pr view "$FM_PR_URL" --json state,baseRefName,statusCheckRollup 2>/dev/null </dev/null) || return 0
+  state=$(printf '%s' "$json" | jq -r 'if type == "object" then (.state // "") else "" end' 2>/dev/null) || return 0
+  case "$state" in
+    OPEN) ;;
+    MERGED|CLOSED) return 1 ;;
+    *) return 0 ;;
+  esac
+  red=$(fm_pr_github_checks_not_green "$json") || return 0
+  [ -n "$red" ] || return 0
+  base=$(printf '%s' "$json" | jq -r '.baseRefName // ""' 2>/dev/null) || return 0
+  [ -n "$base" ] || return 0
+  fm_pr_github_read_queue_app_checks "$FM_PR_OWNER" "$FM_PR_REPO" "$base" "$json" </dev/null || return 0
+  pending=$(fm_pr_github_checks_pending "$json" "$FM_PR_GITHUB_QUEUE_APP_CHECKS") || return 0
+  red=$(printf '%s\n' "$red" | awk -v pending="$pending" '
+    BEGIN { n = split(pending, p, "\n"); for (i = 1; i <= n; i++) skip[p[i]] = 1 }
+    !($0 in skip)')
+  [ -z "$red" ]
+}
+
+cmd_gate() {  # [--window] <url>
+  local mode='' url rc=0 head e admitted=''
+  if [ "${1-}" = --window ]; then
+    mode=--window
+    shift
   fi
+  url=${1-}
   fm_pr_url_parse "$url" || die "not a canonical PR URL: $url" 2
   resolve_repo "$url" || die "not a canonical PR URL: $url" 2
-  case "$mode" in ''|--window) ;; *) die "usage: gate <pr-url> [--window]" 2 ;; esac
   read_line || rc=$?
   case "$rc" in
     0) ;;
@@ -416,7 +446,12 @@ cmd_gate() {  # <url> [--window] in either order
     fi
     while IFS= read -r e; do
       [ "$e" = "$url" ] && admitted=1 && break
-      n=$((n + 1))
+      queued_head "$e" && continue
+      if ( window_waits_for "$e" ); then
+        printf 'held: %s waits for %s ahead of it in the merge line for %s to reach the merge queue first\n' \
+          "$url" "$e" "$(repo_label)"
+        return "$FM_MERGE_LINE_HELD"
+      fi
     done < <(window_entries)
     [ "$admitted" = 1 ] && return 0
     printf 'held: %s is outside the queue window (first %s) of the merge line for %s\n' \
@@ -526,6 +561,7 @@ main() {
         || { usage >&2; exit 2; } ;;
     declare|undeclare|front|enqueue|remove|head|probe)
       [ "$#" -eq 1 ] || { usage >&2; exit 2; } ;;
+    show) [ "$#" -le 1 ] || { usage >&2; exit 2; } ;;
     -h|--help|help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
