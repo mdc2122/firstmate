@@ -1,0 +1,6 @@
+{"at":"2026-10-16T12:26:28Z","epoch":1792153588,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:33Z","epoch":1792153593,"task":"t1","verb":"send","action":"steer","target":"t1","origin":"fm-control.sh"}
+{"at":"2026-10-16T12:26:34Z","epoch":1792153594,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:35Z","epoch":1792153595,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:44Z","epoch":1792153604,"task":"t1","verb":"send","action":"steer","target":"t1","origin":"fm-control.sh"}
+{"at":"2026-10-16T12:26:46Z","epoch":1792153606,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}

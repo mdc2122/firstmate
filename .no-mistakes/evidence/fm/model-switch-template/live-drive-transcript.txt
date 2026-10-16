@@ -1,0 +1,89 @@
+omp: omp/18.4.4
+meta: kind=ship model=default effort=default 
+omp session model_change entries: claude-opus55-cliproxy/claude-opus-5-5[1m] role=;
+
+=== S1 ship task: switch with --effort high ===
+$ fm-control.sh t1 switch-model --model glm-cliproxy/zai-glm53flash-max --effort high --reason SWE-2 weekly quota is spent until 10-18
+switched-model t1 harness=omp from=claude-opus55-cliproxy/claude-opus-5-5[1m] to=glm-cliproxy/zai-glm53flash-max effort=high backend=tmux endpoint=lab:fm-t1 notice=inbox
+[exit 0]
+meta: kind=ship model=glm-cliproxy/zai-glm53flash-max effort=high 
+omp session model_change entries: claude-opus55-cliproxy/claude-opus-5-5[1m] role=;glm-cliproxy/zai-glm53flash-max role=temporary;
+--- inbox 001.msg
+schema=fm-task-inbox.v1
+at=2026-10-16T12:26:33Z
+--
+Your model was switched in place from claude-opus55-cliproxy/claude-opus-5-5[1m] to glm-cliproxy/zai-glm53flash-max at high effort. Reason: SWE-2 weekly quota is spent until 10-18. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next status line.
+
+=== S2 adversarial: switch to the model already running, no effort ===
+$ fm-control.sh t1 switch-model --model glm-cliproxy/zai-glm53flash-max --reason noop
+error: task t1 is already running glm-cliproxy/zai-glm53flash-max; nothing was switched
+[exit 1]
+inbox count: 1
+
+=== S3 adversarial: invalid selectors refused before typing ===
+$ fm-control.sh t1 switch-model --model opus --reason x
+error: switch-model requires an exact --model <provider>/<id>, not 'opus'
+[exit 1]
+$ fm-control.sh t1 switch-model --model a/b --reason    
+error: switch-model requires a non-empty --reason: it is quoted to the worker in the switch notice
+[exit 1]
+$ fm-control.sh t1 switch-model --model a/b --effort huge --reason x
+error: switch-model --effort must be one of low, medium, high, xhigh, max
+[exit 1]
+$ fm-control.sh t1 switch-model --model a/b --harness claude --reason x
+error: --harness and --note apply to 'relaunch' only; switch-model keeps the running harness and its conversation
+[exit 1]
+
+=== S4 secondmate kind, no --effort: keep recorded effort, carrier-prefixed notice ===
+$ fm-control.sh t1 switch-model --model claude-opus55-cliproxy/claude-opus-5-5[1m] --reason GLM Flash cooling down; back to the launch model
+switched-model t1 harness=omp from=glm-cliproxy/zai-glm53flash-max to=claude-opus55-cliproxy/claude-opus-5-5[1m] effort=high backend=tmux endpoint=lab:fm-t1 notice=inbox
+[exit 0]
+meta: kind=secondmate model=claude-opus55-cliproxy/claude-opus-5-5[1m] effort=high 
+omp session model_change entries: claude-opus55-cliproxy/claude-opus-5-5[1m] role=;glm-cliproxy/zai-glm53flash-max role=temporary;claude-opus55-cliproxy/claude-opus-5-5[1m] role=temporary;
+--- inbox 002.msg
+schema=fm-task-inbox.v1
+at=2026-10-16T12:26:44Z
+delivery=fire-and-forget
+--
+[fm-from-firstmate]�M-^A�delivery=42ef135fe514ac84 Your model was switched in place from glm-cliproxy/zai-glm53flash-max to claude-opus55-cliproxy/claude-opus-5-5[1m]. Reason: GLM Flash cooling down; back to the launch model. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you stopped and continue to your next status line.
+
+=== S5 adversarial: harness without in-place switch (claude) ===
+$ fm-control.sh t1 switch-model --model glm-cliproxy/zai-glm53flash-max --reason x
+error: harness claude has no verified in-place model switch, so task t1 cannot change model without losing its conversation; use 'relaunch --model' with a progress note instead
+[exit 1]
+inbox count before=2 after=2
+
+=== supervisor action ledger rows ===
+{"at":"2026-10-16T12:26:28Z","epoch":1792153588,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:33Z","epoch":1792153593,"task":"t1","verb":"send","action":"steer","target":"t1","origin":"fm-control.sh"}
+{"at":"2026-10-16T12:26:34Z","epoch":1792153594,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:35Z","epoch":1792153595,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+{"at":"2026-10-16T12:26:44Z","epoch":1792153604,"task":"t1","verb":"send","action":"steer","target":"t1","origin":"fm-control.sh"}
+{"at":"2026-10-16T12:26:46Z","epoch":1792153606,"task":"t1","verb":"control","action":"switch-model","target":"t1","origin":"direct"}
+
+=== worker pane (tail) ===
+│                          │                                                                       │
+│                          │                                                                       │
+│                          │                                                                       │
+╰──────────────────────────┴───────────────────────────────────────────────────────────────────────╯
+ Tip: Need a cheap nested model call? Use `completion(x...)`. Have a big batch of tasks? Ask clanker
+      to use it!
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.11.1 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Reply with exactly: pong
+ pong
+ Session-only model: glm-cliproxy/zai-glm53flash-max. Use 󰘵 M or /model for roles.
+ : Firstmate instruction waiting: list '/Users/studio2/.fm-switch-drive.oR5Z8K/home/state/t1.inbox'/*.msg and, in numeric order, read and act on each, then mv each handled file to
+ '/Users/studio2/.fm-switch-drive.oR5Z8K/home/state/t1.inbox'/handled/.
+ Session-only model: claude-opus55-cliproxy/claude-opus-5-5[1m]. Use 󰘵 M or /model for roles.
+ Let me look at the inbox directory first.
+ Steering · 1
+   1. : Firstmate instruction waiting: list '/Users/studio2/.fm-switch-drive.oR5Z8K/home/state/t1.inbox'/*.msg and, in numeric order, read and act on each, then mv each handled file to '/Users/studi…
+   └ 󰘵 ↑ to edit
+  󱊷 Reading first inbox message
+                <|
+~-~~~-~~~-~~~-~\__/~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~~-~~
+❯
+ ⠧ 12s · 󰪡 Opus 5.5 via cliproxy (1M context, variable thinking) ·  ~/.fm-switch-drive.oR5Z8K/wt ·  main ·  1.9%/1M 󰁨                                                                           pong

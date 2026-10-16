@@ -1,0 +1,9 @@
+window=lab:fm-t1
+endpoint_task_id=t1
+worktree=/Users/studio2/.fm-switch-drive.oR5Z8K/wt
+project=/Users/studio2/.fm-switch-drive.oR5Z8K/wt
+harness=omp
+kind=secondmate
+busy_gen=g1792153588.99955.8456
+model=claude-opus55-cliproxy/claude-opus-5-5[1m]
+effort=high

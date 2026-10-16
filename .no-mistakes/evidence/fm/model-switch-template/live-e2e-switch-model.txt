@@ -1,0 +1,2 @@
+ok - omp (omp/18.4.4): an unknown model records no switch and sends no notice
+ok - omp (omp/18.4.4): a recorded switch to glm-cliproxy/zai-glm53flash-max sends exactly one notice naming both models

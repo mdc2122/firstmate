@@ -1,0 +1,11 @@
+== tasks.csv (task, outcome, touches, touch_types, zero_touch)
+handtyped live-proven 1 steer:1 False
+switched live-proven 0 - True
+== steers.csv
+task,at,source,script_template,purpose,answerer,classified_by,in_span,body
+handtyped,2026-10-16T12:27:28Z,live-inbox,,unclassified,firstmate,rule,True,"Your model was switched in place (SWE-2 weekly quota and Cursor Opus are spent until 10-11/10-12; the main Claude account is cooling down). Same conversation, nothing else changes: resume exactly where you stopped and continue to your next status line."
+switched,2026-10-16T12:26:33Z,live-inbox,model-switch-notice,script:model-switch-notice,firstmate,rule,True,"Your model was switched in place from claude-opus55-cliproxy/claude-opus-5-5[1m] to glm-cliproxy/zai-glm53flash-max at high effort. Reason: SWE-2 weekly quota is spent until 10-18. Same conversation: your worktree, branch, and commits are unchanged, and nothing else changes. Resume exactly where you"
+switched,2026-10-16T12:26:44Z,live-inbox,model-switch-notice,script:model-switch-notice,firstmate,rule,True,"[fm-from-firstmate]⁣delivery=42ef135fe514ac84 Your model was switched in place from glm-cliproxy/zai-glm53flash-max to claude-opus55-cliproxy/claude-opus-5-5[1m]. Reason: GLM Flash cooling down; back to the launch model. Same conversation: your worktree, branch, and commits are unchanged, and nothin"
+== touches.csv
+task,at,type,detail,source,classified_by
+handtyped,2026-10-16T12:27:28Z,steer,"[unclassified/firstmate] Your model was switched in place (SWE-2 weekly quota and Cursor Opus are spent until 10-11/10-12; the main Claude account is cooling down). Same conversation, nothing else changes: resume exactly wher",live-inbox,rule
