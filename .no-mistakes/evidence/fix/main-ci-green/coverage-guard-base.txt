@@ -1,0 +1,35 @@
+$ bin/fm-test-run.sh --check-coverage   # base cf8ef237 runner, same tests/
+fm-test-run: coverage guard: 31 of 187 portable serial scripts have no measured duration hint (max 15%)
+fm-test-run: refresh the hints from a green run's timing artifacts: docs/fm-test-portable-shards.md
+tests/fm-action-ledger.test.sh
+tests/fm-backlog-read-bound.test.sh
+tests/fm-bearings-board-lavish-live-e2e.test.sh
+tests/fm-calm-claude-mod-live-e2e.test.sh
+tests/fm-calm-claude-mod-plugin.test.sh
+tests/fm-calm-claude-mod.test.sh
+tests/fm-ci-workflow.test.sh
+tests/fm-claude-trust.test.sh
+tests/fm-composer-codex-idle-live-e2e.test.sh
+tests/fm-contributions.test.sh
+tests/fm-durable-job.test.sh
+tests/fm-flow-wait-ledger.test.sh
+tests/fm-gemini-harness.test.sh
+tests/fm-harness-precedence.test.sh
+tests/fm-herdr-pi-stale-registration-live-e2e.test.sh
+tests/fm-mail-check.test.sh
+tests/fm-mail.test.sh
+tests/fm-nm-test-contract.test.sh
+tests/fm-omp-calm-install.test.sh
+tests/fm-omp-primary-live-e2e.test.sh
+tests/fm-pi-codex-native.test.sh
+tests/fm-pr-reviewers.test.sh
+tests/fm-pr-state-live-e2e.test.sh
+tests/fm-pr-state.test.sh
+tests/fm-prime-swarm.test.sh
+tests/fm-rovo-harness.test.sh
+tests/fm-rovo-signals-live-e2e.test.sh
+tests/fm-send-agy-confirm.test.sh
+tests/fm-stat-shadowing.test.sh
+tests/fm-tasks-axi.test.sh
+tests/fm-wip-caps.test.sh
+exit=1

@@ -1,0 +1,12 @@
+DISPATCH state=in_flight
+spawned atomic-mate-b13 harness=claude kind=ship mode=no-mistakes yolo=off window=firstmate:fm-atomic-mate-b13 worktree=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.validation-tmp/fm-backlog-atomicity.WdTmSP/mate-own-books/wt
+TEARDOWN exit=1 state=in_flight task_meta=preserved parent_status=absent
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 15s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: cannot resolve the primary home for marked secondmate mate-h1; refusing cleanup without its durable parent binding.
+ok - missing parent records refuse cleanup and preserve the in-flight task

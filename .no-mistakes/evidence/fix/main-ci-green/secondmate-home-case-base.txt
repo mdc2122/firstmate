@@ -1,0 +1,4 @@
+$ only test_a_secondmate_home_keeps_its_own_books from base tests/fm-backlog-atomicity.test.sh, HEAD bin/
+not ok - mate-home teardown failed: actionable: child outcome needs parent report: child=atomic-mate-b13 state=done (missing or unreadable parent binding .fm-secondmate-parent)
+error: atomic-mate-b13's final outcome has not reached the parent channel; retaining every durable task record so a rerun can retry the delivery
+exit=1

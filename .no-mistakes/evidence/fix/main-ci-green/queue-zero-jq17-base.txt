@@ -1,0 +1,8 @@
+$ bash tests/fm-queue-zero.test.sh   # base cf8ef237 bin/fm-queue-zero.sh, jq-1.7.1
+jq: error: syntax error, unexpected '+', expecting '}' (Unix shell quoting issues?) at <top-level>, line 119:
+                     + " kept, so no row is named unowned this pass"}] end                     
+jq: 1 compile error
+not ok - a ready queued row was not named (missing: 'queue ready ready-now')
+--- output ---
+queue error queue - could not read [the queue model could not be computed]
+exit=1

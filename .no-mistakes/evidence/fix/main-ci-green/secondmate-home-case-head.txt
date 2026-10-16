@@ -1,0 +1,3 @@
+$ only test_a_secondmate_home_keeps_its_own_books from head tests/fm-backlog-atomicity.test.sh, HEAD bin/
+not ok - mate-home teardown failed: REFUSED: cannot resolve the primary home for marked secondmate mate-h1; refusing cleanup without its durable parent binding.
+exit=1

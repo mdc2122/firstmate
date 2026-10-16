@@ -1,0 +1,24 @@
+DISPATCH state=in_flight
+spawned atomic-mate-b13 harness=claude kind=ship mode=no-mistakes yolo=off window=firstmate:fm-atomic-mate-b13 worktree=/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.validation-tmp/fm-backlog-atomicity.A6Wiio/mate-own-books/wt
+TEARDOWN state=done
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 11s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+teardown atomic-mate-b13 complete (window firstmate:fm-atomic-mate-b13, worktree /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.validation-tmp/fm-backlog-atomicity.A6Wiio/mate-own-books/absent-worktree)
+Backlog: atomic-mate-b13 is closed in /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M52HT9HV0V1TH4Y0G9RJK5S8/.validation-tmp/fm-backlog-atomicity.A6Wiio/mate-own-books/home/data/backlog.md.
+Queue: nothing must leave the queue now.
+PARENT TERMINAL STATUS
+done [key=child-outcome-atomic-mate-b13-done-09bd04ba]: child atomic-mate-b13 done: verified: the fixture worker ran in its own endpoint mode=local-only yolo=off
+MATE BACKLOG
+# Backlog
+
+## In flight
+## Queued
+## Done
+- [x] atomic-mate-b13 - item for atomic-mate-b13 (kind: ship) (done 2026-10-16)
+  local main
+ok - a secondmate home keeps its own books paired through dispatch and completion
