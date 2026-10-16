@@ -32,8 +32,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-backlog-receive.sh`  | Idempotently ingest one confined remote handoff outbox through tasks-axi             |
 | `fm-captain-hold.sh`     | Hold tasks for the captain, record the captain's answers, gate investigation completion, and report record divergence between the status log and the backlog |
 | `fm-decision-hold.sh`    | One-release compatibility shim mapping the retired decision commands onto fm-captain-hold.sh |
-| `fm-brief.sh`            | Scaffold ship (explicit `--mode`), scout, secondmate-charter, and Herdr-lab briefs, with Captain's intent and Firstmate spec subsections on ship/scout |
-| [`fm-dod-lib.sh`](../bin/fm-dod-lib.sh) | Own ship/scout worker role scope, ship definitions of done, and the no-mistakes `--intent` contract |
+| `fm-brief.sh`            | Scaffold ship (explicit `--mode`), scout, secondmate-charter, and Herdr-lab briefs, with Captain's intent and Firstmate spec subsections on ship/scout and a completion-observation `verify:` line on ship |
+| [`fm-dod-lib.sh`](../bin/fm-dod-lib.sh) | Own ship/scout worker role scope, ship definitions of done and completion observations, and the no-mistakes `--intent` contract |
 | `fm-durable-job.sh`      | Run a long check in a detached tmux session that always writes its verdict file, and print a due-check line |
 | `fm-prime-swarm.sh`      | Launch one Prime Agent swarm in an Orca tab from its own brief: backlog item, model and session key, confirmed depth, bracketed-paste kickoff, and a gateway sampler |
 | `fm-herdr-lab.sh`        | Provision and guardedly operate an isolated, never-default Herdr lab session         |
@@ -149,8 +149,8 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-merge-line.sh`       | Own per-repository merge lines: declare, move a PR to the head (`front`), and the head-only gate the yolo merge poll, behind-base rerun steer, and `fm-pr-merge.sh` obey |
 | `fm-merge-path-stats.py` | Read-only re-measurement of one repository's merge path per stage (no-mistakes steps, CI duration per runner, merge-line handoff gap, merge to release join and to live), writing only its `--out` directory |
 | `fm-parent-channel-lib.sh` | Resolve a secondmate home's parent channel and append a captain-facing outcome line to it at most once |
-| `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode, write the ship instructions carrying that mode's definition of done, and supersede the task's brief so a later relaunch cannot revive stale scout delivery text |
-| `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees, require completed scout deliverables, retire secondmate homes |
+| `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode and a required live `--verify` observation, write the ship instructions carrying that mode's definition of done, and supersede the task's brief so a later relaunch cannot revive stale scout delivery text |
+| `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees after their recorded verify observation, require completed scout deliverables, retire secondmate homes |
 | `fm-harness.sh`          | Detect the running harness, resolve crew or secondmate harness, model, and effort, and validate the native-only `ultra` effort |
 | `fm-lock.sh`             | Per-home firstmate session lock                                                      |
 | `fm-x-lib.sh`            | Shared Relay config, relay, and reply-threading helpers                              |

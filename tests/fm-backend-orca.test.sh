@@ -24,6 +24,9 @@ Exercise Orca dispatch.
 
 ## Firstmate spec
 Verify the Orca lifecycle behavior under test.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 

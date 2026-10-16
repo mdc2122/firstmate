@@ -191,6 +191,9 @@ Exercise Herdr launcher placement for $2.
 
 ## Firstmate spec
 Verify the worker is placed in the correct workspace.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 

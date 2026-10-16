@@ -41,6 +41,13 @@
 # lift the deferral (it authorizes discarding unlanded WORK, never the
 # captain's question), and bin/fm-captain-hold.sh answer stays the only act
 # that closes the call.
+# A ship task whose brief carries bin/fm-dod-lib.sh's `# Completion observation`
+# section is not finished at landing: teardown REFUSES, naming the missing
+# recording and the brief's `verify:` observation, until fm_verify_recorded
+# finds the worker's `done: verified: <observation>` status line (or a report
+# `verified:` line). Landed work alone never satisfies it. A brief without the
+# section predates that contract and keeps its original Definition of done;
+# only --force with explicit discard authority skips the refusal.
 # REFUSES if the worktree holds work that has not LANDED, because cleanup
 # hard-resets/removes the worktree and kills its processes. Work has landed when it is
 # reachable from any remote-tracking branch (a fork counts as a remote, so
@@ -321,6 +328,8 @@ SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 . "$SCRIPT_DIR/fm-secondmate-parent-lib.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
+# shellcheck source=bin/fm-dod-lib.sh
+. "$SCRIPT_DIR/fm-dod-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
 if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
@@ -3580,6 +3589,20 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
   fi
   if teardown_owns_worktree; then
     validate_scout_worktree_artifacts "$REPORT" || exit 1
+  fi
+fi
+
+# A ship task's completion observation (bin/fm-dod-lib.sh owns the section and
+# what counts as its recording). A brief without the section predates the
+# contract and keeps its original Definition of done; a spawn-abort recovery
+# record never launched a worker that could observe anything.
+if [ "$KIND" = ship ] && [ "$FORCE" != "--force" ] && [ -z "$CLEANUP_RECOVERY" ] \
+    && VERIFY_OBSERVATION=$(fm_brief_verify_observation "$DATA/$ID/brief.md"); then
+  if ! fm_verify_recorded "$STATE/$ID.status" "$DATA/$ID/report.md" >/dev/null; then
+    echo "REFUSED: ship task $ID has not recorded its verify observation, so it is not finished." >&2
+    echo "Missing: a \`done: verified: <what was observed>\` line in $STATE/$ID.status (or a \`verified:\` line in $DATA/$ID/report.md) for: verify: $VERIFY_OBSERVATION" >&2
+    echo "Have the worker make that observation on the live surface and record it, or use --force after explicit discard approval." >&2
+    exit 1
   fi
 fi
 

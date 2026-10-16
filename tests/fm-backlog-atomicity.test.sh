@@ -85,6 +85,9 @@ Verify the atomic backlog transition.
 
 # Definition of done
 Delivery contract: mode=no-mistakes
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
   done
 
@@ -612,9 +615,19 @@ run_ship_spawn() {  # <case-dir> <id>
 # Teardown against a recorded worktree that no longer exists: the landed-work and
 # worktree-return steps are then no-ops, which keeps these cases about the
 # backlog transition rather than re-testing tests/fm-teardown.test.sh's matrix.
+# The fixture briefs carry a completion observation, so the finished worker's
+# `done: verified:` line is recorded first, as it would be before cleanup
+# (tests/fm-teardown.test.sh owns the refusal when it is missing).
+record_verified() {  # <home> <id>
+  case "$2" in ''|-*|*/*) return 0 ;; esac
+  [ -d "$1/state" ] || return 0
+  printf '%s\n' 'done: verified: the fixture worker ran in its own endpoint' >> "$1/state/$2.status"
+}
+
 run_teardown() {  # <case-dir> <id> [args...]
   local case_dir=$1
   shift
+  record_verified "$(home_of "$case_dir")" "${1:-}"
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$(home_of "$case_dir")" \
     PATH="$case_dir/fakebin:$PATH" \
     "$TEARDOWN" "$@" 2>&1
@@ -1089,6 +1102,7 @@ test_completion_targets_a_nested_relative_data_directory() {
   tasks-axi add "$id" "item for $id" --kind ship --file "$backlog" >/dev/null
   tasks-axi start "$id" --file "$backlog" >/dev/null
   write_task_meta "$case_dir" "$id" ship local-only "spawn_gen=spawn-relative-data"
+  record_verified "$(home_of "$case_dir")" "$id"
 
   out=$(cd "$case_dir" && \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$(home_of "$case_dir")" \
@@ -2891,6 +2905,47 @@ test_dispatch_and_completion_are_structural() {
   pass "dispatch and completion transition structurally with evidence"
 }
 
+# One well-formed task end to end: a real scaffold whose completion observation
+# names a live end state clears the spawn gate, the landed task is refused at
+# teardown until its worker records that observation, and the same teardown
+# then closes the row once it does.
+test_a_well_formed_task_passes_both_completion_gates() {
+  local case_dir home id out rc=0 content
+  id=fm-verify-gates-b15
+  case_dir=$(make_home verify-gates)
+  home=$(home_of "$case_dir")
+  add_item "$case_dir" "$id"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" project --mode no-mistakes >/dev/null \
+    || fail "well-formed brief did not scaffold"
+  content=$(cat "$home/data/$id/brief.md")
+  content=${content//'{TASK}'/Make the status page show the deploy time.}
+  content=${content//'{FIRSTMATE_SPEC}'/Render the deploy time in the page footer.}
+  content=${content//'{VERIFY}'/the live status page footer shows the current deploy time}
+  printf '%s\n' "$content" > "$home/data/$id/brief.md"
+
+  out=$(run_ship_spawn "$case_dir" "$id") || fail "well-formed task was refused at spawn: $out"
+  assert_contains "$out" "spawned $id" "well-formed spawn did not report success"
+  assert_grep "verify: the live status page footer shows the current deploy time" \
+    "$home/data/$id/launch-brief.md" "the worker's launch brief lost its completion observation"
+
+  printf '%s\n' 'pr=https://github.com/example/firstmate/pull/16' >> "$home/state/$id.meta"
+  printf '%s\n' 'done: PR https://github.com/example/firstmate/pull/16 checks green' >> "$home/state/$id.status"
+  out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a landed task closed before its worker recorded the observation"
+  assert_contains "$out" "has not recorded its verify observation" \
+    "the unrecorded-observation refusal did not explain itself"
+  [ "$(row_state "$case_dir" "$id")" = in_flight ] \
+    || fail "the refused close changed the live backlog state"
+
+  printf '%s\n' 'done: verified: the live status page footer showed deploy 14:02Z' >> "$home/state/$id.status"
+  out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" 2>&1) || fail "the recorded observation did not let teardown close the task: $out"
+  [ "$(row_state "$case_dir" "$id")" = "done" ] \
+    || fail "teardown left the verified task outside Done"
+  pass "a well-formed task clears the spawn gate and closes once its observation is recorded"
+}
+
 test_refused_teardown_leaves_the_item_live() {
   local case_dir home id out rc=0
   id=fm-structural-refusal-b15
@@ -3087,6 +3142,7 @@ test_spawn_refuses_an_unsafe_tasks_config_before_exempting_a_missing_backlog
 test_spawn_refuses_a_data_directory_symlinked_outside_the_home
 test_configured_adapter_refuses_a_data_directory_outside_the_home
 test_dispatch_and_completion_are_structural
+test_a_well_formed_task_passes_both_completion_gates
 test_refused_teardown_leaves_the_item_live
 test_environment_selected_adapter_is_not_forced_to_markdown
 test_manual_backend_home_dispatches_and_completes_without_touching_the_backlog
