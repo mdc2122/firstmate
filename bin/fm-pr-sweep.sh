@@ -225,6 +225,10 @@ action_check() {
   local branches repos repo json prs pr url branch sha task meta red armed_any handled
   local provider host path number out rc reason entry read_failed=0
   local -a wakes=() keys=() keep=()
+  # Queued PR registrations (bin/fm-wip-caps-lib.sh REGISTRATION) retry in
+  # order on every sweep, whatever the forge says; each armed one is printed
+  # as its own `check: wip-queue:` line and already queued durably.
+  "$SCRIPT_DIR/fm-pr-check.sh" --retry-queued 2>/dev/null || log "queued PR registrations could not be retried"
   TASKS=$(task_rows)
   [ -n "$TASKS" ] || { record_write; return 0; }
   branches=$(printf '%s\n' "$TASKS" | cut -f2 | sort -u)

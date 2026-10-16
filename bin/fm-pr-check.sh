@@ -6,6 +6,15 @@
 # A GitHub pull request URL and a GitLab merge request URL are both accepted,
 # including a merge request on a self-hosted GitLab instance.
 # Usage: fm-pr-check.sh <task-id> <pr-url>
+#        fm-pr-check.sh --retry-queued
+# Work-in-progress cap (bin/fm-wip-caps-lib.sh REGISTRATION owns the rule): a
+# ship whose PR would enter the merges lane is admitted only under the home's
+# task-set lock while that lane has a slot no earlier queued registration
+# claims. Otherwise this exits 5, records nothing in the task and arms no poll,
+# and queues the registration in state/.wip-pr-queue. --retry-queued re-runs
+# queued registrations in order, stopping at the first still refused, and
+# queues one `check: wip-queue:` wake for each it arms. A same-lane
+# re-registration needs no admission and takes no lock.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,6 +28,32 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-parent-channel-lib.sh
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
+# shellcheck source=bin/fm-wip-caps-lib.sh
+. "$SCRIPT_DIR/fm-wip-caps-lib.sh"
+
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+
+# --retry-queued: re-run each queued registration through this same script, in
+# order, and stop at the first one still refused so the queue head arms first.
+if [ "${1:-}" = --retry-queued ]; then
+  [ "$#" -eq 1 ] || { echo "error: invalid PR check request" >&2; exit 2; }
+  while IFS="$(printf '\t')" read -r _order qid qurl _lane; do
+    [ -n "$qid" ] || continue
+    if [ ! -f "$STATE/$qid.meta" ]; then
+      fm_wip_queue_remove "$STATE" "$qid" || true
+      continue
+    fi
+    rc=0
+    "$0" "$qid" "$qurl" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ] || break
+    reason="check: wip-queue: $qid's queued PR registration $qurl armed now that a merges slot freed"
+    fm_wake_append check "wip-queue-$qid" "$reason" || true
+    printf '%s\n' "$reason"
+  done <<EOF
+$(fm_wip_queue_list "$STATE")
+EOF
+  exit 0
+fi
 
 if [ "$#" -ne 2 ]; then
   echo "error: invalid PR check request" >&2
@@ -88,6 +123,8 @@ fi
 META_TMP=
 META_LOCK=
 META_LOCK_HELD=0
+TASK_SET_LOCK=
+TASK_SET_LOCK_HELD=0
 pr_check_cleanup() {
   fm_pr_poll_cleanup
   [ -z "$META_TMP" ] || rm -f -- "$META_TMP"
@@ -95,11 +132,51 @@ pr_check_cleanup() {
     fm_lock_release "$META_LOCK" || true
     META_LOCK_HELD=0
   fi
+  if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+    fm_lock_release "$TASK_SET_LOCK" || true
+    TASK_SET_LOCK_HELD=0
+  fi
 }
 trap pr_check_cleanup EXIT
 trap 'exit 1' HUP INT TERM
 fm_pr_poll_prepare "$STATE" "$ID" "$PROVIDER" "$URL" "$HOST" "$PROJECT_PATH" "$NUMBER" "$SCRIPT_DIR/fm-pr-poll.sh" \
   || { echo "error: could not prepare PR poll" >&2; exit 1; }
+
+# Work-in-progress registration admission (header; bin/fm-wip-caps-lib.sh
+# REGISTRATION). Only a ship entering merges from another lane is admitted;
+# re-recording a PR for a task already in merges takes no lock and waits on
+# nothing, so a merge never stalls behind a spawn.
+wip_queue_refusal() {  # <why>
+  if ! fm_wip_queue_add "$STATE" "$ID" "$URL"; then
+    echo "error: $ID's PR registration was refused ($1) and could not be queued in $STATE/$FM_WIP_PR_QUEUE_NAME" >&2
+    exit 1
+  fi
+  fm_wip_queue_claims "$STATE" "$ID"
+  echo "refused: $ID's PR registration $URL is queued, not armed: $1. It is queued behind ${FM_WIP_QUEUED:-0} earlier registration(s) and arms in order once a merges slot frees." >&2
+  exit 5
+}
+IFS='|' read -r WIP_KIND _WIP_PR WIP_LANE _WIP_BYPASS <<EOF
+$(fm_wip_meta_fields "$META")
+EOF
+fm_wip_task_lane "$STATE" "$ID"
+WIP_CURRENT=$FM_WIP_TASK_LANE
+fm_wip_record_lane "$STATE" "$ID" "$WIP_KIND" "$URL" "$WIP_LANE"
+if [ "$FM_WIP_TASK_LANE" = merges ] && [ "$WIP_CURRENT" != merges ]; then
+  TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
+  WIP_LOCK_WAIT=${FM_WIP_LOCK_WAIT:-20}
+  case "$WIP_LOCK_WAIT" in ''|*[!0-9]*|0) WIP_LOCK_WAIT=20 ;; esac
+  if ! fm_lock_acquire_wait_bounded "$TASK_SET_LOCK" "$WIP_LOCK_WAIT"; then
+    wip_queue_refusal "the task-set lock stayed busy for ${WIP_LOCK_WAIT}s, so merges capacity could not be checked"
+  fi
+  TASK_SET_LOCK_HELD=1
+  WIP_STATUS=0
+  fm_wip_registration_admit "$CONFIG" "$STATE" "$ID" || WIP_STATUS=$?
+  case "$WIP_STATUS" in
+    0) ;;
+    1) wip_queue_refusal "$FM_WIP_REFUSAL" ;;
+    *) echo "error: $ID's PR registration was not checked because its work-in-progress caps could not be read: $FM_WIP_ERROR" >&2; exit 1 ;;
+  esac
+fi
 
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"
@@ -134,6 +211,14 @@ fm_pr_metadata_identity_parse "$META" || exit 1
   && [ "$FM_PR_META_NUMBER" = "$NUMBER" ] || exit 1
 fm_lock_release "$META_LOCK"
 META_LOCK_HELD=0
+# The task now holds its merges slot through pr=, so it leaves the queue and
+# the task-set lock that guarded its admission is released.
+fm_wip_queue_remove "$STATE" "$ID" \
+  || printf 'actionable: %s registered but its queued entry could not be removed from %s\n' "$ID" "$STATE/$FM_WIP_PR_QUEUE_NAME" >&2
+if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+  fm_lock_release "$TASK_SET_LOCK"
+  TASK_SET_LOCK_HELD=0
+fi
 
 fm_pr_poll_publish_prepared || {
   echo "error: could not publish PR poll" >&2

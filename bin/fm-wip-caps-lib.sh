@@ -66,9 +66,25 @@
 # admission checks, excluding the task's own record; an unchanged lane or
 # no-slot outcome needs no admission. Refusal exits 5 without changing task
 # metadata or the scout's brief, so finish existing work and retry.
-# Entering merges is never refused: a ship registering its green PR
-# (bin/fm-pr-check.sh) is finishing admitted work, and the merges cap already
-# gated its dispatch, so registration and merging never wait on a cap.
+#
+# REGISTRATION (bin/fm-pr-check.sh). A ship entering merges by registering its
+# PR is admitted only while the merges lane has a slot that no earlier queued
+# registration claims. A same-lane registration (re-recording the PR of a task
+# already in merges, as bin/fm-pr-merge.sh does before every merge) needs no
+# admission and takes no lock. Admission waits at most FM_WIP_LOCK_WAIT seconds
+# (default 20) for the task-set lock and holds it through the pr= publication.
+# A refused or lock-busy registration exits 5, records nothing in the task,
+# arms no poll, and is queued durably in state/.wip-pr-queue, one tab-separated
+# line per task: <order> <task-id> <pr-url> merges. A task has at most one
+# entry; re-queuing keeps its order and updates its URL. The task keeps its
+# validations slot, and lane listings mark it "PR registration queued".
+# `bin/fm-pr-check.sh --retry-queued` re-runs queued registrations in order and
+# stops at the first one still refused, so the head of the queue always arms
+# first; an entry whose task record is gone is dropped. It runs whenever a
+# merges slot can free: when bin/fm-watch.sh retires a merged poll, at the end
+# of every bin/fm-teardown.sh, and on every bin/fm-pr-sweep.sh check. Each
+# registration it arms prints one "check: wip-queue: ..." line its caller turns
+# into a wake, so enqueue and dequeue are both reported.
 # Exempt, never checked: a secondmate spawn and any relaunch, so recovery is
 # never queued behind a cap.
 # Bypass: a captain's direct dispatch order (class captain) and outage or
@@ -92,6 +108,8 @@ if ! declare -F fm_pr_url_parse >/dev/null; then
   # shellcheck source=bin/fm-pr-lib.sh
   . "$(dirname "${BASH_SOURCE[0]}")/fm-pr-lib.sh"
 fi
+
+FM_WIP_PR_QUEUE_NAME=.wip-pr-queue
 
 FM_WIP_LANES='validations merges reviews investigations'
 FM_WIP_ERROR=
@@ -231,6 +249,9 @@ fm_wip_scan() {  # <state-dir> [exclude-id]
       [ -z "$last" ] || detail="last event: $last"
     fi
     [ -z "$FM_WIP_TASK_BYPASS" ] || detail="${detail:+$detail; }bypass: $FM_WIP_TASK_BYPASS"
+    if [ "$lane" = validations ] && fm_wip_queue_has "$state" "$id"; then
+      detail="${detail:+$detail; }PR registration queued"
+    fi
     var="FM_WIP_COUNT_$lane"
     printf -v "$var" '%s' $((${!var} + 1))
     var="FM_WIP_OCCUPANTS_$lane"
@@ -238,9 +259,12 @@ fm_wip_scan() {  # <state-dir> [exclude-id]
   done
 }
 
+# A full merges lane also counts every queued PR registration, since each one
+# already claims the next free merges slot (REGISTRATION above).
 fm_wip_lane_full() {  # <lane>; after fm_wip_caps_load and fm_wip_scan
-  local count="FM_WIP_COUNT_$1"
-  [ "${!count}" -ge "$(fm_wip_cap "$1")" ]
+  local count="FM_WIP_COUNT_$1" queued=0
+  [ "$1" != merges ] || queued=${FM_WIP_QUEUED:-0}
+  [ $((${!count} + queued)) -ge "$(fm_wip_cap "$1")" ]
 }
 
 # Admission for one fresh dispatch (ADMISSION above). Returns 0 when it may
@@ -254,6 +278,7 @@ fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
   FM_WIP_BINDING=
   fm_wip_caps_load "$config" || return 2
   fm_wip_scan "$state" "$id"
+  fm_wip_queue_claims "$state"
   need=$lane
   [ "$lane" != validations ] || need='validations merges'
   for l in $need; do
@@ -262,6 +287,9 @@ fm_wip_admit() {  # <config-dir> <state-dir> <id> <lane>
     occupants="FM_WIP_OCCUPANTS_$l"
     [ -n "$FM_WIP_BINDING" ] || FM_WIP_BINDING="$l ${!count}/$(fm_wip_cap "$l")"
     text="${text:+$text; }lane $l is at its cap of $(fm_wip_cap "$l") with ${!count} in flight: ${!occupants}"
+    if [ "$l" = merges ] && [ "${FM_WIP_QUEUED:-0}" -gt 0 ]; then
+      text="$text; PR registrations queued for it: $FM_WIP_QUEUED_IDS"
+    fi
   done
   [ -n "$FM_WIP_BINDING" ] || return 0
   FM_WIP_REFUSAL="work-in-progress cap: $text"
@@ -276,7 +304,7 @@ fm_wip_transition_admit() {
   current=$FM_WIP_TASK_LANE
   fm_wip_record_lane "$state" "$id" "$kind" "$pr" "$wlane"
   target=$FM_WIP_TASK_LANE
-  [ -n "$target" ] && [ "$target" != "$current" ] && [ "$target" != merges ] || return 0
+  [ -n "$target" ] && [ "$target" != "$current" ] || return 0
   fm_wip_admit "$config" "$state" "$id" "$target"
 }
 
@@ -286,14 +314,114 @@ fm_wip_free_json() {  # <config-dir> <state-dir>
   local lane count free sep='' out='{'
   fm_wip_caps_load "$1" || return 1
   fm_wip_scan "$2"
+  fm_wip_queue_claims "$2"
   for lane in $FM_WIP_LANES; do
     count="FM_WIP_COUNT_$lane"
     free=$(($(fm_wip_cap "$lane") - ${!count}))
+    [ "$lane" != merges ] || free=$((free - ${FM_WIP_QUEUED:-0}))
     [ "$free" -ge 0 ] || free=0
     out="$out$sep\"$lane\":$free"
     sep=,
   done
   printf '%s}\n' "$out"
+}
+
+# --- queued PR registrations (REGISTRATION above) -------------------------
+
+fm_wip_queue_path() {  # <state-dir>
+  printf '%s/%s\n' "$1" "$FM_WIP_PR_QUEUE_NAME"
+}
+
+# Print the queue's entries in order as "<order>\t<id>\t<url>\t<lane>", dropping
+# none; a missing queue prints nothing.
+fm_wip_queue_list() {  # <state-dir>
+  local queue
+  queue=$(fm_wip_queue_path "$1")
+  [ -f "$queue" ] && [ ! -L "$queue" ] || return 0
+  awk -F'\t' 'NF == 4 && $1 ~ /^[0-9]+$/' "$queue" | sort -t"$(printf '\t')" -k1,1n
+}
+
+fm_wip_queue_has() {  # <state-dir> <id>
+  fm_wip_queue_list "$1" | awk -F'\t' -v id="$2" '$2 == id { found = 1 } END { exit !found }'
+}
+
+# Rewrite the queue through <awk-program> under its own lock. The program
+# reads the current entries (already in order) and prints the new ones.
+fm_wip_queue_rewrite() {  # <state-dir> <awk-program> [awk -v assignments...]
+  local state=$1 program=$2 queue lock tmp status=0
+  shift 2
+  queue=$(fm_wip_queue_path "$state")
+  [ ! -L "$queue" ] || return 1
+  lock="$queue.lock"
+  fm_lock_acquire_wait "$lock" || return 1
+  tmp=$(mktemp "$queue.XXXXXX") || { fm_lock_release "$lock"; return 1; }
+  if fm_wip_queue_list "$state" | awk -F'\t' -v OFS='\t' "$@" "$program" >"$tmp"; then
+    if [ -s "$tmp" ]; then
+      mv -f -- "$tmp" "$queue" || status=1
+    else
+      rm -f -- "$tmp" "$queue" || status=1
+    fi
+  else
+    rm -f -- "$tmp"
+    status=1
+  fi
+  fm_lock_release "$lock" || status=1
+  return "$status"
+}
+
+# Queue <id>'s registration at the tail, or keep its place and update its URL
+# when it is already queued.
+fm_wip_queue_add() {  # <state-dir> <id> <url>
+  # shellcheck disable=SC2016 # awk program text, not shell expansion.
+  fm_wip_queue_rewrite "$1" '
+    { if ($1 + 0 > max) max = $1 + 0 }
+    $2 == id { $3 = url; found = 1 }
+    { print }
+    END { if (!found) print max + 1, id, url, "merges" }
+  ' -v id="$2" -v url="$3"
+}
+
+fm_wip_queue_remove() {  # <state-dir> <id>
+  fm_wip_queue_has "$1" "$2" || return 0
+  # shellcheck disable=SC2016 # awk program text, not shell expansion.
+  fm_wip_queue_rewrite "$1" '$2 != id' -v id="$2"
+}
+
+# Count, into FM_WIP_QUEUED and FM_WIP_QUEUED_IDS, the queued registrations
+# that claim a merges slot ahead of <id>: every live entry when <id> is not
+# queued, otherwise only those before it. An entry whose task record is gone
+# claims nothing. <id> empty counts every live entry.
+fm_wip_queue_claims() {  # <state-dir> [id]
+  local state=$1 id=${2:-} order qid url lane
+  FM_WIP_QUEUED=0
+  FM_WIP_QUEUED_IDS=
+  while IFS="$(printf '\t')" read -r order qid url lane; do
+    [ -n "$qid" ] || continue
+    [ "$qid" != "$id" ] || break
+    [ -f "$state/$qid.meta" ] || continue
+    FM_WIP_QUEUED=$((FM_WIP_QUEUED + 1))
+    FM_WIP_QUEUED_IDS="${FM_WIP_QUEUED_IDS:+$FM_WIP_QUEUED_IDS, }$qid"
+  done <<EOF
+$(fm_wip_queue_list "$state")
+EOF
+}
+
+# Admission for <id> registering its PR into merges (REGISTRATION above):
+# 0 when the merges lane has a slot no earlier queued registration claims, 1
+# with FM_WIP_REFUSAL when it does not, 2 with FM_WIP_ERROR when the caps
+# cannot be read. Call under the task-set lock.
+fm_wip_registration_admit() {  # <config-dir> <state-dir> <id>
+  local config=$1 state=$2 id=$3 count=FM_WIP_COUNT_merges occupants=FM_WIP_OCCUPANTS_merges
+  FM_WIP_REFUSAL=
+  FM_WIP_BINDING=
+  fm_wip_caps_load "$config" || return 2
+  fm_wip_scan "$state" "$id"
+  fm_wip_queue_claims "$state" "$id"
+  fm_wip_lane_full merges || return 0
+  FM_WIP_BINDING="merges ${!count}/$(fm_wip_cap merges)"
+  FM_WIP_REFUSAL="work-in-progress cap: lane merges is at its cap of $(fm_wip_cap merges) with ${!count} in flight: ${!occupants}"
+  [ "$FM_WIP_QUEUED" -eq 0 ] || FM_WIP_REFUSAL="$FM_WIP_REFUSAL; queued ahead of $id: $FM_WIP_QUEUED_IDS"
+  return 1
 }
 
 fm_wip_bypass_class_valid() {  # <class>

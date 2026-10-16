@@ -395,7 +395,8 @@ The [Claude adapter reference](../.agents/skills/harness-adapters/references/har
 
 Each home caps work in progress per lane: validations (a ship before its pull request), merges (a ship whose pull request awaits its merge), reviews, and investigations.
 `bin/fm-spawn.sh` refuses a fresh ship or scout whose lane is at its cap, naming the lane, the cap, and every task occupying it, and leaves the backlog item Queued; `bin/fm-queue-zero.sh` lists a ready row for dispatch only while its lane has a free slot.
-Scout promotion also enforces lane admission before changing task metadata; when refused, finish existing work and retry rather than starting replacement work. PR registration is never capped: the merges cap gates new ship dispatch instead, so a green PR always registers and merges.
+Scout promotion also enforces lane admission before changing task metadata; when refused, finish existing work and retry rather than starting replacement work.
+A ship registering its PR enters the merges lane only while that lane has a free slot; otherwise `bin/fm-pr-check.sh` arms nothing and queues the registration, and queued registrations arm in order as merges finish, after cleanup, and on each PR sweep, each with its own notification.
 Relaunches and secondmate spawns are never capped, and a blocked or parked task keeps its slot until it finishes or is cleaned up.
 A captain's direct dispatch order and outage or security work may bypass a cap with `--cap-bypass` and a reason; the bypass is recorded in the task record and, once the spawn succeeds, in `data/wip-cap-bypasses.log`.
 The optional local, gitignored `config/wip-caps` overrides the measured defaults with `<lane>=<positive integer>` lines, allowing blank lines and `#` comments; invalid or unreadable configuration refuses admission rather than falling back to a default, and the file is not inherited by secondmate homes.

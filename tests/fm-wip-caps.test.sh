@@ -205,36 +205,82 @@ test_promotion_requires_capacity() {
 }
 
 # The review finding's sequence at the measured defaults: four merges and
-# three admitted validations all go green. Every PR registers and arms its
-# merge poll, even while a spawn holds the task-set lock, because the merges
-# cap already gated their dispatch; the over-full merge line instead refuses
-# the next ship until merges finish.
-test_green_prs_always_register_and_the_merge_line_gates_new_ships() {
-  local home out rc i lock merges
+# three admitted validations go green. The first registration takes the one
+# free merges slot (the 5th); the other two queue durably without arming, so
+# the lane never holds a 6th PR. Each finish arms exactly one queued
+# registration, in order, through the retry the watcher, teardown, and sweep
+# all run.
+test_registrations_never_exceed_the_merges_cap_at_defaults() {
+  local home out rc i merges queue occupants=FM_WIP_OCCUPANTS_validations
   home=$(new_home finding-sequence)
   for i in 1 2 3 4; do occupy "$home" "merging-$i" "pr=https://github.com/example/repo/pull/$i"; done
   for i in 1 2 3; do occupy "$home" "validating-$i"; done
+  queue="$home/state/.wip-pr-queue"
+  merges=FM_WIP_COUNT_merges
 
-  lock=$(fm_task_set_lock_path "$home/state")
-  fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
-  for i in 1 2 3; do
+  out=$(run_transition "$home" fm-pr-check.sh validating-1 https://github.com/example/repo/pull/11); rc=$?
+  expect_code 0 "$rc" "the 5th registration takes the last merges slot"$'\n'"$out"
+  assert_present "$home/state/validating-1.check.sh" "an admitted registration arms its merge poll"
+  for i in 2 3; do
     out=$(run_transition "$home" fm-pr-check.sh "validating-$i" "https://github.com/example/repo/pull/1$i"); rc=$?
-    expect_code 0 "$rc" "registration of green validating-$i"$'\n'"$out"
-    [ -f "$home/state/validating-$i.check.sh" ] || fail "a registered PR must arm its merge poll"
+    expect_code 5 "$rc" "registration of validating-$i into a full merges lane"$'\n'"$out"
+    assert_contains "$out" "lane merges is at its cap of 5 with 5 in flight" "the queued registration must name lane, cap, and occupancy"
+    assert_absent "$home/state/validating-$i.check.sh" "a queued registration must not arm a merge poll"
+    assert_no_grep "pr=" "$home/state/validating-$i.meta" "a queued registration must not record its PR in the task"
   done
-  fm_lock_release "$lock"
+  [ "$(cut -f2 "$queue" | tr '\n' ' ')" = "validating-2 validating-3 " ] || fail "both refusals must be queued in order; got: $(cat "$queue")"
   fm_wip_caps_load "$home/config"
   fm_wip_scan "$home/state"
-  merges=FM_WIP_COUNT_merges
-  [ "${!merges}" = 7 ] || fail "every registered PR must hold a merges slot, got ${!merges}"
+  [ "${!merges}" = 5 ] || fail "the merges lane must hold exactly its cap of 5, got ${!merges}"
+  assert_contains "${!occupants}" "validating-2 [PR registration queued]" "a queued task must report the queued state"
 
-  out=$(spawn_ship "$home" next-ship); rc=$?
-  expect_code 5 "$rc" "a new ship while the merge line is over its cap"
-  assert_contains "$out" "lane merges is at its cap of 5 with 7 in flight" "the refusal must name the full merge line"
-  for i in 1 2 3; do rm -f "$home/state/merging-$i.meta"; done
-  out=$(spawn_ship "$home" next-ship); rc=$?
-  expect_code 0 "$rc" "a new ship once merges finish below the cap"$'\n'"$out"
-  pass "green PRs always register; the merges cap gates new ship dispatch instead"
+  # A queued task cannot jump the line by retrying out of order.
+  out=$(run_transition "$home" fm-pr-check.sh validating-3 https://github.com/example/repo/pull/13); rc=$?
+  expect_code 5 "$rc" "a later queued registration while the head still waits"
+
+  # One merge finishes: the retry arms exactly the queue head.
+  rm -f "$home/state/merging-1.meta"
+  out=$(run_transition "$home" fm-pr-check.sh --retry-queued); rc=$?
+  expect_code 0 "$rc" "the retry after one finish"$'\n'"$out"
+  assert_contains "$out" "check: wip-queue: validating-2's queued PR registration" "the armed registration must be reported"
+  assert_present "$home/state/validating-2.check.sh" "the queue head arms once a merges slot frees"
+  assert_absent "$home/state/validating-3.check.sh" "exactly one queued registration may arm per finish"
+  [ "$(cut -f2 "$queue")" = validating-3 ] || fail "only the armed head leaves the queue; got: $(cat "$queue")"
+  assert_grep "wip-queue-validating-2" "$home/state/.wake-queue" "the armed registration must queue a durable wake"
+  fm_wip_scan "$home/state"
+  [ "${!merges}" = 5 ] || fail "the merges lane must never exceed its cap, got ${!merges}"
+
+  # The next finish arms the last one and empties the queue.
+  rm -f "$home/state/merging-2.meta"
+  out=$(run_transition "$home" fm-pr-check.sh --retry-queued); rc=$?
+  expect_code 0 "$rc" "the retry after the second finish"
+  assert_present "$home/state/validating-3.check.sh" "the next finish arms the next queued registration"
+  assert_absent "$queue" "the queue is removed once empty"
+  pass "at the defaults, 4 merges + 3 validations: the 5th registers, the 6th and 7th queue, and each finish arms exactly one in order"
+}
+
+# Registration admission must not stall a merge behind an unrelated spawn: a
+# task already in merges re-records its PR (as bin/fm-pr-merge.sh does before
+# every merge) without the task-set lock, while a task entering merges under a
+# lock that stays busy is queued rather than refused silently.
+test_registration_and_the_task_set_lock() {
+  local home out rc lock
+  home=$(new_home registration-lock)
+  occupy "$home" merging-a "pr=https://github.com/example/repo/pull/21"
+  occupy "$home" validating-b
+  lock=$(fm_task_set_lock_path "$home/state")
+  fm_lock_try_acquire "$lock" || fail "could not stage task-set lock"
+  out=$(run_transition "$home" fm-pr-check.sh merging-a https://github.com/example/repo/pull/21); rc=$?
+  expect_code 0 "$rc" "a same-lane re-registration while a spawn holds the task-set lock"$'\n'"$out"
+  out=$(FM_WIP_LOCK_WAIT=1 run_transition "$home" fm-pr-check.sh validating-b https://github.com/example/repo/pull/22); rc=$?
+  expect_code 5 "$rc" "an entering registration whose lock stays busy"$'\n'"$out"
+  assert_contains "$out" "task-set lock stayed busy" "the queued registration must say why"
+  assert_grep "validating-b" "$home/state/.wip-pr-queue" "a lock-busy registration is queued, not dropped"
+  fm_lock_release "$lock"
+  out=$(run_transition "$home" fm-pr-check.sh --retry-queued); rc=$?
+  expect_code 0 "$rc" "the retry once the lock is free"
+  assert_present "$home/state/validating-b.check.sh" "the queued registration arms once the lock frees and a slot is free"
+  pass "a same-lane re-registration never waits on the task-set lock; a busy lock queues an entering registration"
 }
 
 test_lanes_are_independent() {
@@ -413,7 +459,8 @@ test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_merge_notification_is_scoped_to_the_current_pr
 test_promotion_requires_capacity
-test_green_prs_always_register_and_the_merge_line_gates_new_ships
+test_registrations_never_exceed_the_merges_cap_at_defaults
+test_registration_and_the_task_set_lock
 test_lanes_are_independent
 test_bypass_records_itself_and_still_holds_its_slot
 test_bypass_log_is_written_only_after_spawn_success

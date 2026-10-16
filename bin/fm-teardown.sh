@@ -4079,6 +4079,10 @@ fi
 # state directory. Do not let the side-band refresh recreate that retired home.
 if [ -d "$STATE" ]; then
   "$SCRIPT_DIR/fm-home-summary-refresh.sh" --best-effort || true
+  # Cleanup can free a merges slot: queued PR registrations retry in order
+  # (bin/fm-wip-caps-lib.sh REGISTRATION), each armed one printed here.
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-pr-check.sh" --retry-queued \
+    || echo "warning: queued PR registrations could not be retried after $ID's cleanup" >&2
 fi
 if [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ]; then
   echo "teardown $ID complete (window $T, worktree $WT, legacy record accepted without spawn_gen: endpoint $TEARDOWN_LEGACY_ENDPOINT, incarnation $TEARDOWN_META_SPAWN_GEN)"
