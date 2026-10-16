@@ -2732,11 +2732,106 @@ pr_queue_away_refused_tick() {  # <id> <check-path> <url> <merge-output>
   wake "$reason"
 }
 
+# The landed handling of one PR poll, shared by the check loop and the merge
+# line hand-off below. The caller holds <id>'s control lock and a poll
+# snapshot naming <url>. The landing's outcome is published under its
+# persisted merge authority (external without one), the authority record and
+# the poll retire, and a landed line head hands the line to the next PR
+# before anything wakes. A poll result whose outcome was already recorded
+# returns 1 so the sweep goes on; <self-merged> 1 marks a landing this sweep's
+# own merge made, which always wakes firstmate, as does any first record.
+pr_poll_merged() {  # <id> <check-path> <url> <provider> <host> <path> <number> <self-merged: 0|1>
+  local id=$1 c=$2 url=$3 provider=$4 host=$5 path=$6 number=$7 self=$8
+  local authority identity rc=0 handoff=0 recorded
+  if ! fm_merge_authority_read "$STATE" "$id" "$provider" "$host" "$path" "$number"; then
+    triage_log "no matching persisted merge authority for $id; recording an external merge outcome"
+  fi
+  authority=$FM_MERGE_AUTHORITY
+  identity=$FM_MERGE_AUTHORITY_RECORD_IDENTITY
+  fm_merge_outcome_report "$FM_HOME" "$STATE" "$id" "$url" poll "$authority" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    triage_log "merge outcome for $id could not be recorded (rc=$rc)"
+    exit 1
+  fi
+  recorded=$FM_MERGE_OUTCOME_ALREADY_RECORDED
+  if [ -n "$identity" ] \
+    && ! fm_merge_authority_remove_if_matches "$STATE" "$id" \
+      "$provider" "$host" "$path" "$number" "$authority" "$identity"; then
+    triage_log "published merge outcome for $id but could not retire its authority record"
+    exit 1
+  fi
+  [ "$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-merge-line.sh" head "$url" 2>/dev/null)" != "$url" ] || handoff=1
+  retire_merged_pr_poll "$id" "$url"
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  [ "$handoff" -eq 0 ] || merge_line_handoff "$url"
+  if [ "$recorded" = true ] && [ "$self" -eq 0 ]; then
+    triage_log "absorbed duplicate merged PR poll result for $id"
+    return 1
+  fi
+  wake "check: $c: merged"
+}
+
+# A line head that lands hands the line to the next PR in the same sweep that
+# saw it land, rather than in that PR's own slot of a later sweep: the merge
+# queue a lined repository usually merges through already tests one PR at a
+# time, so a further CHECK_INTERVAL before handing it the next PR only idles
+# it. Only the landed head's successor is attempted, through the same guarded
+# bin/fm-pr-merge.sh the yolo poll runs, so the merge line's single-head gate,
+# the live green check, the away and captain-hold guards, and the merge-queue
+# hand-off all apply unchanged. A new head no yolo=on poll arms, one already
+# handed to its merge queue, or a refused attempt is left to its own poll on
+# the next sweep. A synchronous landing is handled at once like the yolo
+# poll's own self-merge (pr_poll_merged), which hands off again in turn.
+merge_line_handoff() {  # <landed-url>
+  local landed=$1 head check hid='' provider host path number
+  head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-merge-line.sh" head "$landed" 2>/dev/null) || return 0
+  [ -n "$head" ] || return 0
+  for check in "$STATE"/*.check.sh; do
+    [ -e "$check" ] || continue
+    check=$(basename "$check" .check.sh)
+    fm_pr_poll_snapshot_capture "$STATE" "$check" "$SCRIPT_DIR/fm-pr-poll.sh" || continue
+    [ "$FM_PR_POLL_SNAPSHOT_URL" = "$head" ] || continue
+    hid=$check
+    break
+  done
+  [ -n "$hid" ] && [ "$(fm_meta_get "$STATE/$hid.meta" yolo)" = on ] || return 0
+  [ ! -e "$STATE/$hid.queue-merge" ] && [ ! -L "$STATE/$hid.queue-merge" ] || return 0
+  provider=$FM_PR_POLL_SNAPSHOT_PROVIDER
+  host=$FM_PR_POLL_SNAPSHOT_HOST
+  path=$FM_PR_POLL_SNAPSHOT_PATH
+  number=$FM_PR_POLL_SNAPSHOT_NUMBER
+  pr_poll_control_release || exit 1
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$YOLO_MERGE_TIMEOUT" "$SCRIPT_DIR/fm-pr-merge.sh" "$hid" "$head" || exit 1
+  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+    triage_log "merge line hand-off to $hid refused or failed (rc=$FM_ACTION_STATUS): $FM_CHECK_RESULT"
+    return 0
+  fi
+  triage_log "merge line handed $head to its merge in the sweep that saw $landed land ($hid)"
+  fm_pr_poll_merge_already_notified "$STATE" "$hid" "$provider" "$host" "$path" "$number" || return 0
+  # As after the yolo poll's own merge: retake the lifecycle lock and trust a
+  # fresh snapshot only while it still names the PR this hand-off merged.
+  PR_POLL_CONTROL_LOCK="$STATE/.control-$hid.lock"
+  fm_lock_acquire_wait "$PR_POLL_CONTROL_LOCK" || exit 1
+  if fm_pr_poll_snapshot_capture "$STATE" "$hid" "$SCRIPT_DIR/fm-pr-poll.sh" \
+    && [ "$FM_PR_POLL_SNAPSHOT_PROVIDER" = "$provider" ] \
+    && [ "$FM_PR_POLL_SNAPSHOT_HOST" = "$host" ] \
+    && [ "$FM_PR_POLL_SNAPSHOT_PATH" = "$path" ] \
+    && [ "$FM_PR_POLL_SNAPSHOT_NUMBER" = "$number" ]; then
+    pr_poll_merged "$hid" "$STATE/$hid.check.sh" "$head" "$provider" "$host" "$path" "$number" 1
+  fi
+  pr_poll_control_release || exit 1
+}
+
 # A merge line must not stall silently behind its head. For a PR the line
 # holds (bin/fm-merge-line.sh owns the line, its head, and the read-only forge
 # probe), this reads the head first: a head closed unmerged is dropped from
 # the line and wakes firstmate at once, and a head that merged outside its poll
-# is dropped silently so the next PR becomes the head. Otherwise, while the
+# is dropped silently and hands off to the next PR (merge_line_handoff). Otherwise, while the
 # held PR reads green, state/<id>.merge-line-stall records "<held-url>
 # <head-url> <first-seen-epoch> <alerted>" and one wake fires per episode once
 # that same head has held it for MERGE_LINE_STALL_SECS; a new head, a held PR
@@ -2760,7 +2855,10 @@ merge_line_stall_tick() {  # <id> <check-path> <url>
       fi
       rm -f "$file"
       triage_log "merge line head $line_head reads $verdict; dropped from its line"
-      [ "$verdict" = closed ] || return 0
+      if [ "$verdict" = merged ]; then
+        merge_line_handoff "$line_head"
+        return 0
+      fi
       reason="check: $c: merge-line head $line_head closed unmerged; dropped from its line, so $url and the PRs behind it move up"
       fm_wake_append check "$c" "$reason" || exit 1
       pr_poll_control_release || exit 1
@@ -3028,35 +3126,8 @@ EOF
         fi
         reason="check: $c: $out"
         if [ "$is_pr_poll" -eq 1 ] && [ "$out" = merged ]; then
-          if ! fm_merge_authority_read "$STATE" "$id" \
-              "$provider" "$host" "$path" "$number"; then
-            triage_log "no matching persisted merge authority for $id; recording an external merge outcome"
-          fi
-          merge_authority=$FM_MERGE_AUTHORITY
-          merge_authority_record_identity=$FM_MERGE_AUTHORITY_RECORD_IDENTITY
-          merge_outcome_rc=0
-          fm_merge_outcome_report "$FM_HOME" "$STATE" "$id" "$url" poll \
-            "$merge_authority" || merge_outcome_rc=$?
-          if [ "$merge_outcome_rc" -ne 0 ]; then
-            triage_log "merge outcome for $id could not be recorded (rc=$merge_outcome_rc)"
-            exit 1
-          fi
-          if [ -n "$merge_authority_record_identity" ] \
-            && ! fm_merge_authority_remove_if_matches "$STATE" "$id" \
-              "$provider" "$host" "$path" "$number" "$merge_authority" \
-              "$merge_authority_record_identity"; then
-            triage_log "published merge outcome for $id but could not retire its authority record"
-            exit 1
-          fi
-          retire_merged_pr_poll "$id" "$url"
-          pr_poll_control_release || exit 1
-          touch "$STATE/.last-check"
-          if [ "$FM_MERGE_OUTCOME_ALREADY_RECORDED" = true ] \
-            && [ "$pr_poll_self_merged" -eq 0 ]; then
-            triage_log "absorbed duplicate merged PR poll result for $id"
-            continue
-          fi
-          wake "$reason"
+          pr_poll_merged "$id" "$c" "$url" "$provider" "$host" "$path" "$number" \
+            "$pr_poll_self_merged" || continue
         fi
         pr_poll_control_release || exit 1
         fm_wake_append check "$c" "$reason" || exit 1

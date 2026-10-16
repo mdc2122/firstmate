@@ -3268,18 +3268,14 @@ forge_merges() {  # <dir>: merged PR numbers in order
   awk '$1 == "pr" && $2 == "merge" { print $3 }' "$1/gh.log" | tr '\n' ' '
 }
 
-test_merge_line_lands_only_the_head_in_order() {
+# The watcher visits task-a (pull/2) first and the line holds it; task-z
+# (pull/1) then lands, and the line hands off to pull/2 in that same sweep
+# instead of waiting for pull/2's own slot in a later one.
+test_merge_line_lands_head_first_and_hands_off_in_the_same_sweep() {
   local dir state rc
   dir=$(make_case merge-line-order)
   state="$dir/home/state"
   seed_two_yolo_prs "$dir" 1
-
-  merge_line_cycle "$dir" c1
-  [ "$(forge_merges "$dir")" = '1 ' ] \
-    || fail "the line did not land only its head first: $(forge_merges "$dir")"
-  case "$(cat "$dir/c1.out")" in check:*task-z.check.sh:*merged) ;; *) fail "the head's landing was not reported: $(cat "$dir/c1.out")" ;; esac
-  assert_grep 'merge line holds task-a' "$state/.watch-triage.log" "the held PR left no triage record"
-  [ -f "$state/task-a.check.sh" ] || fail "the held PR's poll was retired"
 
   # An attended merge of a PR behind the head is refused by the same gate.
   merge_line "$dir" enqueue https://github.com/o/r/pull/3 || fail "could not enqueue a third PR"
@@ -3289,16 +3285,26 @@ test_merge_line_lands_only_the_head_in_order() {
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "an attended merge of a held PR succeeded"
-  assert_grep 'waits behind https://github.com/o/r/pull/2' "$dir/held.err" "the attended refusal did not name the head"
+  assert_grep 'waits behind https://github.com/o/r/pull/1' "$dir/held.err" "the attended refusal did not name the head"
   merge_line "$dir" remove https://github.com/o/r/pull/3 || fail "could not remove the third PR"
+  : > "$dir/gh.log"
 
-  merge_line_cycle "$dir" c2
+  merge_line_cycle "$dir" c1
   [ "$(forge_merges "$dir")" = '1 2 ' ] \
-    || fail "the next PR did not land once the head had: $(forge_merges "$dir")"
-  case "$(cat "$dir/c2.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the second landing was not reported: $(cat "$dir/c2.out")" ;; esac
+    || fail "the line did not land its head and then hand off to the next PR in one sweep: $(forge_merges "$dir")"
+  assert_grep 'merge line holds task-a' "$state/.watch-triage.log" "the next PR was not held while the head was open"
+  assert_grep 'merge line handed https://github.com/o/r/pull/2 to its merge in the sweep that saw https://github.com/o/r/pull/1 land' \
+    "$state/.watch-triage.log" "the hand-off left no triage record"
+  case "$(cat "$dir/c1.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the handed-off landing was not reported: $(cat "$dir/c1.out")" ;; esac
+  # Both landings retired their polls and left the line within that one sweep.
+  assert_poll_absent "$state" task-z
+  assert_poll_absent "$state" task-a
   [ "$(sed -n '3,$p' "$state/merge-lines/github@github.com@o%2Fr")" = '' ] \
     || fail "landed PRs were left in the line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
-  pass "a declared merge line lands its armed green yolo PRs one at a time, head first"
+
+  merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '1 2 ' ] || fail "a landed PR was merged again: $(forge_merges "$dir")"
+  pass "a declared merge line lands its head first and hands off to the next PR in the same sweep"
 }
 
 test_merge_line_front_reorders() {
@@ -3307,8 +3313,8 @@ test_merge_line_front_reorders() {
   seed_two_yolo_prs "$dir" 1
   merge_line "$dir" front https://github.com/o/r/pull/2 >/dev/null || fail "front refused"
   merge_line_cycle "$dir" c1
-  [ "$(forge_merges "$dir")" = '2 ' ] \
-    || fail "the PR moved to the head did not land first: $(forge_merges "$dir")"
+  [ "$(forge_merges "$dir")" = '2 1 ' ] \
+    || fail "the PR moved to the head did not land first, ahead of the old head: $(forge_merges "$dir")"
   pass "front moves a PR to the head of its merge line in one command"
 }
 
@@ -3409,9 +3415,36 @@ test_merge_line_closed_head_is_dropped_and_wakes() {
   ! grep -qF "$head" "$state/merge-lines/github@github.com@o%2Fr" \
     || fail "the closed head stayed in its line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
   FM_MERGE_LINE_STALL_SECS=1800 merge_line_cycle "$dir" c2
-  [ "$(forge_merges "$dir")" = '1 ' ] \
-    || fail "the next PR did not become the head after the closed head left: $(forge_merges "$dir")"
+  [ "$(forge_merges "$dir")" = '1 2 ' ] \
+    || fail "the line did not land in order after the closed head left: $(forge_merges "$dir")"
   pass "a head closed unmerged is dropped from its line with an immediate wake, and the next PR lands"
+}
+
+# A repository whose base branch has no merge-queue app merges directly, so
+# the line's single-head gate is the only serialization there: a green PR
+# behind an armed head that cannot merge yet stays held. Once that head reads
+# merged outside its own poll, the held PR's stall probe drops it and the line
+# hands off to the held PR in that same sweep.
+test_merge_line_gate_serializes_without_queue_and_probe_hands_off() {
+  local dir state head=https://github.com/o/r/pull/1
+  dir=$(make_case merge-line-probe-handoff)
+  state="$dir/home/state"
+  seed_two_yolo_prs "$dir" 1
+  fake_line_head "$dir" "$head" OPEN FAILURE
+
+  merge_line_cycle "$dir" c1
+  [ -z "$(forge_merges "$dir")" ] \
+    || fail "a green PR merged ahead of its unlanded head on a branch without a merge queue: $(forge_merges "$dir")"
+  assert_grep 'merge line holds task-a' "$state/.watch-triage.log" "the PR behind the head was not held"
+
+  fake_line_head "$dir" "$head" MERGED SUCCESS
+  merge_line_cycle "$dir" c2
+  [ "$(forge_merges "$dir")" = '2 ' ] \
+    || fail "the held PR was not handed off in the sweep that found its head merged: $(forge_merges "$dir")"
+  case "$(cat "$dir/c2.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the handed-off landing was not reported: $(cat "$dir/c2.out")" ;; esac
+  ! grep -qF "$head" "$state/merge-lines/github@github.com@o%2Fr" \
+    || fail "the merged head stayed in its line: $(cat "$state/merge-lines/github@github.com@o%2Fr")"
+  pass "without a merge queue the gate holds a PR behind its head, and a head found merged hands off in the same sweep"
 }
 
 test_repo_without_merge_line_is_unchanged() {
@@ -3603,13 +3636,14 @@ test_green_pr_with_unreported_required_check_does_not_alert
 test_green_pr_in_merge_queue_does_not_alert
 test_merged_poll_leaves_no_green_blocked_record
 test_merged_poll_reregistration_after_notification_is_absorbed
-test_merge_line_lands_only_the_head_in_order
+test_merge_line_lands_head_first_and_hands_off_in_the_same_sweep
 test_merge_line_front_reorders
 test_merge_line_front_lands_an_unarmed_attended_merge
 test_merge_line_holds_behind_rerun_for_non_head
 test_repo_without_merge_line_is_unchanged
 test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
 test_merge_line_closed_head_is_dropped_and_wakes
+test_merge_line_gate_serializes_without_queue_and_probe_hands_off
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority

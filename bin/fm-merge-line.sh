@@ -44,7 +44,11 @@
 # removes it when its poll retires on a landed merge, or when `probe` reads the
 # head merged), when it closes unmerged (the watcher drops a closed head and
 # wakes firstmate at once), or by `remove`. The next listed entry becomes the
-# head. bin/fm-watch.sh's merge_line_stall_tick owns the stall wake: once per
+# head, and a merged head hands off at once: bin/fm-watch.sh's
+# merge_line_handoff runs the new head's yolo merge attempt in the same sweep
+# that saw the old head land, through the same gate, so the order and
+# one-at-a-time landing are unchanged and only the idle wait for a later sweep
+# goes. bin/fm-watch.sh's merge_line_stall_tick owns the stall wake: once per
 # episode when a PR held behind the head is green and that head has not
 # changed for FM_MERGE_LINE_STALL_SECS (default 30 minutes).
 #
