@@ -1,0 +1,24 @@
+
+$ fm-merge-line.sh prune   # next sweep picks up the 11 left unread
+11
+elapsed=35s
+merge line github.com/o/r
+
+# Adversarial: hung read (pull/40 sleeps 600s) with a small outer bound FM_MERGE_LINE_PRUNE_TIMEOUT=9 (budget 6s) and default 20s per-read timeout
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/40 not-armed (skipped)
+  2. https://github.com/o/r/pull/41 not-armed (skipped)
+  3. https://github.com/o/r/pull/42 not-armed (skipped)
+fm-merge-line: 3 merge-line entries not read this sweep (reading https://github.com/o/r/pull/40 timed out); they stay listed for the next sweep
+rc=0 elapsed=7s (must be < 9s, not 20s)
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/40 not-armed (skipped)
+  2. https://github.com/o/r/pull/41 not-armed (skipped)
+  3. https://github.com/o/r/pull/42 not-armed (skipped)
+
+# Failed read (gh exits 1 for pull/41: no fixture) keeps that entry listed; others still pruned
+pruned merged https://github.com/o/r/pull/40
+pruned closed https://github.com/o/r/pull/42
+rc=0
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/41 not-armed (skipped)

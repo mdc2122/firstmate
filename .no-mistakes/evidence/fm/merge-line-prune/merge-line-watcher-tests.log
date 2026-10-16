@@ -1,0 +1,20 @@
+ok - a declared merge line lands its head first and hands off to the next PR in the same sweep
+ok - front moves a PR to the head of its merge line in one command
+ok - an attended merge of a fronted, not yet armed PR passes its merge line's gate
+ok - only the merge line's head gets the behind-base rerun steer; a held PR keeps its green-unmergeable episode
+ok - a fronted unarmed head holds armed green PRs behind it and wakes once per stall episode
+ok - a merged head clears every stall record naming it with one corrective row and leaves open heads' records alone
+ok - a head closed unmerged is dropped from its line with one wake, and the PRs behind it land in the same sweep
+ok - without a merge queue the gate holds a PR behind its head, and a head found merged hands off in the same sweep
+ok - prune drops a merged head before the sweep's polls, so the next entry is the head and lands in that sweep
+ok - prune drops a closed entry behind the head without a wake and keeps the rest of the line in order
+ok - an unowned open merge-line entry wakes once per head and is never armed or merged
+ok - a timed-out prune read stops that sweep's reads but the entries already read are pruned, and the rest are pruned next sweep
+ok - prune stops reading at its read budget, prunes the merged entries it read, and keeps the unread rest listed
+ok - prune leaves an owned open entry alone and wakes once when it loses its poll
+ok - a queue-app base arms the window's green entries in line order, and an ejection skips forward
+ok - the queue window hands an entry to the queue only after every earlier green entry is queued
+ok - a pending earlier entry holds the queue window behind it, and a red one is skipped
+ok - a window entry's queue-stall clock starts only once it is the line's first entry the queue holds
+ok - the queue-stall clock belongs to the line's first entry the queue holds, past an unqueued red head
+ok - the queue window opens only behind a queued head and ends at a fronted entry

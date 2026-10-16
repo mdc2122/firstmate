@@ -1,0 +1,13 @@
+# 30 listed PRs, all merged on the forge, every gh read takes 3s; FM_MERGE_LINE_PRUNE_TIMEOUT unset (default 90 -> read budget 60s)
+$ time fm-merge-line.sh prune
+rc=0 elapsed=61s (whole-command bound 90s)
+pruned lines on stdout: 19
+stderr:
+fm-merge-line: 11 merge-line entries not read this sweep (the read budget was spent); they stay listed for the next sweep
+
+entries still listed: 11
+merge line github.com/o/r
+  1. https://github.com/o/r/pull/20 not-armed (skipped)
+  2. https://github.com/o/r/pull/21 not-armed (skipped)
+  3. https://github.com/o/r/pull/22 not-armed (skipped)
+  ...

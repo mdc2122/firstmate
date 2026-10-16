@@ -1,0 +1,42 @@
+$ fm-merge-line.sh show   # before (forge: 788 merged, 795 closed, 798 merged, 806 closed, 809 merged, 812 open, nobody arms 812)
+merge line github.com/mdc2122/viral-moment
+  1. https://github.com/mdc2122/viral-moment/pull/788 not-armed (skipped)
+  2. https://github.com/mdc2122/viral-moment/pull/795 not-armed (skipped)
+  3. https://github.com/mdc2122/viral-moment/pull/798 not-armed (skipped)
+  4. https://github.com/mdc2122/viral-moment/pull/806 not-armed (skipped)
+  5. https://github.com/mdc2122/viral-moment/pull/809 not-armed (skipped)
+  6. https://github.com/mdc2122/viral-moment/pull/812 not-armed (skipped)
+
+$ fm-merge-line.sh prune   # sweep 1
+pruned merged https://github.com/mdc2122/viral-moment/pull/788
+pruned closed https://github.com/mdc2122/viral-moment/pull/795
+pruned merged https://github.com/mdc2122/viral-moment/pull/798
+pruned closed https://github.com/mdc2122/viral-moment/pull/806
+pruned merged https://github.com/mdc2122/viral-moment/pull/809
+check: merge-line-prune: https://github.com/mdc2122/viral-moment/pull/812 is listed open in the merge line for github.com/mdc2122/viral-moment at head 1111111111111111111111111111111111111111, but no live task's merge poll arms it, so the line never merges it; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/viral-moment/pull/812 once its merge is authorized, or drop it with bin/fm-merge-line.sh remove https://github.com/mdc2122/viral-moment/pull/812
+rc=0
+
+$ fm-merge-line.sh show   # after sweep 1
+merge line github.com/mdc2122/viral-moment
+  1. https://github.com/mdc2122/viral-moment/pull/812 not-armed (skipped)
+
+--- state/.wake-queue after sweep 1
+1792150794	1	check	merge-line-prune-https://github.com/mdc2122/viral-moment/pull/812	check: merge-line-prune: https://github.com/mdc2122/viral-moment/pull/812 is listed open in the merge line for github.com/mdc2122/viral-moment at head 1111111111111111111111111111111111111111, but no live task's merge poll arms it, so the line never merges it; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/viral-moment/pull/812 once its merge is authorized, or drop it with bin/fm-merge-line.sh remove https://github.com/mdc2122/viral-moment/pull/812
+
+--- state/merge-lines/.unowned-woken
+https://github.com/mdc2122/viral-moment/pull/812 1111111111111111111111111111111111111111
+-rw-------@
+
+$ fm-merge-line.sh prune   # sweep 2, same head for 812 (expect no new wake)
+rc=0
+wake-queue rows naming pull/812: 1
+
+$ fm-merge-line.sh prune   # sweep 3, 812 pushed a new head commit (expect one new wake)
+check: merge-line-prune: https://github.com/mdc2122/viral-moment/pull/812 is listed open in the merge line for github.com/mdc2122/viral-moment at head 2222222222222222222222222222222222222222, but no live task's merge poll arms it, so the line never merges it; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/viral-moment/pull/812 once its merge is authorized, or drop it with bin/fm-merge-line.sh remove https://github.com/mdc2122/viral-moment/pull/812
+rc=0
+wake-queue rows naming pull/812: 2
+
+--- action ledger prune rows
+(eval):14: no matches found: /tmp/mlprune.HREX/live/home/state/*ledger*
+merge-lines
+supervisor-actions.jsonl

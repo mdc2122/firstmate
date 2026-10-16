@@ -1,0 +1,29 @@
+--- supervisor-actions.jsonl prune rows (one per dropped entry)
+{"at":"2026-10-16T11:39:54Z","epoch":1792150794,"task":"","verb":"merge-line","action":"prune","target":"https://github.com/mdc2122/viral-moment/pull/788","origin":"direct"}
+{"at":"2026-10-16T11:39:54Z","epoch":1792150794,"task":"","verb":"merge-line","action":"prune","target":"https://github.com/mdc2122/viral-moment/pull/795","origin":"direct"}
+{"at":"2026-10-16T11:39:54Z","epoch":1792150794,"task":"","verb":"merge-line","action":"prune","target":"https://github.com/mdc2122/viral-moment/pull/798","origin":"direct"}
+{"at":"2026-10-16T11:39:54Z","epoch":1792150794,"task":"","verb":"merge-line","action":"prune","target":"https://github.com/mdc2122/viral-moment/pull/806","origin":"direct"}
+{"at":"2026-10-16T11:39:54Z","epoch":1792150794,"task":"","verb":"merge-line","action":"prune","target":"https://github.com/mdc2122/viral-moment/pull/809","origin":"direct"}
+
+$ fm-merge-line.sh enqueue .../pull/820; front .../pull/830  # 830 is the held head, then closes unmerged
+merge line github.com/mdc2122/viral-moment
+  1. https://github.com/mdc2122/viral-moment/pull/830 task=- head fronted
+  2. https://github.com/mdc2122/viral-moment/pull/812 not-armed (skipped)
+  3. https://github.com/mdc2122/viral-moment/pull/820 not-armed (skipped)
+merge line github.com/mdc2122/viral-moment
+  1. https://github.com/mdc2122/viral-moment/pull/830 task=- head fronted
+  2. https://github.com/mdc2122/viral-moment/pull/812 not-armed (skipped)
+  3. https://github.com/mdc2122/viral-moment/pull/820 not-armed (skipped)
+
+$ fm-merge-line.sh prune
+pruned closed https://github.com/mdc2122/viral-moment/pull/830 head
+check: merge-line-prune: merge-line head https://github.com/mdc2122/viral-moment/pull/830 closed unmerged; dropped from its line for github.com/mdc2122/viral-moment, so the PRs behind it move up
+check: merge-line-prune: https://github.com/mdc2122/viral-moment/pull/820 is listed open in the merge line for github.com/mdc2122/viral-moment at head 1111111111111111111111111111111111111111, but no live task's merge poll arms it, so the line never merges it; arm it with bin/fm-pr-check.sh <task> https://github.com/mdc2122/viral-moment/pull/820 once its merge is authorized, or drop it with bin/fm-merge-line.sh remove https://github.com/mdc2122/viral-moment/pull/820
+rc=0
+
+merge line github.com/mdc2122/viral-moment
+  1. https://github.com/mdc2122/viral-moment/pull/812 not-armed (skipped)
+  2. https://github.com/mdc2122/viral-moment/pull/820 not-armed (skipped)
+
+--- closed-head wake row
+merge-line-prune-https://github.com/mdc2122/viral-moment/pull/830	check: merge-line-prune: merge-line head https://github.com/mdc2122/viral-moment/pull/830 closed unmerged; dropped from its line for github.com/mdc2122/viral-moment, so the PRs behind it move up
