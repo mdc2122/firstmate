@@ -1,0 +1,68 @@
+== S1 replay PR#811: armed poll, then relaunch + captain-call gate append keys after pr=
+    arm rc=0
+    meta tail:
+      | pr=https://github.com/mdc2122/viral-moment/pull/811
+      | pr_head=0123456789abcdef0123456789abcdef01234567
+      | control_relaunch_tx=80855.20261015T171018Z.5470
+      | decisions_reviewed=1
+      | decision_keys=
+  -- cycle while PR still open/green (8s bounded run):
+    watcher rc=124 stdout: 
+    wake-queue:
+    pr= in meta: 1 ; armed poll: https://github.com/mdc2122/viral-moment/pull/811
+  -- cycle after PR merges:
+    watcher rc=0 stdout: check: <tmp>/s1/home/state/task-a.check.sh: merged
+    wake-queue:
+      | check: merge landed: task-a https://github.com/mdc2122/viral-moment/pull/811 external
+    pr= in meta: 1 ; armed poll: NONE
+== S2 multi-PR worker life: A, then B reported later, A merges, B reported again
+  -- ready line A:
+    watcher rc=0 stdout: signal: <tmp>/s2/home/state/task-a.status
+    wake-queue:
+      | signal: <tmp>/s2/home/state/task-a.status
+      | signal: <tmp>/s2/home/state/task-a.status
+    pr= in meta: 1 ; armed poll: https://github.com/o/r/pull/501
+  -- ready line B while A open:
+    watcher rc=0 stdout: signal: <tmp>/s2/home/state/task-a.status
+    wake-queue:
+      | check: merge poll not armed for task-a https://github.com/o/r/pull/502: the task already polls https://github.com/o/r/pull/501 (still open); a task holds one merge poll, so arm https://github.com/o/r/pull/502 with bin/fm-pr-check.sh task-a https://github.com/o/r/pull/502 once https://github.com/o/r/pull/501 merges or closes
+      | signal: <tmp>/s2/home/state/task-a.status
+      | signal: <tmp>/s2/home/state/task-a.status
+    pr= in meta: 1 ; armed poll: https://github.com/o/r/pull/501
+  -- A merges (poll cycle):
+    watcher rc=0 stdout: check: <tmp>/s2/home/state/task-a.check.sh: merged
+    wake-queue:
+      | check: merge landed: task-a https://github.com/o/r/pull/501 external
+    pr= in meta: 1 ; armed poll: NONE
+  -- ready line B again after A delivered:
+    watcher rc=0 stdout: signal: <tmp>/s2/home/state/task-a.status
+    wake-queue:
+      | signal: <tmp>/s2/home/state/task-a.status
+      | signal: <tmp>/s2/home/state/task-a.status
+    pr= in meta: 1 ; armed poll: https://github.com/o/r/pull/502
+== S3 adversarial probe outcomes: armed A merged-but-undelivered / unreadable
+  -- [merged] ready line B:
+    watcher rc=0 stdout: signal: <tmp>/s3-merged/home/state/task-a.status
+    wake-queue:
+      | check: merge poll not armed for task-a https://github.com/o/r/pull/502: the task already polls https://github.com/o/r/pull/501 (merged, and its poll has not delivered that merge yet); a task holds one merge poll, so arm https://github.com/o/r/pull/502 with bin/fm-pr-check.sh task-a https://github.com/o/r/pull/502 once https://github.com/o/r/pull/501 merges or closes
+      | signal: <tmp>/s3-merged/home/state/task-a.status
+      | signal: <tmp>/s3-merged/home/state/task-a.status
+    pr= in meta: 1 ; armed poll: https://github.com/o/r/pull/501
+  -- [unreadable] ready line B:
+    watcher rc=0 stdout: signal: <tmp>/s3-unreadable/home/state/task-a.status
+    wake-queue:
+      | check: merge poll not armed for task-a https://github.com/o/r/pull/502: the task already polls https://github.com/o/r/pull/501 (its state could not be read); a task holds one merge poll, so arm https://github.com/o/r/pull/502 with bin/fm-pr-check.sh task-a https://github.com/o/r/pull/502 once https://github.com/o/r/pull/501 merges or closes
+      | signal: <tmp>/s3-unreadable/home/state/task-a.status
+      | signal: <tmp>/s3-unreadable/home/state/task-a.status
+    pr= in meta: 1 ; armed poll: https://github.com/o/r/pull/501
+== S4 adversarial parser: forged second pr= / malformed pr_head= appended after pr= must still be refused
+  -- [dup-pr] merged-cycle:
+    watcher rc=0 stdout: check: rejected unauthenticated state checks: <tmp>/s4-dup-pr/home/state/task-a.check.sh
+    wake-queue:
+      | check: rejected unauthenticated state checks: <tmp>/s4-dup-pr/home/state/task-a.check.sh
+    pr= in meta: 2 ; armed poll: NONE
+  -- [bad-head] merged-cycle:
+    watcher rc=0 stdout: check: rejected unauthenticated state checks: <tmp>/s4-bad-head/home/state/task-a.check.sh
+    wake-queue:
+      | check: rejected unauthenticated state checks: <tmp>/s4-bad-head/home/state/task-a.check.sh
+    pr= in meta: 1 ; armed poll: NONE

@@ -1,0 +1,10 @@
+not ok - a second PR's ready line re-bound the task away from its armed open PR
+FAILED: test_ready_line_never_rebinds_away_from_an_armed_open_pr
+not ok - a multi-PR span armed https://github.com/o/other/pull/7 instead of keeping its first PR https://github.com/o/r/pull/401
+FAILED: test_ready_span_with_several_prs_keeps_the_first_armed_and_wakes_for_the_rest
+not ok - the armed poll did not deliver its merge: 1792123620	1	check	/private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.qwHWJE/poll-after-appended-meta/home/state/z-stop.check.sh	check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.qwHWJE/poll-after-appended-meta/home/state/z-stop.check.sh: stop-cycle
+FAILED: test_poll_survives_keys_appended_after_pr_metadata
+ok - a ready line with trailing prose arms the PR it names
+ok - a later unparseable PR mention does not hide an earlier valid ready line
+ok - a done line mentioning a PR it cannot parse queues the not-armed notice
+ok - bootstrap does not rewrite unauthenticated checks or emit retired migration diagnostics

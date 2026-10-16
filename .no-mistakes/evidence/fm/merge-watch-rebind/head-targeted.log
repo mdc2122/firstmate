@@ -1,0 +1,7 @@
+ok - a ready line arms once, a repeat is a no-op, an open armed PR is never re-bound, and a closed one is
+ok - a span naming several PRs keeps the first armed and wakes once for each other PR
+ok - an armed poll stays authenticated when later keys follow its pr= record
+ok - a ready line with trailing prose arms the PR it names
+ok - a later unparseable PR mention does not hide an earlier valid ready line
+ok - a done line mentioning a PR it cannot parse queues the not-armed notice
+ok - bootstrap does not rewrite unauthenticated checks or emit retired migration diagnostics
