@@ -20,6 +20,9 @@ Exercise trace propagation for $2.
 
 ## Firstmate spec
 Verify the spawned process receives the expected trace context.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 

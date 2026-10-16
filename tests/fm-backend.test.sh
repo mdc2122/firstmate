@@ -53,6 +53,9 @@ Exercise backend dispatch for $2.
 
 ## Firstmate spec
 Verify backend selection without changing task intent.
+
+# Completion observation
+verify: the fixture worker is running in its own endpoint
 EOF
 }
 

@@ -4034,6 +4034,65 @@ EOF
   pass "the run abort and the leaked-process reap both complete before the destructive worktree return"
 }
 
+# A ship task whose brief states a verify observation is not finished when its
+# work lands: teardown refuses, naming the missing recording and the
+# observation, until the worker's `done: verified:` line exists. A ready line
+# that only reports the PR, a verified line with no observation, or a
+# `verified:` line in the report does not count. A brief without the section
+# predates the contract and keeps its old Definition of done.
+test_ship_teardown_requires_the_recorded_verify_observation() {
+  local case_dir rc
+  case_dir=$(make_case verify-recorded)
+  write_meta "$case_dir" no-mistakes ship
+  wt_commit "$case_dir" "shippable work"
+  git -C "$case_dir/wt" push -q origin fm/task-x1
+  git -C "$case_dir/project" fetch -q origin
+  mkdir -p "$case_dir/data/task-x1"
+  printf '# Task\nShip it.\n\n# Completion observation\nverify: v2 deployed to staging and /health returns 200\n' \
+    > "$case_dir/data/task-x1/brief.md"
+  printf '%s\n' 'working: committed abc1234; starting validation' \
+    'done: PR https://github.com/example/repo/pull/7 checks green' \
+    'done: verified:' > "$case_dir/state/task-x1.status"
+  printf '# Findings\nverified: reproduced on main at abc1234\n' > "$case_dir/data/task-x1/report.md"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "verify-recorded: landed work without a recorded observation should refuse"
+  assert_grep "REFUSED: ship task task-x1 has not recorded its verify observation" "$case_dir/stderr" \
+    "verify-recorded: refusal did not name the task"
+  assert_grep "Missing: a \`done: verified: <what was observed>\` line" "$case_dir/stderr" \
+    "verify-recorded: refusal did not name what is missing"
+  assert_grep "for: verify: v2 deployed to staging and /health returns 200" "$case_dir/stderr" \
+    "verify-recorded: refusal did not quote the brief's observation"
+  assert_present "$case_dir/state/task-x1.meta" "verify-recorded: refusal removed the task record"
+  [ -d "$case_dir/wt" ] || fail "verify-recorded: refusal removed the isolated copy"
+
+  printf '%s\n' 'done: verified: staging /health returned 200 for v2 at 14:02Z' >> "$case_dir/state/task-x1.status"
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "verify-recorded: teardown should succeed once the observation is recorded"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "verify-recorded: recorded observation still printed a REFUSED line"
+
+  case_dir=$(make_case verify-legacy)
+  write_meta "$case_dir" no-mistakes ship
+  wt_commit "$case_dir" "shippable work"
+  git -C "$case_dir/wt" push -q origin fm/task-x1
+  git -C "$case_dir/project" fetch -q origin
+  mkdir -p "$case_dir/data/task-x1"
+  printf '# Task\nShip it.\n\n# Definition of done\nDelivery contract: mode=no-mistakes\n' \
+    > "$case_dir/data/task-x1/brief.md"
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 0 "$rc" "verify-legacy: a brief predating the observation contract should keep its old teardown"
+  pass "ship teardown refuses until the brief's verify observation is recorded; legacy briefs keep their contract"
+}
+
 test_local_only_fork_remote_allows
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
@@ -4042,6 +4101,7 @@ test_local_only_merged_to_local_main_allows
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
+test_ship_teardown_requires_the_recorded_verify_observation
 test_scout_report_citing_worktree_only_file_refuses_until_copied
 test_scout_report_only_teardown_succeeds
 test_scout_large_uncited_artifact_dir_refuses

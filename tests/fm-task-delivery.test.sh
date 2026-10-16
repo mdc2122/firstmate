@@ -48,6 +48,7 @@ write_brief() {  # <home> <id> [<recorded-mode>]
   {
     printf 'You are a crewmate.\n\n# Task\n## Captain'\''s intent\nExercise the delivery contract.\n\n## Firstmate spec\nVerify the selected delivery behavior.\n\n# Definition of done\n'
     [ -z "$mode" ] || printf 'Delivery contract: mode=%s\n' "$mode"
+    printf '\n# Completion observation\nverify: the fixture worker is running in its own endpoint\n'
   } > "$home/data/$id/brief.md"
 }
 
@@ -233,15 +234,30 @@ test_promote_requires_and_records_the_delivery_contract() {
   [ "$status" -ne 0 ] || fail "promotion without --yolo should exit non-zero"
   assert_contains "$out" "promotion requires --yolo" "promote refusal did not name the missing merge posture"
 
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode no-mistakes-prod-only --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode no-mistakes-prod-only --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion on a conditional policy should exit non-zero"
   assert_contains "$out" "classify this task's surface" "promote did not refuse the conditional policy as a task mode"
 
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode direct-PR --yolo on 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "promotion without --verify should exit non-zero"
+  assert_contains "$out" "promotion requires --verify <observation>" \
+    "promote refusal did not name the missing completion observation"
+  assert_grep 'kind=scout' "$meta" "promotion without --verify still changed the task record"
+
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode direct-PR --yolo on \
+    --verify "PR merged and checks green" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "promotion with a resting-state observation should exit non-zero"
+  assert_contains "$out" "names only a resting state: verify: PR merged and checks green" \
+    "promote did not refuse a resting-state observation"
+  assert_grep 'kind=scout' "$meta" "a resting-state promotion still changed the task record"
+
   blocked_data="$home/data-blocked"
   printf 'not a directory\n' > "$blocked_data"
   out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$blocked_data" \
-    "$PROMOTE" promote-d1 --mode direct-PR --yolo on 2>&1)
+    "$PROMOTE" promote-d1 --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion without writable instruction storage should exit non-zero"
   assert_grep 'kind=scout' "$meta" "failed instruction publication still promoted the task"
@@ -251,7 +267,7 @@ test_promote_requires_and_records_the_delivery_contract() {
   instructions_path="$home/data/promote-d1/ship-instructions.md"
   mkdir -p "$instructions_path"
   out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
-    "$PROMOTE" promote-d1 --mode direct-PR --yolo on 2>&1)
+    "$PROMOTE" promote-d1 --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion over an instruction directory should exit non-zero"
   assert_contains "$out" "ship instructions path is a directory" \
@@ -261,7 +277,7 @@ test_promote_requires_and_records_the_delivery_contract() {
   assert_no_grep '^yolo=' "$meta" "invalid instruction destination recorded a merge posture"
   rmdir "$instructions_path"
 
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode direct-PR --yolo on 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" promote-d1 --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   expect_code 0 "$status" "a promotion carrying both flags should succeed"
   assert_grep 'kind=ship' "$meta" "promotion did not restore ship teardown protection"
@@ -286,7 +302,7 @@ test_promote_refuses_a_symlinked_task_record() {
   ln -s "$target" "$meta"
 
   out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
-    "$PROMOTE" promote-sym --mode direct-PR --yolo on 2>&1)
+    "$PROMOTE" promote-sym --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion through a symlink record should refuse"
   assert_contains "$out" "task record" "promotion did not identify the unpublished task record"
@@ -326,7 +342,7 @@ STUB
       || fail "$mode: scout brief generation should succeed"
     fill_brief_subsections "$home/data/$id/brief.md" \
       "Ship the delivery-contract change." "Preserve the selected delivery mode."
-    out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode "$mode" --yolo off 2>&1) \
+    out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode "$mode" --yolo off --verify "the fixture service is running" 2>&1) \
       || fail "$mode: promotion should succeed"
 
     payload="$TMP_ROOT/promote-dod/payload-$id"
@@ -356,17 +372,22 @@ STUB
       "$mode: promoted worker did not receive the Firstmate spec subsection"
 
     # Compare the public outputs of both real generation paths. The promoted
-    # payload ends at its Definition of done, as does an ordinary generated
-    # brief, so identical suffixes prove both workers receive the same contract.
+    # payload ends at its Definition of done and completion observation, as
+    # does an ordinary generated brief once Firstmate fills {VERIFY} with the
+    # same observation, so identical suffixes prove both workers receive the
+    # same contract.
     rm "$home/data/$id/brief.md"
     FM_HOME="$home" "$BRIEF" "$id" fixture-project --mode "$mode" >/dev/null 2>&1 \
       || fail "$mode: ordinary ship brief generation should succeed"
     brief_dod="$TMP_ROOT/promote-dod/brief-dod-$id"
     delivered_dod="$TMP_ROOT/promote-dod/delivered-dod-$id"
-    awk '/^# Definition of done$/ { emit=1 } emit' "$home/data/$id/brief.md" > "$brief_dod"
+    awk '/^# Definition of done$/ { emit=1 } emit' "$home/data/$id/brief.md" \
+      | sed 's/^verify: {VERIFY}$/verify: the fixture service is running/' > "$brief_dod"
     awk '/^# Definition of done$/ { emit=1 } emit' "$payload" > "$delivered_dod"
     cmp -s "$brief_dod" "$delivered_dod" \
       || fail "$mode: promotion and ordinary brief generation delivered different Definitions of done"
+    assert_grep "verify: the fixture service is running" "$delivered_dod" \
+      "$mode: promoted worker did not receive its completion observation"
   done
 
   payload="$TMP_ROOT/promote-dod/payload-promote-dod-no-mistakes"
@@ -602,7 +623,7 @@ EOF
   printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\n' "$id" > "$meta"
   FM_HOME="$home" "$BRIEF" "$id" proj --scout >/dev/null 2>&1 \
     || fail "unfilled promote scout brief should scaffold"
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo on 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion of an unfilled scout brief should exit non-zero"
   assert_contains "$out" "preserve the original ask in ## Captain's intent" \
@@ -614,7 +635,7 @@ EOF
   id=promote-missing-brief
   meta="$home/state/$id.meta"
   printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\n' "$id" > "$meta"
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion without a scout brief should exit non-zero"
   assert_contains "$out" "must contain nonempty" \
@@ -638,7 +659,7 @@ Unrelated notes are not the original ask.
 ## Firstmate spec
 Unrelated notes are not the task specification.
 EOF
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion without provenance-marked captain intent should fail"
   assert_contains "$out" "has no provenance-marked Captain's intent" \
@@ -655,7 +676,7 @@ EOF
   fill_brief_subsections "$home/data/$id/brief.md" \
     "Investigate why the identity check is failing." \
     "Ship the identity-check fix without adding a classifier."
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode no-mistakes --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode no-mistakes --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   expect_code 0 "$status" "promotion of a filled scout brief should succeed"
   assert_grep 'kind=ship' "$meta" "filled promotion did not restore ship teardown protection"
@@ -696,7 +717,7 @@ Keep this closing requirement.
 # Setup
 This scout-only setup must not become the spec.
 EOF
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   expect_code 0 "$status" "promotion with nested and fenced spec content should succeed"
   brief="$home/data/$id/ship-instructions.md"
@@ -728,7 +749,7 @@ Ship the narrow session-floor fix with a regression test.
 # Setup
 This is a SCOUT task: the deliverable is a written report, not a PR.
 EOF
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo on 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode direct-PR --yolo on --verify "the fixture service is running" 2>&1)
   status=$?
   expect_code 0 "$status" "promotion of a pre-subsection scout brief should succeed"
   brief="$home/data/$id/ship-instructions.md"
@@ -749,6 +770,76 @@ EOF
   assert_not_contains "$spec_body" "This is a SCOUT task" \
     "legacy promotion copied the scout Setup section into Firstmate spec"
   pass "fm-spawn/fm-promote: leftover Task placeholders are refused until both subsections are filled"
+}
+
+# A ship task that cannot say how completion is observed must not start: the
+# spawn refuses a brief whose completion observation is missing, unfilled, or
+# names only a resting state, before any task record exists, while a brief
+# naming a live end state clears the gate (and only fails later at the
+# refusing fake tmux).
+test_spawn_requires_a_live_verify_observation() {
+  local rec home proj fakebin out status id label observation expect content n=0
+  rec=$(make_home verify-gate)
+  IFS='|' read -r home proj fakebin <<EOF
+$rec
+EOF
+
+  id=verify-missing
+  mkdir -p "$home/data/$id"
+  printf '# Task\n## Captain'\''s intent\nShip it.\n\n## Firstmate spec\nBuild it.\n\n# Definition of done\nDelivery contract: mode=direct-PR\n' \
+    > "$home/data/$id/brief.md"
+  out=$(run_spawn "$home" "$fakebin" "$id" "$proj" claude --mode direct-PR --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "a ship brief without a verify observation should not spawn"
+  assert_contains "$out" "has no verify observation for $id" \
+    "missing-observation refusal did not name the task"
+  assert_contains "$out" "names the live end state the worker will observe" \
+    "missing-observation refusal did not say what to write"
+  assert_absent "$home/state/$id.meta" "a ship spawn without a verify observation wrote task metadata"
+
+  id=verify-unfilled
+  FM_HOME="$home" "$BRIEF" "$id" proj --mode direct-PR >/dev/null 2>&1 \
+    || fail "verify-unfilled brief should scaffold"
+  fill_brief_subsections "$home/data/$id/brief.md" "Ship it." "Build it."
+  out=$(run_spawn "$home" "$fakebin" "$id" "$proj" claude --mode direct-PR --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "a scaffolded brief with {VERIFY} left in should not spawn"
+  assert_contains "$out" "still contains {VERIFY}" "unfilled observation refusal did not name the placeholder"
+  assert_absent "$home/state/$id.meta" "an unfilled verify observation wrote task metadata"
+
+  while IFS='|' read -r label observation expect; do
+    [ -n "$label" ] || continue
+    n=$((n + 1))
+    id="verify-row-$n"
+    FM_HOME="$home" "$BRIEF" "$id" proj --mode direct-PR >/dev/null 2>&1 \
+      || fail "$label: brief should scaffold"
+    fill_brief_subsections "$home/data/$id/brief.md" "Ship it." "Build it."
+    content=$(cat "$home/data/$id/brief.md")
+    printf '%s\n' "${content//'{VERIFY}'/$observation}" > "$home/data/$id/brief.md"
+    out=$(run_spawn "$home" "$fakebin" "$id" "$proj" claude --mode direct-PR --yolo off)
+    status=$?
+    case "$expect" in
+      refuse)
+        [ "$status" -ne 0 ] || fail "$label: a resting-state observation should not spawn"
+        assert_contains "$out" "names only a resting state: verify: $observation" \
+          "$label: resting refusal did not quote the observation"
+        assert_absent "$home/state/$id.meta" "$label: a refused spawn wrote task metadata"
+        ;;
+      pass)
+        assert_not_contains "$out" "verify observation" "$label: a live observation was refused"
+        assert_not_contains "$out" "{VERIFY}" "$label: a live observation was read as unfilled"
+        ;;
+    esac
+  done <<'ROWS'
+merged only|PR merged|refuse
+checks green only|PR https://github.com/example/repo/pull/7 merged and checks green|refuse
+ready for review|ready for review|refuse
+CI passing on main|CI is passing on main|refuse
+deployed surface|v2 deployed to staging and /health returns 200|pass
+observed absence|no keychain popups on screen after a fresh login|pass
+measured result|p95 latency under 200ms measured on prod dashboard|pass
+ROWS
+  pass "fm-spawn: a ship task starts only with a verify observation naming a live end state"
 }
 
 # Exercise the serialized input a worker is told to pass to no-mistakes, not
@@ -805,7 +896,7 @@ EOF
   printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\n' "$id" > "$home/state/$id.meta"
   write_brief "$home" "$id"
   printf '# Task\n## Captain'"'"'s intent\nCaptain: investigate the refusal.\n\n## Firstmate spec\nReproduce it first.\n' > "$home/data/$id/brief.md"
-  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode no-mistakes --yolo off 2>&1)
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode no-mistakes --yolo off --verify "the fixture service is running" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "promotion of addressed intent should be refused"
   assert_contains "$out" "operator-address line: Captain: investigate the refusal." \
@@ -892,4 +983,5 @@ test_promote_refuses_a_symlinked_task_record
 test_promotion_delivers_the_real_definition_of_done
 test_project_mode_maps_the_conditional_policy
 test_spawn_and_promote_require_filled_task_subsections
+test_spawn_requires_a_live_verify_observation
 echo "# all fm-task-delivery tests passed"

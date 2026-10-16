@@ -43,6 +43,108 @@
 # conflicting role is superseded rather than duplicated.
 # fm_ship_rule_one owns the mode-specific first ship safety rule shared by an
 # ordinary ship brief and the durable contract written during scout promotion.
+# This file is also the one owner of a ship task's completion observation.
+# bin/fm-brief.sh scaffolds fm_verify_block's `# Completion observation`
+# section, whose `verify: {VERIFY}` line Firstmate fills with the live end
+# state the worker will observe (deployed, running, measured). The section
+# keeps the worker on the task past its ready line until it records
+# `done: verified: <observation>`. bin/fm-spawn.sh refuses a fresh ship spawn
+# whose brief has no such line, still carries {VERIFY}, or names only a resting
+# state (fm_verify_observation_is_resting); bin/fm-teardown.sh refuses to close
+# a ship row whose brief carries the line until fm_verify_recorded finds the
+# recording. A brief without the section predates this contract: its task
+# keeps its original Definition of done at relaunch and teardown.
+
+FM_VERIFY_HEADING='# Completion observation'
+
+# fm_verify_block [observation] prints the section; without an observation it
+# carries the `{VERIFY}` placeholder bin/fm-brief.sh scaffolds for Firstmate.
+fm_verify_block() {  # [observation]
+  local observation='{VERIFY}'
+  [ -z "${1:-}" ] || observation=$1
+  printf '%s\nverify: %s\n' "$FM_VERIFY_HEADING" "$observation"
+  cat <<'EOF'
+This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
+The ready line the Definition of done asks for (`done: PR ...` or `done: ready in branch ...`) hands the change over for merge; after appending it, end your turn and wait rather than treating the task as complete.
+When firstmate tells you through your instruction inbox that the change has landed, make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
+If the live surface does not show it, append `blocked: verify: {what you saw instead}` and stop; never record `done: verified:` for an observation you did not make.
+Teardown refuses to close this task until that `done: verified:` line exists.
+EOF
+}
+
+# Print why an observation cannot start a ship task and return 0; return 1
+# when it names a live end state. bin/fm-spawn.sh and bin/fm-promote.sh wrap
+# the reason in their own refusal line.
+fm_verify_observation_problem() {  # <observation>
+  if [ -z "$(printf '%s' "$1" | tr -d '[:space:]')" ]; then
+    printf '%s\n' "has no verify observation; name the live end state the worker will observe (deployed, running, measured)"
+  elif [ "$1" = '{VERIFY}' ]; then
+    printf '%s\n' "still contains {VERIFY}; replace it with the live end state the worker will observe (deployed, running, measured)"
+  elif fm_verify_observation_is_resting "$1"; then
+    printf '%s\n' "verify observation names only a resting state: verify: $1; merged, checks-green, and ready-for-review are not completion - name the live end state the worker will observe (deployed, running, measured)"
+  else
+    return 1
+  fi
+}
+
+# Print the brief's verify observation; return 1 when the brief carries no
+# `verify:` line in its completion-observation section. An empty observation
+# prints nothing and returns 0, so callers test the printed text.
+fm_brief_verify_observation() {  # <file>
+  fm_brief_heading_present "$1" "$FM_VERIFY_HEADING" || return 1
+  fm_brief_heading_body "$1" "$FM_VERIFY_HEADING" | awk '
+    match($0, /^verify:[[:space:]]*/) {
+      line = substr($0, RLENGTH + 1)
+      sub(/[[:space:]]+$/, "", line)
+      print line
+      found = 1
+      exit
+    }
+    END { exit !found }
+  '
+}
+
+# Return 0 when an observation names no live end state: once URLs, PR numbers,
+# resting-state vocabulary (merged, checks green, CI, review, pushed, ...), and
+# filler words are removed, nothing remains. "PR merged and checks green" is
+# resting; "deployed to staging" or "no keychain popups on screen" is not.
+fm_verify_observation_is_resting() {  # <observation>
+  printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]' | awk '
+    BEGIN {
+      n = split("merged merge merges merging landed land lands landing green checks check ci passing passed pass passes pr prs pull request requests ready review reviewed reviews reviewer reviewers approved approve approval open opened push pushed committed commit commits branch main master default tests test unit integration e2e locally suite pipeline validation validated validate lint linted done complete completed finished closed close github gh workflow workflows build builds succeeded success successful", w, " ")
+      for (i = 1; i <= n; i++) skip[w[i]] = 1
+      n = split("the a an and or is are be been being it its on in into onto to of for with without all any has have had was were get gets got after before this that these those then now fix fixes fixed change changes feature work task code patch upstream origin repo repository via by as at from", w, " ")
+      for (i = 1; i <= n; i++) skip[w[i]] = 1
+    }
+    {
+      gsub(/[a-z][a-z0-9+.-]*:\/\/[^[:space:]]*/, " ")
+      gsub(/[^a-z0-9]+/, " ")
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^[0-9]+$/ || ($i in skip)) continue
+        live = 1
+      }
+    }
+    END { exit live ? 1 : 0 }
+  '
+}
+
+# Print the first recording of a made verify observation and return 0; return
+# 1 when none exists. A recording is a status line with verb `done` whose note
+# opens `verified:` with text after it. Callers source bin/fm-classify-lib.sh
+# for the status line parser.
+fm_verify_recorded() {  # <status-file>
+  local status=$1 line note
+  if [ -f "$status" ] && [ ! -L "$status" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [ "$(status_line_verb "$line")" = "done" ] || continue
+      note=$(status_line_note "$line")
+      case "$note" in
+        verified:*[![:space:]]*) printf '%s\n' "$line"; return 0 ;;
+      esac
+    done < "$status"
+  fi
+  return 1
+}
 
 fm_brief_worker_role() {  # <state-dir> <task-id>
   local state=$1 task_id=$2

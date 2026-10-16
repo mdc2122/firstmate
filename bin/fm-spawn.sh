@@ -12,6 +12,10 @@
 #   "Delivery contract: mode=<mode>" line and REFUSES a mismatch, so the worker's
 #   instructions and the recorded task delivery cannot drift apart; a brief
 #   scaffolded before that line existed warns once and launches on the flag. A
+#   fresh ship spawn (not --relaunch) also REFUSES a brief whose
+#   `# Completion observation` section has no `verify:` line, still carries
+#   {VERIFY}, or names only a resting state such as merged or checks green;
+#   bin/fm-dod-lib.sh owns that section and the resting-state rule. A
 #   ship or scout spawn also refuses leftover `{TASK}` / `{FIRSTMATE_SPEC}`
 #   placeholders, an empty Task, an incomplete pair of Task subsections, or a
 #   `## Captain's intent` line opening with a Captain label or address.
@@ -2590,6 +2594,20 @@ if [ "$KIND" = ship ]; then
   elif [ "$BRIEF_MODE" != "$MODE" ]; then
     echo "error: delivery mismatch for $ID: the brief says mode=$BRIEF_MODE but this spawn passed --mode $MODE; correct the flag or re-scaffold the brief so the worker's instructions and the task record agree" >&2
     exit 1
+  fi
+  # Completion-observation gate (bin/fm-dod-lib.sh owns the section and the
+  # resting-state rule). A fresh ship task must state the live end state its
+  # worker will observe; a relaunch keeps the contract its task started under.
+  if [ "$RELAUNCH" -eq 0 ]; then
+    VERIFY_SOURCE=${SOURCE_BRIEF:-$BRIEF}
+    if ! VERIFY_OBSERVATION=$(fm_brief_verify_observation "$VERIFY_SOURCE"); then
+      echo "error: $VERIFY_SOURCE has no verify observation for $ID; add a \`$FM_VERIFY_HEADING\` section whose \`verify:\` line names the live end state the worker will observe (deployed, running, measured), or re-scaffold the brief with bin/fm-brief.sh, before spawn" >&2
+      exit 1
+    fi
+    if VERIFY_PROBLEM=$(fm_verify_observation_problem "$VERIFY_OBSERVATION"); then
+      echo "error: $VERIFY_SOURCE $VERIFY_PROBLEM for $ID before spawn" >&2
+      exit 1
+    fi
   fi
   # The registry holds the captain's standing posture, so dropping below it is
   # allowed (a current explicit captain instruction wins) but never silent. An

@@ -27,7 +27,12 @@
 # --pause-before-validate (mode=no-mistakes only) renders the same opt-in pause as
 # bin/fm-brief.sh: the worker reports `done:` after committing and waits for
 # firstmate to trigger validation instead of starting /no-mistakes itself.
-# Usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--pause-before-validate]
+# --verify is REQUIRED: promotion is where a scout becomes a ship task, so it is
+# where the task must state the live end state its worker will observe. The value
+# is refused on the same terms as a ship spawn's brief and rendered after the
+# Definition of done as bin/fm-dod-lib.sh's `# Completion observation` section, so
+# teardown holds the promoted task to the same recorded observation.
+# Usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> --verify <observation> [--pause-before-validate]
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,6 +63,8 @@ YOLO=
 MODE_SET=0
 YOLO_SET=0
 DOD_PAUSE=
+VERIFY=
+VERIFY_SET=0
 POS=()
 want_value=
 for a in "$@"; do
@@ -68,6 +75,7 @@ for a in "$@"; do
     case "$want_value" in
       mode) MODE=$a; MODE_SET=1 ;;
       yolo) YOLO=$a; YOLO_SET=1 ;;
+      verify) VERIFY=$a; VERIFY_SET=1 ;;
     esac
     want_value=
     continue
@@ -77,12 +85,14 @@ for a in "$@"; do
     --mode=*) MODE=${a#--mode=}; MODE_SET=1 ;;
     --yolo) want_value=yolo ;;
     --yolo=*) YOLO=${a#--yolo=}; YOLO_SET=1 ;;
+    --verify) want_value=verify ;;
+    --verify=*) VERIFY=${a#--verify=}; VERIFY_SET=1 ;;
     --pause-before-validate) DOD_PAUSE='pause-before-validate' ;;
     *) POS+=("$a") ;;
   esac
 done
 [ -z "$want_value" ] || { echo "error: --$want_value requires a value" >&2; exit 1; }
-[ "${#POS[@]}" -ge 1 ] || { echo "usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--pause-before-validate]" >&2; exit 1; }
+[ "${#POS[@]}" -ge 1 ] || { echo "usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> --verify <observation> [--pause-before-validate]" >&2; exit 1; }
 [ "$MODE_SET" -eq 1 ] || {
   echo "error: promotion requires --mode <no-mistakes|direct-PR|local-only>; decide it now from the scout's findings and the project's registered posture in data/projects.md" >&2
   exit 1
@@ -91,6 +101,14 @@ done
   echo "error: promotion requires --yolo <on|off>; it is this task's merge authority, not a project lookup" >&2
   exit 1
 }
+[ "$VERIFY_SET" -eq 1 ] || {
+  echo "error: promotion requires --verify <observation>; name the live end state the worker will observe (deployed, running, measured) - a ship task that cannot state how completion is observed does not start" >&2
+  exit 1
+}
+if VERIFY_PROBLEM=$(fm_verify_observation_problem "$VERIFY"); then
+  echo "error: --verify $VERIFY_PROBLEM" >&2
+  exit 1
+fi
 case "$MODE" in
   no-mistakes|direct-PR|local-only) ;;
   no-mistakes-prod-only)
@@ -215,6 +233,8 @@ EOF
   fi
   printf '\n'
   fm_dod_block "$MODE" "$ID" "$DOD_PAUSE"
+  printf '\n'
+  fm_verify_block "$VERIFY"
 }
 mkdir -p "$DATA/$ID"
 [ ! -d "$INSTRUCTIONS" ] || { echo "error: ship instructions path is a directory: $INSTRUCTIONS" >&2; exit 1; }
