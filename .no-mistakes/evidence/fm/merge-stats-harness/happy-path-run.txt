@@ -1,0 +1,175 @@
+$ HOME=/tmp/mps.7QYH/home PATH=stub-gh-axi:$PATH python3 bin/fm-merge-path-stats.py --days 3 --prs 45 --repo acme/vm --nm-repo-ids vm1,vm2 --repo-dir /tmp/mps.7QYH/repo --out /tmp/mps.7QYH/out
+{
+ "no_mistakes": {
+  "rebase": null,
+  "review": {
+   "n": 2,
+   "p50": 3.0,
+   "p90": 2.0,
+   "max": 4.0,
+   "sum_h": 0.1
+  },
+  "test": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  },
+  "document": null,
+  "lint": null,
+  "push": null,
+  "pr": null,
+  "ci": null,
+  "test_agent_invocations": {
+   "n": 2,
+   "p50": 6.0,
+   "p90": 5.0,
+   "max": 7.0,
+   "sum_h": 0.2
+  },
+  "run_status": {
+   "completed": 1,
+   "failed": 1
+  }
+ },
+ "github": {
+  "created_to_green": {
+   "n": 3,
+   "p50": 25.0,
+   "p90": 25.0,
+   "max": 40.0,
+   "sum_h": 1.4
+  },
+  "pr_head_pytest": {
+   "n": 3,
+   "p50": 20.0,
+   "p90": 20.0,
+   "max": 30.0,
+   "sum_h": 1.1
+  },
+  "green_to_armed": {
+   "n": 3,
+   "p50": 5.0,
+   "p90": 5.0,
+   "max": 20.0,
+   "sum_h": 0.5
+  },
+  "armed_to_enqueued": {
+   "n": 3,
+   "p50": 1.0,
+   "p90": 1.0,
+   "max": 1.0,
+   "sum_h": 0.1
+  },
+  "mq_merge_branch_test": {
+   "n": 3,
+   "p50": 11.0,
+   "p90": 11.0,
+   "max": 12.0,
+   "sum_h": 0.6
+  },
+  "green_to_merged": {
+   "n": 3,
+   "p50": 20.0,
+   "p90": 20.0,
+   "max": 35.0,
+   "sum_h": 1.2
+  },
+  "merge_to_next_merge_when_next_was_green": {
+   "n": 1,
+   "p50": 25.0,
+   "p90": 25.0,
+   "max": 25.0,
+   "sum_h": 0.4
+  },
+  "merge_to_next_arm_when_next_was_green": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  }
+ },
+ "ci": {
+  "github-hosted": {
+   "all": {
+    "n": 1,
+    "p50": 24.0,
+    "p90": 24.0,
+    "max": 24.0,
+    "sum_h": 0.4
+   },
+   "push": {
+    "n": 1,
+    "p50": 24.0,
+    "p90": 24.0,
+    "max": 24.0,
+    "sum_h": 0.4
+   }
+  },
+  "n100": {
+   "all": {
+    "n": 1,
+    "p50": 25.0,
+    "p90": 25.0,
+    "max": 25.0,
+    "sum_h": 0.4
+   },
+   "pull_request": {
+    "n": 1,
+    "p50": 25.0,
+    "p90": 25.0,
+    "max": 25.0,
+    "sum_h": 0.4
+   }
+  },
+  "strix": {
+   "all": {
+    "n": 1,
+    "p50": 12.0,
+    "p90": 12.0,
+    "max": 12.0,
+    "sum_h": 0.2
+   },
+   "pull_request": {
+    "n": 1,
+    "p50": 12.0,
+    "p90": 12.0,
+    "max": 12.0,
+    "sum_h": 0.2
+   }
+  }
+ },
+ "release": {
+  "merged_to_live": {
+   "n": 3,
+   "p50": 30.0,
+   "p90": 30.0,
+   "max": 50.0,
+   "sum_h": 1.8
+  },
+  "merged_to_release_join": {
+   "n": 3,
+   "p50": 5.0,
+   "p90": 5.0,
+   "max": 26.0,
+   "sum_h": 0.5
+  },
+  "canary_to_promote": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  },
+  "deploy_to_done": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  }
+ }
+}
+exit=0

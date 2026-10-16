@@ -1,0 +1,13 @@
+$ fm-merge-path-stats.py --nm-repo-ids ","
+fm-merge-path-stats.py: error: --nm-repo-ids must name at least one no-mistakes repo id
+exit=2
+ls: /tmp/mps.7QYH/o2: No such file or directory
+
+$ fm-merge-path-stats.py --prs 0
+                                          ~~~~^^^
+IndexError: list index out of range
+exit=1
+
+$ fm-merge-path-stats.py --days 1 (r2 at now-2h kept, r4 at now-5d dropped; CI created filter)
+review {'n': 3, 'p50': 4.0, 'p90': 4.0, 'max': 166.7, 'sum_h': 2.9} run_status {'completed': 2, 'failed': 1}
+/repos/acme/vm/actions/workflows/pytest-checks.yml/runs?status=completed&per_page=100&page=1&created=%3E%3D2026-10-15T01:24:08Z

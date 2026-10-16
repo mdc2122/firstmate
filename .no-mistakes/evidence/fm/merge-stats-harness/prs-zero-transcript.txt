@@ -1,0 +1,11 @@
+$ fm-merge-path-stats.py --prs 0 --nm-repo-ids vm1 --out sandbox/out0
+github: {"created_to_green": null, "pr_head_pytest": null, "green_to_armed": null, "armed_to_enqueued": null, "mq_merge_branch_test": null, "green_to_merged": null, "merge_to_next_merge_when_next_was_green": null, "merge_to_next_arm_when_next_was_green": null}
+release: {"merged_to_live": null, "merged_to_release_join": null, "canary_to_promote": {"n": 3, "p50": 8.0, "p90": 8.0, "max": 8.0, "sum_h": 0.4}, "deploy_to_done": {"n": 3, "p50": 18.0, "p90": 18.0, "max": 23.0, "sum_h": 0.8}}
+ci runners: ['github-hosted', 'n100', 'strix']
+exit=0
+--- out0 contents
+pr_stage_table.csv
+stats.json
+--- pr_stage_table.csv (bytes):
+       2
+

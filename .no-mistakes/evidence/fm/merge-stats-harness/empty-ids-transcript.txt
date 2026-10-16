@@ -1,0 +1,4 @@
+$ fm-merge-path-stats.py --nm-repo-ids "," --out sandbox/outE
+fm-merge-path-stats.py: error: --nm-repo-ids must name at least one no-mistakes repo id
+exit=2
+ls: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/tmp.dHBPrSzE8f/outE: No such file or directory
