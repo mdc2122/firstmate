@@ -47,7 +47,8 @@ HUMAN TOUCH (applied uniformly, spawn < t <= end):
   steer        a firstmate- or captain-authored steering-inbox message delivered to the
                worker (worker-side record, union live inbox files, union supervisor-side
                fm-send calls). Script-originated templates are NOT touches: watcher
-               behind-base rerun steer, pending-reply REPOST REQUIRED, CONFIG_REREAD.
+               behind-base rerun steer, pending-reply REPOST REQUIRED, CONFIG_REREAD,
+               and the fm-control switch-model notice.
   answer       a steer that answers an open needs-decision/blocked (subset of steer), or a
                supervisor fm-captain-hold answer/release/complete on the task id.
   re-point     supervisor fm-pr-check, fm-pr-merge (non-dry-run), or fm-merge-line
@@ -139,6 +140,7 @@ SCRIPT_TEMPLATES = [
     ("watcher-behind-rerun", re.compile(r"is green but GitHub refuses the merge because the branch is behind")),
     ("pending-reply-repost", re.compile(r"REPOST REQUIRED: previous marked request")),
     ("config-reread", re.compile(r"\bCONFIG_REREAD:")),
+    ("model-switch-notice", re.compile(r"Your model was switched in place from \S+ to \S+")),
 ]
 
 

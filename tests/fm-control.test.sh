@@ -25,6 +25,8 @@ set -u
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-backend.sh"
 
 CONTROL="$ROOT/bin/fm-control.sh"
 SEND="$ROOT/bin/fm-send.sh"
@@ -100,6 +102,14 @@ case "${1:-}" in
       fi
       case "$payload" in
         *'encode launch-brief'*) cat "$D/becomes" > "$D/command" ;;
+        '/switch '*)
+          # omp records a session-only switch as a model_change entry and
+          # records nothing for a model it refuses (verified omp 18.4.4).
+          if [ -n "${FM_FAKE_OMP_SESSION:-}" ] && [ -z "${FM_FAKE_OMP_REFUSE:-}" ]; then
+            sel=${payload#/switch }
+            printf '{"type":"model_change","model":"%s","role":"temporary"}\n' "${sel%:*}" >> "$FM_FAKE_OMP_SESSION"
+          fi
+          ;;
       esac
     else
       printf '%s\n' "$payload" >> "$D/keys"
@@ -962,6 +972,135 @@ test_fm_send_still_marks_the_same_secondmate_task() {
   pass "fm-control's arrival leaves fm-send's from-firstmate marking untouched"
 }
 
+# --- 7. in-place model switch and its notice --------------------------------
+
+# switch_case <name> <harness> -> echoes a case dir whose idle agent has an omp
+# session record with one launch-time model_change.
+switch_case() {
+  local dir gen
+  dir=$(new_case "$1")
+  add_task "$dir" t1 "$2"
+  alive_as "$dir" "$2"
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1 --state idle --source fm-spawn --event seed)
+  printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
+  printf 'spawn_gen=s%s.123.456\n' "$(date +%s)" >> "$dir/home/state/t1.meta"
+  mkdir -p "$dir/.omp/agent/sessions/-wt-t1"
+  printf '{"type":"model_change","model":"old-provider/old-model"}\n' \
+    > "$dir/.omp/agent/sessions/-wt-t1/s.jsonl"
+  printf '%s\n' "$dir"
+}
+
+run_switch() {  # <case-dir> <args...>
+  local dir=$1; shift
+  env PATH="$dir/fakebin:$PATH" HOME="$dir" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+    FM_FAKE_OMP_SESSION="$dir/.omp/agent/sessions/-wt-t1/s.jsonl" \
+    FM_FAKE_OMP_REFUSE="${FM_FAKE_OMP_REFUSE:-}" FM_CONTROL_POLL=0.01 \
+    FM_CONTROL_SWITCH_WAIT=0.05 FM_SEND_SETTLE=0 FM_ROOT_OVERRIDE="$dir/home" \
+    "$CONTROL" t1 switch-model "$@" 2>&1
+}
+
+inbox_records() {  # <case-dir>
+  find "$1/home/state/t1.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null | sort
+}
+
+test_switch_model_emits_exactly_one_notice_naming_both_models() {
+  local dir out rc records body
+  dir=$(switch_case switch omp)
+  out=$(run_switch "$dir" --model new-provider/new-model --effort high \
+    --reason "SWE-2 weekly quota is spent"); rc=$?
+  expect_code 0 "$rc" "an omp in-place switch should succeed"$'\n'"$out"
+  [ "$(literals "$dir" | head -n 1)" = "/switch new-provider/new-model:high" ] \
+    || fail "omp should receive its session-only switch command, got: $(literals "$dir")"
+  records=$(inbox_records "$dir")
+  [ "$(printf '%s\n' "$records" | grep -c .)" = 1 ] \
+    || fail "one switch should write exactly one inbox notice, got: $records"
+  body=$(bash -c '. "$1"; fm_task_inbox_body "$2"' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$records")
+  assert_contains "$body" "from old-provider/old-model to new-provider/new-model" "the notice should name the old and new model"
+  assert_contains "$body" "SWE-2 weekly quota is spent" "the notice should carry the reason"
+  assert_contains "$body" "commits are unchanged" "the notice should say the work is unchanged"
+  [ "$(fm_meta_get "$dir/home/state/t1.meta" model)" = new-provider/new-model ] \
+    || fail "the durable record should name the new model"
+  [ "$(fm_meta_get "$dir/home/state/t1.meta" effort)" = high ] \
+    || fail "the durable record should name the new effort"
+  pass "fm-control switch-model: a proven switch writes one notice naming both models and updates the record"
+}
+
+test_switch_model_without_effort_keeps_recorded_effort() {
+  local dir out rc meta
+  dir=$(switch_case keep-effort omp)
+  meta="$dir/home/state/t1.meta"
+  { grep -v '^effort=' "$meta"; echo "effort=high"; } > "$meta.new" && mv "$meta.new" "$meta"
+  out=$(run_switch "$dir" --model new-provider/new-model --reason "quota"); rc=$?
+  expect_code 0 "$rc" "a switch without --effort should succeed"$'\n'"$out"
+  [ "$(literals "$dir" | head -n 1)" = "/switch new-provider/new-model" ] \
+    || fail "a switch without --effort should send no thinking level, got: $(literals "$dir")"
+  [ "$(fm_meta_get "$meta" model)" = new-provider/new-model ] \
+    || fail "the durable record should name the new model"
+  [ "$(fm_meta_get "$meta" effort)" = high ] \
+    || fail "a switch without --effort must keep the recorded effort, got: $(fm_meta_get "$meta" effort)"
+  assert_contains "$out" "effort=high" "the success line should report the effort actually recorded"
+  pass "fm-control switch-model: a switch without --effort keeps the recorded effort"
+}
+
+test_switch_model_refuses_historical_session() {
+  local dir out rc model
+  for model in old-provider/old-model new-provider/new-model; do
+    dir=$(switch_case historical omp)
+    touch -t 200001010000 "$dir/.omp/agent/sessions/-wt-t1/s.jsonl"
+    out=$(run_switch "$dir" --model "$model" --reason quota); rc=$?
+    expect_code 1 "$rc" "a replacement without its own session must refuse"
+    assert_contains "$out" "current spawn" "historical sessions must not identify the running model"
+    [ -z "$(literals "$dir")" ] || fail "a historical session must not permit typing"
+    [ -z "$(inbox_records "$dir")" ] || fail "a historical session must not permit a notice"
+  done
+  pass "fm-control switch-model: historical sessions never identify a replacement"
+}
+
+test_switch_model_requires_unique_current_session() {
+  local dir out rc mode
+  for mode in missing ambiguous invalid-generation; do
+    dir=$(switch_case "$mode" omp)
+    case "$mode" in
+      missing) rm "$dir/.omp/agent/sessions/-wt-t1/s.jsonl" ;;
+      ambiguous) cp "$dir/.omp/agent/sessions/-wt-t1/s.jsonl" "$dir/.omp/agent/sessions/-wt-t1/other.jsonl" ;;
+      invalid-generation)
+        grep -v '^spawn_gen=' "$dir/home/state/t1.meta" > "$dir/meta.new"
+        mv "$dir/meta.new" "$dir/home/state/t1.meta"
+        ;;
+    esac
+    out=$(run_switch "$dir" --model new-provider/new-model --reason quota); rc=$?
+    expect_code 1 "$rc" "$mode session selection must refuse"
+    assert_contains "$out" "current spawn" "unproven ownership must refuse"
+    [ -z "$(literals "$dir")" ] || fail "unproven ownership must type nothing"
+    [ -z "$(inbox_records "$dir")" ] || fail "unproven ownership must send no notice"
+  done
+  dir=$(switch_case current-and-historical omp)
+  cp "$dir/.omp/agent/sessions/-wt-t1/s.jsonl" "$dir/.omp/agent/sessions/-wt-t1/old.jsonl"
+  touch -t 200001010000 "$dir/.omp/agent/sessions/-wt-t1/old.jsonl"
+  out=$(run_switch "$dir" --model new-provider/new-model --reason quota); rc=$?
+  expect_code 0 "$rc" "one current record alongside history must succeed"$'\n'"$out"
+  pass "fm-control switch-model: requires exactly one current session and ignores history"
+}
+
+test_failed_switch_model_emits_no_notice() {
+  local dir out rc
+  dir=$(switch_case refused omp)
+  out=$(FM_FAKE_OMP_REFUSE=1 run_switch "$dir" --model nosuch/model --reason "quota"); rc=$?
+  expect_code 1 "$rc" "a switch omp did not record should fail"$'\n'"$out"
+  assert_contains "$out" "no notice was sent" "the failure should say no notice went out"
+  [ -z "$(inbox_records "$dir")" ] || fail "a failed switch must write no notice"
+  [ "$(fm_meta_get "$dir/home/state/t1.meta" model)" = default ] \
+    || fail "a failed switch must leave the durable record untouched"
+
+  dir=$(switch_case noswitch claude)
+  out=$(run_switch "$dir" --model new-provider/new-model --reason "quota"); rc=$?
+  expect_code 1 "$rc" "a harness with no in-place switch should be refused"
+  assert_contains "$out" "relaunch" "the refusal should point at relaunch"
+  [ -z "$(literals "$dir")" ] || fail "a refused switch must type nothing"
+  [ -z "$(inbox_records "$dir")" ] || fail "a refused switch must write no notice"
+  pass "fm-control switch-model: an unrecorded or unsupported switch sends no notice and changes no record"
+}
+
 test_exit_types_each_harness_verified_command
 test_interrupt_sends_each_harness_verified_key
 test_opencode_interrupts_twice_and_others_once
@@ -1000,3 +1139,8 @@ test_grok_interrupt_without_acknowledgement_reports_unconfirmed
 test_grok_idle_footer_does_not_confirm_cancellation
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task
+test_switch_model_emits_exactly_one_notice_naming_both_models
+test_switch_model_without_effort_keeps_recorded_effort
+test_switch_model_refuses_historical_session
+test_switch_model_requires_unique_current_session
+test_failed_switch_model_emits_no_notice

@@ -21,7 +21,7 @@
 #             explicit backend-target steer, a repository-wide merge-line
 #             change, or a PR no task has armed).
 #   verb      send | control | pr-check | pr-merge | merge-line | captain-hold
-#   action    send: steer | key; control: interrupt | exit | relaunch;
+#   action    send: steer | key; control: interrupt | exit | relaunch | switch-model;
 #             pr-check: arm; pr-merge: merge; merge-line: declare | undeclare |
 #             front | enqueue | remove | prune (one row per entry a sweep
 #             drops); captain-hold: hold | answer | answers |

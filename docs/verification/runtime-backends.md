@@ -2076,6 +2076,23 @@ A throwaway scout was spawned through `bin/fm-spawn.sh --scout --harness omp --m
 
 `FM_OMP_LIVE_E2E=1 tests/fm-omp-primary-live-e2e.test.sh` refreshes the primary evidence; the worker path above is refreshed by repeating the scout dispatch after any omp upgrade.
 
+### In-place model switch
+
+Verified 2026-10-16 against omp 18.4.4 on macOS arm64 with tmux, driving the real `bin/fm-control.sh <id> switch-model` against a real idle omp worker:
+
+```sh
+FM_CONTROL_SWITCH_LIVE_E2E=1 tests/fm-control-switch-model-live-e2e.test.sh
+```
+
+```text
+ok - omp (omp/18.4.4): an unknown model records no switch and sends no notice
+ok - omp (omp/18.4.4): a recorded switch to glm-cliproxy/zai-glm53flash-max sends exactly one notice naming both models
+```
+
+The vendor facts the verb depends on, observed by hand in the same session: `/switch <provider>/<id>[:level]` opens a slash popup that swallows the first Enter, so a second Enter submits it; a known model appends `{"type":"model_change",...,"model":"<provider>/<id>","role":"temporary"}` (plus a `thinking_level_change` for a level) to the session file immediately, and the footer shows the new model; an unknown model prints `Error: Unknown model: <selector>` and appends nothing; and omp writes no session file before the first completed turn.
+The session directory for a worktree under `$HOME` is `~/.omp/agent/sessions/-<path relative to $HOME with / as ->`, matching omp's own encoder.
+`tests/fm-control.test.sh` pins the verb's notice and refusal behavior portably against a stubbed session record; rerun the live guard above after any omp upgrade.
+
 ### Supervision branch
 
 Verified 2026-10-03 against omp 18.4.4 on macOS arm64 by `FM_OMP_BRANCH_LIVE_E2E=1 FM_OMP_BRANCH_LIVE_MODEL='claude-opus55-cliproxy/claude-opus-5-5[1m]' bash tests/fm-omp-branch-live-e2e.test.sh` (that model is the test's default). The test runs in a scratch clone that acts as its own FM_HOME, never a primary home. It drives real omp over rpc and, for `/restart`, a real TUI omp in a dedicated tmux server named `fm-omp-branch-e2e-<pid>`; afterwards it reaps every lab process and removes the lab. All 11 `ok` lines passed. The branch rightly refuses instructions embedded in fleet data: an earlier run that carried the probe instructions in a status line got a `WOULD:` report flagging them as untrusted. The probe instructions are therefore appended to the branch's system prompt in the lab clone only. The extension, its bash tool, and the classifier are unmodified.
