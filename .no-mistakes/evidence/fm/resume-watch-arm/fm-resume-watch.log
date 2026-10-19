@@ -1,0 +1,10 @@
+ok - retire without a watch record touches nothing
+ok - a merged PR lands exactly one silent resume record, attributed to the watch
+ok - a paused worker is resumed whether or not its pause names the PR
+ok - a worker no longer waiting on its PR is never resumed
+ok - a PR closed unmerged ends in condition-error with no steer
+ok - a live watch fires only once the release pointer contains the merge
+ok - pr-live reads a GitLab fast-forward merge through the MR head commit
+ok - a verify line that does not name production keeps the merged form
+ok - a new PR replaces the watch and retire removes it
+ok - a new PR arms while the old PR's outcome is still unhandled

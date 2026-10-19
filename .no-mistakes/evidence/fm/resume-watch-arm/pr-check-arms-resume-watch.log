@@ -1,0 +1,27 @@
+$ fm-pr-check.sh task-a1 https://github.com/example/repo/pull/7
+armed: state/task-a1.check.sh
+rc=0
+$ cat state/task-a1.resume-watch
+fm-resume-watch-v1
+name=resume-0dbed758-becc2297-task-a1
+url=https://github.com/example/repo/pull/7
+form=merged
+$ ls state/when
+when-resume-0dbed758-becc2297-task-a1.spec
+when-resume-0dbed758-becc2297-task-a1.trust
+$ fm-pr-check.sh task-a1 https://github.com/example/repo/pull/7   # re-run same PR
+armed: state/task-a1.check.sh
+rc=0
+when-resume-0dbed758-becc2297-task-a1.spec
+when-resume-0dbed758-becc2297-task-a1.trust
+$ fm-pr-check.sh task-a1 https://github.com/example/repo/pull/8   # new PR
+armed: state/task-a1.check.sh
+rc=0
+$ cat state/task-a1.resume-watch
+fm-resume-watch-v1
+name=resume-0dbed758-df7abbeb-task-a1
+url=https://github.com/example/repo/pull/8
+form=merged
+$ ls state/when
+when-resume-0dbed758-df7abbeb-task-a1.spec
+when-resume-0dbed758-df7abbeb-task-a1.trust

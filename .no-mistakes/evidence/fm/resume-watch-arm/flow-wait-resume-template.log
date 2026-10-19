@@ -1,0 +1,7 @@
+== tasks (task outcome touches touch_types zero_touch) ==
+quiet live-proven 0 - True human_answer=0.0
+relaunch live-proven 1 relaunch:1 False human_answer=0.0
+steered live-proven 0 - True human_answer=0.5
+== steers.csv rows naming Resume fact ==
+task,at,source,script_template,purpose,answerer,classified_by,in_span,body
+steered,2026-10-12T10:30:00Z,live-inbox,resume-watch,script:resume-watch,firstmate,rule,True,"Resume fact (watch): PR https://github.com/example/repo/pull/7 merged. The wait you declared has cleared; continue with the next step your brief or your own last status line already names, and append working: when you resume."
