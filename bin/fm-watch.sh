@@ -207,6 +207,10 @@
 #                          rows do not feed this escalation, observation is
 #                          read-only, and one parent notification covers each
 #                          no-progress episode
+# Idle-after-done stale bound (docs/watcher-continuity.md "Idle-after-done
+# stale bound"): a terminal done/failed pane whose outcome was already
+# presented, with no steer delivered since, re-surfaces at most once per
+# PAUSE_RESURFACE_SECS and is never wedge-escalated.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -1609,6 +1613,30 @@ captain_call_stale_bound() {  # <window-key> <task>
   STALE_WAIT_DECLARATION=$(captain_call_declaration "$task" "$CAPTAIN_CALL_IDENTITY")
   afk_record_present && return 0
   stale_wait_throttled "$key" "$STALE_WAIT_DECLARATION"
+}
+
+# Bound a terminal-outcome stale sighting whose completion was already
+# presented to firstmate: the pane is stale only because the task's cleanup is
+# still owed on the firstmate side (teardown refusal, ledger, holds,
+# observation bookkeeping). The worker finished; no wedge is possible, so the
+# caller gives it one bounded low-priority re-surface instead of the wedge
+# timer. Returns 0 when status_presented_outcome_covers proves the log's
+# last line is a terminal `done:`/`failed:` already presented in full AND no
+# steering-inbox record (pending or handled) is newer than that log: a steer
+# delivered after the outcome re-engaged the worker, so its idle pane is
+# ordinary stale again. Anything else - a still-unpresented terminal line, a
+# non-terminal line, or any unreadable record - keeps ordinary surfacing.
+# `blocked` and `needs-decision` keep the captain_call_stale_bound path.
+done_outcome_stale_bound() {  # <task>
+  local status="$STATE/$1.status" dir rec
+  [ -n "$1" ] || return 1
+  status_presented_outcome_covers "$status" || return 1
+  dir=$(fm_task_inbox_dir "$STATE" "$1")
+  for rec in "$dir"/*.msg "$dir"/handled/*.msg; do
+    [ -e "$rec" ] || continue
+    [ "$rec" -nt "$status" ] && return 1
+  done
+  return 0
 }
 
 # Surface a stale pane no classifier could resolve, so firstmate inspects it: it
@@ -3557,6 +3585,22 @@ EOF
               rm -f "$ssf"
               clear_write_tracking "$key"
               triage_log "absorbed stale (open captain call already surfaced for this status): $w"
+            elif done_outcome_stale_bound "$task"; then
+              # A terminal `done:`/`failed:` status already presented to
+              # firstmate (the .status-presentation-cursor coverage record),
+              # with no steer delivered since, whose pane is stale only
+              # because cleanup is still owed: teardown refusal on an
+              # unresolved follow-up ledger, a captain hold, or observation
+              # bookkeeping. It is not a wedge - the worker finished - so it
+              # gets one bounded low-priority re-surface per
+              # PAUSE_RESURFACE_SECS and never an escalation timer.
+              printf '%s' "$h" > "$sf"
+              rm -f "$ssf"
+              clear_write_tracking "$key"
+              resurface_absorbed "$w" "$STATE/.done-stale-resurfaced-$key" 999999 \
+                "stale: $w (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)" \
+                "done-stale:$(status_observed_signature "$STATE/$task.status")" "$PAUSE_RESURFACE_SECS"
+              triage_log "absorbed stale (done outcome already presented; cleanup-pending, not wedgeable): $w"
             else
               fm_wake_append stale "$w" "stale: $w" || exit 1
               stale_wait_record "$key"
