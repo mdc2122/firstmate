@@ -328,9 +328,19 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
       # non-destructive clear is provable from here without the target's
       # harness family, so touching it would risk the very worker this
       # recovery exists to protect.
+      # Terminals and harnesses (real pi; tmux at column 0) draw the typed
+      # draft without its zero-width U+2063 mark, so the screen holds only the
+      # visible header. Drop any rendered marks and restore them where the
+      # contract places them before classifying.
       _ring_draft=
-      if _ring_draft=$(fm_backend_composer_content "$backend" "$target" "$label" 2>/dev/null) \
-        && fm_operational_input_kind "$_ring_draft" _ring_kind 2>/dev/null; then
+      if _ring_draft=$(fm_backend_composer_content "$backend" "$target" "$label" 2>/dev/null); then
+        _ring_draft=${_ring_draft//"$FM_OPERATIONAL_MARK"/}
+        case "$_ring_draft" in
+          "$FM_FROMFIRST_LABEL"*) _ring_draft="${FM_FROMFIRST_MARK}${_ring_draft#"$FM_FROMFIRST_LABEL"}" ;;
+          *) _ring_draft="${FM_OPERATIONAL_MARK}${_ring_draft}" ;;
+        esac
+      fi
+      if [ -n "$_ring_draft" ] && fm_operational_input_kind "$_ring_draft" _ring_kind 2>/dev/null; then
         fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || true
         cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
         # 4 reports the RECOVERED attempt: the draft was submitted AND the

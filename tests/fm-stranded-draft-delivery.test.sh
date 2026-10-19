@@ -111,6 +111,20 @@ test_submit_that_does_not_free_the_composer_is_not_recovered() {
   pass "stranded draft: a submit that left the composer pending skips without typing the doorbell"
 }
 
+test_draft_rendered_without_its_mark_is_recovered() {
+  # Real pi (and tmux at column 0) draws a typed draft WITHOUT its zero-width
+  # U+2063 mark, so the composer screen holds only the visible header.
+  local dir out
+  dir=$(ring_with_stubs ring-unmarked pending empty \
+    'FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: stale: sess:fm-t1')
+  out=$(cat "$dir/out")
+  printf '%s' "$out" | grep -q 'rc=4' \
+    || fail "a draft drawn without its mark must still be recovered with 4: $out"
+  [ "$(cat "$dir/send.log")" = 'KEY Enter' ] \
+    || fail "the recovery must submit exactly Enter and nothing else: $(cat "$dir/send.log")"
+  pass "stranded draft: a draft the screen drew without its U+2063 mark is recovered the same way"
+}
+
 test_legacy_carrier_is_refused() {
   local dir out
   # Composer extraction joins rows with single spaces, so the legacy carrier
@@ -165,6 +179,7 @@ test_unreadable_composer_content_is_refused() {
 
 test_recoverable_draft_returns_4_when_the_composer_is_freed
 test_submit_that_does_not_free_the_composer_is_not_recovered
+test_draft_rendered_without_its_mark_is_recovered
 test_legacy_carrier_is_refused
 test_human_pending_text_is_never_touched
 test_near_miss_text_is_refused
