@@ -181,5 +181,50 @@ test_automation_rows_are_not_touches() {
   pass "a ledger row written by firstmate automation is never a human touch"
 }
 
+test_brief_citing_another_tasks_status_joins_its_own_task() {
+  # Shape of the 2026-10-09T21-32-36 launch brief: its task text cites another
+  # task's status log (`status notes in <home>/state/anatomy.status`), and here
+  # also quotes a literal append command for it, before the brief's own
+  # status-append line names state/exploit.status. The session must join
+  # exploit, not become a second launch of anatomy.
+  local root="$TMP_ROOT/cited" got want
+  mkdir -p "$root/home/fm/state" "$root/home/fm/data"
+  python3 - "$root" <<'PY'
+import json, os, sys
+root = sys.argv[1]
+fm = os.path.join(root, "home", "fm")
+sess = os.path.join(root, "home", ".omp", "agent", "sessions")
+
+def rows(task, at, done_at, prose=""):
+    brief = ("\u2063FIRSTMATE_OP: v1 launch-brief: # Task\nThis is a SCOUT task.\n" + prose +
+             f"# Rules\n   `echo \"{{state}}: {{one short line}}\" >> '{fm}/state/{task}.status'`\n")
+    cmd = f"echo \"done: report\" >> '{fm}/state/{task}.status'"
+    return [{"type": "message", "timestamp": at, "message": {"role": "user", "content": [{"type": "text", "text": brief}]}},
+            {"type": "message", "timestamp": done_at, "message": {"role": "assistant", "stopReason": "stop",
+             "content": [{"type": "toolCall", "arguments": {"command": cmd}}]}}]
+
+cite = (f"An investigation (status notes in {fm}/state/anatomy.status) found the source.\n"
+        f"It reported with `echo \"done: found it\" >> '{fm}/state/anatomy.status'`.\n")
+for task, r in {"anatomy": rows("anatomy", "2026-10-12T09:00:00Z", "2026-10-12T09:30:00Z"),
+                "exploit": rows("exploit", "2026-10-12T10:00:00Z", "2026-10-12T10:20:00Z", cite)}.items():
+    os.makedirs(os.path.join(sess, f"-orca-workspaces-{task}"))
+    with open(os.path.join(sess, f"-orca-workspaces-{task}", "w.jsonl"), "w") as f:
+        f.writelines(json.dumps(x) + "\n" for x in r)
+PY
+  make_nm_db "$root/nm.sqlite"
+  run_flow "$root" "$root/out" || fail "fm-flow-wait.py failed on the cited-status fixture: $(cat "$root/out.err")"
+  got=$(python3 - "$root/out" <<'PY'
+import csv, sys
+for r in sorted(csv.DictReader(open(f"{sys.argv[1]}/tasks.csv")), key=lambda r: r["task"]):
+    print(r["task"], r["spawn"], r["sessions"], r["touch_types"] or "-")
+PY
+)
+  want='anatomy 2026-10-12T09:00:00Z 1 -
+exploit 2026-10-12T10:00:00Z 1 -'
+  assert_equals "$want" "$got" "a launch brief citing another task's status log must join its own task"
+  pass "a launch brief joins the task its status-append line names, not a status log its task text cites"
+}
+
 test_ledger_and_transcript_classify_the_same
 test_automation_rows_are_not_touches
+test_brief_citing_another_tasks_status_joins_its_own_task
