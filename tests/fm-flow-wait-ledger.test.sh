@@ -183,9 +183,10 @@ test_automation_rows_are_not_touches() {
 
 test_brief_citing_another_tasks_status_joins_its_own_task() {
   # Shape of the 2026-10-09T21-32-36 launch brief: its task text cites another
-  # task's status log (`status notes in <home>/state/anatomy.status`) before the
-  # brief's own status-append line names state/exploit.status. The session must
-  # join exploit, not become a second launch of anatomy.
+  # task's status log (`status notes in <home>/state/anatomy.status`), and here
+  # also quotes a literal append command for it, before the brief's own
+  # status-append line names state/exploit.status. The session must join
+  # exploit, not become a second launch of anatomy.
   local root="$TMP_ROOT/cited" got want
   mkdir -p "$root/home/fm/state" "$root/home/fm/data"
   python3 - "$root" <<'PY'
@@ -202,7 +203,8 @@ def rows(task, at, done_at, prose=""):
             {"type": "message", "timestamp": done_at, "message": {"role": "assistant", "stopReason": "stop",
              "content": [{"type": "toolCall", "arguments": {"command": cmd}}]}}]
 
-cite = f"An investigation (status notes in {fm}/state/anatomy.status) found the source.\n"
+cite = (f"An investigation (status notes in {fm}/state/anatomy.status) found the source.\n"
+        f"It reported with `echo \"done: found it\" >> '{fm}/state/anatomy.status'`.\n")
 for task, r in {"anatomy": rows("anatomy", "2026-10-12T09:00:00Z", "2026-10-12T09:30:00Z"),
                 "exploit": rows("exploit", "2026-10-12T10:00:00Z", "2026-10-12T10:20:00Z", cite)}.items():
     os.makedirs(os.path.join(sess, f"-orca-workspaces-{task}"))

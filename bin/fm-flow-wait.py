@@ -255,10 +255,12 @@ def scan_workers(since_mtime):
                         txt = text_of(msg.get("content"))
                         if "FIRSTMATE_OP: v1 launch-brief" in txt[:60]:
                             if rec is None:
-                                # The task's own status log is the brief's status-append
-                                # target (`>> '<home>/state/<id>.status'`); a bare mention
-                                # earlier in the task text can name another task's log.
-                                m = (re.search(r">>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
+                                # The task's own status log is the target of the brief's
+                                # template append line (`echo "{state}: {one short line}" >>
+                                # '<home>/state/<id>.status'`); the task text, rendered before
+                                # it, can mention or append to another task's log.
+                                m = (re.search(r"\"\{state\}: \{one short line\}\"\s*>>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
+                                     or re.search(r">>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
                                      or re.search(r"(?<![^\s'\"=])(/\S+?)/state/([A-Za-z0-9._-]+)\.status", txt))
                                 if not m:
                                     break
