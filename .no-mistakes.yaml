@@ -1,11 +1,7 @@
 # Per-repo no-mistakes overrides.
 # Agent selection and fallback constraints: docs/configuration.md "Gate defaults".
 # Every fallback member must satisfy the project-instruction neutralization guard.
-# Aligned with the global seat order (captain 2026-10-19, row
-# surplus1017-seat-rollout): pi first, which is the
-# surplus-dsv41-flash-1017-max review seat, with claude second. This repo's own
-# gate previously pinned claude first, so a firstmate switch ran on the old
-# order long after the fleet-wide review seat had moved.
+# Order matches the global review seat.
 agent: [pi, claude]
 
 # firstmate is an agent-orchestration repo: its AGENTS.md installs a fleet-captain
