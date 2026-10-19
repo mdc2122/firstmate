@@ -117,13 +117,16 @@ Three redundant-delivery classes are bounded without weakening the durable queue
 
 Bare turn-end signal coalescing.
 `bin/fm-watch.sh` classifies a signal batch as ROUTINE only when every signaled file is a bare `*.turn-ended` marker with no newly classified `.status` span and no `needs-decision` payload - an enumerated set, never a heuristic.
-When such a batch is ready to close and the durable queue already holds an unheld row, the watcher appends its rows and advances the seen markers but does NOT close the cycle: the wake already delivered or in flight for those rows carries the same drain instruction, and `bin/fm-wake-drain.sh` claims every unclaimed row at drain time (`claim_main_rows_locked`), so the routine rows are presented together with it.
+When such a batch is ready to close, the watcher appends its rows and advances the seen markers, then, under the queue lock, checks whether the queue's oldest unheld row is at or below `state/.wake-emitted-through`: the queue sequence `wake()` recorded before an emitted reason reached stdout.
+Only then does it skip its own close: a wake was emitted after that row was queued and no drain has claimed it yet, and `bin/fm-wake-drain.sh` claims every unclaimed row at drain time (`claim_main_rows_locked`), so the routine rows are presented together with it.
+A row queued without a wake (for example `fm-inbox.sh note`) sits above the record, so it never proves coverage and the turn-end wakes as before.
 Any `.status` file, `check`, `stale`, or `heartbeat` wake keeps its ordinary close, so captain-facing and decision-bearing events are never deferred.
 Per-row acknowledgement is untouched: rows stay durable until `--ack-through` consumes them, so an interrupted handling turn re-presents only the unacknowledged rows.
 
 One durable presented-outcome record.
 `bin/fm-classify-lib.sh`'s `status_presented_outcome_covers` reads the per-task `state/.status-presentation-cursor` manifest row the drain commits after its status presentation; that row is the single record every outcome surface consults.
-`bin/fm-inactive-reconcile.sh` uses it before queueing a `check: inactive-outcome` presentation row, so a terminal outcome already presented through a signal annotation, the `UNREAD STATUS` section, or the `STATUS OUTCOME BACKSTOP` never produces a second notice.
+It answers yes only when the log's last line is itself a terminal `done:`/`failed:` and the cursor covers it, so a completion the log never announced is never treated as presented.
+`bin/fm-inactive-reconcile.sh` uses it, requiring that last verb to equal the crew-state verdict, before queueing a `check: inactive-outcome` presentation row, so a terminal outcome already presented through a signal annotation, the `UNREAD STATUS` section, or the `STATUS OUTCOME BACKSTOP` never produces a second notice, while a crew-state `done`/`failed` behind a non-terminal last line still queues its presentation row.
 `bin/fm-watch.sh`'s done-outcome stale bound uses the same record (see below).
 The supervision branch's own grant/outcome machinery is untouched by this and by routine coalescing: those rows are never eaten, reordered, or acknowledged by either change.
 
@@ -131,12 +134,6 @@ Idle-after-done stale bound.
 A pane whose last status line is a terminal `done:`/`failed:` whose completion is already presented through the same cursor record is cleanup-pending, not wedged: teardown refusal on an unresolved follow-up ledger, a captain hold, or observation bookkeeping all leave a finished worker's pane idle.
 `done_outcome_stale_bound` routes that sighting to the bounded `resurface_absorbed` cadence (one low-priority recheck per `PAUSE_RESURFACE_SECS`) instead of the ordinary first-sight close, and it never reaches `wedge_timer_check`, so no wedge escalation or demand-deep-inspection marker is produced.
 A terminal outcome NOT yet presented, and every non-terminal stale pane, keeps the existing surface-and-escalate behavior exactly as before.
-
-Stranded operational-draft steering recovery.
-`bin/fm-task-inbox-lib.sh`'s `fm_task_inbox_ring` no longer treats a `pending` composer as an unconditional skip.
-When the composer's extracted content classifies through `bin/fm-operational-input.sh` (a current `FIRSTMATE_OP` kind, the from-firstmate carrier, or a legacy watcher/banner literal), the ring submits that draft with the backend's Enter key - it is machine-issued input the harness never submitted - and returns 4 so the caller records the attempt and re-rings the ordinary doorbell on the next due tick.
-Any other pending content (human text, unknown bytes) still returns 1 and is never typed into; `bin/fm-watch.sh`'s escalation names that case `delivery-blocked` rather than worker-stale, so the remedy is to clear the composer rather than recover the agent.
-`bin/fm-send.sh` reports the 4 outcome distinctly and keeps the steer durably sent.
 
 ## Arm-layer cycle contract
 

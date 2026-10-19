@@ -46,10 +46,7 @@
 #
 # Re-ring ladder (fm_task_inbox_due_action): an unhandled message older than
 # FM_TASK_INBOX_GRACE_SECS is due one delivery attempt per grace period; an
-# attempt may ring, recover a composer stranded on a machine-issued
-# operational draft (fm_task_inbox_ring, which submits that draft and reports
-# 4 so the next attempt re-rings), or be skipped to protect pending
-# non-operational composer text. After
+# attempt may ring or be skipped to protect proven pending composer text. After
 # FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it escalates. The
 # caller owns the busy and recovery-grade endpoint checks: a busy pane waits,
 # while a positively dead or missing endpoint skips delivery and the ladder and
@@ -80,8 +77,6 @@ _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$_FM_TASK_INBOX_LIB_DIR/fm-wake-lib.sh"
 # shellcheck source=/dev/null
 . "$_FM_TASK_INBOX_LIB_DIR/fm-backend.sh"
-# shellcheck source=/dev/null
-. "$_FM_TASK_INBOX_LIB_DIR/fm-operational-input.sh"
 
 FM_TASK_INBOX_SCHEMA='fm-task-inbox.v1'
 FM_TASK_INBOX_GRACE_DEFAULT=90
@@ -277,14 +272,10 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # composer pre-check, then the backend's submit machinery with a minimal retry
 # budget, verdict discarded.
 # Returns 0 rang, 1 skipped because the composer PROVENLY holds pending text
-# that is not a recoverable operational draft (the watcher re-rings later and
-# escalates as delivery-blocked), 2 the backend send failed, 3 skipped because
+# (the watcher re-rings later), 2 the backend send failed, 3 skipped because
 # the endpoint is positively dead or missing (nothing typed; recovery owns the
-# record), 4 the composer held only a stranded operational draft which was
-# submitted, freeing the composer (the durable record still owns the
-# acknowledgement; the ladder owns the next ordinary re-ring).
-# No return value is delivery proof; the acknowledgement move is the only
-# delivery signal.
+# record). No return value is delivery proof; the acknowledgement move is the
+# only delivery signal.
 # The skip is deliberately narrow: only an exact `pending` verdict defers,
 # because there our Enter could submit someone's real half-typed content.
 # `pending-unproven` and `unknown` still ring - the worst outcome is a garbled
@@ -292,7 +283,7 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # verdicts would starve a harness whose idle screen the classifier cannot
 # positively identify (that classifier is advisory here by design).
 fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
-  local backend=$1 target=$2 rec=$3 label=${4:-} line cstate verdict _ring_draft _ring_kind
+  local backend=$1 target=$2 rec=$3 label=${4:-} line cstate verdict
   case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || true)" in
     dead|missing) return 3 ;;
   esac
@@ -301,39 +292,7 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   fi
   cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
   case "$cstate" in
-    pending)
-      # A visibly pending composer is a delivery guard, not a verdict. The
-      # 2026-10-16 failure mode: the composer's unsubmitted text is itself a
-      # stranded operational draft (an earlier watcher wake or banner the
-      # harness typed but never submitted), so the doorbell skip kept
-      # starving every later steer while the pane sat idle. Only a draft the
-      # operational-input contract itself proves recoverable may be
-      # submitted: current typed kinds and the legacy carrier are
-      # unambiguous, machine-issued content; anything else - human text,
-      # unknown bytes - stays untouched so this path can never clobber the
-      # captain's half-typed message.
-      # ORDER OF GUARDS, most conservative first. (1) Classify the extracted
-      # text with NO keystroke at all, so human or unrecognized content is
-      # never touched. (2) Only then submit the machine-issued draft: Enter is
-      # the one stage whose effect is exactly the draft's own intent, and a
-      # stranded wake the harness typed but never submitted is precisely what
-      # Enter delivers. A draft Enter does not clear is reported as the
-      # recovered attempt (4) and the ladder re-rings on its next due tick
-      # rather than this plane reaching for a composer-clear key: the only
-      # broadly available clear (C-c) can cancel a live turn, and no
-      # non-destructive clear is provable from here without the target's
-      # harness family, so touching it would risk the very worker this
-      # recovery exists to protect.
-      _ring_draft=
-      if _ring_draft=$(fm_backend_composer_content "$backend" "$target" "$label" 2>/dev/null) \
-        && fm_operational_input_classify "$_ring_draft" _ring_kind 2>/dev/null; then
-        fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || true
-        cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
-        [ "$cstate" = empty ] || return 4
-      else
-        return 1
-      fi
-      ;;
+    pending) return 1 ;;
   esac
   # Accepted residual race: terminal input and Enter are separate delivery
   # steps, so an agent exiting after the liveness check could leave a bare

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/fm-wake-coalesce.test.sh - routine-wake coalescing, cross-surface
-# presented-outcome dedupe, the idle-after-done stale class, and the stranded
-# operational-draft steering recovery. Real processes everywhere: a real
+# presented-outcome dedupe, and the idle-after-done stale class. Real
+# processes everywhere: a real
 # fm-watch.sh subprocess against fake tmux, the real drain, and the real
 # inactive reconcile scanner.
 set -u
@@ -12,21 +12,10 @@ set -u
 WATCH="$ROOT/bin/fm-watch.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
 RECON="$ROOT/bin/fm-inactive-reconcile.sh"
-INBOX_LIB="$ROOT/bin/fm-task-inbox-lib.sh"
+PUSH_LIB="$ROOT/bin/fm-push-transition-lib.sh"
 CLASSIFY_LIB="$ROOT/bin/fm-classify-lib.sh"
 TMP_ROOT=$(fm_test_tmproot fm-wake-coalesce)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
-
-inbox_lib() {  # <state> <function> [args...]
-  local state=$1
-  shift
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    fn=$2
-    shift 2
-    "$fn" "$@"
-  ' _ "$INBOX_LIB" "$@"
-}
 
 classify_lib() {  # <state> <function> [args...]
   local state=$1
@@ -42,9 +31,6 @@ classify_lib() {  # <state> <function> [args...]
 # --- fixture ---------------------------------------------------------------
 
 # One-window fake tmux. FM_FAKE_TMUX_CAPTURE holds the pane text.
-# FM_FAKE_TMUX_COMPOSER controls the composer's rendered bottom row for the
-# ring path (a bordered shape). send-keys -l logs to FM_SEND_LOG and appends
-# the text into the capture so the composer reads pending; Enter pops it.
 make_case() {  # <name> -> dir with state/, fakebin/, meta
   local name=$1 dir fakebin
   dir="$TMP_ROOT/$name"
@@ -68,31 +54,6 @@ case "${1:-}" in
       cat "$FM_FAKE_TMUX_CAPTURE"
     else
       printf '╭────╮\n│    │\n╰────╯\n'
-    fi
-    exit 0 ;;
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        Enter)
-          # Submit: clear last capture row (the composer text) and record.
-          printf '[ENTER]\n' >> "${FM_SEND_LOG:-/dev/null}"
-          if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && [ -s "$FM_FAKE_TMUX_CAPTURE" ]; then
-            _tmp=$(mktemp)
-            sed '$d' "$FM_FAKE_TMUX_CAPTURE" > "$_tmp" && mv -f "$_tmp" "$FM_FAKE_TMUX_CAPTURE"
-          fi
-          ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s\n' "${1:-}" >> "${FM_SEND_LOG:-/dev/null}"
-      if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ]; then
-        printf '%s\n' "${1:-}" >> "$FM_FAKE_TMUX_CAPTURE"
-      fi
     fi
     exit 0 ;;
 esac
@@ -149,13 +110,20 @@ presented_status() {  # <state> <task> <line>
   ' _ "$CLASSIFY_LIB" "$state" "$task"
 }
 
-# Seed one unheld queue row as already DELIVERED: the durable episode is
-# mid-handling (pending:handling) and the watcher starts as the handling
-# successor, so startup emits no resurface wake and the poll loop reaches the
-# routine batch. This mirrors a wake delivered to a busy main whose drain has
-# presented but not yet acknowledged its rows.
+# Emit one wake through the real watcher wake(), which records the queue
+# sequence it covers.
+emit_wake() {  # <state> <reason>
+  FM_STATE_OVERRIDE="$1" bash -c '. "$1"; wake "$2"' _ "$PUSH_LIB" "$2" > /dev/null
+}
+
+# Seed one unheld queue row as already DELIVERED: its wake was emitted, the
+# durable episode is mid-handling (pending:handling), and the watcher starts as
+# the handling successor, so startup emits no resurface wake and the poll loop
+# reaches the routine batch. This mirrors a wake delivered to a busy main whose
+# drain has not yet claimed its rows.
 seed_unheld_delivered_row() {  # <state>
   append_wake "$1" check "wake-queue-stall-5" "check: wake-queue stalled"
+  emit_wake "$1" "check: wake-queue stalled"
   printf 'pending:handling:gen-delivered\n' > "$1/.watcher-down"
 }
 
@@ -218,6 +186,34 @@ test_routine_turnend_wakes_when_queue_empty() {
   grep -qF 'turn-ended' "$state/.wake-queue" \
     || fail "the lone routine row was lost from the durable queue"
   pass "watcher: a bare turn-end still wakes when no pending wake already covers the queue"
+}
+
+test_turnend_behind_unwoken_row_still_wakes() {
+  # A row an external producer queued without a wake (fm-inbox.sh note) is
+  # unheld but no wake covers it: a bare turn-end must still close the cycle
+  # so both rows reach the conversation now, not at the stall alarm.
+  local dir state pid
+  dir=$(make_case coalesce7); state="$dir/state"
+  make_meta "$state" t1
+  # An earlier wake was emitted, drained, and acknowledged.
+  append_wake "$state" check "earlier" "check: earlier"
+  emit_wake "$state" "check: earlier"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > /dev/null 2> "$dir/drain.err"
+  ack_drain_err "$state" "$dir/drain.err" > /dev/null 2>&1 || fail "fixture: the earlier wake could not be acknowledged"
+  ! grep -qF 'check: earlier' "$state/.wake-queue" || fail "fixture: the earlier row survived its ack"
+  append_wake "$state" check "inbox:note-1" "check inbox:note-1"
+  printf 'pending:handling:gen-unwoken\n' > "$state/.watcher-down"
+  : > "$state/t1.turn-ended"
+  watch_bg "$state" "$dir/fakebin" "$dir/watch.out" \
+    FM_FAKE_TMUX_CAPTURE= $COALESCE_ENV
+  pid=$!
+  wait_watcher_gone "$pid" 80 || { kill "$pid" 2>/dev/null; fail "a turn-end behind an unwoken row was coalesced: $(cat "$dir/watch.out")" ; }
+  wait "$pid" 2>/dev/null || true
+  grep -q '^signal:' "$dir/watch.out" \
+    || fail "a turn-end behind a row queued without a wake must wake: $(cat "$dir/watch.out")"
+  grep -qF 'turn-ended' "$state/.wake-queue" \
+    || fail "the routine turn-end row was lost from the durable queue"
+  pass "watcher: a bare turn-end behind a row no emitted wake covers still wakes"
 }
 
 test_status_signal_never_coalesces() {
@@ -380,6 +376,26 @@ test_inactive_reconcile_skips_presented_outcome() {
   pass "inactive-reconcile: a presented terminal outcome never queues its own wake"
 }
 
+test_inactive_reconcile_queues_unannounced_finish() {
+  # The log's last line is a presented `working:` while crew-state reports
+  # done from run/PR state: the completion itself was never announced, so the
+  # presentation row must still be queued.
+  local dir state out
+  dir=$(make_case crossdedupe3); state="$dir/state"
+  make_meta "$state" t1
+  presented_status "$state" t1 'working: running validation'
+  age_path "$state/t1.meta"
+  out=$(FM_STATE_OVERRIDE="$state" FM_INACTIVE_RECONCILE_SECS=60 \
+    FM_INACTIVE_CREW_STATE_BIN="$dir/fakebin/fm-crew-state.sh" \
+    FM_FAKE_CREW_STATE='state: done · source: fake' \
+    "$RECON" scan 2>/dev/null || true)
+  grep -qF 'inactive-outcome:' "$state/.wake-queue" \
+    || fail "an unannounced finish behind a presented working line was swallowed: out=$out queue=$(cat "$state/.wake-queue" 2>/dev/null)"
+  ! ls "$state/terminal-outcomes/"*.presented >/dev/null 2>&1 \
+    || fail "an unannounced finish was marked presented: $(ls "$state/terminal-outcomes")"
+  pass "inactive-reconcile: a crew-state done behind a presented non-terminal line still queues its presentation"
+}
+
 test_inactive_reconcile_queues_unpresented_outcome() {
   local dir state out
   dir=$(make_case crossdedupe2); state="$dir/state"
@@ -463,132 +479,6 @@ test_unpresented_done_stale_surfaces() {
   pass "watcher: a terminal outcome never presented still surfaces (stale pane or inactive reconcile)"
 }
 
-# --- (5) stranded operational draft steering recovery ---------------------------
-#
-# The composer classifier (bin/fm-composer-lib.sh) and the backends own their
-# own verification; these cases stub the backend verdict/content/key functions
-# so the RING's recovery policy is what is under test, not shell-shape parsing.
-
-# The real tmux composer classifier needs a genuine bordered composer holding
-# text to read `pending`; this is the same shape tests/fm-send-inbox.test.sh
-# uses for its composer guard, so the escalate case exercises the real
-# classifier rather than a stub (the ring cases above stub it deliberately).
-composer_capture() {  # <dir> <text> -> echoes a capture path reading `pending`
-  local dir=$1 text=$2
-  printf 'transcript line\n╭──────────────╮\n│ %s │\n╰──────────────╯\n' "$text" > "$dir/capture"
-  printf '%s\n' "$dir/capture"
-}
-
-ring_with_stubs() {  # <state> <rec> <cstate> <content> <log> [post-cstate]
-  local state=$1 rec=$2 cstate=$3 content=$4 log=$5 post=${6:-empty}
-  FM_STATE_OVERRIDE="$state" FM_SEND_LOG="$log" \
-  RING_CSTATE="$cstate" RING_CONTENT="$content" RING_POST="$post" \
-    bash -c '
-      . "$1"
-      fm_backend_agent_state() { printf "alive\n"; }
-      fm_backend_composer_state() { printf "%s\n" "$RING_CSTATE"; }
-      fm_backend_composer_content() { printf "%s" "$RING_CONTENT"; }
-      fm_backend_send_key() { printf "KEY %s\n" "$3" >> "$FM_SEND_LOG"; }
-      fm_backend_send_text_submit() { printf "TEXT %s\n" "$3" >> "$FM_SEND_LOG"; printf "empty\n"; }
-      fm_task_inbox_ring tmux sess:fm-t1 "$2" fm-t1
-      printf "rc=%s\n" "$?"
-    ' _ "$INBOX_LIB" "$rec"
-}
-
-test_ring_submits_stranded_operational_draft() {
-  local dir state rec log out draft
-  dir=$(make_case ringop); state="$dir/state"
-  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
-  draft=$(printf '⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: stale: sess:fm-t1')
-  log="$dir/send.log"; : > "$log"
-  # The composer reads pending, then empty after the draft is submitted.
-  ring_with_stubs "$state" "$rec" pending "$draft" "$log" > "$dir/out" 2>&1 || true
-  out=$(cat "$dir/out")
-  printf '%s' "$out" | grep -q 'rc=4' \
-    || fail "a stranded operational draft should submit and return 4: $out"
-  # EXACT key pin: the recovery submits with Enter, never a typed doorbell and
-  # never any other special key.
-  [ "$(cat "$log")" = 'KEY Enter' ] \
-    || fail "the recovery must submit exactly Enter and nothing else: $(cat "$log")"
-  pass "inbox ring: a composer holding only a stranded FIRSTMATE_OP draft is submitted with exactly Enter, not silently skipped"
-}
-
-test_ring_skips_human_pending_text() {
-  local dir state rec log out
-  dir=$(make_case ringhuman); state="$dir/state"
-  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
-  log="$dir/send.log"; : > "$log"
-  ring_with_stubs "$state" "$rec" pending "hold on, let me think about this" "$log" > "$dir/out" 2>&1 || true
-  out=$(cat "$dir/out")
-  printf '%s' "$out" | grep -q 'rc=1' \
-    || fail "human text must still skip the ring with 1: $out"
-  ! grep -q 'TEXT ' "$log" \
-    || fail "human pending text was clobbered by a doorbell: $(cat "$log")"
-  pass "inbox ring: human-authored pending text is never submitted or clobbered"
-}
-
-test_ring_near_miss_text_stays_untouched() {
-  # Independence: text that merely RESEMBLES an operational draft must not be
-  # submitted. Only the operational-input contract's own classification may
-  # authorize a keystroke, so a line naming FIRSTMATE_OP as prose is refused.
-  local dir state rec log out
-  dir=$(make_case ringmiss); state="$dir/state"
-  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
-  log="$dir/send.log"; : > "$log"
-  ring_with_stubs "$state" "$rec" pending \
-    "so I asked FIRSTMATE_OP: v1 watcher to do it but nothing happened" "$log" > "$dir/out" 2>&1 || true
-  out=$(cat "$dir/out")
-  printf '%s' "$out" | grep -q 'rc=1' \
-    || fail "a near-miss operational-looking message must be refused with 1: $out"
-  [ ! -s "$log" ] \
-    || fail "a near-miss message was typed into: $(cat "$log")"
-  pass "inbox ring: text that merely resembles an operational draft is refused, never submitted"
-}
-
-test_ring_legacy_operational_draft() {
-  local dir state rec log out draft
-  dir=$(make_case ringlegacy); state="$dir/state"
-  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
-  draft='FIRSTMATE WATCHER WAKE: stale: sess:fm-t1
-
-Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.'
-  log="$dir/send.log"; : > "$log"
-  ring_with_stubs "$state" "$rec" pending "$draft" "$log" > "$dir/out" 2>&1 || true
-  out=$(cat "$dir/out")
-  printf '%s' "$out" | grep -q 'rc=4' \
-    || fail "a legacy operational draft should submit and return 4: $out"
-  [ "$(cat "$log")" = 'KEY Enter' ] \
-    || fail "the legacy recovery must submit exactly Enter: $(cat "$log")"
-  pass "inbox ring: a stranded legacy watcher draft is submitted with exactly Enter, freeing the composer"
-}
-
-test_escalate_names_delivery_blocked() {
-  local dir state out pid rec cap i
-  dir=$(make_case escalblk); state="$dir/state"
-  make_meta "$state" t1
-  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
-  age_path "$rec"
-  cap=$(composer_capture "$dir" "hold on, ltm")
-  watch_bg "$state" "$dir/fakebin" "$dir/watch.out" \
-    FM_FAKE_TMUX_CAPTURE="$cap" FM_TASK_INBOX_RING_MAX=1
-  pid=$!
-  # The ladder must first ring once, then escalate on the next due tick; poll
-  # for the delivery-blocked close rather than bounding this by wall time.
-  i=0
-  while [ "$i" -lt 240 ]; do
-    grep -q 'delivery-blocked' "$dir/watch.out" 2>/dev/null && break
-    kill -0 "$pid" 2>/dev/null || break
-    sleep 0.25
-    i=$((i + 1))
-  done
-  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
-  grep -q 'delivery-blocked' "$dir/watch.out" \
-    || fail "the escalation did not name delivery-blocked: $(cat "$dir/watch.out") triage=$(cat "$state/.watch-triage.log" 2>/dev/null)"
-  ! grep -q 'possible wedge' "$dir/watch.out" \
-    || fail "a delivery-blocked steer was misread as a wedge: $(cat "$dir/watch.out")"
-  pass "watcher: an escalation over a composer holding non-operational text names delivery-blocked, not worker-stale"
-}
-
 test_coalescing_never_touches_branch_granted_rows() {
   # Independence from the supervision-branch contract: a branch-reserved row is
   # NOT counted as an unheld row for main's routine coalescing (the unheld count
@@ -599,6 +489,7 @@ test_coalescing_never_touches_branch_granted_rows() {
   dir=$(make_case branchgrant); state="$dir/state"
   make_meta "$state" t1
   append_wake "$state" signal "task-a.status" "signal: task-a"
+  emit_wake "$state" "signal: task-a"
   FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-grant.sh" activate "$$" branchgrant || fail "branch owner activation failed"
   FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-grant.sh" publish branchgrant 1 || fail "branch grant publication failed"
   # A mid-handling episode with the handling-successor start, so the direct
@@ -623,6 +514,7 @@ test_coalescing_never_touches_branch_granted_rows() {
 
 test_routine_turnend_coalesces_with_pending_row
 test_routine_turnend_wakes_when_queue_empty
+test_turnend_behind_unwoken_row_still_wakes
 test_status_signal_never_coalesces
 test_mixed_signal_batch_never_coalesces
 test_two_bare_turnends_without_pending_row_wake_together
@@ -630,14 +522,10 @@ test_stale_pane_still_closes_beside_coalesced_turnend
 test_ack_through_leaves_unacked_rows
 test_ack_through_is_not_circular
 test_inactive_reconcile_skips_presented_outcome
+test_inactive_reconcile_queues_unannounced_finish
 test_inactive_reconcile_queues_unpresented_outcome
 test_done_outcome_absorbs_stale_pane
 test_unpresented_done_stale_surfaces
-test_ring_submits_stranded_operational_draft
-test_ring_skips_human_pending_text
-test_ring_near_miss_text_stays_untouched
-test_ring_legacy_operational_draft
-test_escalate_names_delivery_blocked
 test_coalescing_never_touches_branch_granted_rows
 
 printf 'fm-wake-coalesce.test.sh: all tests passed\n'

@@ -72,8 +72,11 @@
 # ledger_claim binds that one ledger fingerprint to the already-delivered
 # inactive receipt so the two publishers cannot report one completion twice.
 # Pending atomically becomes reported after parent append or presented after
-# main-home acknowledgement. The atomic epoch/cursor marker's mtime gates scans,
-# and its cursor records the last child visited within the aggregate budget.
+# main-home acknowledgement, or presented directly when the status log's last
+# line already announced this same terminal verb and the drain's status
+# presentation committed it (status_presented_outcome_covers).
+# The atomic epoch/cursor marker's mtime gates scans, and its cursor records
+# the last child visited within the aggregate budget.
 #
 # The scan reads only durable local state and fm-crew-state.sh; it never invokes
 # gh, gh-axi, curl, fm-pr-check.sh, fm-pr-poll.sh, or a state *.check.sh.
@@ -525,10 +528,12 @@ reconcile_direct_child_locked() { # <id> <meta> <secondmate-id-or-empty> <timeou
   # row's annotation, the STATUS OUTCOME BACKSTOP section, or the UNREAD STATUS
   # section), which commits byte coverage through .status-presentation-cursor.
   # That manifest row is the ONE durable presented-outcome record both surfaces
-  # consult; when it already covers the log's current end, queueing a second
-  # check wake for the same completion would be a repeat notice, so mark the
-  # receipt presented directly instead of asking for a turn.
-  if status_presented_outcome_covers "$status" 2>/dev/null; then
+  # consult; when the log's last line is this same terminal verb and the
+  # record already covers it, queueing a second check wake for the same
+  # completion would be a repeat notice, so mark the receipt presented
+  # directly instead of asking for a turn. A crew-state verdict the log never
+  # announced (its last line still non-terminal) keeps the presentation row.
+  if status_presented_outcome_covers "$status" "$state" 2>/dev/null; then
     mv -f "$RECORD_PENDING" "$(record_path "$fingerprint" presented)" || return 1
     return 0
   fi
