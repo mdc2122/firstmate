@@ -1,0 +1,10 @@
+### mode=control: run1 presented done, first sighting
+  wake | stale: sess:fm-t1 (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)
+### mode=control: same outcome, pane repaints (idle on new hash)
+  (absorbed, no wake)
+### mode=retire: run1 presented done, first sighting
+  wake | stale: sess:fm-t1 (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)
+  -> firstmate teardown: watch_window_markers_retire (throttle marker before: 1)
+  -> after: 0
+### mode=retire: same outcome, pane repaints (idle on new hash)
+  wake | stale: sess:fm-t1 (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)

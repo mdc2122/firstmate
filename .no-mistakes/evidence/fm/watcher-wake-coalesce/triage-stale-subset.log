@@ -1,0 +1,10 @@
+ok - stale_is_terminal: terminal status surfaces, non-terminal and no-status are benign
+ok - a stale pane sitting on a terminal status is surfaced (queue + exit)
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5AH1S0G98PR08C3APPZCKR2/bin/fm-watch.sh: line 1941: 94125 Killed: 9               ( FM_CHECK_OWNED_GROUP=1 run_check_process "$bound" "$@" ) > "$FM_CHECK_OUTPUT" 2>&1
+ok - a stale terminal-looking status is overridden and absorbed while a run is actively working, then wedge-escalated
+ok - a not-provably-working non-terminal stale is surfaced immediately (never left to wait out the timer)
+ok - work under an open captain call surfaces once, absorbs pane churn, then re-surfaces when the window elapses
+ok - a stale window with no open captain call keeps alarming on every new hash
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5AH1S0G98PR08C3APPZCKR2/bin/fm-watch.sh: line 1941: 94604 Killed: 9               ( FM_CHECK_OWNED_GROUP=1 run_check_process "$bound" "$@" ) > "$FM_CHECK_OUTPUT" 2>&1
+ok - consecutive wedge escalations on the same pane accumulate and demand deep inspection at the threshold
+ok - both first-sight paths through a captain-relevant status drop a finished write-deferral chain with the idle window

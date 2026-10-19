@@ -1,0 +1,8 @@
+ok - inactive-reconcile: an outcome printed by an interrupted, unacknowledged turn still queues its backstop
+ok - inactive-reconcile: a crew-state done behind a presented non-terminal line still queues its presentation
+ok - inactive-reconcile: an unpresented terminal outcome still queues its presentation wake
+ok - watcher: a done worker awaiting firstmate cleanup wakes once, absorbs a new hash in the window, never a wedge
+ok - watcher: a steer delivered after the presented outcome makes the next idle sighting wake as ordinary stale
+ok - watcher: each newly presented terminal outcome gets its own first done-stale wake
+ok - watcher: a terminal outcome never presented still surfaces (stale pane or inactive reconcile)
+fm-done-outcome.test.sh: all tests passed

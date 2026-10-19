@@ -1,0 +1,31 @@
+
+### S1: worker t1 wrote 'done:' and firstmate was presented it; pane goes idle (first sighting)
+watcher stdout:
+  | stale: sess:fm-t1 (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)
+new triage lines:
+drain (firstmate handling turn):
+  | 1792447042	1	stale	sess:fm-t1	stale: sess:fm-t1 (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)
+  | acked through drained seq
+
+### S2: pane repaints (new hash) inside PAUSE_RESURFACE_SECS while cleanup still owed
+watcher stdout:
+  | (no wake emitted)
+new triage lines:
+  | absorbed stale (done outcome already presented; cleanup-pending, not wedgeable): sess:fm-t1
+wedge escalation markers present? 0
+
+### S3 (adversarial): firstmate tears the window down and re-dispatches t1 on same window; new presented done
+done-stale throttle marker after retire: none
+watcher stdout:
+  | check: rearm-resurface
+new triage lines:
+drain (firstmate handling turn):
+  | acked through drained seq
+
+### S4 (adversarial): unpresented done line (never printed to firstmate) on an idle pane
+watcher stdout:
+  | stale: sess:fm-t1
+new triage lines:
+drain (firstmate handling turn):
+  | 1792447063	2	stale	sess:fm-t1	stale: sess:fm-t1
+  | acked through drained seq
