@@ -207,12 +207,9 @@
 #                          rows do not feed this escalation, observation is
 #                          read-only, and one parent notification covers each
 #                          no-progress episode
-# Coalescing and the done-stale bound (docs/watcher-continuity.md
-# "Routine-wake coalescing and the idle-after-done stale bound"): a bare
-# turn-end-only signal batch is not closed when the durable queue's oldest
-# unheld row was already covered by an emitted wake (that wake's drain covers
-# it), and a terminal done/failed pane whose outcome was already presented,
-# with no steer delivered since, re-surfaces at most once per
+# Idle-after-done stale bound (docs/watcher-continuity.md "Idle-after-done
+# stale bound"): a terminal done/failed pane whose outcome was already
+# presented, with no steer delivered since, re-surfaces at most once per
 # PAUSE_RESURFACE_SECS and is never wedge-escalated.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
@@ -1015,35 +1012,6 @@ wake_queue_unheld_oldest() {
     }
     END { if (n) print oldest, n }
   ' "$FM_WAKE_QUEUE" 2>/dev/null || true
-}
-
-# 0 iff the oldest unheld row is at or below state/.wake-emitted-through, the
-# queue sequence wake() recorded before its reason reached stdout: a wake was
-# emitted after that row was queued and no drain has claimed it yet. A row
-# appended without a wake (seq above the record) is no proof, and neither is
-# any row while a supervision-branch owner or grant record exists: the wake may
-# be routed to the branch, whose drain never claims main's rows, so every wake
-# is emitted as before. Read under
-# FM_WAKE_QUEUE_LOCK after the caller's own appends, so any later drain claim
-# of that row also claims the caller's rows. Prints the unheld row count.
-wake_queue_emitted_wake_pending() {
-  local emitted oldest n status=1
-  fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK" || return 1
-  if [ -e "$STATE/.branch-eligible-owner" ] || [ -L "$STATE/.branch-eligible-owner" ] \
-    || [ -e "$STATE/.branch-eligible-rows" ] || [ -L "$STATE/.branch-eligible-rows" ]; then
-    fm_lock_release "$FM_WAKE_QUEUE_LOCK"
-    return 1
-  fi
-  emitted=$(cat "$STATE/.wake-emitted-through" 2>/dev/null)
-  read -r oldest n <<EOF
-$(wake_queue_unheld_oldest)
-EOF
-  case "$emitted:$oldest" in
-    :*|*:|*[!0-9:]*) ;;
-    *) if [ "$oldest" -le "$emitted" ]; then printf '%s' "$n"; status=0; fi ;;
-  esac
-  fm_lock_release "$FM_WAKE_QUEUE_LOCK"
-  return "$status"
 }
 
 # 0 iff a conversation that will take the queue up is provably mid-turn, bounded
@@ -3451,28 +3419,6 @@ EOF
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
       || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
-      # Routine-signal coalescing: when every signaled file is a bare
-      # .turn-ended marker (no .status span, no needs-decision payload) and an
-      # already emitted wake still awaits the drain of an older unheld row
-      # (wake_queue_emitted_wake_pending), this batch's delivery is redundant:
-      # that drain claims and presents every unclaimed row - including the
-      # ones this batch appends below - in one presentation. Per-row
-      # ack-through semantics are untouched. Only bare turn-ends are routine:
-      # any .status file, check, stale, or heartbeat keeps the ordinary wake
-      # because it may carry captain-facing content a turn must see
-      # (enumerated, never heuristic).
-      routine_only=0
-      case "$reason" in
-        "signal:"*)
-          routine_only=1
-          for f in $files; do
-            case "$f" in *.turn-ended) ;; *) routine_only=0; break ;; esac
-          done
-          if [ "$routine_only" -eq 1 ] && [ -n "$FM_SIGNAL_NEEDS_DECISION_FILES" ]; then
-            routine_only=0
-          fi
-          ;;
-      esac
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"
@@ -3505,14 +3451,6 @@ EOF
       done <<EOF
 $FM_SIGNAL_SURFACE_ENDPOINTS
 EOF
-      # A routine bare-turn-end batch behind an emitted, undrained wake is
-      # delivered by that wake's drain; skip this batch's own close (the cycle
-      # keeps polling and the rows stay durable) rather than paying one whole
-      # wake-turn per routine signal.
-      if [ "$routine_only" -eq 1 ] && _coalesce_n=$(wake_queue_emitted_wake_pending); then
-        triage_log "coalesced routine $reason into ${_coalesce_n} already-queued wake row(s); one delivery covers the batch"
-        continue
-      fi
       wake "$reason"
     else
       while IFS=$(printf '\t') read -r sf sig f; do

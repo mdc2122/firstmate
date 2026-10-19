@@ -84,22 +84,9 @@ triage_log() {
   fi
 }
 
-# Record the queue sequence a just-emitted wake covers: every row at or below
-# it was queued before the reason reached stdout, so its drain will claim it.
-# bin/fm-watch.sh's routine coalescing reads it as the only proof that an
-# unheld row already has a wake in flight.
-watch_wake_emitted_record() {  # <seq>
-  local tmp
-  case "$1" in ''|*[!0-9]*) return 0 ;; esac
-  tmp="$STATE/.wake-emitted-through.tmp.$$"
-  printf '%s\n' "$1" > "$tmp" 2>/dev/null && mv -f "$tmp" "$STATE/.wake-emitted-through" 2>/dev/null
-  rm -f "$tmp" 2>/dev/null || true
-}
-
 # Exit after reporting one actionable wake. Tests override this callback.
 wake() {
-  local output_status=0 emitted
-  emitted=$(cat "$STATE/.wake-queue.seq" 2>/dev/null)
+  local output_status=0
   case "$1" in
     heartbeat*) echo $(( $(cat "$STATE/.heartbeat-streak" 2>/dev/null || echo 0) + 1 )) > "$STATE/.heartbeat-streak" ;;
     *) echo 0 > "$STATE/.heartbeat-streak" ;;
@@ -109,7 +96,6 @@ wake() {
   if echo "$1"; then
     output_status=0
     watch_delivery_publish "$1" || true
-    watch_wake_emitted_record "$emitted"
     # shellcheck disable=SC2034 # Read by bin/fm-watch.sh's EXIT cleanup.
     FM_WATCH_DELIVERED_REASON=$1
   else
