@@ -120,7 +120,7 @@ Bare turn-end signal coalescing.
 When such a batch is ready to close, the watcher appends its rows and advances the seen markers, then, under the queue lock, checks whether the queue's oldest unheld row is at or below `state/.wake-emitted-through`: the queue sequence `wake()` recorded before an emitted reason reached stdout.
 Only then does it skip its own close: a wake was emitted after that row was queued and no drain has claimed it yet, and `bin/fm-wake-drain.sh` claims every unclaimed row at drain time (`claim_main_rows_locked`), so the routine rows are presented together with it.
 A row queued without a wake (for example `fm-inbox.sh note`) sits above the record, so it never proves coverage and the turn-end wakes as before.
-A `.branch-eligible-rows` file without a live grant also refuses coalescing: its rows revert to main only when a fresh main drain runs `reclaim_stale_branch_grant_locked`, so the turn-end must wake one.
+Coalescing applies only when no supervision branch exists: while `state/.branch-eligible-owner` or `state/.branch-eligible-rows` is present, a wake may be routed to the branch, whose drain never claims main's rows, and an expired grant's rows revert to main only when a fresh main drain runs `reclaim_stale_branch_grant_locked`, so every turn-end wakes exactly as before this change.
 Any `.status` file, `check`, `stale`, or `heartbeat` wake keeps its ordinary close, so captain-facing and decision-bearing events are never deferred.
 Per-row acknowledgement is untouched: rows stay durable until `--ack-through` consumes them, so an interrupted handling turn re-presents only the unacknowledged rows.
 

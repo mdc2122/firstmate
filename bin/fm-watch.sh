@@ -1021,15 +1021,16 @@ wake_queue_unheld_oldest() {
 # queue sequence wake() recorded before its reason reached stdout: a wake was
 # emitted after that row was queued and no drain has claimed it yet. A row
 # appended without a wake (seq above the record) is no proof, and neither is
-# any row while a branch grant file exists without a live grant: only a fresh
-# main drain reclaims those rows, so a wake must be emitted. Read under
+# any row while a supervision-branch owner or grant record exists: the wake may
+# be routed to the branch, whose drain never claims main's rows, so every wake
+# is emitted as before. Read under
 # FM_WAKE_QUEUE_LOCK after the caller's own appends, so any later drain claim
 # of that row also claims the caller's rows. Prints the unheld row count.
 wake_queue_emitted_wake_pending() {
   local emitted oldest n status=1
   fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK" || return 1
-  if { [ -e "$STATE/.branch-eligible-rows" ] || [ -L "$STATE/.branch-eligible-rows" ]; } \
-    && ! fm_wake_branch_grant_live "$STATE/.branch-eligible-rows" "$STATE/.branch-eligible-owner"; then
+  if [ -e "$STATE/.branch-eligible-owner" ] || [ -L "$STATE/.branch-eligible-owner" ] \
+    || [ -e "$STATE/.branch-eligible-rows" ] || [ -L "$STATE/.branch-eligible-rows" ]; then
     fm_lock_release "$FM_WAKE_QUEUE_LOCK"
     return 1
   fi

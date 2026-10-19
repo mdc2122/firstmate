@@ -1676,8 +1676,8 @@ watch_window_markers_retire() {  # <state-dir> <window-key>
     "$state/.stale-since-$key" "$state/.wedge-escalations-$key" \
     "$state/.paused-$key" "$state/.paused-rechecked-$key" "$state/.paused-resurfaced-$key" \
     "$state/.writing-since-$key" "$state/.writing-resurfaced-$key" \
-    "$state/.waiting-resurfaced-$key" "$state/.churn-since-$key" \
-    "$state/.endpoint-gone-$key"
+    "$state/.waiting-resurfaced-$key" "$state/.done-stale-resurfaced-$key" \
+    "$state/.churn-since-$key" "$state/.endpoint-gone-$key"
 }
 
 # Capture the bytes of an append-only status log at or after <start-offset> under

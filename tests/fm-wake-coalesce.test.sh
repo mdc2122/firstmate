@@ -153,15 +153,18 @@ test_routine_turnend_coalesces_with_pending_row() {
     FM_FAKE_TMUX_CAPTURE= $COALESCE_ENV
   pid=$!
   # A coalesced routine batch leaves the watcher ALIVE (no close was
-  # delivered); poll until the row lands, then assert no signal close escaped.
+  # delivered); poll until the coalescing decision is logged, then assert no
+  # signal close escaped.
   local i=0
   while [ "$i" -lt 120 ]; do
-    grep -qF 'turn-ended' "$state/.wake-queue" 2>/dev/null && break
+    grep -qF 'coalesced routine' "$state/.watch-triage.log" 2>/dev/null && break
     sleep 0.25
     i=$((i + 1))
   done
   stop_watcher_was_running "$pid" \
     || fail "the watcher exited on a coalesced routine batch (a wake escaped): $(cat "$dir/watch.out")"
+  grep -qF 'coalesced routine' "$state/.watch-triage.log" 2>/dev/null \
+    || fail "the coalescing decision never ran: triage=$(cat "$state/.watch-triage.log" 2>/dev/null)"
   # The turn-end row MUST be in the durable queue (durable, ack-granular),
   # but the batch must not have re-delivered as its own wake close - the
   # pending wake for the earlier row covers it. (The worker's later stale
@@ -556,6 +559,37 @@ test_expired_branch_grant_rows_never_cover_turnend() {
   pass "watcher: rows of an expired branch grant never cover a routine turn-end"
 }
 
+test_branch_owner_disables_coalescing() {
+  # Under a supervision branch the covering wake may be routed to the branch,
+  # whose drain never claims main's rows: a main-only check row C queued
+  # without a wake, then a branch-handled signal E whose wake was emitted.
+  # Every later bare turn-end must still wake immediately.
+  local dir state pid t
+  dir=$(make_case branchowner); state="$dir/state"
+  make_meta "$state" t1
+  fm_write_meta "$state/t2.meta" "window=sess:fm-t1" "kind=ship" "harness=grok"
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-grant.sh" activate "$$" branchowner || fail "branch owner activation failed"
+  append_wake "$state" check "inbox:note-1" "check inbox:note-1"
+  append_wake "$state" signal "t0.status" "signal: t0"
+  emit_wake "$state" "signal: t0"
+  for t in t1 t2; do
+    printf 'pending:handling:gen-owner\n' > "$state/.watcher-down"
+    : > "$state/$t.turn-ended"
+    watch_bg "$state" "$dir/fakebin" "$dir/watch-$t.out" \
+      FM_FAKE_TMUX_CAPTURE= $COALESCE_ENV
+    pid=$!
+    wait_watcher_gone "$pid" 80 || { kill "$pid" 2>/dev/null; fail "a $t turn-end under a branch owner was coalesced: $(cat "$dir/watch-$t.out")" ; }
+    wait "$pid" 2>/dev/null || true
+    grep -q '^signal:' "$dir/watch-$t.out" \
+      || fail "a $t turn-end under a branch owner must wake: $(cat "$dir/watch-$t.out")"
+    ! grep -q 'wake-queue stalled' "$dir/watch-$t.out" \
+      || fail "a false stall alarm fired under a branch owner: $(cat "$dir/watch-$t.out")"
+  done
+  ! grep -qF 'coalesced routine' "$state/.watch-triage.log" 2>/dev/null \
+    || fail "a turn-end was coalesced under a branch owner: $(cat "$state/.watch-triage.log")"
+  pass "watcher: with a supervision-branch owner record, every bare turn-end wakes immediately"
+}
+
 test_coalescing_never_touches_branch_granted_rows() {
   # Independence from the supervision-branch contract: a branch-reserved row is
   # NOT counted as an unheld row for main's routine coalescing (the unheld count
@@ -605,6 +639,7 @@ test_done_outcome_absorbs_stale_pane
 test_done_stale_after_steer_wakes
 test_unpresented_done_stale_surfaces
 test_expired_branch_grant_rows_never_cover_turnend
+test_branch_owner_disables_coalescing
 test_coalescing_never_touches_branch_granted_rows
 
 printf 'fm-wake-coalesce.test.sh: all tests passed\n'
