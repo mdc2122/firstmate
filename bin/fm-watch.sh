@@ -3599,7 +3599,7 @@ EOF
               clear_write_tracking "$key"
               resurface_absorbed "$w" "$STATE/.done-stale-resurfaced-$key" 999999 \
                 "stale: $w (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)" \
-                'done-stale' "$PAUSE_RESURFACE_SECS"
+                "done-stale:$(status_observed_signature "$STATE/$task.status")" "$PAUSE_RESURFACE_SECS"
               triage_log "absorbed stale (done outcome already presented; cleanup-pending, not wedgeable): $w"
             else
               fm_wake_append stale "$w" "stale: $w" || exit 1

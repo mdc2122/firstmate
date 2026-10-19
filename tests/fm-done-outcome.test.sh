@@ -247,6 +247,28 @@ test_done_stale_after_steer_wakes() {
   pass "watcher: a steer delivered after the presented outcome makes the next idle sighting wake as ordinary stale"
 }
 
+test_new_presented_outcome_gets_its_own_first_wake() {
+  # A first done-stale wake, then the worker reports a NEW presented terminal
+  # outcome and idles on a new hash inside the resurface window: the throttle
+  # belongs to the earlier outcome, so this one still gets its first wake.
+  local dir state r
+  dir=$(make_case donenew); state="$dir/state"
+  make_meta "$state" t1
+  presented_status "$state" t1 'done: first pass, awaiting teardown'
+  prime_status_seen "$state" "$state/t1.status"
+  printf 'idle pane A\n' > "$dir/capA"
+  printf 'idle pane B\n' > "$dir/capB"
+  r=$(done_stale_run "$dir" "$dir/capA" "$dir/watch1.out")
+  [ "$r" = woke ] || fail "fixture: the first done-stale sighting did not wake: $(cat "$dir/watch1.out")"
+  presented_status "$state" t1 'done: second pass with the follow-up fixed, awaiting teardown'
+  prime_status_seen "$state" "$state/t1.status"
+  r=$(done_stale_run "$dir" "$dir/capB" "$dir/watch2.out")
+  [ "$r" = woke ] || fail "a new presented outcome was absorbed by the earlier outcome's throttle: triage=$(cat "$state/.watch-triage.log" 2>/dev/null)"
+  grep -q '^stale: .*terminal outcome already presented' "$dir/watch2.out" \
+    || fail "the new outcome's first sighting was not the bounded done-stale notice: $(cat "$dir/watch2.out")"
+  pass "watcher: each newly presented terminal outcome gets its own first done-stale wake"
+}
+
 test_unpresented_done_stale_surfaces() {
   local dir state out pid
   dir=$(make_case undonestale); state="$dir/state"
@@ -282,6 +304,7 @@ test_inactive_reconcile_queues_unannounced_finish
 test_inactive_reconcile_queues_unpresented_outcome
 test_done_outcome_absorbs_stale_pane
 test_done_stale_after_steer_wakes
+test_new_presented_outcome_gets_its_own_first_wake
 test_unpresented_done_stale_surfaces
 
 printf 'fm-done-outcome.test.sh: all tests passed\n'
