@@ -1082,23 +1082,20 @@ EOF
   printf '0'
 }
 
-# status_presented_outcome_covers <status-file> [done|failed]
-# The ONE durable presented-outcome record shared by every surface that can
-# re-announce a finished worker's terminal outcome: the .status-presentation-cursor
-# manifest row this status log already committed through the drain's status
-# presentation (status_commit_presentation_snapshot). 0 only when the log's
-# last line is a terminal `done:`/`failed:` (equal to the optional expected
-# verb) AND the manifest's presented byte offset covers the file's current
-# size with a matching identity, meaning that terminal line itself was already
-# presented to firstmate. Any other answer (a non-terminal or different last
-# verb, no manifest row, stale identity, truncated coverage, or an unreadable
-# file) returns 1 so callers keep their ordinary surface rather than silently
-# swallowing a real outcome.
-status_presented_outcome_covers() {  # <status-file> [done|failed]
-  local f=$1 want=${2:-} verb offset size
+# status_presented_outcome_covers <status-file>
+# 0 only when the log's last line is a terminal `done:`/`failed:` AND the
+# .status-presentation-cursor manifest row the drain committed when it printed
+# its status presentation (status_commit_presentation_snapshot) covers the
+# file's current size with a matching identity, meaning that terminal line
+# itself was already printed to firstmate. This is print-time evidence, not
+# acknowledgement. Any other answer (a non-terminal last verb, no manifest
+# row, stale identity, truncated coverage, or an unreadable file) returns 1 so
+# callers keep their ordinary surface rather than silently swallowing a real
+# outcome.
+status_presented_outcome_covers() {  # <status-file>
+  local f=$1 verb offset size
   verb=$(status_line_verb "$(last_status_line "$f")")
   case "$verb" in done|failed) ;; *) return 1 ;; esac
-  [ -z "$want" ] || [ "$verb" = "$want" ] || return 1
   offset=$(status_presentation_cursor_offset "$f") || return 1
   case "$offset" in ''|*[!0-9]*|0) return 1 ;; esac
   size=$(_fm_status_file_size "$f") || return 1

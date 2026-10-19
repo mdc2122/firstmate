@@ -207,12 +207,13 @@
 #                          rows do not feed this escalation, observation is
 #                          read-only, and one parent notification covers each
 #                          no-progress episode
-# Coalescing and outcome dedupe: a bare turn-end-only signal batch is not
-# closed when the durable queue's oldest unheld row was already covered by an
-# emitted wake (that wake's drain covers it; docs/watcher-continuity.md
-# "Routine-wake coalescing and cross-surface outcome dedupe"), a terminal done/failed pane whose outcome was
-# already presented is bounded to one low-priority recheck instead of the
-# ordinary stale close and never wedge-escalated.
+# Coalescing and the done-stale bound (docs/watcher-continuity.md
+# "Routine-wake coalescing and the idle-after-done stale bound"): a bare
+# turn-end-only signal batch is not closed when the durable queue's oldest
+# unheld row was already covered by an emitted wake (that wake's drain covers
+# it), and a terminal done/failed pane whose outcome was already presented,
+# with no steer delivered since, re-surfaces at most once per
+# PAUSE_RESURFACE_SECS and is never wedge-escalated.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -1019,12 +1020,19 @@ wake_queue_unheld_oldest() {
 # 0 iff the oldest unheld row is at or below state/.wake-emitted-through, the
 # queue sequence wake() recorded before its reason reached stdout: a wake was
 # emitted after that row was queued and no drain has claimed it yet. A row
-# appended without a wake (seq above the record) is no proof. Read under
+# appended without a wake (seq above the record) is no proof, and neither is
+# any row while a branch grant file exists without a live grant: only a fresh
+# main drain reclaims those rows, so a wake must be emitted. Read under
 # FM_WAKE_QUEUE_LOCK after the caller's own appends, so any later drain claim
 # of that row also claims the caller's rows. Prints the unheld row count.
 wake_queue_emitted_wake_pending() {
   local emitted oldest n status=1
   fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK" || return 1
+  if { [ -e "$STATE/.branch-eligible-rows" ] || [ -L "$STATE/.branch-eligible-rows" ]; } \
+    && ! fm_wake_branch_grant_live "$STATE/.branch-eligible-rows" "$STATE/.branch-eligible-owner"; then
+    fm_lock_release "$FM_WAKE_QUEUE_LOCK"
+    return 1
+  fi
   emitted=$(cat "$STATE/.wake-emitted-through" 2>/dev/null)
   read -r oldest n <<EOF
 $(wake_queue_unheld_oldest)
@@ -1644,13 +1652,22 @@ captain_call_stale_bound() {  # <window-key> <task>
 # observation bookkeeping). The worker finished; no wedge is possible, so the
 # caller gives it one bounded low-priority re-surface instead of the wedge
 # timer. Returns 0 when status_presented_outcome_covers proves the log's
-# last line is a terminal `done:`/`failed:` already presented in full;
-# anything else - a still-unpresented terminal line, a non-terminal line, or
-# any unreadable record - keeps ordinary surfacing. `blocked` and
-# `needs-decision` keep the captain_call_stale_bound path.
+# last line is a terminal `done:`/`failed:` already presented in full AND no
+# steering-inbox record (pending or handled) is newer than that log: a steer
+# delivered after the outcome re-engaged the worker, so its idle pane is
+# ordinary stale again. Anything else - a still-unpresented terminal line, a
+# non-terminal line, or any unreadable record - keeps ordinary surfacing.
+# `blocked` and `needs-decision` keep the captain_call_stale_bound path.
 done_outcome_stale_bound() {  # <task>
+  local status="$STATE/$1.status" dir rec
   [ -n "$1" ] || return 1
-  status_presented_outcome_covers "$STATE/$1.status"
+  status_presented_outcome_covers "$status" || return 1
+  dir=$(fm_task_inbox_dir "$STATE" "$1")
+  for rec in "$dir"/*.msg "$dir"/handled/*.msg; do
+    [ -e "$rec" ] || continue
+    [ "$rec" -nt "$status" ] && return 1
+  done
+  return 0
 }
 
 # Surface a stale pane no classifier could resolve, so firstmate inspects it: it
@@ -3631,8 +3648,8 @@ EOF
               triage_log "absorbed stale (open captain call already surfaced for this status): $w"
             elif done_outcome_stale_bound "$task"; then
               # A terminal `done:`/`failed:` status already presented to
-              # firstmate (the .status-presentation-cursor coverage record
-              # every outcome surface consults) whose pane is stale only
+              # firstmate (the .status-presentation-cursor coverage record),
+              # with no steer delivered since, whose pane is stale only
               # because cleanup is still owed: teardown refusal on an
               # unresolved follow-up ledger, a captain hold, or observation
               # bookkeeping. It is not a wedge - the worker finished - so it

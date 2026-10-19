@@ -111,29 +111,27 @@ A consumer provably mid-turn defers the alarm, as a secondmate's active turn doe
 A missing, malformed, foreign, or dead-pid marker is no proof, so the alarm fires.
 `tests/fm-wake-queue.test.sh` pins the first-sight interval, the single alarm through both the check row and the alert channel, the claimed-row exemption, and the busy-turn deferral and its cap.
 
-## Routine-wake coalescing and cross-surface outcome dedupe
+## Routine-wake coalescing and the idle-after-done stale bound
 
-Three redundant-delivery classes are bounded without weakening the durable queue:
+Two redundant-delivery classes are bounded without weakening the durable queue:
 
 Bare turn-end signal coalescing.
 `bin/fm-watch.sh` classifies a signal batch as ROUTINE only when every signaled file is a bare `*.turn-ended` marker with no newly classified `.status` span and no `needs-decision` payload - an enumerated set, never a heuristic.
 When such a batch is ready to close, the watcher appends its rows and advances the seen markers, then, under the queue lock, checks whether the queue's oldest unheld row is at or below `state/.wake-emitted-through`: the queue sequence `wake()` recorded before an emitted reason reached stdout.
 Only then does it skip its own close: a wake was emitted after that row was queued and no drain has claimed it yet, and `bin/fm-wake-drain.sh` claims every unclaimed row at drain time (`claim_main_rows_locked`), so the routine rows are presented together with it.
 A row queued without a wake (for example `fm-inbox.sh note`) sits above the record, so it never proves coverage and the turn-end wakes as before.
+A `.branch-eligible-rows` file without a live grant also refuses coalescing: its rows revert to main only when a fresh main drain runs `reclaim_stale_branch_grant_locked`, so the turn-end must wake one.
 Any `.status` file, `check`, `stale`, or `heartbeat` wake keeps its ordinary close, so captain-facing and decision-bearing events are never deferred.
 Per-row acknowledgement is untouched: rows stay durable until `--ack-through` consumes them, so an interrupted handling turn re-presents only the unacknowledged rows.
 
-One durable presented-outcome record.
-`bin/fm-classify-lib.sh`'s `status_presented_outcome_covers` reads the per-task `state/.status-presentation-cursor` manifest row the drain commits after its status presentation; that row is the single record every outcome surface consults.
-It answers yes only when the log's last line is itself a terminal `done:`/`failed:` and the cursor covers it, so a completion the log never announced is never treated as presented.
-`bin/fm-inactive-reconcile.sh` uses it, requiring that last verb to equal the crew-state verdict, before queueing a `check: inactive-outcome` presentation row, so a terminal outcome already presented through a signal annotation, the `UNREAD STATUS` section, or the `STATUS OUTCOME BACKSTOP` never produces a second notice, while a crew-state `done`/`failed` behind a non-terminal last line still queues its presentation row.
-`bin/fm-watch.sh`'s done-outcome stale bound uses the same record (see below).
-The supervision branch's own grant/outcome machinery is untouched by this and by routine coalescing: those rows are never eaten, reordered, or acknowledged by either change.
+The supervision branch's own grant/outcome machinery is untouched by routine coalescing: those rows are never eaten, reordered, or acknowledged by it.
 
 Idle-after-done stale bound.
-A pane whose last status line is a terminal `done:`/`failed:` whose completion is already presented through the same cursor record is cleanup-pending, not wedged: teardown refusal on an unresolved follow-up ledger, a captain hold, or observation bookkeeping all leave a finished worker's pane idle.
-`done_outcome_stale_bound` routes that sighting to the bounded `resurface_absorbed` cadence (one low-priority recheck per `PAUSE_RESURFACE_SECS`) instead of the ordinary first-sight close, and it never reaches `wedge_timer_check`, so no wedge escalation or demand-deep-inspection marker is produced.
-A terminal outcome NOT yet presented, and every non-terminal stale pane, keeps the existing surface-and-escalate behavior exactly as before.
+`bin/fm-classify-lib.sh`'s `status_presented_outcome_covers` answers yes only when the log's last line is a terminal `done:`/`failed:` and the per-task `state/.status-presentation-cursor` row the drain commits when it prints its status presentation covers it.
+That is print-time evidence, not acknowledgement, so it only throttles a repeat stale notice; `bin/fm-inactive-reconcile.sh` does not consult it, and its terminal-outcome receipt still becomes `presented` only after main-home acknowledgement.
+A pane whose presented terminal status has no newer steering-inbox record (`state/<id>.inbox/*.msg` or `handled/*.msg`) is cleanup-pending, not wedged: teardown refusal on an unresolved follow-up ledger, a captain hold, or observation bookkeeping all leave a finished worker's pane idle.
+`done_outcome_stale_bound` routes that sighting to the `resurface_absorbed` cadence: the first sighting still closes with one `stale:` wake, a new pane hash inside `PAUSE_RESURFACE_SECS` is absorbed, and it never reaches `wedge_timer_check`, so no wedge escalation or demand-deep-inspection marker is produced.
+A steer delivered after the terminal line re-engaged the worker, so its next idle sighting wakes as ordinary stale; a terminal outcome NOT yet presented, and every non-terminal stale pane, likewise keep the existing surface-and-escalate behavior exactly as before.
 
 ## Arm-layer cycle contract
 

@@ -501,13 +501,13 @@ ok - unacknowledged recovery is announced at most once per generation and the su
 FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=59357
 ```
 
-Routine-wake coalescing, cross-surface presented-outcome dedupe, and the idle-after-done stale class were verified on 2026-10-19 with a real `bin/fm-watch.sh` subprocess against fake tmux, the real drain, and the real inactive-outcome scanner:
+Routine-wake coalescing and the idle-after-done stale class were verified on 2026-10-19 with a real `bin/fm-watch.sh` subprocess against fake tmux, the real drain, and the real inactive-outcome scanner:
 
 ```sh
 tests/fm-wake-coalesce.test.sh
 ```
 
-Observed guarantee: a bare turn-end batch behind an unheld row an emitted wake already covers appends its rows, leaves them durable, and does not deliver its own close (while an empty-queue routine batch, or one behind a row queued without any wake, still wakes exactly once, and any `.status`, `check`, `stale`, or `heartbeat` wake is never batched); a mid-burst `--ack-through` consumes only its own rows and its monotonic replay can never consume a higher wake; an already-presented terminal outcome queues no second `inactive-outcome` wake, while an unpresented one, or a crew-state `done` behind a presented non-terminal last line, still surfaces; and a cleanup-pending `done:` pane takes one low-priority recheck and never a wedge escalation.
+Observed guarantee: a bare turn-end batch behind an unheld row an emitted wake already covers appends its rows, leaves them durable, and does not deliver its own close (while an empty-queue routine batch, or one behind a row queued without any wake or behind an expired branch grant, still wakes exactly once, and any `.status`, `check`, `stale`, or `heartbeat` wake is never batched); a mid-burst `--ack-through` consumes only its own rows and its monotonic replay can never consume a higher wake; a terminal outcome printed by a drain whose turn was interrupted before `--ack-through`, an unpresented one, and a crew-state `done` behind a presented non-terminal last line all still queue the `inactive-outcome` backstop; and a cleanup-pending `done:` pane wakes once, absorbs a new pane hash inside the resurface window, and never wedge-escalates, while a steer delivered after the outcome makes its next idle sighting wake as ordinary stale.
 
 Deterministic entry points:
 
