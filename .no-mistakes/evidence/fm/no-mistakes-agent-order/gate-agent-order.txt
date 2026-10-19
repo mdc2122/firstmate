@@ -1,0 +1,17 @@
+$ ruby -ryaml -e (parse tracked .no-mistakes.yaml at base and target)
+a5b76329: {"agent"=>["claude", "pi"], "primary"=>"claude", "fallback"=>["pi"], "disable_project_settings"=>true}
+4ae43d9a: {"agent"=>["pi", "claude"], "primary"=>"pi", "fallback"=>["claude"], "disable_project_settings"=>true}
+
+$ bash tests/fm-gate-refuse.test.sh
+ok - fm-gate-refuse-lib: refuses from a gate worktree via git-common-dir (marker unset)
+ok - fm-gate-refuse-lib: no-op for a normal session (neither signal, set -eu clean)
+ok - fm-spawn: refuses on marker and gate-worktree backstop; a normal crew spawn is unaffected
+ok - fm-send: refuses on marker and gate-worktree backstop; a normal steer uses the inbox
+ok - fm-teardown: refuses on marker and gate-worktree backstop; a normal teardown is unaffected
+
+$ bash tests/fm-nm-test-contract.test.sh
+ok - no-mistakes does not configure commands.test
+
+$ which pi claude
+/Users/studio2/.hermes/node/bin/pi
+/Users/studio2/.local/bin/claude

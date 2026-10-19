@@ -1,0 +1,13 @@
+reviewing changes...
+
+pi started pid=37635
+
+pi exited pid=37635 error=pi exited: exit status 1: stub pi refusing (simulated outage)
+
+agent pi failed (pi exited: exit status 1: stub pi refusing (simulated outage)); falling back to claude
+
+claude started pid=38713
+
+Heads up first: claude-mem reports it cannot save memories, with the error "Claude Code reported the observer as signed out" since 2026-10-05. Running `/login` refreshes the observer credentials. Now reviewing the diff between the base and target commits.The whole change is one appended line in the README. There is no executable code, no protected data, no tests, and no behavior to trace. The pipeline config file is untouched by the diff.
+claude exited pid=38713 status=success
+
