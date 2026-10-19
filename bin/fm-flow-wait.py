@@ -141,6 +141,7 @@ SCRIPT_TEMPLATES = [
     ("pending-reply-repost", re.compile(r"REPOST REQUIRED: previous marked request")),
     ("config-reread", re.compile(r"\bCONFIG_REREAD:")),
     ("model-switch-notice", re.compile(r"Your model was switched in place from \S+ to \S+")),
+    ("resume-watch", re.compile(r"^Resume fact \(watch\): ")),
 ]
 
 

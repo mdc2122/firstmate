@@ -4128,6 +4128,37 @@ test_teardown_archives_status_and_inbox_into_data() {
   pass "teardown archives the status log and the whole steering inbox into data/<id>/ before cleanup"
 }
 
+# A task's resume watch can only ever steer that task, so teardown retires it:
+# no spec, registration, or record survives, and nothing is left to fire into
+# a task that no longer exists.
+test_teardown_retires_the_resume_watch() {
+  local case_dir rc name sid
+  case_dir=$(make_case resume-watch-retire)
+  export FM_PROCEVENT_CLAIM_ROOT="$case_dir/claims"
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed work"
+  add_fork_with_pushed_branch "$case_dir"
+  printf '%s\n' 'done: PR https://github.com/example/repo/pull/7 checks green' > "$case_dir/state/task-x1.status"
+  FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" FM_RESUME_WATCH_INTERVAL=3600 \
+    "$ROOT/bin/fm-resume-watch.sh" arm task-x1 https://github.com/example/repo/pull/7 >/dev/null \
+    || fail "resume-watch-retire: could not arm the resume watch"
+  name=$(sed -n 's/^name=//p' "$case_dir/state/task-x1.resume-watch")
+  sid="when-$name"
+  assert_present "$case_dir/state/procevent/$sid.source" "resume-watch-retire: the watch was not registered"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  unset FM_PROCEVENT_CLAIM_ROOT
+
+  expect_code 0 "$rc" "resume-watch-retire: teardown of landed work should succeed ($(grep -v '^●' "$case_dir/stderr" | tail -5))"
+  assert_absent "$case_dir/state/procevent/$sid.source" "resume-watch-retire: the watch registration survived teardown"
+  assert_absent "$case_dir/state/when/$sid.spec" "resume-watch-retire: the watch spec survived teardown"
+  assert_absent "$case_dir/state/task-x1.resume-watch" "resume-watch-retire: the watch record survived teardown"
+  pass "teardown retires the task's resume watch"
+}
+
 # An archive that cannot be written stops teardown before any evidence is lost.
 test_teardown_refuses_to_delete_unarchived_evidence() {
   local case_dir rc
@@ -4194,6 +4225,7 @@ test_secondmate_retire_archives_home_evidence() {
 }
 
 test_teardown_archives_status_and_inbox_into_data
+test_teardown_retires_the_resume_watch
 test_teardown_refuses_to_delete_unarchived_evidence
 test_secondmate_retire_archives_home_evidence
 test_local_only_fork_remote_allows
