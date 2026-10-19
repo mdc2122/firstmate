@@ -507,7 +507,7 @@ The inactive-outcome backstop and the idle-after-done stale class were verified 
 tests/fm-done-outcome.test.sh
 ```
 
-Observed guarantee: a terminal outcome printed by a drain whose turn was interrupted before `--ack-through`, an unpresented one, and a crew-state `done` behind a presented non-terminal last line all still queue the `inactive-outcome` backstop; and a cleanup-pending `done:` pane wakes once, absorbs a new pane hash inside the resurface window, and never wedge-escalates, while a steer delivered after the outcome makes its next idle sighting wake as ordinary stale.
+Observed guarantee: a terminal outcome printed by a drain whose turn was interrupted before `--ack-through`, an unpresented one, and a crew-state `done` behind a presented non-terminal last line all still queue the `inactive-outcome` backstop; and a cleanup-pending `done:` pane wakes once, absorbs a new pane hash inside the resurface window, and never wedge-escalates, a newly presented terminal outcome gets its own first wake, while a steer delivered after the outcome makes its next idle sighting wake as ordinary stale.
 
 Deterministic entry points:
 
