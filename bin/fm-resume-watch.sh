@@ -8,12 +8,14 @@
 #   fm-resume-watch.sh arm    <task-id> <pr-url> [merged|live]
 #   fm-resume-watch.sh retire <task-id>
 #
-# arm     Bind watch `resume-<home>-<task-id>`, where <home> is the first 8 hex
-#         of a SHA-256 of this home's physical state directory: process-event
+# arm     Bind watch `resume-<home>-<pr>-<task-id>`, where <home> is the first 8
+#         hex of a SHA-256 of this home's physical state directory: process-event
 #         ownership is keyed by source id across every home sharing one claim
-#         root, so two homes with the same task id must not share a source. A
-#         task id longer than 43 characters keeps its first 26 and gains a
-#         16-hex hash of the whole id, because a source id is capped at 64.
+#         root, so two homes with the same task id must not share a source.
+#         <pr> is the first 8 hex of a SHA-256 of the PR URL and form, so a new
+#         PR never meets the old watch's still-unhandled outcome. A task id
+#         longer than 34 characters keeps its first 17 and gains a 16-hex hash
+#         of the whole id, because a source id is capped at 64.
 #         Condition: `bin/fm-resume-cond.sh pr-merged <pr-url>`, or for `live`
 #         `bin/fm-resume-cond.sh pr-live <pr-url> <repo-dir> <pointer-file>`.
 #         Action: `bin/fm-resume-action.sh <home> <state> <task-id> <pr-url>
@@ -78,7 +80,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-1}"; }
-usage() { sed -n '2,67p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,69p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 
 RECORD_VERSION=fm-resume-watch-v1
 
@@ -90,18 +92,20 @@ sha256_hex() {  # <text>
   fi
 }
 
-watch_name() {  # <task-id>
-  local id=$1 state_real home_digest id_digest
+watch_name() {  # <task-id> <pr-url> <form>
+  local id=$1 state_real home_digest pr_digest id_digest
   state_real=$(cd "$STATE" 2>/dev/null && pwd -P) || return 1
   home_digest=$(sha256_hex "$state_real")
   [[ "$home_digest" =~ ^[0-9a-f]{64}$ ]] || return 1
-  if [ "${#id}" -le 43 ]; then
-    printf 'resume-%s-%s\n' "${home_digest:0:8}" "$id"
+  pr_digest=$(sha256_hex "$2 $3")
+  [[ "$pr_digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [ "${#id}" -le 34 ]; then
+    printf 'resume-%s-%s-%s\n' "${home_digest:0:8}" "${pr_digest:0:8}" "$id"
     return 0
   fi
   id_digest=$(sha256_hex "$id")
   [[ "$id_digest" =~ ^[0-9a-f]{64}$ ]] || return 1
-  printf 'resume-%s-%s-%s\n' "${home_digest:0:8}" "${id:0:26}" "${id_digest:0:16}"
+  printf 'resume-%s-%s-%s-%s\n' "${home_digest:0:8}" "${pr_digest:0:8}" "${id:0:17}" "${id_digest:0:16}"
 }
 
 record_file() { printf '%s/%s.resume-watch\n' "$STATE" "$1"; }
@@ -242,7 +246,7 @@ cmd_arm() {
       || die "no release pointer is configured for $(repo_url) in $CONFIG/resume-live-pointers; a live watch needs one"
     merge_commit_readable || die "this host cannot read the merge commit of $url; a live watch needs one"
   fi
-  name=$(watch_name "$id") || die "cannot derive the watch name for $id"
+  name=$(watch_name "$id" "$url" "$form") || die "cannot derive the watch name for $id"
   home=$(cd "$FM_HOME" 2>/dev/null && pwd -P) || die "home is unavailable: $FM_HOME"
   state=$(cd "$STATE" 2>/dev/null && pwd -P) || die "state directory is unavailable"
 

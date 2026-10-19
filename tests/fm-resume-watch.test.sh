@@ -256,3 +256,15 @@ assert_absent "$H/state/procevent/$SID.source" "retire drops the registration"
 assert_absent "$H/state/t1.resume-watch" "retire removes the record"
 watch "$H" retire t1 >/dev/null || fail "retire is not idempotent"
 pass "a new PR replaces the watch and retire removes it"
+
+# --- a new PR still arms while the old PR's outcome is unhandled --------------
+H=$(make_home replace-pending "done: PR $URL checks green")
+printf 'closed\n' > "$H/pr-state"
+watch "$H" arm t1 "$URL" >/dev/null || fail "arm failed"
+start_runner "$H"
+wait_result "$H" >/dev/null || fail "no outcome for the closed PR"
+out=$(watch "$H" arm t1 "$NEW") || fail "a new PR could not arm beside the old unhandled outcome: $out"
+assert_contains "$out" "armed: resume watch" "a new PR arms beside the old outcome"
+assert_grep "url=$NEW" "$H/state/t1.resume-watch" "the record follows the new PR"
+assert_present "$H/state/when/$(sid_of "$H").spec" "the new PR's watch is registered"
+pass "a new PR arms while the old PR's outcome is still unhandled"
