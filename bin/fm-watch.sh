@@ -564,7 +564,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # too: their pane-staleness exemption is about quiet panes being healthy,
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state capture_rc
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state capture_rc inbox_cstate
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -602,6 +602,12 @@ inbox_steer_check() {  # <window> <task>
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
         return 0
       fi
+      if [ "$ring_rc" -eq 4 ]; then
+        # A stranded operational draft sat in the composer and was submitted
+        # by the ring, freeing it; the record still owns the ladder so the
+        # ordinary doorbell re-rings next due.
+        triage_log "steer-inbox: submitted a stranded operational draft blocking $task's composer; doorbell re-rings on the next due tick"
+      fi
       if ! fm_task_inbox_record_ring "$STATE" "$task" "$rec"; then
         if [ ! -f "$rec" ]; then
           fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
@@ -617,6 +623,15 @@ inbox_steer_check() {  # <window> <task>
       ;;
     escalate)
       reason="stale: $w (unread firstmate instruction: $rec still unhandled after $count doorbell delivery attempts with an idle pane; inspect the worker)"
+      # Delivery-blocked distinction: when the composer's pending text is
+      # neither a recoverable operational draft nor provably empty, the worker
+      # is fine - the steer is stranded behind unsubmitted text in the input
+      # box. Name that instead of generic worker-stale so the caller knows to
+      # clear the composer rather than recover the agent.
+      inbox_cstate=$(fm_backend_composer_state "$backend" "$w" "$(window_label "$w")" 2>/dev/null || printf 'unknown')
+      if [ "$inbox_cstate" = pending ]; then
+        reason="stale: $w (delivery-blocked: $rec still unhandled after $count doorbell attempts - the composer's unsubmitted text blocks every doorbell and is not a recoverable operational draft; clear or submit the composer's pending text so steers can reach the worker)"
+      fi
       if [ ! -d "${rec%/*}" ] || [ ! -f "$rec" ]; then
         fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
         return 0
