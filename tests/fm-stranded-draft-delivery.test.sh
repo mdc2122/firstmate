@@ -11,8 +11,10 @@
 #   1. A recoverable operational draft is submitted with exactly one Enter and
 #      returns 4 WHEN the submit freed the composer.
 #   2. A submit that leaves the composer still holding text recovered nothing:
-#      it is NOT reported as 4 (the ordinary ring continues).
-#   3. The legacy watcher carrier is recovered the same way.
+#      it is NOT reported as 4, and the doorbell is never typed into that
+#      still-pending composer (rc 1, the ordinary skip).
+#   3. The legacy watcher carrier, in the single-line form real composer
+#      extraction produces, is refused (rc 1, no keystroke).
 #   4. Human-authored pending text is never typed into (rc 1, no keystroke).
 #   5. Text that merely RESEMBLES an operational draft is refused the same way.
 #   6. A composer reading pending whose content cannot be read at all (content
@@ -100,27 +102,28 @@ test_submit_that_does_not_free_the_composer_is_not_recovered() {
   out=$(cat "$dir/out")
   printf '%s' "$out" | grep -q 'rc=4' \
     && fail "a submit that did not free the composer must not be reported as recovered: $out"
-  # ... and it is not a skip either: the ordinary ring continues.
+  # The composer still provably holds text, so it keeps the ordinary skip:
+  # the doorbell must never be appended to it and submitted.
   printf '%s' "$out" | grep -q 'rc=1' \
-    && fail "a still-pending composer after the submit must not read as a skip: $out"
-  printf '%s' "$out" | grep -q 'rc=0' \
-    || fail "the ordinary ring must continue after an unfreed submit: $out"
-  pass "stranded draft: a submit that left the composer pending is not reported as recovered"
+    || fail "a still-pending composer after the submit must skip with 1: $out"
+  [ "$(cat "$dir/send.log")" = 'KEY Enter' ] \
+    || fail "the doorbell was typed into a still-pending composer: $(cat "$dir/send.log")"
+  pass "stranded draft: a submit that left the composer pending skips without typing the doorbell"
 }
 
-test_legacy_carrier_is_recovered_the_same_way() {
+test_legacy_carrier_is_refused() {
   local dir out
-  # The legacy carrier's exact bytes, taken from the operational-input owner's
-  # own constants (FM_LEGACY_WATCHER_PREFIX/SUFFIX), because the classifier
-  # matches the whole shape, suffix included.
+  # Composer extraction joins rows with single spaces, so the legacy carrier
+  # reaches the ring in this single-line form. Legacy carriers are not typed
+  # by any current producer and are never submitted.
   dir=$(ring_with_stubs ring-legacy pending empty \
-    "$(printf 'FIRSTMATE WATCHER WAKE: stale: sess:fm-t1\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.')")
+    'FIRSTMATE WATCHER WAKE: stale: sess:fm-t1 Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.')
   out=$(cat "$dir/out")
-  printf '%s' "$out" | grep -q 'rc=4' \
-    || fail "a legacy operational draft that freed the composer must return 4: $out"
-  [ "$(cat "$dir/send.log")" = 'KEY Enter' ] \
-    || fail "the legacy recovery must submit exactly Enter: $(cat "$dir/send.log")"
-  pass "stranded draft: the legacy watcher carrier is submitted with exactly Enter and returns 4"
+  printf '%s' "$out" | grep -q 'rc=1' \
+    || fail "a legacy carrier in the composer must be refused with 1: $out"
+  [ ! -s "$dir/send.log" ] \
+    || fail "a legacy carrier was typed into: $(cat "$dir/send.log")"
+  pass "stranded draft: the legacy watcher carrier is refused, never submitted"
 }
 
 test_human_pending_text_is_never_touched() {
@@ -162,7 +165,7 @@ test_unreadable_composer_content_is_refused() {
 
 test_recoverable_draft_returns_4_when_the_composer_is_freed
 test_submit_that_does_not_free_the_composer_is_not_recovered
-test_legacy_carrier_is_recovered_the_same_way
+test_legacy_carrier_is_refused
 test_human_pending_text_is_never_touched
 test_near_miss_text_is_refused
 test_unreadable_composer_content_is_refused

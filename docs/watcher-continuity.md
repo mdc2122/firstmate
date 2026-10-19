@@ -116,12 +116,13 @@ A missing, malformed, foreign, or dead-pid marker is no proof, so the alarm fire
 A steering doorbell is skipped only when the worker's composer PROVENLY holds pending text, because typing into it could submit someone's half-typed message.
 That guard has one failure mode: the pending text is itself machine-issued - a watcher wake or banner the harness typed into the composer but never submitted - so every later steer is starved while the pane sits idle.
 `bin/fm-task-inbox-lib.sh`'s `fm_task_inbox_ring` therefore does not treat `pending` as an unconditional skip.
-It extracts the composer's content and classifies it through `bin/fm-operational-input.sh` BEFORE any keystroke; only a current `FIRSTMATE_OP` kind or the legacy carrier may be submitted, and human text or unknown bytes stay untouched.
+It extracts the composer's content and classifies it through `bin/fm-operational-input.sh` BEFORE any keystroke; only content opening with a current typed `FIRSTMATE_OP` kind or the from-firstmate carrier may be submitted, and human text, legacy carriers, or unknown bytes stay untouched.
+That proof is the draft's header only: text typed after a stranded draft cannot be told apart from its body and is submitted with it.
 For a recoverable draft the ring sends exactly one Enter - the one stage whose effect is exactly the draft's own intent - and returns 4 when the submit also FREED the composer, so the caller records the attempt and the ladder re-rings its ordinary doorbell on the next due tick.
-A submit that leaves the composer still holding text recovered nothing and is not a 4.
+A submit that leaves the composer still holding pending text recovered nothing and is the ordinary skip (1), so the doorbell is never typed into that composer.
 No return value is delivery proof: the record's acknowledgement move is the only delivery signal.
-`bin/fm-send.sh` reports the 4 outcome distinctly, and `bin/fm-watch.sh` names any OTHER pending composer `delivery-blocked` at escalation, so the remedy is to clear the composer rather than recover the agent.
-`tests/fm-stranded-draft-delivery.test.sh` pins that a recoverable draft is submitted with exactly Enter and returns 4 only when the composer is freed, that human and near-miss text is never typed into, and that a still-pending composer after the submit is not reported as recovered.
+`bin/fm-send.sh` reports the 4 outcome distinctly, and `bin/fm-watch.sh` names a composer still pending at escalation `delivery-blocked`, so the remedy is to clear the composer rather than recover the agent.
+`tests/fm-stranded-draft-delivery.test.sh` pins that a recoverable draft is submitted with exactly Enter and returns 4 only when the composer is freed, that human, legacy-carrier, and near-miss text is never typed into, and that a still-pending composer after the submit skips rather than receiving the doorbell.
 
 ## Arm-layer cycle contract
 

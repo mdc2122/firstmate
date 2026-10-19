@@ -277,13 +277,14 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # composer pre-check, then the backend's submit machinery with a minimal retry
 # budget, verdict discarded.
 # Returns 0 rang, 1 skipped because the composer PROVENLY holds pending text
-# that is not a recoverable operational draft (the watcher re-rings later and
-# escalates as delivery-blocked), 2 the backend send failed, 3 skipped because
+# that is not a recoverable operational draft, or still holds pending text after
+# that draft's submit (the watcher re-rings later and escalates as
+# delivery-blocked), 2 the backend send failed, 3 skipped because
 # the endpoint is positively dead or missing (nothing typed; recovery owns the
 # record), 4 the composer held only a stranded operational draft, that draft was
 # submitted, AND the submit freed the composer (the durable record still owns the
 # acknowledgement; the ladder owns the next ordinary re-ring). A submit that left
-# the composer still holding text recovered nothing and is not a 4.
+# the composer still holding text recovered nothing and is a 1, never a 4.
 # No return value is delivery proof; the acknowledgement move is the only
 # delivery signal.
 # The skip is deliberately narrow: only an exact `pending` verdict defers,
@@ -308,11 +309,12 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
       # stranded operational draft (an earlier watcher wake or banner the
       # harness typed but never submitted), so the doorbell skip kept
       # starving every later steer while the pane sat idle. Only a draft the
-      # operational-input contract itself proves recoverable may be
-      # submitted: current typed kinds and the legacy carrier are
-      # unambiguous, machine-issued content; anything else - human text,
-      # unknown bytes - stays untouched so this path can never clobber the
-      # captain's half-typed message.
+      # operational-input contract itself types may be submitted: content
+      # that opens with a current typed FIRSTMATE_OP kind or the
+      # from-firstmate carrier. Anything else - human text, legacy carriers,
+      # unknown bytes - stays untouched. The proof is the draft's header
+      # only: text typed AFTER a stranded draft is indistinguishable from
+      # its body and is submitted with it.
       # ORDER OF GUARDS, most conservative first. (1) Classify the extracted
       # text with NO keystroke at all, so human or unrecognized content is
       # never touched. (2) Only then submit the machine-issued draft: Enter is
@@ -328,18 +330,19 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
       # recovery exists to protect.
       _ring_draft=
       if _ring_draft=$(fm_backend_composer_content "$backend" "$target" "$label" 2>/dev/null) \
-        && fm_operational_input_classify "$_ring_draft" _ring_kind 2>/dev/null; then
+        && fm_operational_input_kind "$_ring_draft" _ring_kind 2>/dev/null; then
         fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || true
         cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
         # 4 reports the RECOVERED attempt: the draft was submitted AND the
         # composer is now free, so the caller records the attempt and lets the
-        # ordinary doorbell re-ring on the next due tick. An Enter that did NOT
-        # free the composer (it still reads pending or is unreadable) recovered
-        # nothing, so that is not a 4 - the ordinary ring continues and the
-        # doorbell line is typed as usual.
-        if [ "$cstate" = empty ]; then
-          return 4
-        fi
+        # ordinary doorbell re-ring on the next due tick. An Enter after which
+        # the composer still reads pending recovered nothing and keeps the same
+        # skip as any other pending text: typing the doorbell there would
+        # append it to whatever the composer now holds and submit both.
+        case "$cstate" in
+          empty) return 4 ;;
+          pending) return 1 ;;
+        esac
       else
         return 1
       fi

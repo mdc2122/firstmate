@@ -623,14 +623,14 @@ inbox_steer_check() {  # <window> <task>
       ;;
     escalate)
       reason="stale: $w (unread firstmate instruction: $rec still unhandled after $count doorbell delivery attempts with an idle pane; inspect the worker)"
-      # Delivery-blocked distinction: when the composer's pending text is
-      # neither a recoverable operational draft nor provably empty, the worker
+      # Delivery-blocked distinction: when the composer still provably holds
+      # pending text at escalation, the worker
       # is fine - the steer is stranded behind unsubmitted text in the input
       # box. Name that instead of generic worker-stale so the caller knows to
       # clear the composer rather than recover the agent.
       inbox_cstate=$(fm_backend_composer_state "$backend" "$w" "$(window_label "$w")" 2>/dev/null || printf 'unknown')
       if [ "$inbox_cstate" = pending ]; then
-        reason="stale: $w (delivery-blocked: $rec still unhandled after $count doorbell attempts - the composer's unsubmitted text blocks every doorbell and is not a recoverable operational draft; clear or submit the composer's pending text so steers can reach the worker)"
+        reason="stale: $w (delivery-blocked: $rec still unhandled after $count doorbell attempts - the composer's unsubmitted text blocks every doorbell; clear or submit the composer's pending text so steers can reach the worker)"
       fi
       if [ ! -d "${rec%/*}" ] || [ ! -f "$rec" ]; then
         fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
