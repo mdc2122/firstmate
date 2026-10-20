@@ -337,7 +337,39 @@ swarm-c swarm scout 2026-10-12T21:00:05Z - closed-not-live - human_answer=0.0 wo
   pass "a swarm root's session directory and a beads crew mirror bead each join their own task; a launch brief keeps its task"
 }
 
+test_swarm_under_a_symlinked_home_is_measured() {
+  # fm-prime-swarm.sh names the kickoff through the logical $FM_HOME, so a home
+  # reached through a symlink must still match the swarm root's first message.
+  local root="$TMP_ROOT/symlinked" got
+  mkdir -p "$root/real-fm/state" "$root/home"
+  ln -s "$root/real-fm" "$root/home/fm"
+  python3 - "$root" <<'PY'
+import json, os, sys
+fm = os.path.join(sys.argv[1], "home", "fm")
+path = os.path.join(fm, "data", "swarm-l", "sessions", "s.jsonl")
+os.makedirs(os.path.dirname(path))
+with open(path, "w") as f:
+    for r in [{"type": "session", "timestamp": "2026-10-12T08:00:00Z"},
+              {"type": "message", "timestamp": "2026-10-12T08:00:05Z", "message": {"role": "user",
+               "content": [{"type": "text", "text": f"Read {fm}/data/swarm-l/kickoff.md and begin."}]}},
+              {"type": "message", "timestamp": "2026-10-12T08:30:00Z", "message": {"role": "assistant", "stopReason": "stop",
+               "content": [{"type": "toolCall", "arguments": {"command": f"echo \"done: x\" >> '{fm}/state/swarm-l.status'"}}]}}]:
+        f.write(json.dumps(r) + "\n")
+PY
+  make_nm_db "$root/nm.sqlite"
+  run_flow "$root" "$root/out" || fail "fm-flow-wait.py failed on the symlinked-home fixture: $(cat "$root/out.err")"
+  got=$(python3 - "$root/out" <<'PY'
+import csv, sys
+for r in csv.DictReader(open(f"{sys.argv[1]}/tasks.csv")):
+    print(r["task"], r["source"], r["outcome"])
+PY
+)
+  assert_equals "swarm-l swarm live-proven" "$got" "a swarm kickoff naming the symlinked home is measured"
+  pass "a swarm under a home reached through a symlink is measured"
+}
+
 test_ledger_and_transcript_classify_the_same
 test_automation_rows_are_not_touches
 test_brief_citing_another_tasks_status_joins_its_own_task
 test_swarm_and_beads_crew_dispatches_are_measured
+test_swarm_under_a_symlinked_home_is_measured

@@ -888,7 +888,11 @@ def build(args):
     print("scanning worker transcripts ...", file=sys.stderr)
     sessions = scan_workers(scan_from)
     print(f"  {len(sessions)} launch-brief sessions", file=sys.stderr)
-    disp_homes = list(dict.fromkeys(os.path.realpath(p) for p in [args.home] + local_secondmate_homes(args.home)))
+    # one entry per real home, kept in its given (logical) form: swarm kickoffs name the unresolved path
+    disp_homes = {}
+    for p in [args.home] + local_secondmate_homes(args.home):
+        disp_homes.setdefault(os.path.realpath(p), p)
+    disp_homes = list(disp_homes.values())
     swarm_sessions = scan_swarms(scan_from, disp_homes)
     bead_sessions = scan_beads(disp_homes)
     print(f"  {len(swarm_sessions)} swarm sessions, {len(bead_sessions)} beads crew dispatches", file=sys.stderr)
