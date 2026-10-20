@@ -1,0 +1,134 @@
+{
+ "touch_categories_settled": [],
+ "tasks_touched_by_category_settled": [],
+ "counterfactual_zero_touch_live": {
+  "baseline": 2,
+  "minus_merge_release_handoffs": 2,
+  "minus_handoffs_and_decision_answers": 2,
+  "minus_handoffs_decisions_relaunch": 2,
+  "settled_denominator": 2
+ },
+ "ship_touches_per_task": {
+  "n": 0,
+  "median": null,
+  "mean": null
+ },
+ "scout_touches_per_task": {
+  "n": 2,
+  "median": 0.0,
+  "mean": 0.0
+ },
+ "decision_answers": {
+  "total": 0,
+  "no_mistakes_gate": 0,
+  "captain": 0
+ },
+ "merge_queue_per_item_h": {
+  "n": 0,
+  "median": null,
+  "p90": null,
+  "sum": 0.0,
+  "top10_sum": 0.0,
+  "ge5h_n": 0,
+  "ge5h_sum": 0.0,
+  "top": []
+ },
+ "release_per_item_h": {
+  "n": 0,
+  "median": null,
+  "p90": null,
+  "sum": 0.0,
+  "top10_sum": 0.0,
+  "ge5h_n": 0,
+  "ge5h_sum": 0.0,
+  "top": []
+ },
+ "ci_per_item_h": {
+  "n": 0,
+  "median": null,
+  "p90": null,
+  "sum": 0.0,
+  "top10_sum": 0.0,
+  "ge5h_n": 0,
+  "ge5h_sum": 0.0,
+  "top": []
+ },
+ "hours_by_day_and_class": {},
+ "by_kind_outcome_zero_touch": {
+  "scout|live-proven|True": 2
+ },
+ "by_home": {
+  "primary": 2
+ },
+ "zero_touch_live_ships": [],
+ "supervisor_transcript_gaps": [
+  {
+   "start": "2026-10-12T06:00:00Z",
+   "end": "2026-10-12T12:00:00Z",
+   "hours": 6.0,
+   "settled": 1,
+   "zero_touch_any": 1,
+   "zero_touch_live": [
+    [
+     "quiet",
+     "primary"
+    ]
+   ]
+  },
+  {
+   "start": "2026-10-12T18:00:00Z",
+   "end": "2026-10-13T00:00:00Z",
+   "hours": 6.0,
+   "settled": 1,
+   "zero_touch_any": 1,
+   "zero_touch_live": [
+    [
+     "late",
+     "primary"
+    ]
+   ]
+  }
+ ],
+ "ended_after_cap": {
+  "n": 1,
+  "tail_h": 5.0,
+  "zero_touch": 1
+ },
+ "merge_queue_by_kind_yolo": {
+  "scout/yolo=-": 0.0
+ },
+ "uncovered_rows": {
+  "spawned on/after window end": {
+   "n": 1,
+   "ids": [
+    "after-row"
+   ]
+  },
+  "secondmate / beads crew": {
+   "n": 1,
+   "ids": [
+    "beads-fix"
+   ]
+  },
+  "no launch brief anywhere (firstmate-direct, captain call, or done by another task's worker)": {
+   "n": 2,
+   "ids": [
+    "direct-row",
+    "primary-fix"
+   ]
+  },
+  "spawned before window": {
+   "n": 1,
+   "ids": [
+    "early-row"
+   ]
+  },
+  "swarm (no fm-spawn launch brief)": {
+   "n": 1,
+   "ids": [
+    "grok-sweep"
+   ]
+  }
+ },
+ "uncovered_rows_total": 6
+}

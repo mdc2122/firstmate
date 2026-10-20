@@ -1,0 +1,90 @@
+{
+ "window": [
+  "2026-10-12",
+  "2026-10-13"
+ ],
+ "generated": "2026-10-20T04:08:22Z",
+ "now_cap": "2026-10-13T00:00:00Z",
+ "tasks_spawned": 2,
+ "excluded": 0,
+ "measured": 2,
+ "settled": 2,
+ "live_proven": 2,
+ "closed_not_live": 0,
+ "in_flight": 0,
+ "zero_touch_live": 2,
+ "zero_touch_share_of_settled_pct": 100.0,
+ "zero_touch_share_of_live_pct": 100.0,
+ "in_flight_untouched_so_far": 0,
+ "upper_bound_if_all_untouched_inflight_land_pct": 100.0,
+ "by_kind": {
+  "scout": {
+   "settled": 2,
+   "zero_touch_live": 2,
+   "live": 2
+  }
+ },
+ "touches_total": 0,
+ "touches_by_type": {},
+ "steer_purposes": {},
+ "steer_answerers": {},
+ "script_steers_excluded": 0,
+ "flash_classified_rows": {
+  "steers": 0,
+  "pauses": 0
+ },
+ "wait_hours_by_class": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.0,
+  "of_which_handoff_idle": 0.0
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.0
+ },
+ "top_tasks_by_class": {
+  "decision_park": [],
+  "human_answer": [],
+  "ci": [],
+  "merge_queue": [],
+  "release": [],
+  "worker_stall": [],
+  "handoff_idle": []
+ },
+ "coverage": {
+  "supervisor_transcripts": [
+   {
+    "first": "2026-10-11T22:00:00Z",
+    "last": "2026-10-12T06:00:00Z",
+    "file": "s1.jsonl",
+    "dir": "-fm"
+   },
+   {
+    "first": "2026-10-12T12:00:00Z",
+    "last": "2026-10-12T18:00:00Z",
+    "file": "s2.jsonl",
+    "dir": "-fm"
+   }
+  ],
+  "supervisor_unresolved_variable_targets": {},
+  "backlog_rows_closed_in_window_without_worker_transcript": [
+   "after-row",
+   "beads-fix",
+   "direct-row",
+   "early-row",
+   "grok-sweep",
+   "primary-fix"
+  ],
+  "owned_prs_unresolved": {},
+  "gh_cache_entries": 0,
+  "releases_indexed": 0
+ }
+}
