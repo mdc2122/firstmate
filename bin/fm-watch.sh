@@ -147,7 +147,13 @@
 #                          at that head; <detail> carries the queue check's
 #                          conclusion and reason. One wake per handed-over head,
 #                          and the yolo poll does not re-queue that head
-#                          (pr_queue_merge_tick)
+#                          (pr_queue_merge_tick). The task's worker also
+#                          receives one steer naming the PR, the failing tests
+#                          read from the queue run's own log, and that run,
+#                          ordering the supported pipeline rerun on the current
+#                          base - never a hand rebase or forge branch update
+#                          (pr_mq_ejection_steer); once per handed-over head,
+#                          and never while a queue run is still in flight.
 #   check: <check>: merge-queue hand-off cancelled: <url> moved from verified head <old> to <new>, ...
 #                          a PR handed to its merge-queue app read at another
 #                          head: its merge authority was revoked and auto-merge
@@ -355,6 +361,8 @@ PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base r
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
 PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
+MQ_EJECTION_STEER_TIMEOUT=${FM_MQ_EJECTION_STEER_TIMEOUT:-30}  # seconds allowed for one ejection rerun steer (bin/fm-send.sh)
+case "$MQ_EJECTION_STEER_TIMEOUT" in ''|*[!0-9]*|0) MQ_EJECTION_STEER_TIMEOUT=30 ;; esac
 MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head or queue-held-head age before its one wake
 case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
@@ -2532,7 +2540,8 @@ retire_merged_pr_poll() {  # <id> <url> <check-path>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.merge-line-stall" \
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.mq-ejection" \
+    "$STATE/$id.merge-line-stall" \
     "$STATE/$id.queue-merge" "$STATE/$id.queue-away-refused" "$STATE/$id.queue-stall"
   # A landed PR leaves its repository's merge line so the next PR becomes the
   # head (bin/fm-merge-line.sh; a no-op without a line).
@@ -2665,6 +2674,62 @@ pr_behind_rerun_steer() {  # <id> <url> <head>
   fi
   triage_log "behind-rerun steer sent to $id for $url at $head"
   tmp=$(mktemp "$STATE/.pr-behind-rerun.XXXXXX") || return 0
+  if {
+    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
+    printf '%s %s %s\n' "$url" "$head" "$now"
+  } > "$tmp" && mv -f -- "$tmp" "$file"; then
+    return 0
+  fi
+  rm -f "$tmp"
+}
+
+# One bin/fm-send.sh steer per merge-queue ejection, asking the worker for the
+# supported pipeline rerun on the current base: the queue tested the handed-over
+# head against the moved base and ejected it on failing tests, so the fix is the
+# pipeline's own rerun (which rebases onto that base and revalidates), never a
+# hand rebase, a hand push, or a forge branch update. The steer names the pull
+# request, the failing tests, and the queue run, all read by
+# bin/fm-mq-ejection.sh from the queue's own ejection comment and the failing
+# run's log; the probe prints nothing while a queue run is still in flight, so
+# an ejection that has not finished is never steered. The previous run's
+# post-green CI monitor may still hold the branch and blocks a bare rerun, so
+# the steer has the worker abort that run first, but only when it is the sole
+# active run and its only active step is ci after checks passed, confirming the
+# cancel through axi status; any other active run is reported blocked instead.
+# state/<id>.mq-ejection keeps one "<url> <head-sha> <epoch>" line per delivered
+# steer, so a head is never steered twice; it retires with the merged poll and
+# at teardown, and only a delivered steer is recorded so a refused send retries
+# on a later sweep.
+pr_mq_ejection_steer() {  # <id> <url> <head>
+  local id=$1 url=$2 head=$3 file verdict detail run_url failure msg tmp now
+  file="$STATE/$id.mq-ejection"
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    awk -v u="$url" -v h="$head" '$1 == u && $2 == h { found = 1 } END { exit !found }' "$file" \
+      && return 0
+  fi
+  run_check_capture "$SCRIPT_DIR/fm-mq-ejection.sh" "$url" "$head" \
+    "$FM_PR_QUEUE_MERGE_CHECKS" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    'ejection '*' '*' '*)
+      detail=${verdict#ejection }
+      detail=${detail#* }
+      run_url=${detail%% *}
+      failure=${detail#* }
+      ;;
+    *) return 0 ;;
+  esac
+  [ -n "$run_url" ] && [ -n "$failure" ] || return 0
+  msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$MQ_EJECTION_STEER_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
+  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+    triage_log "ejection steer for $id refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
+    return 0
+  fi
+  triage_log "ejection steer sent to $id for $url at $head (run $run_url)"
+  now=$(date +%s)
+  tmp=$(mktemp "$STATE/.mq-ejection.XXXXXX") || return 0
   if {
     if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
     printf '%s %s %s\n' "$url" "$head" "$now"
@@ -2833,6 +2898,13 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
       return 0
       ;;
   esac
+  # A queue that cancelled auto-merge while the pull request stayed open at the
+  # recorded head has ejected it. The worker hears about the ejection itself,
+  # not only through firstmate: the queue's failing tests and run reach it as
+  # the one steer that orders the supported pipeline rerun
+  # (pr_mq_ejection_steer, idempotent per head, so a refused send retries on a
+  # later sweep while the wake below still fires once).
+  pr_mq_ejection_steer "$id" "$url" "$head"
   [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] || return 0
   reason="check: $c: merge-queue ejected $url at $head: $detail"
   fm_wake_append check "$c" "$reason" || exit 1
