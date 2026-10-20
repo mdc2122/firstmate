@@ -1,0 +1,7 @@
+== seeded legacy behind-rerun line at same head, then ejection sweep ==
+inbox messages: 1
+record:
+https://github.com/o/r/pull/1 0123456789abcdef0123456789abcdef01234567 1792457814
+https://github.com/o/r/pull/1 0123456789abcdef0123456789abcdef01234567 1792457819 ejection
+forge branch-mutating gh calls (update-branch / pr update / PUT .../update-branch):
+(none)

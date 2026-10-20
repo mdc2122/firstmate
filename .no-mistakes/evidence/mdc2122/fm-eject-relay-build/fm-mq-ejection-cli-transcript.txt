@@ -1,0 +1,16 @@
+$ queue run failed, app comment + failed log
+ejection 0123456789abcdef0123456789abcdef01234567 https://github.com/o/r/actions/runs/38500432987/job/115645870881 tests/test_alpha.py::test_moved_base
+[exit=0 ]
+
+$ queue run failed, log names no test id -> check-name fallback
+ejection 0123456789abcdef0123456789abcdef01234567 https://github.com/o/r/actions/runs/38500432987/job/115645870881 check queue-mq
+[exit=0 ]
+
+$ queue run still in flight -> silent
+[exit=0 ]
+
+$ failing 'queue-mq' posted by GitHub Actions (15368), not the queue app -> silent
+[exit=0 ]
+
+$ invalid head sha -> silent
+[exit=0]

@@ -1,0 +1,21 @@
+== worker inbox after ejection sweep (1 message) ==
+schema=fm-task-inbox.v1
+at=2026-10-20T00:56:32Z
+--
+The merge queue ejected PR https://github.com/o/r/pull/1 at head 0123456789abcdef0123456789abcdef01234567 after its queue run around https://github.com/o/r/actions/runs/38500432987/job/115645870881 failed: tests/test_alpha.py::test_moved_base; tests/test_beta.py::test_second. The queue tested that head against the moved base branch, so the current base's tests are what failed. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not 0123456789abcdef0123456789abcdef01234567, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/1/head, confirm git cherry 0123456789abcdef0123456789abcdef01234567 HEAD prints no + line (every local commit is already in the PR head), then git reset --keep 0123456789abcdef0123456789abcdef01234567; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR https://github.com/o/r/pull/1 checks green; the armed merge poll lands it.
+== firstmate wake queue ==
+check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.Dxbh8s/evidence-steer/home/state/task-a.check.sh: merge-queue ejected https://github.com/o/r/pull/1 at 0123456789abcdef0123456789abcdef01234567: queue-mq failure: queue-mq
+== state/task-a.pr-behind-rerun ==
+https://github.com/o/r/pull/1 0123456789abcdef0123456789abcdef01234567 1792457792 ejection
+== gh calls made by the probe ==
+   2 api --paginate repos/o/r/commits/0123456789abcdef0123456789abcdef01234567/check-runs
+   1 api --paginate repos/o/r/issues/1/comments?per_page=100
+   1 api repos/o/r/commits/0123456789abcdef0123456789abcdef01234567/check-runs?filter=all&per_page=100 --paginate --slurp
+   1 api repos/o/r/issues/1/comments?per_page=100 --paginate --slurp
+   1 run view 38500432987 -R o/r --job 115645870881 --log-failed
+== second sweep at same ejected head ==
+inbox messages: 1
+after.out: check: /private/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T/fm-pr-check-security.Dxbh8s/evidence-steer/home/state/z-stop.check.sh: stop-cycle
+record:
+https://github.com/o/r/pull/1 0123456789abcdef0123456789abcdef01234567 1792457792 ejection
+run view calls total: 1
