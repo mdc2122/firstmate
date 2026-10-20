@@ -774,7 +774,7 @@ remote_teardown_locks_release() {
 }
 
 remote_recovery_paths_validate() {
-  local mode=${1:-initial} handoff_dir outbox pending_dir real rec
+  local mode=${1:-initial} handoff_dir outbox pending_dir real rec arec
   handoff_dir="$DATA/handoff"
   outbox="$handoff_dir/$ID.outbox.md"
   pending_dir="$STATE/pending-replies"
@@ -819,6 +819,18 @@ remote_recovery_paths_validate() {
     fi
     for rec in "$pending_dir"/*; do
       [ -e "$rec" ] || [ -L "$rec" ] || continue
+      # bin/fm-pending-reply-lib.sh archives settled resolved records here;
+      # every other entry must still be one regular record file.
+      if [ "$rec" = "$pending_dir/archive" ]; then
+        [ -d "$rec" ] && [ ! -L "$rec" ] \
+          || { echo "REFUSED: pending-replies archive is unsafe" >&2; return 1; }
+        for arec in "$rec"/*; do
+          [ -e "$arec" ] || [ -L "$arec" ] || continue
+          [ -f "$arec" ] && [ ! -L "$arec" ] \
+            || { echo "REFUSED: pending-replies archive contains an unsafe entry" >&2; return 1; }
+        done
+        continue
+      fi
       [ -f "$rec" ] && [ ! -L "$rec" ] \
         || { echo "REFUSED: pending-replies contains an unsafe recovery entry" >&2; return 1; }
     done
@@ -829,13 +841,22 @@ remote_recovery_paths_validate() {
 }
 
 remote_pending_replies_cleanup() {
-  local rec
+  local rec arec
   [ "$REMOTE_PENDING_DIR_PRESENT" -eq 1 ] || return 0
   (
     CDPATH='' cd -- "$STATE/pending-replies" 2>/dev/null || exit 1
     [ "$(pwd -P)" = "$REMOTE_PENDING_DIR_REAL" ] || exit 1
     for rec in ./*; do
       [ -e "$rec" ] || [ -L "$rec" ] || continue
+      if [ "$rec" = ./archive ]; then
+        [ -d "$rec" ] && [ ! -L "$rec" ] || exit 1
+        for arec in "$rec"/*; do
+          [ -e "$arec" ] || [ -L "$arec" ] || continue
+          [ -f "$arec" ] && [ ! -L "$arec" ] || exit 1
+          [ "$(fm_meta_get "$arec" task_id)" = "$ID" ] && rm -f -- "$arec"
+        done
+        continue
+      fi
       [ -f "$rec" ] && [ ! -L "$rec" ] || exit 1
       [ "$(fm_meta_get "$rec" task_id)" = "$ID" ] && rm -f -- "$rec"
     done
