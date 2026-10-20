@@ -505,6 +505,47 @@ test_backstop_output_is_bounded() {
   pass "the outcome backstop caps each item and its total task output deterministically"
 }
 
+# The 2026-10-20 repeat: one main drain printed a worker's done line as a wake
+# annotation and again under STATUS OUTCOME BACKSTOP. The annotation is that
+# drain's presentation of the latest event, so the backstop records it instead
+# of printing it a second time, and a later drain stays silent; a captain
+# event appended afterwards with no wake row still reaches the backstop.
+test_annotated_done_line_is_not_reprinted_by_the_backstop() {
+  local dir state out err sequence generation old body
+  dir=$(make_case annotated-done)
+  state="$dir/state"
+  out="$dir/drain.out"
+  err="$dir/drain.err"
+  old=$(( $(date +%s) - 20 ))
+
+  printf 'working: lane one\ndone: PR https://example.test/906 checks green\n' > "$state/crew.status"
+  set_mtime "$old" "$state/crew.status"
+  append_wake "$state" signal crew.status 'signal: crew.status' \
+    || fail "could not queue the status signal"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" 2> "$err" \
+    || fail "main drain failed for an annotated done line: $(cat "$err")"
+  [ "$(grep -cF 'done: PR https://example.test/906 checks green' "$out")" -eq 1 ] \
+    || fail "one drain presented the done line other than exactly once: $(cat "$out")"
+  grep -F 'wake annotation: latest wake-EVENT observed at drain, not current state: crew.status: done: PR https://example.test/906' "$out" >/dev/null \
+    || fail "the done line was not presented as the signal's annotation: $(cat "$out")"
+  sequence=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation .*$/\1/p' "$err")
+  generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$err")
+  FM_STATE_OVERRIDE="$state" "$DRAIN" --ack-through "$sequence" --recovery-generation "$generation" >/dev/null 2>&1 \
+    || fail "acknowledgement failed"
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" 2>&1 \
+    || fail "the next main drain failed"
+  [ ! -s "$out" ] || fail "a later drain re-presented the annotated done line: $(cat "$out")"
+
+  printf 'failed: a later lane failed\n' >> "$state/crew.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" 2>&1 \
+    || fail "main drain failed for a later unwoken failure"
+  body=$(backstop_body "$out")
+  case "$body" in *'crew failed: a later lane failed'*) ;; *) fail "a later captain event with no wake row lost its backstop: $(cat "$out")" ;; esac
+  pass "a done line the drain's own annotation presented is not re-printed by the backstop, while a later unwoken captain event still is"
+}
+
 test_uncovered_keyless_captain_events_surface_on_the_next_main_drain
 test_newer_task_outcome_and_routine_latest_events_stay_silent
 test_older_or_other_task_outcome_cannot_hide_a_new_captain_event
@@ -523,3 +564,4 @@ test_held_lock_mode_accepts_a_lock_owner_descendant
 test_index_self_heal_runs_under_the_outcome_lock
 test_overbound_routine_event_stays_silent
 test_backstop_output_is_bounded
+test_annotated_done_line_is_not_reprinted_by_the_backstop

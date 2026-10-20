@@ -1073,9 +1073,11 @@ test_watch_extension_restart_decides_replay_per_wake_within_one_generation() {
   pass ".omp watch extension: closes sharing one pending recovery generation replay per wake, so acknowledging row 7 replays only row 8"
 }
 
-# An arm fixture that closes each row of state/.e2e-plan in turn
-# (<seq>\t<reason>), appending its wake row first like the real watcher, and
-# waits for the next row once the plan is empty.
+# An arm fixture that closes each row of state/.e2e-plan in turn, appending its
+# wake row first like the real watcher, and waits for the next row once the
+# plan is empty. A plan row is <seq>\t<reason>, or
+# <seq>\t<reason>\t<kind>\t<key>\t<payload> to queue the row the watcher would
+# (a payload of "-" queues no row: a reason the watcher printed without one).
 write_omp_plan_arm_fixture() {  # <repo>
   cat > "$1/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
@@ -1087,9 +1089,12 @@ next=$(head -n 1 "$plan")
 [ -n "$next" ] || exit 0
 tail -n +2 "$plan" > "$plan.tmp" && mv "$plan.tmp" "$plan"
 sleep 0.3
-seq=${next%%$'\t'*}; reason=${next#*$'\t'}
-printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
-printf '1700000000\t%s\tstale\tkey%s\t%s\n' "$seq" "$seq" "$reason" >> "$FM_HOME/state/.wake-queue"
+IFS=$'\t' read -r seq reason kind key payload <<< "$next"
+kind=${kind:-stale}; key=${key:-key$seq}; payload=${payload:-$reason}
+if [ "$payload" != - ]; then
+  printf '%s\n' "$seq" > "$FM_HOME/state/.wake-queue.seq"
+  printf '1700000000\t%s\t%s\t%s\t%s\n' "$seq" "$kind" "$key" "$payload" >> "$FM_HOME/state/.wake-queue"
+fi
 printf '%s\n' "$reason"
 SH
   chmod +x "$1/bin/fm-watch-arm.sh"
@@ -1172,22 +1177,41 @@ EOF
   pass ".omp watch extension: idle wakes start turns, unconsumed ones are re-poked once, and a streaming main gets follow-ups"
 }
 
-# The 2026-10-05 ghost wakes: omp hands main a stale wake for a terminal torn
-# down meanwhile. The context event before the LLM call shows the model a
-# no-action note only for that stale wake once main acknowledged its row; the
-# same torn-down stale wake with its row still queued, a live terminal's stale
-# wake, an unrecorded task's signal wake (a torn-down task's final word), and
-# a check wake all reach the model unchanged, and no consumed record rides a
-# replacement handoff.
+# The 2026-10-20 backlog: omp handed main watcher wakes 2.8-3.7 hours after the
+# watcher queued them, after main had already handled their rows through later
+# drains. Before each LLM call the context event shows the model a no-action
+# note for every wake whose own row main acknowledged - a stale, a signal (in
+# both its plain and decision-owned row form), a custom check, a merge landing,
+# and a heartbeat - while each kind with its row still queued, a signal batch
+# still holding a sibling row, and a reason the watcher printed without its own
+# row reach the model unchanged; no consumed record rides a replacement handoff.
 test_watch_extension_context_drops_superseded_wakes() {
   local dir repo home out status
   dir="$TMP_ROOT/watch-superseded"; repo="$dir/repo"; home="$dir/home"
   install_omp_extension_fixture "$repo"
   write_omp_plan_arm_fixture "$repo"
   mkdir -p "$home/state"
-  fm_write_meta "$home/state/live.meta" "window=fm-live" "endpoint_task_id=live" "terminal=term_live" "backend=orca" "kind=ship"
-  printf '7\tstale: term_gone (idle 300s, possible wedge, escalation 6)\n8\tstale: term_gone (idle 360s, possible wedge, escalation 7)\n9\tstale: term_live (idle 300s, possible wedge, escalation 1)\n10\tsignal: %s/state/ghost.status\n11\tcheck: omp-superseded C ready\n' \
-    "$home" > "$home/state/.e2e-plan"
+  {
+    # Acknowledged before consumption: rows 7-12.
+    printf '7\tstale: term_a (idle 300s, possible wedge, escalation 1)\n'
+    printf '8\tsignal: %s/state/a.status %s/state/b.turn-ended\tsignal\ta.status\n' "$home" "$home"
+    printf '9\tsignal: %s/state/d.status\tsignal\td.status\tneeds-decision: %s/state/d.status\n' "$home" "$home"
+    printf '10\tcheck: %s/state/audit.check.sh: audit window unreviewed\tcheck\t%s/state/audit.check.sh\n' "$home" "$home"
+    printf '11\tcheck: %s/state/m.check.sh: merged\tcheck\tmerged-m-https://example.test/o/r/pull/9\tcheck: merge landed: m https://example.test/o/r/pull/9\n' "$home"
+    printf '12\theartbeat\theartbeat\theartbeat\n'
+    # Still queued at consumption: rows 13-17.
+    printf '13\tstale: term_q\n'
+    printf '14\tsignal: %s/state/q.status\tsignal\tq.status\n' "$home"
+    printf '15\tcheck: %s/state/q.check.sh: still due\tcheck\t%s/state/q.check.sh\n' "$home" "$home"
+    printf '16\tcheck: %s/state/qm.check.sh: merged\tcheck\tmerged-qm-https://example.test/o/r/pull/8\tcheck: merge landed: qm https://example.test/o/r/pull/8\n' "$home"
+    printf '17\theartbeat\theartbeat\theartbeat\n'
+    # A two-file signal batch: row 20 acknowledged, its sibling row 21 queued.
+    printf '20\tsignal: %s/state/s.status %s/state/t.status\tsignal\ts.status\n' "$home" "$home"
+    printf '21\tsignal: %s/state/s.status %s/state/t.status\tsignal\tt.status\n' "$home" "$home"
+    # Reason-only closes printed with no own row, after row 21.
+    printf '30\tcheck: queue-zero: 1 queue row must leave the queue\tcheck\tqz\t-\n'
+    printf '31\tcheck: rearm-resurface\tcheck\trr\t-\n'
+  } > "$home/state/.e2e-plan"
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_OMP_ARM_READY_TIMEOUT_MS=3000 FM_WATCH_REARM_RETRY_LIMIT=1 \
     FM_WATCH_REARM_RETRY_BASE_MS=5 FM_WATCH_REARM_RETRY_MAX_MS=10 \
     EXT="$repo/.omp/extensions/fm-primary-omp-watch.ts" node --input-type=module 2>&1 <<'EOF'
@@ -1204,34 +1228,49 @@ mod.default({
   sendUserMessage(m) { sent.push(m); return undefined; },
 });
 await handlers.get("session_start")({}, {});
-const deadline = Date.now() + 20000;
-while (Date.now() < deadline && sent.length < 5) await new Promise((r) => setTimeout(r, 50));
-if (sent.length !== 5) throw new Error(`expected five wakes sent, saw ${sent.length}`);
-// The drain in main acknowledged every row except 8 before omp handed the wakes over.
-const rows = readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean);
-writeFileSync(`${state}/.wake-queue`, rows.filter((row) => row.split("\t")[1] === "8").map((row) => `${row}\n`).join(""));
+const ack = (keep) => {
+  const rows = readFileSync(`${state}/.wake-queue`, "utf8").split("\n").filter(Boolean);
+  writeFileSync(`${state}/.wake-queue`, rows.filter((row) => keep.includes(row.split("\t")[1])).map((row) => `${row}\n`).join(""));
+};
+const wait = async (count) => {
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline && sent.length < count) await new Promise((r) => setTimeout(r, 50));
+  if (sent.length < count) throw new Error(`expected ${count} wakes sent, saw ${sent.length}: ${sent.map((m) => m.split("WAKE: ")[1]?.split("\n")[0]).join(" | ")}`);
+};
+// The reason-only closes print after row 21 with no row of their own, so the
+// queue sequence they observe is 21's: a row that belongs to another wake.
+await wait(16);
+// Main's later drains acknowledged rows 7-12 and 20; rows 13-17 and 21 wait.
+ack(["13", "14", "15", "16", "17", "21"]);
 const text = (message) => message.content.map((part) => part.text).join("\n");
 const userMessage = (m, timestamp) => ({ role: "user", content: [{ type: "text", text: m }], timestamp });
 const history = () => [userMessage("captain: status?", 100), ...sent.map((m, index) => userMessage(m, 101 + index))];
-// omp hands the torn-down stale wake to an idle main (before_agent_start, then
-// its user message_start) and the rest to a streaming main (user message_start).
+// omp hands the first wake to an idle main (before_agent_start, then its user
+// message_start) and the rest to a streaming main (user message_start).
 for (const message of history()) {
   if (message.timestamp === 101) await handlers.get("before_agent_start")({ prompt: sent[0] }, {});
   await handlers.get("message_start")({ message }, {});
 }
+const dropped = { 1: "row 7", 2: "row 8", 3: "row 9", 4: "row 10", 5: "row 11", 6: "row 12" };
+const kept = { 7: "queued stale", 8: "queued signal", 9: "queued check", 10: "queued merge landing", 11: "queued heartbeat",
+  12: "signal batch with an acknowledged row", 13: "signal batch with a queued row", 14: "reason-only queue-zero check",
+  15: "reason-only rearm check" };
 for (const pass of [1, 2]) {
   const result = await handlers.get("context")({ type: "context", messages: history() }, {});
   const seen = result?.messages?.map(text) ?? [];
   if (seen[0] !== "captain: status?") throw new Error(`pass ${pass}: a non-wake message changed: ${seen[0]}`);
-  if (!/watcher: superseded wake dropped \(no state\/<id>\.meta records term_gone; wake row 7 already acknowledged\): stale: term_gone \(idle 300s.* - no action needed; do not run the drain for it\./.test(seen[1]) || seen[1].includes("FIRSTMATE WATCHER WAKE")) {
-    throw new Error(`pass ${pass}: the acknowledged torn-down stale wake reached the model: ${seen[1]}`);
+  for (const [index, row] of Object.entries(dropped)) {
+    const note = new RegExp(`watcher: superseded wake dropped \\(wake ${row} already acknowledged\\): .* - no action needed; do not run the drain for it\\.`);
+    if (!note.test(seen[index]) || seen[index].includes("FIRSTMATE WATCHER WAKE")) {
+      throw new Error(`pass ${pass}: the acknowledged wake for ${row} reached the model: ${seen[index]}`);
+    }
   }
-  for (const [index, label] of [[2, "queued torn-down stale"], [3, "live stale"], [4, "unrecorded signal"], [5, "check"]]) {
+  for (const [index, label] of Object.entries(kept)) {
     if (seen[index] !== sent[index - 1]) throw new Error(`pass ${pass}: the ${label} wake was changed: ${seen[index]}`);
   }
 }
 const triage = readFileSync(`${state}/.watch-triage.log`, "utf8").split("\n").filter(Boolean);
-if (triage.length !== 1 || !triage[0].includes("stale: term_gone (idle 300s")) throw new Error(`only the acknowledged torn-down stale wake may be dropped: ${triage.join("\n")}`);
+if (triage.length !== 6) throw new Error(`only the six acknowledged own-row wakes may be dropped: ${triage.join("\n")}`);
 await handlers.get("session_shutdown")({}, {});
 const handoff = `${state}/extensions/omp-primary-watch/session-replacement-actionable.json`;
 if (existsSync(handoff)) throw new Error(`dropped and consumed wakes must not ride the replacement handoff: ${readFileSync(handoff, "utf8")}`);
@@ -1241,7 +1280,7 @@ EOF
   status=$?
   expect_code 0 "$status" "omp superseded-wake context: $out"
   [ -z "$out" ] || fail "omp superseded-wake context test printed output: $out"
-  pass ".omp watch extension: the context event replaces only an acknowledged stale wake for a torn-down terminal and passes every other wake unchanged"
+  pass ".omp watch extension: the context event replaces every wake kind whose own row main acknowledged and passes queued, batch-sibling, and reason-only wakes unchanged"
 }
 
 # The watcher repeats one stale wake text for an endpoint. A drop
@@ -1281,7 +1320,7 @@ const userMessage = (timestamp) => ({ role: "user", content: [{ type: "text", te
 await handlers.get("message_start")({ message: userMessage(1) }, {});
 const result = await handlers.get("context")({ type: "context", messages: [userMessage(1), userMessage(2)] }, {});
 const seen = (result?.messages ?? []).map((message) => message.content.map((part) => part.text).join("\n"));
-if (!/watcher: superseded wake dropped \(no state\/<id>\.meta records term_twin; wake row 7 already acknowledged\)/.test(seen[0] ?? "")) throw new Error(`the acknowledged wake reached the model: ${seen[0]}`);
+if (!/watcher: superseded wake dropped \(wake row 7 already acknowledged\)/.test(seen[0] ?? "")) throw new Error(`the acknowledged wake reached the model: ${seen[0]}`);
 if (seen[1] !== sent[1]) throw new Error(`the later identical wake was rewritten: ${seen[1]}`);
 await handlers.get("session_shutdown")({}, {});
 const handoff = `${state}/extensions/omp-primary-watch/session-replacement-actionable.json`;

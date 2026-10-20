@@ -673,6 +673,11 @@ test_local_only_fork_remote_allows() {
   # The supervision branch's bounded per-task outcome cache is a footprint of
   # the retired task, not a record anything reads after it is gone.
   printf 'fm-branch-outcome-index-v1\t5\t0\t-\n' > "$case_dir/state/.task-x1.branch-outcome-index"
+  # The watcher's turn-end seen marker retires with the task's other watcher
+  # records, so nothing left behind names it; a sibling task's marker stays.
+  : > "$case_dir/state/task-x1.turn-ended"
+  printf '0:1792461414.310799000' > "$case_dir/state/.seen-task-x1_turn-ended"
+  printf '0:1792461414.310799000' > "$case_dir/state/.seen-task-x2_turn-ended"
 
   set +e
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
@@ -683,6 +688,10 @@ test_local_only_fork_remote_allows() {
   ! grep -q REFUSED "$case_dir/stderr" || fail "fork-allow: teardown printed a REFUSED line"
   [ ! -e "$case_dir/state/.task-x1.branch-outcome-index" ] \
     || fail "fork-allow: teardown left the task's branch outcome index behind"
+  [ ! -e "$case_dir/state/.seen-task-x1_turn-ended" ] \
+    || fail "fork-allow: teardown left the task's turn-end seen marker behind"
+  [ -e "$case_dir/state/.seen-task-x2_turn-ended" ] \
+    || fail "fork-allow: teardown removed another task's turn-end seen marker"
   # The supervision branch reports the teardown it just performed AFTER the
   # task's records are gone (bin/fm-branch-prompt.sh); that report must be
   # stored, must publish its ready sequence, and must not recreate the index.

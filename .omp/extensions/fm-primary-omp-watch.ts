@@ -86,17 +86,21 @@
 // Supersession at delivery (stated once here):
 // omp queues an accepted follow-up while main is not running (a turn that
 // ended in a provider error leaves it parked until the next prompt) and then
-// replays the backlog one turn each, so stale wakes for a worker torn down in
-// the meantime would each cost a turn. Every actionable close is still sent
-// to omp at once. A wake is instead judged when omp hands it to the model (its
-// consumption), and is dropped as superseded only when all of these hold: its
-// reason line starts with `stale:`; the endpoint it names maps to no
-// state/<id>.meta (no meta file named for it, none recording it as window= or
-// terminal=); and it has a queue binding whose row is no longer in
-// state/.wake-queue. A row still queued is never dropped, every other wake
-// kind always passes, and an unreadable state directory, queue, or binding
-// never drops. Wake text repeats, so a drop is bound to that one user message
-// by omp's per-message timestamp plus its text, taken from the user
+// replays the backlog one turn each, so a wake can reach the model hours after
+// main already handled its row through a later drain (the 2026-10-20 backlog:
+// every wake consumed 02:30-03:40Z was 2.8-3.7h old). Every actionable close is
+// still sent to omp at once. A wake is instead judged when omp hands it to the
+// model (its consumption), and is dropped as superseded only when all of these
+// hold, for every wake kind: the close is bound to its own wake row (when the
+// close was observed, the row at the queue's current sequence carried exactly
+// that reason as its payload, or the decision-owned `needs-decision:` form of
+// the same signal); that row is no longer in state/.wake-queue; and no row still
+// queued carries the same payload, so a multi-row signal batch is kept while any
+// of its rows waits. A close whose reason the watcher printed without appending
+// its own row (rows written by another owner, or none) has no own-row binding
+// and is never dropped, nor is a still-queued row; an unreadable queue or
+// binding never drops. Wake text repeats, so a drop is bound to that one user
+// message by omp's per-message timestamp plus its text, taken from the user
 // message_start (which follows an idle main's before_agent_start for the same
 // prompt); a consumption whose message carries no timestamp drops nothing.
 // The dropped message's record settles, the drop is logged to
@@ -105,7 +109,7 @@
 // action is needed.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
@@ -163,6 +167,9 @@ type PendingActionableClose = {
   // the wake queue state was unreadable, which always replays.
   wakeQueueSeq?: number;
   recoveryGeneration?: string;
+  // The payload of the row at wakeQueueSeq, present only when that row is this
+  // close's own (the header's "Supersession at delivery" owns the pairing).
+  wakeQueuePayload?: string;
 };
 
 type ReplacementActionableHandoff = {
@@ -412,12 +419,31 @@ function unackedRecoveryGeneration(): string {
 }
 
 // Bind a close to its own wake row: the watcher queued that row, advancing the
-// sequence counter, immediately before printing the close's reason.
-function acknowledgementBinding(): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration"> {
+// sequence counter, immediately before printing the close's reason. A merge
+// poll's landing may queue later rows (a stall correction, a retried PR
+// registration) before it prints, so its own row is the newest `merged-<id>-`
+// check row instead. The row's payload is kept only when the pairing in the
+// header's "Supersession at delivery" proves the row is this close's own.
+function acknowledgementBinding(reason: string): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration" | "wakeQueuePayload"> {
   try {
     const seq = readFileSync(wakeQueueSeqFile, "utf8").trim();
     if (!/^[0-9]+$/.test(seq)) return {};
-    return { wakeQueueSeq: Number(seq), recoveryGeneration: unackedRecoveryGeneration() };
+    const binding = { wakeQueueSeq: Number(seq), recoveryGeneration: unackedRecoveryGeneration() };
+    const line = actionableLine(reason);
+    const rows = readOptional(wakeQueue).split("\n").map((row) => row.split("\t")).filter((fields) => fields.length >= 5);
+    const merged = line.match(/^check: (?:.*\/)?([A-Za-z0-9._-]+)\.check\.sh: merged$/);
+    if (merged) {
+      const own = rows.filter(([, , kind, key]) => kind === "check" && key.startsWith(`merged-${merged[1]}-`)).at(-1);
+      return own ? { ...binding, wakeQueueSeq: Number(own[1]), wakeQueuePayload: own.slice(4).join("\t") } : binding;
+    }
+    const own = rows.find((fields) => fields[1] === seq);
+    if (!own || !line) return binding;
+    // bin/fm-wake-lib.sh's fm_wake_clean_field flattens a queued payload to one
+    // line, so the reason line compares directly; a decision-owned file's row
+    // in a signal batch carries the needs-decision form of the same reason.
+    const payload = own.slice(4).join("\t");
+    const decision = line.startsWith("signal:") && payload === `needs-decision:${line.slice("signal:".length)}`;
+    return payload === line || decision ? { ...binding, wakeQueuePayload: payload } : binding;
   } catch {
     return {};
   }
@@ -437,42 +463,29 @@ function actionableStillUnacknowledged(pending: PendingActionableClose): boolean
   }
 }
 
-// Every task id and recorded endpoint (orca terminal= or window=) in this
-// home's task metadata, or null when the state directory cannot be read.
-function recordedTaskKeys(): Set<string> | null {
-  const keys = new Set<string>();
-  try {
-    for (const name of readdirSync(state)) {
-      if (!name.endsWith(".meta")) continue;
-      keys.add(name.slice(0, -".meta".length));
-      for (const field of readFileSync(`${state}/${name}`, "utf8").split(/\r?\n/)) {
-        const match = field.match(/^(?:window|terminal)=(.+)$/);
-        if (match) keys.add(match[1]);
-      }
-    }
-  } catch {
-    return null;
-  }
-  return keys;
-}
-
 // Why a wake omp is handing to the model no longer warrants a main turn, or ""
 // when it still does; the header's "Supersession at delivery" owns the rule.
 function supersededReason(pending: PendingActionableClose): string {
-  const line = actionableLine(pending.message);
-  if (!line.startsWith("stale:") || pending.wakeQueueSeq === undefined) return "";
-  const endpoint = line.slice("stale:".length).trim().split(/\s+/, 1)[0];
-  if (!endpoint) return "";
+  const payload = pending.wakeQueuePayload;
+  if (pending.wakeQueueSeq === undefined || !payload) return "";
+  // One signal wake queues a row per file of its batch, every row carrying the
+  // batch reason (a decision-owned file's in the needs-decision form); any
+  // still-queued row of that batch keeps the wake. Every other kind queues one
+  // row per wake, so a later repeat of its text is its own wake.
+  const batch = payload.replace(/^needs-decision:/, "signal:");
   let queue: string;
   try {
     queue = readOptional(wakeQueue);
   } catch {
     return "";
   }
-  if (queue.split("\n").some((row) => row.split("\t")[1] === String(pending.wakeQueueSeq))) return "";
-  const recorded = recordedTaskKeys();
-  if (!recorded || recorded.has(endpoint)) return "";
-  return `no state/<id>.meta records ${endpoint}; wake row ${pending.wakeQueueSeq} already acknowledged`;
+  for (const row of queue.split("\n")) {
+    const fields = row.split("\t");
+    if (fields[1] === String(pending.wakeQueueSeq)) return "";
+    if (batch.startsWith("signal:") && fields.length >= 5 && fields[2] === "signal" &&
+      fields.slice(4).join("\t").replace(/^needs-decision:/, "signal:") === batch) return "";
+  }
+  return `wake row ${pending.wakeQueueSeq} already acknowledged`;
 }
 
 // One line in the watcher's absorbed-wake debug log, in its timestamp format.
@@ -494,7 +507,7 @@ function createPendingActionable(message: string, predecessorArmPid: string): Pe
     token: `${process.pid}-${Date.now()}-${++replacementCoordinator.nextTokenId}`,
     message,
     predecessorArmPid,
-    ...acknowledgementBinding(),
+    ...acknowledgementBinding(message),
   };
 }
 
@@ -517,6 +530,11 @@ function validatePendingActionable(value: unknown): PendingActionableClose {
     ((value as { recoveryGeneration?: unknown }).recoveryGeneration !== undefined &&
       !/^[A-Za-z0-9._-]*$/.test(String((value as { recoveryGeneration?: unknown }).recoveryGeneration)))
   ) {
+    throw new Error(`invalid omp replacement actionable handoff at ${actionableHandoff}`);
+  }
+  // An own-row payload is meaningful only beside the sequence it was read at.
+  if ("wakeQueuePayload" in value && value.wakeQueuePayload !== undefined &&
+    (typeof value.wakeQueuePayload !== "string" || !("wakeQueueSeq" in value) || value.wakeQueueSeq === undefined)) {
     throw new Error(`invalid omp replacement actionable handoff at ${actionableHandoff}`);
   }
   return value as PendingActionableClose;

@@ -2453,10 +2453,15 @@ fm_wake_latest_event() {  # <validated-status-path> <tail-byte-cap>
 
 # Print supplemental drain-time context only after the caller has committed the
 # raw queue consumption and released the append lock.
+# FM_WAKE_ANNOTATED_THROUGH lists "<task>\t<endpoint>" for every status log whose
+# annotations this call printed through <endpoint>, so the same drain's status
+# outcome backstop does not print that latest event a second time.
+FM_WAKE_ANNOTATED_THROUGH=
 fm_wake_print_annotations() {  # <deduped-raw-rows> [<presentation-snapshot>]
   local rows=$1 snapshot=${2:-} manifest status_key mode path prefix line task endpoint
   local snapshot_task snapshot_endpoint _snapshot_ident offset last_event event_line
   local LC_ALL=C
+  FM_WAKE_ANNOTATED_THROUGH=
 
   manifest=$(fm_wake_annotation_manifest "$rows" | awk -F '\t' '
     {
@@ -2533,6 +2538,7 @@ EOF
     done <<EOF
 $FM_WAKE_UNREAD_LINES
 EOF
+    [ -z "$endpoint" ] || FM_WAKE_ANNOTATED_THROUGH="$FM_WAKE_ANNOTATED_THROUGH${status_key%.status}"$'\t'"$endpoint"$'\n'
   done <<EOF
 $manifest
 EOF

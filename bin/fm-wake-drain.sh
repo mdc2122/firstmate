@@ -347,6 +347,18 @@ print_status_outcome_backstop_section() {  # <task-and-endpoint-snapshot>
     event_endpoint=$FM_STATUS_SNAPSHOT_EVENT_ENDPOINT
     [ "$receipt" -lt "$event_endpoint" ] || continue
     status_is_captain_relevant "$event" || continue
+    # This same main drain's wake annotations already printed the task's
+    # unread lines through this snapshot endpoint, the latest event among them:
+    # record that presentation as the backstop receipt instead of printing it
+    # a second time, so a later drain does not repeat it either.
+    case "
+${FM_WAKE_ANNOTATED_THROUGH:-}" in
+      *$'\n'"$task"$'\t'"$endpoint"$'\n'*)
+        STATUS_OUTCOME_BACKSTOP_ACKNOWLEDGED="$STATUS_OUTCOME_BACKSTOP_ACKNOWLEDGED$task$(printf '\t')$event_endpoint
+"
+        continue
+        ;;
+    esac
     verb=$(status_line_verb "$event")
     case "$verb" in
       needs-decision|blocked)
