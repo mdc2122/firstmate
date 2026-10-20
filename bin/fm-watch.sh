@@ -2696,6 +2696,9 @@ pr_behind_rerun_steer() {  # <id> <url> <head>
 # the steer has the worker abort that run first, but only when it is the sole
 # active run and its only active step is ci after checks passed, confirming the
 # cancel through axi status; any other active run is reported blocked instead.
+# That rerun may also have left the worker's local branch behind the pull
+# request's head, so the steer next has the worker bring it to that head the
+# same way pr_behind_rerun_steer does.
 # state/<id>.mq-ejection keeps one "<url> <head-sha> <epoch>" line per delivered
 # steer, so a head is never steered twice; it retires with the merged poll and
 # at teardown, and only a delivered steer is recorded so a refused send retries
@@ -2720,7 +2723,7 @@ pr_mq_ejection_steer() {  # <id> <url> <head>
     *) return 0 ;;
   esac
   [ -n "$run_url" ] && [ -n "$failure" ] || return 0
-  msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
     run_action_capture "$MQ_EJECTION_STEER_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
   if [ "$FM_ACTION_STATUS" -ne 0 ]; then

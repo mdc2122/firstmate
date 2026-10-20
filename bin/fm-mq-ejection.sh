@@ -20,11 +20,13 @@
 # invalid, or a forge read failed. The caller changes nothing on silence.
 #
 # Queue checks are the given check names (the base branch's merge-queue app
-# checks) and every check the app mirrors under "<name>/<context>". The run URL
-# comes from the queue app's own most recent ejection comment on the pull
-# request, which names the failing check and links the run - gitea-mq posts
-# "Removed from merge queue: Check failed: [<check>](<run url>)" - and falls
-# back to the failing mirrored check's own details URL. The failing test ids
+# checks) and every check the app mirrors under "<name>/<context>", each read
+# only from the app that posted a given check name itself. The run URL comes
+# from that app's own most recent ejection comment on the pull request, which
+# names the failing check and links the run - gitea-mq posts
+# "Removed from merge queue: Check failed: [<check>](<run url>)" - and is used
+# only when it names a failing queue check and links a run in this repository;
+# otherwise it falls back to the failing mirrored check's own details URL. The failing test ids
 # come from that run's `gh run view --log-failed` output, bounded by
 # FM_MQ_EJECTION_LOG_TIMEOUT seconds (default 15, capped at 25 to fit the
 # watcher's per-check bound). It never merges, updates a branch, or writes
@@ -59,18 +61,24 @@ log_timeout=${FM_MQ_EJECTION_LOG_TIMEOUT:-15}
 case "$log_timeout" in ''|*[!0-9]*|0) log_timeout=15 ;; esac
 [ "$log_timeout" -le 25 ] || log_timeout=25
 
-# The latest check run per name at the head, as one JSON array. A failed read
-# leaves the answer unknown.
+# The latest check run per name at the head, as one JSON array, kept only when
+# the queue app itself produced it: the app that posted a queue check under its
+# own name (never GitHub Actions, integration 15368, which any workflow can
+# post as). A failed read leaves the answer unknown.
 runs=$(gh api --paginate "repos/$owner/$repo/commits/$head/check-runs" 2>/dev/null \
   | jq -sc --argjson names "$names" --arg head "$head" '
     [.[] | (if type == "array" then .[] else . end) | .check_runs[]?]
     | group_by(.name)
     | map(max_by(.id))
     | map(select(.head_sha == $head))
+    | [.[] | select(.name as $n | any($names[]; . == $n))
+        | .app.id | select(type == "number" and . != 15368)] as $apps
+    | map(select(.app.id as $a | any($apps[]; . == $a)))
     | map(select(.name as $n
         | any($names[]; . as $q | $n == $q or ($n | startswith($q + "/")))))
   ' 2>/dev/null) || exit 0
 [ -n "$runs" ] && [ "$runs" != '[]' ] || exit 0
+apps=$(printf '%s' "$runs" | jq -c '[.[].app.id] | unique' 2>/dev/null) || exit 0
 
 # Only a settled failing queue check means the queue ejected; a run still in
 # flight is never this probe's business.
@@ -84,22 +92,33 @@ first_name=$(printf '%s\n' "$failing" | awk -F '\t' 'NR == 1 { print $1 }')
 first_started=$(printf '%s\n' "$failing" | awk -F '\t' 'NR == 1 { print $3 }')
 
 # The queue app's own ejection comment names the failing check and links the
-# merge-branch run; only a comment posted at or after the failing check run
-# started describes this ejection, never an earlier one on the same head.
+# merge-branch run; only a comment the queue app itself posted at or after the
+# failing check run started describes this ejection, never another author's or
+# an earlier one on the same head, and only when it names a failing queue check
+# and links a run in this repository.
+run_url_shape="^https://github\\.com/$owner/$repo/actions/runs/[0-9]+(/job/[0-9]+)?\$"
 run_url=''
 comment_check=''
-if comments=$(gh api --paginate "repos/$owner/$repo/issues/$number/comments?per_page=100" 2>/dev/null); then
-  rec=$(printf '%s' "$comments" | jq -r --arg since "$first_started" '
-    [ .[] | select(type == "object")
+if [ -n "$first_started" ] \
+  && comments=$(gh api --paginate "repos/$owner/$repo/issues/$number/comments?per_page=100" 2>/dev/null); then
+  rec=$(printf '%s' "$comments" | jq -rs --arg since "$first_started" --argjson apps "$apps" '
+    [ .[] | (if type == "array" then .[] else . end) | select(type == "object")
+      | select(.user.type == "Bot"
+          and (.performed_via_github_app.id as $a | any($apps[]; . == $a)))
       | select((.created_at // "") >= $since)
       | .body // ""
       | select(test("Removed from merge queue"))
     ] | last // empty' 2>/dev/null) || rec=''
   if [ -n "$rec" ]; then
-    run_url=$(printf '%s' "$rec" | sed -n \
+    comment_url=$(printf '%s' "$rec" | sed -n \
       's/.*[Cc]heck failed: *\[[^]]*\](\(https:\/\/github\.com\/[^) ]*\)).*/\1/p' | head -1)
-    comment_check=$(printf '%s' "$rec" | sed -n \
+    comment_name=$(printf '%s' "$rec" | sed -n \
       's/.*[Cc]heck failed: *\[\([^]]*\)\].*/\1/p' | head -1)
+    if printf '%s\n' "$failing" | awk -F '\t' -v n="$comment_name" '$1 == n { f = 1 } END { exit !f }' \
+      && printf '%s' "$comment_url" | grep -Eq "$run_url_shape"; then
+      run_url=$comment_url
+      comment_check=$comment_name
+    fi
   fi
 fi
 
@@ -107,8 +126,8 @@ fi
 # merge-branch job the app mirrored; the queue's status check links only its
 # dashboard entry.
 if [ -z "$run_url" ]; then
-  run_url=$(printf '%s\n' "$failing" | awk -F '\t' '
-    $2 ~ /^https:\/\/github\.com\/[^\/]+\/[^\/]+\/actions\/runs\/[0-9]+(\/job\/[0-9]+)?$/ {
+  run_url=$(printf '%s\n' "$failing" | shape=$run_url_shape awk -F '\t' '
+    $2 ~ ENVIRON["shape"] {
       if (index($1, "/") > 0 && first == "") first = $2
       else if (fallback == "") fallback = $2
     }
