@@ -6,9 +6,14 @@
 # wake; this script only reads the forge and classifies what it saw.
 #
 # Prints exactly one line:
-#   waiting <head-sha>
+#   waiting <head-sha> <reported> <detail>
 #                     the pull request is open with auto-merge still enabled,
-#                     so the queue still holds it
+#                     so the queue still holds it; <reported> is true when any
+#                     queue check has a status of its own and false when none
+#                     does (unreported, or only the EXPECTED placeholder), and
+#                     <detail> names each queue check with its latest
+#                     conclusion, state, or status, so the caller can tell a
+#                     queue that is moving from one that never answered
 #   off <head-sha> <detail>
 #                     the pull request is open and auto-merge is no longer
 #                     enabled; <detail> names each queue check with its latest
@@ -21,11 +26,34 @@
 # or a missing jq. The caller changes nothing on silence.
 # It never merges, enables or disables auto-merge, or writes anything.
 #
+# With --unhanded it instead reads a pull request with no recorded queue
+# hand-off and prints exactly one line:
+#   unhanded <head-sha> <auto-merge-enabled> <detail>
+#                     the pull request is open, not a draft, and green apart
+#                     from its base branch's merge-queue app checks (the same
+#                     rule bin/fm-pr-merge.sh verifies before a hand-off: every
+#                     other check green and every other required check
+#                     reported), its base branch requires such a check, and no
+#                     queue check has any status of its own;
+#                     <auto-merge-enabled> is true or false and <detail> names
+#                     each queue check as the waiting line does
+#   ci-pending <head-sha> <detail>
+#                     the pull request is open and not a draft, and no check
+#                     outside the merge-queue app's is red, but one is still
+#                     pending or is required and not yet reported; <detail>
+#                     names each such check as "<name> pending" or "<name> not
+#                     reported", on any base branch
+#   clear             none of that holds: merged, closed, a draft, a red
+#                     check, or green with no merge-queue app on the base or
+#                     a queue check that has reported
+# and nothing when the answer is unknown, exactly as above.
+#
 # With --disable-auto it instead disables GitHub auto-merge on the pull
 # request, which the watcher does when the queue holds a head other than the
 # one bin/fm-pr-merge.sh verified, and exits nonzero when that fails.
 #
 # Usage: fm-pr-queue-state.sh <github-pull-request-url> <queue-check-names-json>
+#        fm-pr-queue-state.sh --unhanded <github-pull-request-url>
 #        fm-pr-queue-state.sh --disable-auto <github-pull-request-url>
 set -u
 
@@ -42,6 +70,54 @@ if [ "${1:-}" = --disable-auto ]; then
   gh pr merge "$FM_PR_URL" --disable-auto >/dev/null || exit 1
   exit 0
 fi
+
+# Every check outside <names> that is red, pending, or required but not yet
+# reported, as a JSON array of {name, state} with state "red", "pending", or
+# "not reported"; exits nonzero when that cannot be read.
+not_green_outside() {  # <pull-request-json> <base> <head> <names-json>
+  local json=$1 base=$2 head=$3 names=$4 red pending producers missing
+  red=$(fm_pr_github_checks_not_green "$json") || return 1
+  red=$(printf '%s' "$red" | jq -Rsc 'split("\n") | map(select(length > 0))' 2>/dev/null) || return 1
+  pending=$(fm_pr_github_checks_pending "$json" "$red") || return 1
+  fm_pr_github_read_required_contexts "$FM_PR_OWNER" "$FM_PR_REPO" "$base" || return 1
+  producers=$(fm_pr_github_read_check_producers "$FM_PR_OWNER" "$FM_PR_REPO" "$head" "$FM_PR_GITHUB_REQUIRED") || return 1
+  missing=$(fm_pr_github_required_checks_missing "$json" "$FM_PR_GITHUB_REQUIRED" "$producers") || return 1
+  jq -nc --argjson names "$names" --argjson red "$red" --arg pending "$pending" --arg missing "$missing" '
+    ($pending | split("\n")) as $p
+    | [($red[] | {name: ., state: (. as $n | if any($p[]; . == $n) then "pending" else "red" end)}),
+       ($missing | split("\n")[] | select(length > 0) | {name: ., state: "not reported"})]
+    | map(select(.name as $n | any($names[]; . == $n) | not))' 2>/dev/null || return 1
+}
+
+if [ "${1:-}" = --unhanded ]; then
+  [ "$#" -eq 2 ] || exit 0
+  fm_pr_url_parse "$2" && [ "$FM_PR_PROVIDER" = github ] || exit 0
+  command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || exit 0
+  json=$(gh pr view "$FM_PR_URL" --json state,isDraft,headRefOid,baseRefName,autoMergeRequest,statusCheckRollup 2>/dev/null) || exit 0
+  base=$(printf '%s' "$json" | jq -r 'if type == "object" then (.baseRefName // "" | tostring) else error("unreadable") end' 2>/dev/null) || exit 0
+  [ -n "$base" ] || exit 0
+  fm_pr_github_read_queue_app_checks "$FM_PR_OWNER" "$FM_PR_REPO" "$base" "$json" || exit 0
+  names=$FM_PR_GITHUB_QUEUE_APP_CHECKS
+  fm_pr_github_auto_merge_parse "$json" "$names" || exit 0
+  [ "$FM_PR_GITHUB_AUTO_STATE" = OPEN ] || { echo clear; exit 0; }
+  case "$(fm_pr_json_draft_state "$json")" in
+    false) ;;
+    true) echo clear; exit 0 ;;
+    *) exit 0 ;;
+  esac
+  blocking=$(not_green_outside "$json" "$base" "$FM_PR_GITHUB_AUTO_HEAD" "$names") || exit 0
+  if [ "$blocking" != '[]' ]; then
+    pending=$(printf '%s' "$blocking" | jq -r 'if any(.[]; .state == "red") then ""
+      else map(.name + " " + .state) | join(", ") | gsub("[\r\n]"; " ") end' 2>/dev/null) || exit 0
+    [ -n "$pending" ] || { echo clear; exit 0; }
+    echo "ci-pending $FM_PR_GITHUB_AUTO_HEAD $pending"
+    exit 0
+  fi
+  [ "$names" != '[]' ] && [ "$FM_PR_GITHUB_AUTO_REPORTED" = false ] || { echo clear; exit 0; }
+  echo "unhanded $FM_PR_GITHUB_AUTO_HEAD $FM_PR_GITHUB_AUTO_ENABLED ${FM_PR_GITHUB_AUTO_DETAIL:-no queue check reported}"
+  exit 0
+fi
+
 [ "$#" -eq 2 ] || exit 0
 fm_pr_url_parse "$1" && [ "$FM_PR_PROVIDER" = github ] || exit 0
 command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || exit 0
@@ -54,7 +130,7 @@ case "$FM_PR_GITHUB_AUTO_STATE" in
   CLOSED) echo closed; exit 0 ;;
 esac
 if [ "$FM_PR_GITHUB_AUTO_ENABLED" = true ]; then
-  echo "waiting $FM_PR_GITHUB_AUTO_HEAD"
+  echo "waiting $FM_PR_GITHUB_AUTO_HEAD $FM_PR_GITHUB_AUTO_REPORTED ${FM_PR_GITHUB_AUTO_DETAIL:-no queue check reported}"
   exit 0
 fi
 

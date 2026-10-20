@@ -3331,6 +3331,207 @@ test_queue_wait_past_stall_window_wakes_once_per_head() {
   pass "a pull request the queue holds past the stall window wakes firstmate once per head"
 }
 
+# Liveness of the merge path itself: a green pull request waiting on its
+# merge-queue app that has received no queue status at all - handed over, or
+# never handed over because auto-merge was never requested - wakes firstmate
+# once per pull request and head after the bound; a queue whose status moves
+# stays silent; and a merge retires the episode.
+backdate_queue_stall() {  # <state> <seconds>
+  local file="$1/task-a.queue-stall" url head first alerted key
+  read -r url head first alerted key < "$file" || fail "no queue-stall episode to backdate"
+  printf '%s %s %s %s %s\n' "$url" "$head" "$((first - $2))" "$alerted" "$key" > "$file"
+}
+
+queue_status_auto_json() {  # <dir> <queue-entry-json-or-empty> [auto-merge-json]
+  local entry=${2:+,$2} auto='{"mergeMethod":"SQUASH"}'
+  [ "$#" -lt 3 ] || auto=$3
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"0123456789abcdef0123456789abcdef01234567","baseRefName":"main","autoMergeRequest":%s,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}%s]}\n' \
+    "$auto" "$entry" > "$1/auto.json"
+}
+
+test_handed_queue_with_no_status_wakes_once_and_retires_on_merge() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case queue-silent-handed)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  # The queue app never posts its check: only the forge's EXPECTED placeholder.
+  queue_status_auto_json "$dir" '{"__typename":"StatusContext","context":"queue-mq","state":"EXPECTED"}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a silent queue woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" silent
+  case "$(cat "$dir/silent.out")" in
+    *"task-a.check.sh: merge-queue silent: $url has been green for 15 min at head $head with no merge-queue status (queue-mq EXPECTED); auto-merge was requested when it was handed to the queue") ;;
+    *) fail "a handed-over PR with no queue status past the bound did not wake once: $(cat "$dir/silent.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one silent queue woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 1 ] || fail "a silent queue wait was handed to the queue again"
+
+  printf '{"state":"MERGED","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[]}\n' "$head" > "$dir/auto.json"
+  queue_app_cycle "$dir" landed MERGED
+  case "$(cat "$dir/landed.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the landing was not reported: $(cat "$dir/landed.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "the merge did not retire the silent-queue episode"
+  pass "a handed-over PR with no queue status wakes once past the bound and the episode retires on merge"
+}
+
+test_cycling_queue_status_wakes_at_bound_from_first_hold() {
+  local dir state url=https://github.com/o/r/pull/1 status
+  dir=$(queue_app_case queue-cycling)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  # A queue re-testing one head posts a new status each reading; inside the
+  # bound that is healthy processing and stays silent.
+  for status in QUEUED IN_PROGRESS QUEUED; do
+    queue_status_auto_json "$dir" "{\"__typename\":\"CheckRun\",\"name\":\"queue-mq\",\"status\":\"$status\",\"conclusion\":null}"
+    FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" "moving-$status"
+    case "$(cat "$dir/moving-$status.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a queue processing inside the bound ($status) woke firstmate: $(cat "$dir/moving-$status.out")" ;; esac
+  done
+  # Past the bound from when the queue first held the head, a status that
+  # changed again does not restart the clock.
+  backdate_queue_stall "$state" 900
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" stuck
+  case "$(cat "$dir/stuck.out")" in
+    *"task-a.check.sh: merge-queue stalled: merge queue has not picked up or finished $url after 15 min at head "*) ;;
+    *) fail "a queue cycling its status at one head past the bound did not wake: $(cat "$dir/stuck.out")" ;;
+  esac
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"QUEUED","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one cycling queue woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  pass "a queue cycling its status at one head stays silent inside the bound and wakes once at it"
+}
+
+# PR 825's shape: armed and green, the base requires the queue app's check,
+# and auto-merge was never requested, so no hand-off exists for the queue to
+# answer.
+unhanded_case() {  # <name> <yolo>; echoes the case dir
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case "$1")
+  state="$dir/home/state"
+  sed "s/^yolo=on\$/yolo=$2/" "$state/task-a.meta" > "$state/task-a.meta.next" \
+    && mv "$state/task-a.meta.next" "$state/task-a.meta"
+  queue_status_auto_json "$dir" '' null
+  printf '{"check_runs":[{"id":3,"name":"ci","status":"completed","conclusion":"success","head_sha":"%s","app":{"id":15368}}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  printf '%s\n' "$dir"
+}
+
+test_never_handed_green_pr_wakes_once_naming_auto_merge() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(unhanded_case queue-never-handed off)
+  state="$dir/home/state"
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "an unhanded PR woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  [ -f "$state/task-a.queue-stall" ] || fail "an armed green PR never handed to the queue started no episode"
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" silent
+  case "$(cat "$dir/silent.out")" in
+    *"task-a.check.sh: merge-queue silent: $url has been green for 15 min at head $head with no merge-queue status (queue-mq not reported); auto-merge was never requested, so the queue was never asked to take it; it waits for an approved guarded merge"*) ;;
+    *) fail "a green PR never handed to the queue did not wake naming auto-merge: $(cat "$dir/silent.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one unhanded episode woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 0 ] || fail "the liveness monitor requested a merge for a non-yolo task"
+
+  # A queue status appearing ends the episode.
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}' null
+  queue_app_cycle "$dir" answered
+  [ ! -e "$state/task-a.queue-stall" ] || fail "a queue status appearing did not end the unhanded episode"
+
+  queue_status_auto_json "$dir" '' null
+  queue_app_cycle "$dir" restart
+  [ -f "$state/task-a.queue-stall" ] || fail "the unhanded episode did not restart"
+  printf '{"state":"MERGED","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[]}\n' "$head" > "$dir/auto.json"
+  queue_app_cycle "$dir" landed MERGED
+  case "$(cat "$dir/landed.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the landing was not reported: $(cat "$dir/landed.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "the merge did not retire the unhanded episode"
+  pass "an armed green PR never handed to the queue wakes once naming auto-merge, and the episode retires on a queue status or merge"
+}
+
+ci_rollup_json() {  # <dir> <head> <ci-entries-json>
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"%s","baseRefName":"main","autoMergeRequest":null,"statusCheckRollup":[%s]}\n' \
+    "$2" "$3" > "$1/auto.json"
+}
+
+test_pending_ci_wakes_once_per_head() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  local moved=fedcba9876543210fedcba9876543210fedcba98
+  dir=$(unhanded_case ci-pending off)
+  state="$dir/home/state"
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "pending CI woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  [ -f "$state/task-a.queue-stall" ] || fail "pending CI on an armed PR started no episode"
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" stuck
+  case "$(cat "$dir/stuck.out")" in
+    *"task-a.check.sh: ci pending: $url has waited 15 min at head $head for CI that has not finished (ci pending)") ;;
+    *) fail "CI pending past the bound did not wake: $(cat "$dir/stuck.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one pending-CI episode woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+
+  # A new head starts a new episode, and a required check that never reports
+  # is the same wait.
+  ci_rollup_json "$dir" "$moved" ''
+  printf '{"check_runs":[]}\n' > "$dir/check-runs.json"
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" moved
+  case "$(cat "$dir/moved.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a new head woke before its own bound: $(cat "$dir/moved.out")" ;; esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" moved-stuck
+  case "$(cat "$dir/moved-stuck.out")" in
+    *"task-a.check.sh: ci pending: $url has waited 15 min at head $moved for CI that has not finished (ci not reported)") ;;
+    *) fail "unreported CI at a new head past the bound did not wake: $(cat "$dir/moved-stuck.out")" ;;
+  esac
+  [ "$(queue_app_merge_requests "$dir")" = 0 ] || fail "the CI liveness monitor requested a merge"
+  pass "CI pending or unreported past the bound wakes once per PR head"
+}
+
+test_ci_finishing_inside_bound_stays_silent() {
+  local dir state head=0123456789abcdef0123456789abcdef01234567 kind
+  dir=$(unhanded_case ci-healthy off)
+  state="$dir/home/state"
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" running
+  case "$(cat "$dir/running.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "running CI inside the bound woke firstmate: $(cat "$dir/running.out")" ;; esac
+  # CI finishes green and the queue answers: nothing is waiting any more.
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" green
+  case "$(cat "$dir/green.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "healthy CI and queue woke firstmate: $(cat "$dir/green.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "finished CI with a queue answer kept a wait episode"
+  # CI finishing green with no queue answer starts the queue's own clock.
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" rerun
+  backdate_queue_stall "$state" 900
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" handed-to-queue-clock
+  case "$(cat "$dir/handed-to-queue-clock.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "the CI wait's age carried into the queue's wait: $(cat "$dir/handed-to-queue-clock.out")" ;; esac
+  read -r _ _ _ _ kind < "$state/task-a.queue-stall"
+  [ "$kind" = unhanded ] || fail "green CI did not start the unhanded queue episode: $kind"
+  pass "CI finishing inside the bound stays silent and hands the clock to the queue wait"
+}
+
+# A red pull request is not waiting on the queue, whatever the queue shows.
+test_never_handed_red_pr_starts_no_episode() {
+  local dir state
+  dir=$(unhanded_case queue-never-handed-red off)
+  state="$dir/home/state"
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"0123456789abcdef0123456789abcdef01234567","baseRefName":"main","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    > "$dir/auto.json"
+  FM_MERGE_LINE_STALL_SECS=0 queue_app_cycle "$dir" red
+  case "$(cat "$dir/red.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a red PR raised a queue-liveness wake: $(cat "$dir/red.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "a red PR started a queue-liveness episode"
+  pass "a red PR never handed to the queue starts no queue-liveness episode"
+}
+
 test_queue_landing_at_unverified_head_is_not_credited() {
   local dir state url=https://github.com/o/r/pull/1 moved=fedcba9876543210fedcba9876543210fedcba98
   dir=$(queue_app_case queue-landed-moved)
@@ -4462,6 +4663,12 @@ test_queue_landing_at_unverified_head_is_not_credited
 test_queue_head_moved_for_non_yolo_task_wakes_once
 test_queue_landing_with_unknown_head_is_deferred
 test_queue_wait_past_stall_window_wakes_once_per_head
+test_handed_queue_with_no_status_wakes_once_and_retires_on_merge
+test_cycling_queue_status_wakes_at_bound_from_first_hold
+test_never_handed_green_pr_wakes_once_naming_auto_merge
+test_never_handed_red_pr_starts_no_episode
+test_pending_ci_wakes_once_per_head
+test_ci_finishing_inside_bound_stays_silent
 test_queue_away_refusal_wakes_once_per_head
 test_yolo_merge_attempt_is_bounded
 test_authority_persistence_refuses_rebound_metadata
