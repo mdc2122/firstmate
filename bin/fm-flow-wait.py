@@ -136,10 +136,10 @@ Usage:
 Writes tasks.csv, touches.csv, waits.csv, steers.csv, summary.json into --out and prints
 the summary without its coverage and per-class top lists. Caches (gh_cache.json,
 flash_cache.jsonl) live in --cache-dir; bin/fm-flow-wait-analyze.py derives the
-counterfactuals and per-item distributions from one --out directory.
+counterfactuals, per-item distributions, and coverage caveats from one --out directory.
 
 Weekly readout: run the last full week (e.g. --since 2026-10-16 --until 2026-10-23), then
-bin/fm-flow-wait-analyze.py on its --out. The baseline is the 2026-10-09..2026-10-17
+bin/fm-flow-wait-analyze.py --home <the same home> on its --out. The baseline is the 2026-10-09..2026-10-17
 window as of 2026-10-16T03:44:44Z: zero-touch 20.1% (32 of 159 settled; ships 5 of 95),
 merge_queue 293.4 h, release 213.3 h, ci 124.0 h. Those figures count launch-brief (W) tasks only;
 summary by_source splits a readout by join, so compare its launch-brief row against them.
@@ -1291,7 +1291,7 @@ def build(args):
     for c in REPORT_CLASSES + ["handoff_idle"]:
         top[c] = sorted(({"task": r["task"], "hours": r[f"wait_{c}_h"]} for r in measured if r[f"wait_{c}_h"] > 0),
                         key=lambda x: -x["hours"])[:8]
-    sup_ranges = sorted((c["first"], c["last"], c["file"]) for c in sup_cov if c["first"])
+    sup_ranges = sorted((c["first"], c["last"], c["file"], c["dir"]) for c in sup_cov if c["first"])
     summary = dict(
         window=[args.since, args.until], generated=iso(time.time()), now_cap=iso(now),
         tasks_spawned=len(task_rows), excluded=len(task_rows) - len(measured), measured=len(measured),
@@ -1321,7 +1321,7 @@ def build(args):
         wait_hours_by_class_live_tasks={c: round(sum(r[f"wait_{c}_h"] for r in live), 1) for c in REPORT_CLASSES},
         top_tasks_by_class=top,
         coverage=dict(
-            supervisor_transcripts=[dict(first=a, last=b, file=f) for a, b, f in sup_ranges],
+            supervisor_transcripts=[dict(first=a, last=b, file=f, dir=d) for a, b, f, d in sup_ranges],
             supervisor_unresolved_variable_targets=dict(unresolved_targets),
             backlog_rows_closed_in_window_without_worker_transcript=sorted(
                 k for k, v in backlog.items() if v.get("close") and v["close"][0] in ("done", "merged", "reported")
