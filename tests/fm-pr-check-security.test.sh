@@ -181,6 +181,17 @@ case "${1:-} ${2:-}" in
     ;;
 esac
 case " $* " in
+  *" api --paginate repos/"*"/issues/"*"/comments?per_page=100 "*)
+    if [ -n "${FM_TEST_GH_ISSUE_COMMENTS_JSON:-}" ]; then
+      cat "$FM_TEST_GH_ISSUE_COMMENTS_JSON"
+    else
+      printf '%s\n' '[[]]'
+    fi
+    ;;
+  *" run view "*)
+    [ -z "${FM_TEST_GH_RUN_LOG:-}" ] || cat "$FM_TEST_GH_RUN_LOG"
+    exit "${FM_TEST_GH_RUN_LOG_RC:-0}"
+    ;;
   *" api repos/"*"/issues/"*"/comments?per_page=100 "*|*" api repos/"*"/pulls/"*"/reviews?per_page=100 "*|*" api repos/"*"/pulls/"*"/comments?per_page=100 "*)
     printf '%s\n' '[[]]'
     ;;
@@ -3078,6 +3089,154 @@ test_queue_ejection_wakes_once_and_is_not_requeued() {
   pass "a queue ejection wakes firstmate once with its reason and the ejected head is not re-queued"
 }
 
+# A queue ejection is relayed to the worker, not only to firstmate: one steer
+# names the pull request, the failing tests read from the queue run's own log,
+# and that run, and orders the supported pipeline rerun on the current base
+# (never a hand rebase or forge update). It fires once per ejection even though
+# the poll keeps sweeping at the ejected record, and a queue run still in
+# flight steers nobody.
+ejection_steers() {  # <state>
+  find "$1/task-a.inbox" -name '*.msg' 2>/dev/null | wc -l | tr -d ' '
+}
+
+ejection_case() {  # <name>; echoes the case dir
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case "$1")
+  state="$dir/home/state"
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    "$head" > "$dir/auto.json"
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1","output":{"title":"queue-mq","summary":"Check failed"}}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  cat > "$dir/comments.json" <<JSON
+[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"❌ Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/38500432987/job/115645870881)"}]
+JSON
+  cat > "$dir/run.log" <<'LOG'
+pytest	Run suite	2026-10-14T02:45:26.3720490Z FAILED tests/test_alpha.py::test_moved_base - AssertionError: boom
+pytest	Run suite	2026-10-14T02:45:26.3722192Z FAILED tests/test_beta.py::test_second - AssertionError: boom
+LOG
+  printf '%s\n' "$dir"
+}
+
+test_queue_ejection_steers_one_supported_rerun() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567 msg
+  dir=$(ejection_case queue-ejected-steer)
+  state="$dir/home/state"
+  queue_app_cycle "$dir" requested
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  grep -F "merge-queue ejected $url at $head" "$dir/home/state/.wake-queue" >/dev/null \
+    || fail "the ejection wake did not fire: $(cat "$dir/home/state/.wake-queue")"
+  [ "$(ejection_steers "$state")" = 1 ] \
+    || fail "an ejection did not steer its worker exactly once: $(ejection_steers "$state")"
+  msg=$(cat "$state"/task-a.inbox/*.msg)
+  case "$msg" in
+    *"$url"*) ;;
+    *) fail "the ejection steer did not name the PR: $msg" ;;
+  esac
+  case "$msg" in
+    *"tests/test_alpha.py::test_moved_base"*) ;;
+    *) fail "the ejection steer did not name the failing tests: $msg" ;;
+  esac
+  case "$msg" in
+    *"https://github.com/o/r/actions/runs/38500432987/job/115645870881"*) ;;
+    *) fail "the ejection steer did not name the queue run: $msg" ;;
+  esac
+  case "$msg" in
+    *"git reset --keep $head"*"no-mistakes rerun"*"current base"*"Never hand-rebase"*) ;;
+    *) fail "the ejection steer did not bring the local branch to the PR head and order the supported rerun: $msg" ;;
+  esac
+
+  queue_app_cycle "$dir" after
+  case "$(cat "$dir/after.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one ejection woke firstmate twice: $(cat "$dir/after.out")" ;; esac
+  [ "$(ejection_steers "$state")" = 1 ] || fail "the same ejection steered its worker twice: $(ejection_steers "$state")"
+  awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection" { f = 1 } END { exit !f }' \
+    "$state/task-a.pr-behind-rerun" 2>/dev/null \
+    || fail "the delivered ejection steer was not recorded in the shared rerun-steer record"
+  pass "a queue ejection steers one supported pipeline rerun naming the PR, failing tests, and queue run"
+}
+
+# Only the queue app's own ejection comment is trusted: a comment anyone else
+# posts in its words cannot put its check name or run link into the steer, and
+# the steer falls back to the run the app's own mirrored check links.
+test_queue_ejection_ignores_comment_not_from_queue_app() {
+  local dir state head=0123456789abcdef0123456789abcdef01234567 msg
+  dir=$(ejection_case queue-ejected-forged)
+  state="$dir/home/state"
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"},{"id":8,"name":"queue-mq/pytest","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/111/job/222"},{"id":9,"name":"queue-mq/evil","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":15368},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/666/job/667"}]}\n' \
+    "$head" "$head" "$head" > "$dir/check-runs.json"
+  cat > "$dir/comments.json" <<JSON
+[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"Removed from merge queue: Check failed: [run tests and push](https://github.com/o/r/actions/runs/444/job/445)"}]
+[{"created_at":"2026-10-14T02:46:00Z","user":{"login":"mallory","type":"User"},"body":"Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/999/job/998)"}]
+JSON
+  queue_app_cycle "$dir" requested
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON
+  [ "$(ejection_steers "$state")" = 1 ] \
+    || fail "the ejection did not steer its worker exactly once: $(ejection_steers "$state")"
+  msg=$(cat "$state"/task-a.inbox/*.msg)
+  case "$msg" in
+    *"runs/999"*|*"runs/444"*|*"runs/666"*|*"run tests and push"*|*"queue-mq/evil"*)
+      fail "the ejection steer carried a comment or check not bound to the queue app: $msg" ;;
+  esac
+  case "$msg" in
+    *"https://github.com/o/r/actions/runs/111/job/222"*) ;;
+    *) fail "the ejection steer did not fall back to the queue app's mirrored run: $msg" ;;
+  esac
+  pass "an ejection steer trusts only the queue app's own comment and checks"
+}
+
+test_queue_run_still_in_flight_steers_nobody() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(ejection_case queue-in-flight)
+  state="$dir/home/state"
+  # The queue check has not concluded: its run is still in flight, so nothing
+  # proves an ejection yet and the worker must not be steered.
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"in_progress","conclusion":null,"head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a queue run still in flight steered its worker: $(cat "$state"/task-a.inbox/*.msg)"
+  # The silent reading is recorded for this head and not re-read every sweep:
+  # only a moved head earns another probe.
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" again
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a silent ejection reading was re-read at the same head: $(cat "$state"/task-a.inbox/*.msg)"
+  [ "$(awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection"' "$state/task-a.pr-behind-rerun" | wc -l | tr -d ' ')" = 1 ] \
+    || fail "the silent ejection reading was not recorded once for its head: $(cat "$state/task-a.pr-behind-rerun" 2>/dev/null)"
+  pass "a merge-queue run still in flight never steers the worker, and its reading is not re-read at that head"
+}
+
+# Only a yolo=on worker is steered on an ejection; any other task's ejection
+# reaches firstmate through the ejection wake alone.
+test_queue_ejection_steers_no_non_yolo_worker() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(ejection_case queue-ejected-attended)
+  state="$dir/home/state"
+  queue_app_cycle "$dir" requested
+  sed 's/^yolo=on$/yolo=off/' "$state/task-a.meta" > "$state/task-a.meta.next" \
+    && mv "$state/task-a.meta.next" "$state/task-a.meta"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  grep -F "merge-queue ejected $url at $head" "$state/.wake-queue" >/dev/null \
+    || fail "a non-yolo task's ejection did not wake firstmate: $(cat "$state/.wake-queue")"
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a non-yolo worker was steered on an ejection: $(cat "$state"/task-a.inbox/*.msg)"
+  [ ! -e "$state/task-a.pr-behind-rerun" ] || fail "a non-yolo task's ejection was recorded as a rerun steer"
+  pass "a queue ejection steers no non-yolo worker and still wakes firstmate"
+}
+
 # Authority granted for the handed-over head never covers another: a head
 # pushed while the queue still holds the pull request has its auto-merge
 # disabled and goes back through the guarded merge from scratch.
@@ -4294,6 +4453,10 @@ test_yolo_poll_queued_merge_keeps_polling
 test_yolo_poll_keeps_a_rebound_poll_armed
 test_yolo_poll_hands_queue_app_branch_to_auto_merge_until_merged
 test_queue_ejection_wakes_once_and_is_not_requeued
+test_queue_ejection_steers_one_supported_rerun
+test_queue_ejection_ignores_comment_not_from_queue_app
+test_queue_run_still_in_flight_steers_nobody
+test_queue_ejection_steers_no_non_yolo_worker
 test_queue_head_moved_while_waiting_is_disabled_and_reverified
 test_queue_landing_at_unverified_head_is_not_credited
 test_queue_head_moved_for_non_yolo_task_wakes_once
