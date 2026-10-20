@@ -1,0 +1,27 @@
+== HEAD (4557d61f) live readout, no --as-of ==
+  7 swarm sessions, 8 beads crew dispatches
+warning: 1 owned PR(s) of 1 task(s) did not resolve (gh error, uncached under --no-github, or created after --as-of); see summary coverage.owned_prs_unresolved
+ "tasks_spawned": 14,
+  "beads-crew": {
+  "swarm": {
+ "wait_hours_by_class_live_tasks": {
+blocked-row     beads-crew   scout 2026-10-12T15:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+mate-swarm      swarm        scout 2026-10-12T14:00:00Z  2026-10-12T14:20:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+merged-sha      beads-crew   scout 2026-10-12T15:00:00Z  2026-10-12T15:45:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+open-row        beads-crew   scout 2026-10-12T16:00:00Z  -                     in-flight        touches=0 - zero_touch=True worker_stall=0.0
+pr-row          beads-crew   scout 2026-10-12T17:00:00Z  2026-10-12T17:45:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+shipped-row     beads-crew   scout 2026-10-12T16:00:00Z  2026-10-12T16:45:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+superseded-row  beads-crew   scout 2026-10-12T19:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+swarm-gone      swarm        scout 2026-10-12T12:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+swarm-live      swarm        scout 2026-10-12T12:00:00Z  -                     in-flight        touches=0 - zero_touch=True worker_stall=11.5
+swarm-quiet     swarm        scout 2026-10-12T08:00:00Z  2026-10-12T09:00:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+swarm-relaunch  swarm        scout 2026-10-12T10:00:00Z  2026-10-12T11:30:00Z  live-proven      touches=1 relaunch:1 zero_touch=False worker_stall=0.83
+swarm-ship      swarm        ship  2026-10-12T13:00:00Z  2026-10-12T13:40:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+verified-row    beads-crew   scout 2026-10-12T17:00:00Z  2026-10-12T17:45:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+wontfix-row     beads-crew   scout 2026-10-12T18:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+by_source: {"beads-crew": {"measured": 8, "settled": 7, "zero_touch_live": 4, "wait_hours": 0.0}, "swarm": {"measured": 6, "settled": 5, "zero_touch_live": 3, "wait_hours": 12.3}}
+
+== BASE (a9453888) same world ==
+ "tasks_spawned": 0,
+ "wait_hours_by_class_live_tasks": {
+by_source: "(absent)"

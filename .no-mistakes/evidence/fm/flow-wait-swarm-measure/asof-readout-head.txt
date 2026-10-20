@@ -1,0 +1,8 @@
+== HEAD with --as-of 2026-10-12T13:20:00Z (swarm-ship's done: lands at 13:40) ==
+  6 swarm sessions, 0 beads crew dispatches
+swarm-gone      swarm        scout 2026-10-12T12:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+swarm-live      swarm        scout 2026-10-12T12:00:00Z  -                     closed-not-live  touches=0 - zero_touch=True worker_stall=0.0
+swarm-quiet     swarm        scout 2026-10-12T08:00:00Z  2026-10-12T09:00:00Z  live-proven      touches=0 - zero_touch=True worker_stall=0.0
+swarm-relaunch  swarm        scout 2026-10-12T10:00:00Z  2026-10-12T11:30:00Z  live-proven      touches=1 relaunch:1 zero_touch=False worker_stall=0.83
+swarm-ship      swarm        ship  2026-10-12T13:00:00Z  -                     in-flight        touches=0 - zero_touch=True worker_stall=0.0
+by_source: {"swarm": {"measured": 5, "settled": 4, "zero_touch_live": 1, "wait_hours": 0.8}}
