@@ -30,9 +30,9 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           appends status with: a call that opens state/<id>.status for append
                           (by path, or through a name an earlier call of the session bound to
                           it) appends every string literal in it that starts with a status verb.
-                          With no done: line yet, a swarm is in flight while its backlog row is
-                          under "In flight" or a session of it was active within IDLE_MIN_S of
-                          the readout instant.
+                          With no done: line by the readout instant, a swarm is in flight when a
+                          root session of it has an event after --as-of (it was still running),
+                          or, without --as-of, while its backlog row is under "In flight".
   C  beads crew queue    <home>/data/beads/.beads/beads.db (mode=ro) of --home and every local
                           secondmate home: each bead labelled mirror:<row-id> is one launch of
                           that backlog row to the standing beads crew, which works it inside its
@@ -290,6 +290,7 @@ def read_session(f, launch, py_status=False):
     rec = None
     events = []           # (t, kind, payload)
     binds = {}
+    later = False
     try:
         fh = open(f, errors="replace")
     except OSError:
@@ -303,6 +304,7 @@ def read_session(f, launch, py_status=False):
             typ = d.get("type")
             t = ts(d.get("timestamp")) if d.get("timestamp") else None
             if t is not None and not seen(t):
+                later = True
                 continue   # happened after --as-of
             if typ == "message":
                 msg = d["message"]
@@ -345,6 +347,7 @@ def read_session(f, launch, py_status=False):
     if rec:
         rec["events"] = [e for e in events if e[0] is not None]
         rec["end_ts"] = max((e[0] for e in rec["events"]), default=rec["spawn"])
+        rec["past_as_of"] = later
     return rec, events
 
 
@@ -997,9 +1000,10 @@ def build(args):
         # merged event stream across sessions
         ev = sorted((e for s in t["sessions"] for e in s["events"]), key=lambda e: e[0])
         status = [(e[0],) + parse_status(e[2][1]) + (e[2][1],) for e in ev if e[1] == "status" and e[2][0] == tid]
-        # a swarm with no done: line yet is in flight while its row is or its session was just active
+        # a swarm with no done: line yet is in flight while it ran past --as-of or, live, its row is
         if t["source"] == "swarm" and not any(st[1] == "done" for st in status):
-            in_flight = in_flight or bl.get("section") == "in flight" or ev[-1][0] >= now - IDLE_MIN_S
+            in_flight = in_flight or (any(s["past_as_of"] for s in t["sessions"]) if AS_OF is not None
+                                      else bl.get("section") == "in flight")
         # steers: worker-side inbox reads (dedupe by at), live inbox, doorbell-only
         steers = {}
         for e in ev:

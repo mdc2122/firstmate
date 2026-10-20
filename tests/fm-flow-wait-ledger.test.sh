@@ -272,11 +272,18 @@ write(os.path.join(fm, "data", "swarm-a", "sessions", "c2.jsonl"), [
     user("2026-10-12T08:06:01Z", "Rule: every reply you send must contain at least one tool call until your evidence "
          f"file is written. Your final step is writing {fm}/data/swarm-a/evidence/t1.md."),
     call("2026-10-12T08:11:00Z", "code", "print(1)", "stop")])
-# A swarm still working at the readout instant with no done: line is in flight.
+# A swarm still running at --as-of (quiet for an hour, its done: line lands later) is in
+# flight; one whose session ended before --as-of with no done: line is closed-not-live.
 write(os.path.join(fm, "data", "swarm-b", "sessions", "s.jsonl"), [
     {"type": "session", "timestamp": "2026-10-12T21:00:00Z"},
     user("2026-10-12T21:00:05Z", f"Read {fm}/data/swarm-b/kickoff.md and begin."),
-    call("2026-10-12T22:58:00Z", "code", "print(1)")])
+    call("2026-10-12T22:00:00Z", "code", "print(1)"),
+    call("2026-10-12T23:30:00Z", "code", f"with open('{fm}/state/swarm-b.status', 'a') as f:\n"
+         "    f.write('done: report.md written\\n')", "stop")])
+write(os.path.join(fm, "data", "swarm-c", "sessions", "s.jsonl"), [
+    {"type": "session", "timestamp": "2026-10-12T21:00:00Z"},
+    user("2026-10-12T21:00:05Z", f"Read {fm}/data/swarm-c/kickoff.md and begin."),
+    call("2026-10-12T22:59:00Z", "code", "print(1)", "stop")])
 # A sessions directory whose first message names another directory is not a swarm launch.
 write(os.path.join(fm, "data", "notes", "sessions", "x.jsonl"),
       [user("2026-10-12T08:00:00Z", "Summarize these transcripts."),
@@ -322,10 +329,11 @@ dup beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 w
 empty beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
 pending beads-crew scout 2026-10-12T09:30:00Z - in-flight - human_answer=0.0 worker_stall=0.0
 swarm-a swarm scout 2026-10-12T08:00:05Z 2026-10-12T08:40:00Z live-proven direct:1 human_answer=0.0 worker_stall=0.0
-swarm-b swarm scout 2026-10-12T21:00:05Z - in-flight - human_answer=0.0 worker_stall=0.0'
+swarm-b swarm scout 2026-10-12T21:00:05Z - in-flight - human_answer=0.0 worker_stall=1.0
+swarm-c swarm scout 2026-10-12T21:00:05Z - closed-not-live - human_answer=0.0 worker_stall=0.0'
   assert_equals "$want" "$got" "swarm and beads-crew dispatches must be measured tasks beside the launch-brief ones"
   got=$(jq -c '.by_source | map_values(.measured)' "$root/out/summary.json")
-  assert_equals '{"beads-crew":6,"launch-brief":1,"swarm":2}' "$got" "summary splits measured tasks by join"
+  assert_equals '{"beads-crew":6,"launch-brief":1,"swarm":3}' "$got" "summary splits measured tasks by join"
   pass "a swarm root's session directory and a beads crew mirror bead each join their own task; a launch brief keeps its task"
 }
 
