@@ -1,0 +1,12 @@
+before: scanned=445 archived=0
+t+1s beat #1 scanned=443 archived=2
+t+9s beat #2 scanned=3 archived=442
+t+10s beat #3 scanned=3 archived=442
+t+12s beat #4 scanned=3 archived=442
+after: scanned=3 archived=442 total=445
+scanned survivors:
+  0631a6a43e741c86 phase=resolved escalated_epoch=1200 
+  873126ebf43187ef phase=awaiting_report escalated_epoch= 
+  c1e6f870fd094506 phase=awaiting_report escalated_epoch= 
+watcher stderr (tail):
+WATCHER PASS

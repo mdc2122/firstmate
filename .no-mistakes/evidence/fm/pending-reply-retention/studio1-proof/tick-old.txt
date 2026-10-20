@@ -1,0 +1,9 @@
+open1=4a8e3a11fb752f03 open2=82a9a298d77ac418 open_escalation=ffffffffffff0001
+records before: 444 (resolved: 442)
+pass 1: 47.12s; scanned=444 archived=0
+pass 2: 38.19s; scanned=444 archived=0
+pass 3: 39.21s; scanned=444 archived=0
+still scanned: 4a8e3a11fb752f03 phase=awaiting_report
+still scanned: 82a9a298d77ac418 phase=awaiting_report
+still scanned: ffffffffffff0001 phase=resolved
+total records preserved (scanned+archive): 444

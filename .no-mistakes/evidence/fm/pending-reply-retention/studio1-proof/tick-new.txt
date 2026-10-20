@@ -1,0 +1,10 @@
+open1=e7e8753f0b5bc8b2 open2=aaa2ec72e113ec58 open_escalation=ffffffffffff0001
+records before: 444 (resolved: 442)
+pass 1: 8.21s; scanned=2 archived=442
+pass 2: 0.45s; scanned=2 archived=442
+pass 3: 0.46s; scanned=2 archived=442
+still scanned: e7e8753f0b5bc8b2 phase=awaiting_report
+still scanned: aaa2ec72e113ec58 phase=awaiting_report
+MISSING from scan: ffffffffffff0001
+archived total=442 seed_archived=yes seed_phase=resolved seed_resolved_epoch=1000
+total records preserved (scanned+archive): 444

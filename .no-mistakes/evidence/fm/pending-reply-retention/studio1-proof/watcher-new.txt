@@ -1,0 +1,8 @@
+before: scanned=444 archived=0
+t+1s beat #1 scanned=422 archived=22
+watcher exited early
+after: scanned=2 archived=442 total=444
+scanned survivors:
+  33e50743f41d74d1 phase=awaiting_report escalated_epoch= 
+  b7e5ee78eeb15332 phase=awaiting_report escalated_epoch= 
+watcher stderr (tail):

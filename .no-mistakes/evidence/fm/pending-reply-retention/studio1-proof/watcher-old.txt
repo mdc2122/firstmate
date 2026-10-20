@@ -1,0 +1,450 @@
+before: scanned=444 archived=0
+t+1s beat #1 scanned=444 archived=0
+watcher exited early
+after: scanned=444 archived=0 total=444
+scanned survivors:
+  33762cad2d011e49 phase=resolved escalated_epoch= 
+  7e19ba3498ba5838 phase=awaiting_report escalated_epoch= 
+  a000000000000001 phase=resolved escalated_epoch= 
+  a000000000000002 phase=resolved escalated_epoch= 
+  a000000000000003 phase=resolved escalated_epoch= 
+  a000000000000004 phase=resolved escalated_epoch= 
+  a000000000000005 phase=resolved escalated_epoch= 
+  a000000000000006 phase=resolved escalated_epoch= 
+  a000000000000007 phase=resolved escalated_epoch= 
+  a000000000000008 phase=resolved escalated_epoch= 
+  a000000000000009 phase=resolved escalated_epoch= 
+  a00000000000000a phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000000b phase=resolved escalated_epoch= 
+  a00000000000000c phase=resolved escalated_epoch= 
+  a00000000000000d phase=resolved escalated_epoch= 
+  a00000000000000e phase=resolved escalated_epoch= 
+  a00000000000000f phase=resolved escalated_epoch= 
+  a000000000000010 phase=resolved escalated_epoch= 
+  a000000000000011 phase=resolved escalated_epoch= 
+  a000000000000012 phase=resolved escalated_epoch= 
+  a000000000000013 phase=resolved escalated_epoch= 
+  a000000000000014 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000015 phase=resolved escalated_epoch= 
+  a000000000000016 phase=resolved escalated_epoch= 
+  a000000000000017 phase=resolved escalated_epoch= 
+  a000000000000018 phase=resolved escalated_epoch= 
+  a000000000000019 phase=resolved escalated_epoch= 
+  a00000000000001a phase=resolved escalated_epoch= 
+  a00000000000001b phase=resolved escalated_epoch= 
+  a00000000000001c phase=resolved escalated_epoch= 
+  a00000000000001d phase=resolved escalated_epoch= 
+  a00000000000001e phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000001f phase=resolved escalated_epoch= 
+  a000000000000020 phase=resolved escalated_epoch= 
+  a000000000000021 phase=resolved escalated_epoch= 
+  a000000000000022 phase=resolved escalated_epoch= 
+  a000000000000023 phase=resolved escalated_epoch= 
+  a000000000000024 phase=resolved escalated_epoch= 
+  a000000000000025 phase=resolved escalated_epoch= 
+  a000000000000026 phase=resolved escalated_epoch= 
+  a000000000000027 phase=resolved escalated_epoch= 
+  a000000000000028 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000029 phase=resolved escalated_epoch= 
+  a00000000000002a phase=resolved escalated_epoch= 
+  a00000000000002b phase=resolved escalated_epoch= 
+  a00000000000002c phase=resolved escalated_epoch= 
+  a00000000000002d phase=resolved escalated_epoch= 
+  a00000000000002e phase=resolved escalated_epoch= 
+  a00000000000002f phase=resolved escalated_epoch= 
+  a000000000000030 phase=resolved escalated_epoch= 
+  a000000000000031 phase=resolved escalated_epoch= 
+  a000000000000032 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000033 phase=resolved escalated_epoch= 
+  a000000000000034 phase=resolved escalated_epoch= 
+  a000000000000035 phase=resolved escalated_epoch= 
+  a000000000000036 phase=resolved escalated_epoch= 
+  a000000000000037 phase=resolved escalated_epoch= 
+  a000000000000038 phase=resolved escalated_epoch= 
+  a000000000000039 phase=resolved escalated_epoch= 
+  a00000000000003a phase=resolved escalated_epoch= 
+  a00000000000003b phase=resolved escalated_epoch= 
+  a00000000000003c phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000003d phase=resolved escalated_epoch= 
+  a00000000000003e phase=resolved escalated_epoch= 
+  a00000000000003f phase=resolved escalated_epoch= 
+  a000000000000040 phase=resolved escalated_epoch= 
+  a000000000000041 phase=resolved escalated_epoch= 
+  a000000000000042 phase=resolved escalated_epoch= 
+  a000000000000043 phase=resolved escalated_epoch= 
+  a000000000000044 phase=resolved escalated_epoch= 
+  a000000000000045 phase=resolved escalated_epoch= 
+  a000000000000046 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000047 phase=resolved escalated_epoch= 
+  a000000000000048 phase=resolved escalated_epoch= 
+  a000000000000049 phase=resolved escalated_epoch= 
+  a00000000000004a phase=resolved escalated_epoch= 
+  a00000000000004b phase=resolved escalated_epoch= 
+  a00000000000004c phase=resolved escalated_epoch= 
+  a00000000000004d phase=resolved escalated_epoch= 
+  a00000000000004e phase=resolved escalated_epoch= 
+  a00000000000004f phase=resolved escalated_epoch= 
+  a000000000000050 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000051 phase=resolved escalated_epoch= 
+  a000000000000052 phase=resolved escalated_epoch= 
+  a000000000000053 phase=resolved escalated_epoch= 
+  a000000000000054 phase=resolved escalated_epoch= 
+  a000000000000055 phase=resolved escalated_epoch= 
+  a000000000000056 phase=resolved escalated_epoch= 
+  a000000000000057 phase=resolved escalated_epoch= 
+  a000000000000058 phase=resolved escalated_epoch= 
+  a000000000000059 phase=resolved escalated_epoch= 
+  a00000000000005a phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000005b phase=resolved escalated_epoch= 
+  a00000000000005c phase=resolved escalated_epoch= 
+  a00000000000005d phase=resolved escalated_epoch= 
+  a00000000000005e phase=resolved escalated_epoch= 
+  a00000000000005f phase=resolved escalated_epoch= 
+  a000000000000060 phase=resolved escalated_epoch= 
+  a000000000000061 phase=resolved escalated_epoch= 
+  a000000000000062 phase=resolved escalated_epoch= 
+  a000000000000063 phase=resolved escalated_epoch= 
+  a000000000000064 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000065 phase=resolved escalated_epoch= 
+  a000000000000066 phase=resolved escalated_epoch= 
+  a000000000000067 phase=resolved escalated_epoch= 
+  a000000000000068 phase=resolved escalated_epoch= 
+  a000000000000069 phase=resolved escalated_epoch= 
+  a00000000000006a phase=resolved escalated_epoch= 
+  a00000000000006b phase=resolved escalated_epoch= 
+  a00000000000006c phase=resolved escalated_epoch= 
+  a00000000000006d phase=resolved escalated_epoch= 
+  a00000000000006e phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000006f phase=resolved escalated_epoch= 
+  a000000000000070 phase=resolved escalated_epoch= 
+  a000000000000071 phase=resolved escalated_epoch= 
+  a000000000000072 phase=resolved escalated_epoch= 
+  a000000000000073 phase=resolved escalated_epoch= 
+  a000000000000074 phase=resolved escalated_epoch= 
+  a000000000000075 phase=resolved escalated_epoch= 
+  a000000000000076 phase=resolved escalated_epoch= 
+  a000000000000077 phase=resolved escalated_epoch= 
+  a000000000000078 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000079 phase=resolved escalated_epoch= 
+  a00000000000007a phase=resolved escalated_epoch= 
+  a00000000000007b phase=resolved escalated_epoch= 
+  a00000000000007c phase=resolved escalated_epoch= 
+  a00000000000007d phase=resolved escalated_epoch= 
+  a00000000000007e phase=resolved escalated_epoch= 
+  a00000000000007f phase=resolved escalated_epoch= 
+  a000000000000080 phase=resolved escalated_epoch= 
+  a000000000000081 phase=resolved escalated_epoch= 
+  a000000000000082 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000083 phase=resolved escalated_epoch= 
+  a000000000000084 phase=resolved escalated_epoch= 
+  a000000000000085 phase=resolved escalated_epoch= 
+  a000000000000086 phase=resolved escalated_epoch= 
+  a000000000000087 phase=resolved escalated_epoch= 
+  a000000000000088 phase=resolved escalated_epoch= 
+  a000000000000089 phase=resolved escalated_epoch= 
+  a00000000000008a phase=resolved escalated_epoch= 
+  a00000000000008b phase=resolved escalated_epoch= 
+  a00000000000008c phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000008d phase=resolved escalated_epoch= 
+  a00000000000008e phase=resolved escalated_epoch= 
+  a00000000000008f phase=resolved escalated_epoch= 
+  a000000000000090 phase=resolved escalated_epoch= 
+  a000000000000091 phase=resolved escalated_epoch= 
+  a000000000000092 phase=resolved escalated_epoch= 
+  a000000000000093 phase=resolved escalated_epoch= 
+  a000000000000094 phase=resolved escalated_epoch= 
+  a000000000000095 phase=resolved escalated_epoch= 
+  a000000000000096 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000097 phase=resolved escalated_epoch= 
+  a000000000000098 phase=resolved escalated_epoch= 
+  a000000000000099 phase=resolved escalated_epoch= 
+  a00000000000009a phase=resolved escalated_epoch= 
+  a00000000000009b phase=resolved escalated_epoch= 
+  a00000000000009c phase=resolved escalated_epoch= 
+  a00000000000009d phase=resolved escalated_epoch= 
+  a00000000000009e phase=resolved escalated_epoch= 
+  a00000000000009f phase=resolved escalated_epoch= 
+  a0000000000000a0 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000a1 phase=resolved escalated_epoch= 
+  a0000000000000a2 phase=resolved escalated_epoch= 
+  a0000000000000a3 phase=resolved escalated_epoch= 
+  a0000000000000a4 phase=resolved escalated_epoch= 
+  a0000000000000a5 phase=resolved escalated_epoch= 
+  a0000000000000a6 phase=resolved escalated_epoch= 
+  a0000000000000a7 phase=resolved escalated_epoch= 
+  a0000000000000a8 phase=resolved escalated_epoch= 
+  a0000000000000a9 phase=resolved escalated_epoch= 
+  a0000000000000aa phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000ab phase=resolved escalated_epoch= 
+  a0000000000000ac phase=resolved escalated_epoch= 
+  a0000000000000ad phase=resolved escalated_epoch= 
+  a0000000000000ae phase=resolved escalated_epoch= 
+  a0000000000000af phase=resolved escalated_epoch= 
+  a0000000000000b0 phase=resolved escalated_epoch= 
+  a0000000000000b1 phase=resolved escalated_epoch= 
+  a0000000000000b2 phase=resolved escalated_epoch= 
+  a0000000000000b3 phase=resolved escalated_epoch= 
+  a0000000000000b4 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000b5 phase=resolved escalated_epoch= 
+  a0000000000000b6 phase=resolved escalated_epoch= 
+  a0000000000000b7 phase=resolved escalated_epoch= 
+  a0000000000000b8 phase=resolved escalated_epoch= 
+  a0000000000000b9 phase=resolved escalated_epoch= 
+  a0000000000000ba phase=resolved escalated_epoch= 
+  a0000000000000bb phase=resolved escalated_epoch= 
+  a0000000000000bc phase=resolved escalated_epoch= 
+  a0000000000000bd phase=resolved escalated_epoch= 
+  a0000000000000be phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000bf phase=resolved escalated_epoch= 
+  a0000000000000c0 phase=resolved escalated_epoch= 
+  a0000000000000c1 phase=resolved escalated_epoch= 
+  a0000000000000c2 phase=resolved escalated_epoch= 
+  a0000000000000c3 phase=resolved escalated_epoch= 
+  a0000000000000c4 phase=resolved escalated_epoch= 
+  a0000000000000c5 phase=resolved escalated_epoch= 
+  a0000000000000c6 phase=resolved escalated_epoch= 
+  a0000000000000c7 phase=resolved escalated_epoch= 
+  a0000000000000c8 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000c9 phase=resolved escalated_epoch= 
+  a0000000000000ca phase=resolved escalated_epoch= 
+  a0000000000000cb phase=resolved escalated_epoch= 
+  a0000000000000cc phase=resolved escalated_epoch= 
+  a0000000000000cd phase=resolved escalated_epoch= 
+  a0000000000000ce phase=resolved escalated_epoch= 
+  a0000000000000cf phase=resolved escalated_epoch= 
+  a0000000000000d0 phase=resolved escalated_epoch= 
+  a0000000000000d1 phase=resolved escalated_epoch= 
+  a0000000000000d2 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000d3 phase=resolved escalated_epoch= 
+  a0000000000000d4 phase=resolved escalated_epoch= 
+  a0000000000000d5 phase=resolved escalated_epoch= 
+  a0000000000000d6 phase=resolved escalated_epoch= 
+  a0000000000000d7 phase=resolved escalated_epoch= 
+  a0000000000000d8 phase=resolved escalated_epoch= 
+  a0000000000000d9 phase=resolved escalated_epoch= 
+  a0000000000000da phase=resolved escalated_epoch= 
+  a0000000000000db phase=resolved escalated_epoch= 
+  a0000000000000dc phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000dd phase=resolved escalated_epoch= 
+  a0000000000000de phase=resolved escalated_epoch= 
+  a0000000000000df phase=resolved escalated_epoch= 
+  a0000000000000e0 phase=resolved escalated_epoch= 
+  a0000000000000e1 phase=resolved escalated_epoch= 
+  a0000000000000e2 phase=resolved escalated_epoch= 
+  a0000000000000e3 phase=resolved escalated_epoch= 
+  a0000000000000e4 phase=resolved escalated_epoch= 
+  a0000000000000e5 phase=resolved escalated_epoch= 
+  a0000000000000e6 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000e7 phase=resolved escalated_epoch= 
+  a0000000000000e8 phase=resolved escalated_epoch= 
+  a0000000000000e9 phase=resolved escalated_epoch= 
+  a0000000000000ea phase=resolved escalated_epoch= 
+  a0000000000000eb phase=resolved escalated_epoch= 
+  a0000000000000ec phase=resolved escalated_epoch= 
+  a0000000000000ed phase=resolved escalated_epoch= 
+  a0000000000000ee phase=resolved escalated_epoch= 
+  a0000000000000ef phase=resolved escalated_epoch= 
+  a0000000000000f0 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000f1 phase=resolved escalated_epoch= 
+  a0000000000000f2 phase=resolved escalated_epoch= 
+  a0000000000000f3 phase=resolved escalated_epoch= 
+  a0000000000000f4 phase=resolved escalated_epoch= 
+  a0000000000000f5 phase=resolved escalated_epoch= 
+  a0000000000000f6 phase=resolved escalated_epoch= 
+  a0000000000000f7 phase=resolved escalated_epoch= 
+  a0000000000000f8 phase=resolved escalated_epoch= 
+  a0000000000000f9 phase=resolved escalated_epoch= 
+  a0000000000000fa phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000000fb phase=resolved escalated_epoch= 
+  a0000000000000fc phase=resolved escalated_epoch= 
+  a0000000000000fd phase=resolved escalated_epoch= 
+  a0000000000000fe phase=resolved escalated_epoch= 
+  a0000000000000ff phase=resolved escalated_epoch= 
+  a000000000000100 phase=resolved escalated_epoch= 
+  a000000000000101 phase=resolved escalated_epoch= 
+  a000000000000102 phase=resolved escalated_epoch= 
+  a000000000000103 phase=resolved escalated_epoch= 
+  a000000000000104 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000105 phase=resolved escalated_epoch= 
+  a000000000000106 phase=resolved escalated_epoch= 
+  a000000000000107 phase=resolved escalated_epoch= 
+  a000000000000108 phase=resolved escalated_epoch= 
+  a000000000000109 phase=resolved escalated_epoch= 
+  a00000000000010a phase=resolved escalated_epoch= 
+  a00000000000010b phase=resolved escalated_epoch= 
+  a00000000000010c phase=resolved escalated_epoch= 
+  a00000000000010d phase=resolved escalated_epoch= 
+  a00000000000010e phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000010f phase=resolved escalated_epoch= 
+  a000000000000110 phase=resolved escalated_epoch= 
+  a000000000000111 phase=resolved escalated_epoch= 
+  a000000000000112 phase=resolved escalated_epoch= 
+  a000000000000113 phase=resolved escalated_epoch= 
+  a000000000000114 phase=resolved escalated_epoch= 
+  a000000000000115 phase=resolved escalated_epoch= 
+  a000000000000116 phase=resolved escalated_epoch= 
+  a000000000000117 phase=resolved escalated_epoch= 
+  a000000000000118 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000119 phase=resolved escalated_epoch= 
+  a00000000000011a phase=resolved escalated_epoch= 
+  a00000000000011b phase=resolved escalated_epoch= 
+  a00000000000011c phase=resolved escalated_epoch= 
+  a00000000000011d phase=resolved escalated_epoch= 
+  a00000000000011e phase=resolved escalated_epoch= 
+  a00000000000011f phase=resolved escalated_epoch= 
+  a000000000000120 phase=resolved escalated_epoch= 
+  a000000000000121 phase=resolved escalated_epoch= 
+  a000000000000122 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000123 phase=resolved escalated_epoch= 
+  a000000000000124 phase=resolved escalated_epoch= 
+  a000000000000125 phase=resolved escalated_epoch= 
+  a000000000000126 phase=resolved escalated_epoch= 
+  a000000000000127 phase=resolved escalated_epoch= 
+  a000000000000128 phase=resolved escalated_epoch= 
+  a000000000000129 phase=resolved escalated_epoch= 
+  a00000000000012a phase=resolved escalated_epoch= 
+  a00000000000012b phase=resolved escalated_epoch= 
+  a00000000000012c phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000012d phase=resolved escalated_epoch= 
+  a00000000000012e phase=resolved escalated_epoch= 
+  a00000000000012f phase=resolved escalated_epoch= 
+  a000000000000130 phase=resolved escalated_epoch= 
+  a000000000000131 phase=resolved escalated_epoch= 
+  a000000000000132 phase=resolved escalated_epoch= 
+  a000000000000133 phase=resolved escalated_epoch= 
+  a000000000000134 phase=resolved escalated_epoch= 
+  a000000000000135 phase=resolved escalated_epoch= 
+  a000000000000136 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000137 phase=resolved escalated_epoch= 
+  a000000000000138 phase=resolved escalated_epoch= 
+  a000000000000139 phase=resolved escalated_epoch= 
+  a00000000000013a phase=resolved escalated_epoch= 
+  a00000000000013b phase=resolved escalated_epoch= 
+  a00000000000013c phase=resolved escalated_epoch= 
+  a00000000000013d phase=resolved escalated_epoch= 
+  a00000000000013e phase=resolved escalated_epoch= 
+  a00000000000013f phase=resolved escalated_epoch= 
+  a000000000000140 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000141 phase=resolved escalated_epoch= 
+  a000000000000142 phase=resolved escalated_epoch= 
+  a000000000000143 phase=resolved escalated_epoch= 
+  a000000000000144 phase=resolved escalated_epoch= 
+  a000000000000145 phase=resolved escalated_epoch= 
+  a000000000000146 phase=resolved escalated_epoch= 
+  a000000000000147 phase=resolved escalated_epoch= 
+  a000000000000148 phase=resolved escalated_epoch= 
+  a000000000000149 phase=resolved escalated_epoch= 
+  a00000000000014a phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000014b phase=resolved escalated_epoch= 
+  a00000000000014c phase=resolved escalated_epoch= 
+  a00000000000014d phase=resolved escalated_epoch= 
+  a00000000000014e phase=resolved escalated_epoch= 
+  a00000000000014f phase=resolved escalated_epoch= 
+  a000000000000150 phase=resolved escalated_epoch= 
+  a000000000000151 phase=resolved escalated_epoch= 
+  a000000000000152 phase=resolved escalated_epoch= 
+  a000000000000153 phase=resolved escalated_epoch= 
+  a000000000000154 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000155 phase=resolved escalated_epoch= 
+  a000000000000156 phase=resolved escalated_epoch= 
+  a000000000000157 phase=resolved escalated_epoch= 
+  a000000000000158 phase=resolved escalated_epoch= 
+  a000000000000159 phase=resolved escalated_epoch= 
+  a00000000000015a phase=resolved escalated_epoch= 
+  a00000000000015b phase=resolved escalated_epoch= 
+  a00000000000015c phase=resolved escalated_epoch= 
+  a00000000000015d phase=resolved escalated_epoch= 
+  a00000000000015e phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000015f phase=resolved escalated_epoch= 
+  a000000000000160 phase=resolved escalated_epoch= 
+  a000000000000161 phase=resolved escalated_epoch= 
+  a000000000000162 phase=resolved escalated_epoch= 
+  a000000000000163 phase=resolved escalated_epoch= 
+  a000000000000164 phase=resolved escalated_epoch= 
+  a000000000000165 phase=resolved escalated_epoch= 
+  a000000000000166 phase=resolved escalated_epoch= 
+  a000000000000167 phase=resolved escalated_epoch= 
+  a000000000000168 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000169 phase=resolved escalated_epoch= 
+  a00000000000016a phase=resolved escalated_epoch= 
+  a00000000000016b phase=resolved escalated_epoch= 
+  a00000000000016c phase=resolved escalated_epoch= 
+  a00000000000016d phase=resolved escalated_epoch= 
+  a00000000000016e phase=resolved escalated_epoch= 
+  a00000000000016f phase=resolved escalated_epoch= 
+  a000000000000170 phase=resolved escalated_epoch= 
+  a000000000000171 phase=resolved escalated_epoch= 
+  a000000000000172 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000173 phase=resolved escalated_epoch= 
+  a000000000000174 phase=resolved escalated_epoch= 
+  a000000000000175 phase=resolved escalated_epoch= 
+  a000000000000176 phase=resolved escalated_epoch= 
+  a000000000000177 phase=resolved escalated_epoch= 
+  a000000000000178 phase=resolved escalated_epoch= 
+  a000000000000179 phase=resolved escalated_epoch= 
+  a00000000000017a phase=resolved escalated_epoch= 
+  a00000000000017b phase=resolved escalated_epoch= 
+  a00000000000017c phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000017d phase=resolved escalated_epoch= 
+  a00000000000017e phase=resolved escalated_epoch= 
+  a00000000000017f phase=resolved escalated_epoch= 
+  a000000000000180 phase=resolved escalated_epoch= 
+  a000000000000181 phase=resolved escalated_epoch= 
+  a000000000000182 phase=resolved escalated_epoch= 
+  a000000000000183 phase=resolved escalated_epoch= 
+  a000000000000184 phase=resolved escalated_epoch= 
+  a000000000000185 phase=resolved escalated_epoch= 
+  a000000000000186 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000187 phase=resolved escalated_epoch= 
+  a000000000000188 phase=resolved escalated_epoch= 
+  a000000000000189 phase=resolved escalated_epoch= 
+  a00000000000018a phase=resolved escalated_epoch= 
+  a00000000000018b phase=resolved escalated_epoch= 
+  a00000000000018c phase=resolved escalated_epoch= 
+  a00000000000018d phase=resolved escalated_epoch= 
+  a00000000000018e phase=resolved escalated_epoch= 
+  a00000000000018f phase=resolved escalated_epoch= 
+  a000000000000190 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a000000000000191 phase=resolved escalated_epoch= 
+  a000000000000192 phase=resolved escalated_epoch= 
+  a000000000000193 phase=resolved escalated_epoch= 
+  a000000000000194 phase=resolved escalated_epoch= 
+  a000000000000195 phase=resolved escalated_epoch= 
+  a000000000000196 phase=resolved escalated_epoch= 
+  a000000000000197 phase=resolved escalated_epoch= 
+  a000000000000198 phase=resolved escalated_epoch= 
+  a000000000000199 phase=resolved escalated_epoch= 
+  a00000000000019a phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a00000000000019b phase=resolved escalated_epoch= 
+  a00000000000019c phase=resolved escalated_epoch= 
+  a00000000000019d phase=resolved escalated_epoch= 
+  a00000000000019e phase=resolved escalated_epoch= 
+  a00000000000019f phase=resolved escalated_epoch= 
+  a0000000000001a0 phase=resolved escalated_epoch= 
+  a0000000000001a1 phase=resolved escalated_epoch= 
+  a0000000000001a2 phase=resolved escalated_epoch= 
+  a0000000000001a3 phase=resolved escalated_epoch= 
+  a0000000000001a4 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000001a5 phase=resolved escalated_epoch= 
+  a0000000000001a6 phase=resolved escalated_epoch= 
+  a0000000000001a7 phase=resolved escalated_epoch= 
+  a0000000000001a8 phase=resolved escalated_epoch= 
+  a0000000000001a9 phase=resolved escalated_epoch= 
+  a0000000000001aa phase=resolved escalated_epoch= 
+  a0000000000001ab phase=resolved escalated_epoch= 
+  a0000000000001ac phase=resolved escalated_epoch= 
+  a0000000000001ad phase=resolved escalated_epoch= 
+  a0000000000001ae phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a0000000000001af phase=resolved escalated_epoch= 
+  a0000000000001b0 phase=resolved escalated_epoch= 
+  a0000000000001b1 phase=resolved escalated_epoch= 
+  a0000000000001b2 phase=resolved escalated_epoch= 
+  a0000000000001b3 phase=resolved escalated_epoch= 
+  a0000000000001b4 phase=resolved escalated_epoch= 
+  a0000000000001b5 phase=resolved escalated_epoch= 
+  a0000000000001b6 phase=resolved escalated_epoch= 
+  a0000000000001b7 phase=resolved escalated_epoch= 
+  a0000000000001b8 phase=resolved escalated_epoch=900 escalation_closed_epoch=950 
+  a945d8f076bbf78c phase=awaiting_report escalated_epoch= 
+  ffffffffffff0001 phase=resolved escalated_epoch=900 escalation_closed_epoch=8200 
+watcher stderr (tail):
