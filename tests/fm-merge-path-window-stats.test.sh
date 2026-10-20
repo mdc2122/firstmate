@@ -67,6 +67,11 @@ h = M.pr_hours([dict(pr=5, green=1100, armed=None, mq_start=None, merged=1400)],
 check("unarmed merge ends green_unarmed", h["green_unarmed_queue_idle"], 300)
 check("unarmed merge then merged_not_joined", h["merged_not_joined"], 600)
 
+# a PR enqueued without an auto-squash arm stops being green-unarmed when it enters the queue
+h = M.pr_hours([dict(pr=9, green=1100, armed=None, mq_start=1200, merged=1400)], [[1200, 1400]], W0, W1)[9]
+check("unarmed enqueue ends green_unarmed", (h["green_unarmed_queue_idle"], h["green_unarmed_queue_busy"]), (100, 0.0))
+check("unarmed enqueue then in_queue", h["in_queue"], 200)
+
 # an open entry whose gitea-mq check already ended (ejected) leaves the queue then
 open_rows = [dict(pr=6, green=None, armed=None, mq_start=1200, mq_done=1300, merged=None),
              dict(pr=7, green=1100, armed=1150, mq_start=1600, mq_done=None, merged=None)]

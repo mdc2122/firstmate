@@ -143,7 +143,7 @@ def pr_hours(prs, busy, w0, w1):
             continue
         mine = per_pr.setdefault(r["pr"], {k: 0.0 for k in PR_HOUR_STATES})
         mine["open_at_until"] = r.get("merged") is None
-        s, e = max(r["green"], w0), min(r["armed"] or r.get("merged") or w1, w1)
+        s, e = max(r["green"], w0), min(r["armed"] or r["mq_start"] or r.get("merged") or w1, w1)
         if e > s:
             b = overlap(s, e, busy)
             mine["green_unarmed_queue_busy"] += b
