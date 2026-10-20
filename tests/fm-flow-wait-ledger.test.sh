@@ -225,6 +225,87 @@ exploit 2026-10-12T10:00:00Z 1 -'
   pass "a launch brief joins the task its status-append line names, not a status log its task text cites"
 }
 
+test_swarm_and_beads_crew_dispatches_are_measured() {
+  # A Prime swarm root runs in <home>/data/<id>/sessions/ with no launch brief and
+  # appends its status from Python through a name bound in an earlier call; the
+  # beads crew works mirror:<row-id> beads inside its own session. Each must become
+  # a measured task, and neither may re-join a task a launch brief already owns.
+  local root="$TMP_ROOT/dispatch" got want
+  mkdir -p "$root/home/fm/state" "$root/home/fm/data/beads/.beads"
+  python3 - "$root" <<'PY'
+import json, os, sqlite3, sys
+root = sys.argv[1]
+fm = os.path.join(root, "home", "fm")
+sess = os.path.join(root, "home", ".omp", "agent", "sessions")
+
+def write(path, rows):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.writelines(json.dumps(r) + "\n" for r in rows)
+
+def user(t, text):
+    return {"type": "message", "timestamp": t, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}
+
+def call(t, key, body, stop="toolUse"):
+    return {"type": "message", "timestamp": t, "message": {"role": "assistant", "stopReason": stop,
+            "content": [{"type": "toolCall", "arguments": {key: body}}]}}
+
+# The swarm: the pasted kickoff lost a doubled letter ("kickof"), the status path is
+# bound in one call and appended in a later one, and one captain question arrives.
+swarm = os.path.join(fm, "data", "swarm-a", "sessions", "s.jsonl")
+write(swarm, [
+    {"type": "session", "timestamp": "2026-10-12T08:00:00Z"},
+    user("2026-10-12T08:00:05Z", f"Read {fm}/data/swarm-a/kickof.md and begin."),
+    call("2026-10-12T08:01:00Z", "code", f"STATUS = Path('{fm}/state/swarm-a.status')\nprint(STATUS.exists())"),
+    user("2026-10-12T08:20:00Z", "Follow-up question from the captain: which source wins?"),
+    call("2026-10-12T08:40:00Z", "code", "if 'done:' not in STATUS.read_text():\n    with STATUS.open('a') as f:\n"
+         "        f.write('done: source B wins; report.md written\\n')", "stop"),
+])
+# A sessions directory whose first message names another directory is not a swarm launch.
+write(os.path.join(fm, "data", "notes", "sessions", "x.jsonl"),
+      [user("2026-10-12T08:00:00Z", "Summarize these transcripts."),
+       call("2026-10-12T08:05:00Z", "command", f"echo \"done: x\" >> '{fm}/state/notes.status'", "stop")])
+# A launch-brief task whose row the crew also has a bead for keeps its launch-brief join.
+brief = ("\u2063FIRSTMATE_OP: v1 launch-brief: # Task\nThis is a SCOUT task.\n"
+         f"   `echo \"{{state}}: {{one short line}}\" >> '{fm}/state/briefed.status'`\n")
+write(os.path.join(sess, "-orca-workspaces-briefed", "w.jsonl"),
+      [user("2026-10-12T07:00:00Z", brief),
+       call("2026-10-12T07:30:00Z", "command", f"echo \"done: report\" >> '{fm}/state/briefed.status'", "stop")])
+
+db = sqlite3.connect(os.path.join(fm, "data", "beads", ".beads", "beads.db"))
+db.executescript("create table issues(id text, created_at text, closed_at text, close_reason text, deleted_at text);"
+                 "create table labels(issue_id text, label text);")
+db.executemany("insert into issues values (?,?,?,?,null)", [
+    ("fm-1", "2026-10-12T09:00:00.000000+00:00", "2026-10-12T11:00:00.000000+00:00", "chore done: wrote the audit"),
+    ("fm-2", "2026-10-12T09:30:00.000000+00:00", None, None),
+    ("fm-3", "2026-10-12T06:00:00.000000+00:00", "2026-10-12T06:30:00.000000+00:00", "needs captain: which channel?"),
+    ("fm-4", "2026-10-12T07:10:00.000000+00:00", "2026-10-12T07:20:00.000000+00:00", "done"),
+    ("fm-5", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:05:00.000000+00:00", "no mirror label")])
+db.executemany("insert into labels values (?,?)", [("fm-1", "mirror:chore"), ("fm-1", "chore"), ("fm-2", "mirror:pending"),
+                                                   ("fm-3", "mirror:asks"), ("fm-4", "mirror:briefed")])
+db.commit()
+PY
+  make_nm_db "$root/nm.sqlite"
+  run_flow "$root" "$root/out" || fail "fm-flow-wait.py failed on the dispatch fixture: $(cat "$root/out.err")"
+  got=$(python3 - "$root/out" <<'PY'
+import csv, sys
+for r in sorted(csv.DictReader(open(f"{sys.argv[1]}/tasks.csv")), key=lambda r: r["task"]):
+    print(r["task"], r["source"], r["kind"], r["spawn"], r["end"] or "-", r["outcome"], r["touch_types"] or "-",
+          "human_answer=" + r["wait_human_answer_h"], "worker_stall=" + r["wait_worker_stall_h"])
+PY
+)
+  want='asks beads-crew scout 2026-10-12T06:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
+briefed launch-brief scout 2026-10-12T07:00:00Z 2026-10-12T07:30:00Z live-proven - human_answer=0.0 worker_stall=0.0
+chore beads-crew scout 2026-10-12T09:00:00Z 2026-10-12T11:00:00Z live-proven - human_answer=0.0 worker_stall=0.0
+pending beads-crew scout 2026-10-12T09:30:00Z - in-flight - human_answer=0.0 worker_stall=0.0
+swarm-a swarm scout 2026-10-12T08:00:05Z 2026-10-12T08:40:00Z live-proven direct:1 human_answer=0.0 worker_stall=0.0'
+  assert_equals "$want" "$got" "swarm and beads-crew dispatches must be measured tasks beside the launch-brief ones"
+  got=$(jq -c '.by_source | map_values(.measured)' "$root/out/summary.json")
+  assert_equals '{"beads-crew":3,"launch-brief":1,"swarm":1}' "$got" "summary splits measured tasks by join"
+  pass "a swarm root's session directory and a beads crew mirror bead each join their own task; a launch brief keeps its task"
+}
+
 test_ledger_and_transcript_classify_the_same
 test_automation_rows_are_not_touches
 test_brief_citing_another_tasks_status_joins_its_own_task
+test_swarm_and_beads_crew_dispatches_are_measured

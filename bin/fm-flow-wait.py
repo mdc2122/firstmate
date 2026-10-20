@@ -18,6 +18,28 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           timestamp), every steering-inbox message body it read
                           (schema=fm-task-inbox.v1 at=...), doorbells, turn ends, relaunches.
                           Needed because state/<id>.status lines carry no timestamp.
+  W2 swarm transcripts   <home>/data/<id>/sessions/*.jsonl of --home and every local secondmate
+                          home: the session directory a swarm root runs in (bin/fm-prime-swarm.sh
+                          --session-dir, and hand-launched Prime/Grok swarms alike). A swarm has
+                          no launch brief; a session there whose first user message names
+                          <home>/data/<id>/ (its kickoff or brief, compared with doubled letters
+                          collapsed because a pasted kickoff can lose them) is a launch of task
+                          <id> at that message, kind scout unless the backlog row says ship. Its
+                          events are read as in W, plus the Python tool calls a swarm root
+                          appends status with: a call that opens state/<id>.status for append
+                          (by path, or through a name an earlier call of the session bound to
+                          it) appends every string literal in it that starts with a status verb.
+  C  beads crew queue    <home>/data/beads/.beads/beads.db (mode=ro) of --home and every local
+                          secondmate home: each bead labelled mirror:<row-id> is one launch of
+                          that backlog row to the standing beads crew, which works it inside its
+                          own long-running session and so never gets a launch brief per row.
+                          Launch = the bead's created_at; its close is one status line at
+                          closed_at, `blocked:` when the close reason starts with "blocked" or
+                          "needs captain", else `done: <reason>`; an open bead keeps the row in
+                          flight. Kind scout unless the backlog row says ship. Touches are the
+                          supervisor actions that name the row; steers to the crew name the crew.
+  A task is joined from the first of W, W2, C that has it (W2 and C never re-join a W task), and
+  W2 and C tasks claim a PR only when no W task does (see the PR owner rule in build()).
   S  supervisor actions   the action ledger <home>/state/supervisor-actions.jsonl of --home and
                           of every local secondmate home registered in <home>/data/secondmates.md,
                           and the copy teardown archived of every retired one under
@@ -111,7 +133,8 @@ counterfactuals and per-item distributions from one --out directory.
 Weekly readout: run the last full week (e.g. --since 2026-10-16 --until 2026-10-23), then
 bin/fm-flow-wait-analyze.py on its --out. The baseline is the 2026-10-09..2026-10-17
 window as of 2026-10-16T03:44:44Z: zero-touch 20.1% (32 of 159 settled; ships 5 of 95),
-merge_queue 293.4 h, release 213.3 h, ci 124.0 h.
+merge_queue 293.4 h, release 213.3 h, ci 124.0 h. Those figures count launch-brief (W) tasks only;
+summary by_source splits a readout by join, so compare its launch-brief row against them.
 """
 import argparse, base64, bisect, csv, glob, hashlib, json, os, re, sqlite3, subprocess, sys, time
 import urllib.request
@@ -208,6 +231,31 @@ def extract_status_appends(cmd):
     return out
 
 
+# A swarm root (W2) appends status from a Python tool call, e.g.
+#   status = Path('<home>/state/<id>.status') ... with status.open('a') as f: f.write("done: ...")
+PY_STATUS_BIND_RE = re.compile(r"([A-Za-z_]\w*)\s*=\s*[^\n=]*?/state/([A-Za-z0-9._-]+)\.status\b")
+PY_STATUS_DIR_BIND_RE = re.compile(r"([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*/\s*[\"']([A-Za-z0-9._-]+)\.status[\"']")
+PY_APPEND_RE = re.compile(r"""\bopen\([^()\n]*?[\"']a\+?[\"']|\.write_text\(|>>""")
+PY_STATUS_LIT_RE = re.compile(r"""(?<![\w\\])[rRfFuU]{0,2}([\"'])((?:working|done|needs-decision|blocked|paused|resolved|failed)\b(?:\s*\[key=[^\]\n]+\])?\s*:(?:(?!\1)[^\\\n]|\\.)*)""")
+
+
+def extract_py_status_appends(code, binds):
+    """[(task, line)] for one swarm-root Python tool call that appends to a status log.
+    binds maps a name an earlier call of the session bound to state/<id>.status -> <id>
+    and is updated with this call's bindings."""
+    for name, task in PY_STATUS_BIND_RE.findall(code):
+        binds[name] = task
+    for name, base, task in PY_STATUS_DIR_BIND_RE.findall(code):
+        binds[name] = task
+    named = set(re.findall(r"/state/([A-Za-z0-9._-]+)\.status\b", code))
+    named |= {task for name, task in binds.items() if re.search(r"\b" + re.escape(name) + r"\b", code)}
+    if len(named) != 1 or not PY_APPEND_RE.search(code):
+        return []
+    task = named.pop()
+    lines = (m.group(2).replace("\\n", "").strip() for m in PY_STATUS_LIT_RE.finditer(code))
+    return [(task, ln) for ln in lines if parse_status(ln)[2]]   # a bare "done:" is a check, not a line
+
+
 def parse_status(line):
     m = VERB_RE.match(line)
     if not m:
@@ -227,75 +275,163 @@ def session_dir(path):
     return os.path.join(SESS, "-" + rel.replace(os.sep, "-"))
 
 
+def read_session(f, launch, py_status=False):
+    """(launch record or None, events) for one session transcript.
+    launch(txt, rec) classifies a user message: ("launch", fields) is a launch (fields seed the
+    record on the first one), "abort" stops reading (not a session of this source), and None is
+    an ordinary user message. py_status also reads the Python status appends of a swarm root."""
+    rec = None
+    events = []           # (t, kind, payload)
+    binds = {}
+    try:
+        fh = open(f, errors="replace")
+    except OSError:
+        return None, events
+    with fh:
+        for raw in fh:
+            try:
+                d = json.loads(raw)
+            except ValueError:
+                continue
+            typ = d.get("type")
+            t = ts(d.get("timestamp")) if d.get("timestamp") else None
+            if t is not None and not seen(t):
+                continue   # happened after --as-of
+            if typ == "message":
+                msg = d["message"]
+                role = msg.get("role")
+                if role == "user":
+                    txt = text_of(msg.get("content"))
+                    verdict = launch(txt, rec)
+                    if verdict == "abort":
+                        break
+                    if verdict:
+                        if rec is None:
+                            rec = dict(verdict[1], file=f, spawn=t)
+                        events.append((t, "launch", None))
+                    elif txt.lstrip().startswith(": Firstmate instruction waiting"):
+                        events.append((t, "doorbell", None))
+                    else:
+                        events.append((t, "user_other", txt[:400]))
+                elif role == "assistant":
+                    stop = msg.get("stopReason")
+                    for p in msg.get("content") or []:
+                        if p.get("type") == "toolCall" and isinstance(p.get("arguments"), dict):
+                            cmd = p["arguments"].get("command") or ""
+                            if ".status" in cmd:
+                                for task, line in extract_status_appends(cmd):
+                                    events.append((t, "status", (task, line)))
+                            code = p["arguments"].get("code") if py_status else None
+                            if isinstance(code, str):
+                                for task, line in extract_py_status_appends(code, binds):
+                                    events.append((t, "status", (task, line)))
+                    events.append((t, "turn_end" if stop in ("stop", "error", "aborted") else "assistant", stop))
+                elif role == "toolResult":
+                    txt = text_of(msg.get("content"))
+                    if "schema=fm-task-inbox.v1" in txt:
+                        txt = strip_line_numbers(txt)
+                        for m in re.finditer(r"schema=fm-task-inbox\.v1\nat=(\S+)\n((?:[a-z_]+=\S*\n)*)--\n(.*?)(?=\n?(?:==\s|schema=fm-task-inbox)|\Z)", txt, re.S):
+                            events.append((t, "inbox", (ts(m.group(1)), m.group(2), m.group(3).strip())))
+                    events.append((t, "tool_result", None))
+            elif typ == "custom_message":
+                events.append((t, "async" if d.get("customType") in ("async-result", "launch-completion") else "custom", d.get("customType")))
+    if rec:
+        rec["events"] = [e for e in events if e[0] is not None]
+        rec["end_ts"] = max((e[0] for e in rec["events"]), default=rec["spawn"])
+    return rec, events
+
+
+def brief_launch(txt, rec):
+    """W: a launch-brief message launches the task its status-append line names."""
+    if "FIRSTMATE_OP: v1 launch-brief" not in txt[:60]:
+        return None
+    if rec is not None:
+        return ("launch", None)
+    # The task's own status log is the target of the brief's template append line
+    # (`echo "{state}: {one short line}" >> '<home>/state/<id>.status'`); the task
+    # text, rendered before it, can mention or append to another task's log.
+    m = (re.search(r"\"\{state\}: \{one short line\}\"\s*>>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
+         or re.search(r">>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
+         or re.search(r"(?<![^\s'\"=])(/\S+?)/state/([A-Za-z0-9._-]+)\.status", txt))
+    if not m:
+        return "abort"
+    mode = re.search(r"Delivery contract: mode=(\S+)", txt)
+    return ("launch", dict(task=m.group(2), home=m.group(1), source="launch-brief",
+                           kind="scout" if "This is a SCOUT task" in txt else ("ship" if mode else "other"),
+                           mode=mode.group(1) if mode else "",
+                           charter=bool(re.search(r"charter|kind=secondmate|You are a secondmate", txt[:4000], re.I))))
+
+
 def scan_workers(since_mtime):
     """One record per worker session that began with a launch brief."""
     sessions = []
-    files = [f for f in glob.glob(os.path.join(SESS, "*/*.jsonl")) if os.path.getmtime(f) >= since_mtime]
-    for f in files:
-        rec = None
-        events = []           # (t, kind, payload)
-        try:
-            fh = open(f, errors="replace")
-        except OSError:
+    for f in glob.glob(os.path.join(SESS, "*/*.jsonl")):
+        if os.path.getmtime(f) >= since_mtime:
+            rec, _ = read_session(f, brief_launch)
+            if rec:
+                sessions.append(rec)
+    return sessions
+
+
+def collapse(s):
+    return re.sub(r"(.)\1+", r"\1", s)
+
+
+def scan_swarms(since_mtime, homes):
+    """W2: one record per swarm-root session under <home>/data/<id>/sessions/ of each home."""
+    sessions = []
+    for home in homes:
+        for f in sorted(glob.glob(os.path.join(home, "data", "*", "sessions", "*.jsonl"))):
+            if os.path.getmtime(f) < since_mtime:
+                continue
+            task = os.path.basename(os.path.dirname(os.path.dirname(f)))
+            names = {collapse(os.path.join(p, "data", task, "")) for p in (home, os.path.realpath(home))}
+
+            def swarm_launch(txt, rec, names=names, task=task, home=home):
+                if rec is not None:
+                    return None
+                if not any(n in collapse(txt) for n in names):
+                    return "abort"
+                return ("launch", dict(task=task, home=home, source="swarm", kind="scout", mode="", charter=False))
+
+            rec, _ = read_session(f, swarm_launch, py_status=True)
+            if rec:
+                sessions.append(rec)
+    return sessions
+
+
+# ---------------------------------------------------------------- beads crew queue (C)
+BEAD_BLOCKED_RE = re.compile(r"^\s*(blocked|needs captain)\b", re.I)
+
+
+def scan_beads(homes):
+    """C: one record per bead labelled mirror:<row-id> in each home's beads crew queue."""
+    sessions = []
+    for home in homes:
+        db = os.path.join(home, "data", "beads", ".beads", "beads.db")
+        if not os.path.exists(db):
             continue
-        with fh:
-            for raw in fh:
-                try:
-                    d = json.loads(raw)
-                except ValueError:
-                    continue
-                typ = d.get("type")
-                t = ts(d.get("timestamp")) if d.get("timestamp") else None
-                if t is not None and not seen(t):
-                    continue   # happened after --as-of
-                if typ == "message":
-                    msg = d["message"]
-                    role = msg.get("role")
-                    if role == "user":
-                        txt = text_of(msg.get("content"))
-                        if "FIRSTMATE_OP: v1 launch-brief" in txt[:60]:
-                            if rec is None:
-                                # The task's own status log is the target of the brief's
-                                # template append line (`echo "{state}: {one short line}" >>
-                                # '<home>/state/<id>.status'`); the task text, rendered before
-                                # it, can mention or append to another task's log.
-                                m = (re.search(r"\"\{state\}: \{one short line\}\"\s*>>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
-                                     or re.search(r">>\s*['\"]?(/[^'\"\s]+?)/state/([A-Za-z0-9._-]+)\.status", txt)
-                                     or re.search(r"(?<![^\s'\"=])(/\S+?)/state/([A-Za-z0-9._-]+)\.status", txt))
-                                if not m:
-                                    break
-                                mode = re.search(r"Delivery contract: mode=(\S+)", txt)
-                                rec = dict(file=f, task=m.group(2), home=m.group(1), spawn=t,
-                                           kind="scout" if "This is a SCOUT task" in txt else ("ship" if mode else "other"),
-                                           mode=mode.group(1) if mode else "",
-                                           charter=bool(re.search(r"charter|kind=secondmate|You are a secondmate", txt[:4000], re.I)))
-                            events.append((t, "launch", None))
-                        elif txt.lstrip().startswith(": Firstmate instruction waiting"):
-                            events.append((t, "doorbell", None))
-                        else:
-                            events.append((t, "user_other", txt[:400]))
-                    elif role == "assistant":
-                        stop = msg.get("stopReason")
-                        for p in msg.get("content") or []:
-                            if p.get("type") == "toolCall" and isinstance(p.get("arguments"), dict):
-                                cmd = p["arguments"].get("command") or ""
-                                if ".status" in cmd:
-                                    for task, line in extract_status_appends(cmd):
-                                        events.append((t, "status", (task, line)))
-                        events.append((t, "turn_end" if stop in ("stop", "error", "aborted") else "assistant", stop))
-                    elif role == "toolResult":
-                        txt = text_of(msg.get("content"))
-                        if "schema=fm-task-inbox.v1" in txt:
-                            txt = strip_line_numbers(txt)
-                            for m in re.finditer(r"schema=fm-task-inbox\.v1\nat=(\S+)\n((?:[a-z_]+=\S*\n)*)--\n(.*?)(?=\n?(?:==\s|schema=fm-task-inbox)|\Z)", txt, re.S):
-                                events.append((t, "inbox", (ts(m.group(1)), m.group(2), m.group(3).strip())))
-                        events.append((t, "tool_result", None))
-                elif typ == "custom_message":
-                    events.append((t, "async" if d.get("customType") in ("async-result", "launch-completion") else "custom", d.get("customType")))
-        if rec:
-            rec["events"] = [e for e in events if e[0] is not None]
-            rec["end_ts"] = max((e[0] for e in rec["events"]), default=rec["spawn"])
-            sessions.append(rec)
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            rows = con.execute("select i.id, substr(l.label, 8), i.created_at, i.closed_at, i.close_reason "
+                               "from issues i join labels l on l.issue_id = i.id "
+                               "where l.label like 'mirror:%' and i.deleted_at is null").fetchall()
+            con.close()
+        except sqlite3.Error as e:
+            print(f"warning: beads crew queue {db} unreadable ({e}); its rows stay unmeasured", file=sys.stderr)
+            continue
+        for bead, task, created, closed, reason in rows:
+            spawn, end = ts(created), ts(closed)
+            if not task or not seen(spawn):
+                continue
+            events = [(spawn, "launch", None)]
+            if end is not None and seen(end):
+                reason = " ".join((reason or "").split())
+                verb = "blocked" if BEAD_BLOCKED_RE.match(reason) else "done"
+                events.append((end, "status", (task, f"{verb}: {reason}")))
+            sessions.append(dict(task=task, home=home, source="beads-crew", kind="scout", mode="", charter=False,
+                                 file=f"{db}#{bead}", spawn=spawn, events=events, end_ts=events[-1][0],
+                                 open=len(events) == 1))
     return sessions
 
 
@@ -724,6 +860,10 @@ def build(args):
     print("scanning worker transcripts ...", file=sys.stderr)
     sessions = scan_workers(scan_from)
     print(f"  {len(sessions)} launch-brief sessions", file=sys.stderr)
+    disp_homes = list(dict.fromkeys(os.path.realpath(p) for p in [args.home] + local_secondmate_homes(args.home)))
+    swarm_sessions = scan_swarms(scan_from, disp_homes)
+    bead_sessions = scan_beads(disp_homes)
+    print(f"  {len(swarm_sessions)} swarm sessions, {len(bead_sessions)} beads crew dispatches", file=sys.stderr)
     print("scanning supervisor transcripts ...", file=sys.stderr)
     retired = retired_secondmate_homes(args.home)
     acts, sup_cov, late_teardowns = scan_supervisors(scan_from, args.home, retired)
@@ -733,15 +873,22 @@ def build(args):
     flash = Flash(os.path.join(args.cache_dir, "flash_cache.jsonl"), not args.no_flash, args.flash_workers)
     rels, idx = releases(args.home)
 
-    # group sessions into tasks (home, task)
+    # group sessions into tasks (home, task); a task belongs to the first source that has it
     tasks = {}
-    for s in sorted(sessions, key=lambda s: s["spawn"]):
-        k = (s["home"], s["task"])
-        t = tasks.setdefault(k, dict(task=s["task"], home=s["home"], spawn=s["spawn"], kind=s["kind"], mode=s["mode"],
-                                     charter=s["charter"], sessions=[]))
-        t["sessions"].append(s)
-        if s["kind"] == "ship":
-            t["kind"], t["mode"] = "ship", s["mode"]
+    for src in (sessions, swarm_sessions, bead_sessions):
+        claimed = {(os.path.realpath(t["home"]), t["task"]) for t in tasks.values()}
+        for s in sorted(src, key=lambda s: s["spawn"]):
+            if (os.path.realpath(s["home"]), s["task"]) in claimed:
+                continue
+            k = (s["home"], s["task"])
+            t = tasks.setdefault(k, dict(task=s["task"], home=s["home"], spawn=s["spawn"], kind=s["kind"], mode=s["mode"],
+                                         charter=s["charter"], source=s["source"], sessions=[]))
+            t["sessions"].append(s)
+            if s["kind"] == "ship":
+                t["kind"], t["mode"] = "ship", s["mode"]
+    for t in tasks.values():
+        if t["source"] != "launch-brief" and backlog.get(t["task"], {}).get("kind") == "ship":
+            t["kind"] = "ship"
 
     # supervisor actions indexed by task id and PR url
     sup_by_task = defaultdict(list)
@@ -772,32 +919,37 @@ def build(args):
             sup_by_url[g[1]].append(dict(a, task=tid))
 
     # One owner per PR. Claim strength: 3 = no-mistakes run on branch fm/<task>,
-    # 2 = the task's own `done: PR <url>` line, 1 = supervisor fm-pr-check or meta pr=.
-    # Highest strength wins; ties go to the earliest claim. A PR merely mentioned
-    # (waiting on another task's PR) is never claimed.
+    # 2 = the task's own `done: PR <url>` line (for a bead, a PR its close reason names),
+    # 1 = supervisor fm-pr-check or meta pr=. A launch-brief task's claim outranks every
+    # swarm or beads-crew claim; then the highest strength wins and ties go to the earliest
+    # claim. A PR merely mentioned (waiting on another task's PR) is never claimed.
     claims = defaultdict(list)
     for (home, tid), t in tasks.items():
+        w = int(t["source"] == "launch-brief")
         for r in runs:
             if r["pr_url"] and r["branch"] in (f"fm/{tid}", tid):
-                claims[r["pr_url"]].append((3, r["created_at"], (home, tid)))
+                claims[r["pr_url"]].append((w, 3, r["created_at"], (home, tid)))
         for s in t["sessions"]:
             for e in s["events"]:
                 if e[1] == "status" and e[2][0] == tid:
                     verb, _, note = parse_status(e[2][1])
-                    m = re.match(r"PR (https://github\.com/[^\s/]+/[^\s/]+/pull/\d+)", note or "")
+                    if t["source"] == "beads-crew":
+                        m = re.search(r"(https://github\.com/[^\s/]+/[^\s/]+/pull/\d+)", note or "")
+                    else:
+                        m = re.match(r"PR (https://github\.com/[^\s/]+/[^\s/]+/pull/\d+)", note or "")
                     if verb == "done" and m:
-                        claims[m.group(1)].append((2, e[0], (home, tid)))
+                        claims[m.group(1)].append((w, 2, e[0], (home, tid)))
         for a in sup_by_task.get(tid, []):
             if a["kind"] == "pr_check":
-                claims[a["groups"][1]].append((1, a["t"], (home, tid)))
+                claims[a["groups"][1]].append((w, 1, a["t"], (home, tid)))
         meta_pr = read_meta(os.path.join(home, "state", f"{tid}.meta")).get("pr")
         if meta_pr:
-            claims[meta_pr].append((1, t["spawn"], (home, tid)))
+            claims[meta_pr].append((w, 1, t["spawn"], (home, tid)))
     pr_owner = {}
     for u, cs in claims.items():
         u2 = u.rstrip(".,;)")
-        best = max(cs, key=lambda c: (c[0], -c[1]))
-        pr_owner[u2] = best[2]
+        best = max(cs, key=lambda c: (c[0], c[1], -c[2]))
+        pr_owner[u2] = best[3]
 
     task_rows, touch_rows, wait_rows, steer_rows = [], [], [], []
     flash_items = []
@@ -812,8 +964,9 @@ def build(args):
         if t["charter"] or bl.get("kind") in ("program", "secondmate"):
             excluded = "standing crew / secondmate charter"
         meta = read_meta(os.path.join(home, "state", f"{tid}.meta"))
-        # at --as-of, a record removed since then still existed if its teardown came later
-        in_flight = bool(meta) or bool(late_teardowns.get(tid))
+        # at --as-of, a record removed since then still existed if its teardown came later;
+        # a beads-crew row is in flight while one of its beads is open
+        in_flight = bool(meta) or bool(late_teardowns.get(tid)) or any(s.get("open") for s in t["sessions"])
         yolo = meta.get("yolo") or spawn_yolo.get(tid, "")
 
         # merged event stream across sessions
@@ -968,7 +1121,8 @@ def build(args):
                     add_touch(a["t"], "re-point", f"fm-merge-line {a['groups'][0]} {u}", "supervisor")
         launches = [e[0] for e in ev if e[1] == "launch"]
         for lt in launches[1:]:
-            add_touch(lt, "relaunch", "new launch-brief session", "worker-transcript")
+            add_touch(lt, "relaunch", "new launch-brief session" if t["source"] == "launch-brief" else f"new {t['source']} launch",
+                      "worker-transcript" if t["source"] != "beads-crew" else "beads-crew")
         for e in ev:
             if e[1] == "user_other":
                 add_touch(e[0], "direct", e[2] or "", "worker-transcript")
@@ -1056,9 +1210,9 @@ def build(args):
                 continue   # background compute finished: not a wait
             else:
                 iv.append((a[0], b[0], "worker_stall", f"idle until {nxt_kind}" + (" (error stop)" if a[2] == "error" else "")))
-        # tail: last event to horizon with no resume
+        # tail: last event to horizon with no resume (a beads-crew row has no transcript to idle in)
         last = ev[-1]
-        if last[0] < horizon - IDLE_MIN_S:
+        if last[0] < horizon - IDLE_MIN_S and t["source"] != "beads-crew":
             iv.append((last[0], horizon, "worker_stall", "no worker activity to end of span"))
         iv = [x for x in iv if x[1] > x[0] and x[2] in PRIORITY]
         lo, hi = max(spawn, since), min(horizon, now)
@@ -1079,6 +1233,7 @@ def build(args):
             **{f"wait_{c}_h": h(by_cls.get(c, 0) + (by_cls.get("handoff_idle", 0) if c == "human_answer" else 0)) for c in REPORT_CLASSES},
             wait_handoff_idle_h=h(by_cls.get("handoff_idle", 0)),
             nm_parked_h=h(sum(p.get("nm_parked_s", 0) for p in P["prs"].values())),
+            source=t["source"],
         ))
 
     # ---- summary
@@ -1111,6 +1266,11 @@ def build(args):
                          zero_touch_live=len([r for r in zt_live if r["kind"] == k]),
                          live=len([r for r in live if r["kind"] == k]))
                  for k in sorted({r["kind"] for r in measured})},
+        by_source={k: dict(measured=len([r for r in measured if r["source"] == k]),
+                           settled=len([r for r in settled if r["source"] == k]),
+                           zero_touch_live=len([r for r in zt_live if r["source"] == k]),
+                           wait_hours=round(sum(r[f"wait_{c}_h"] for r in measured if r["source"] == k for c in REPORT_CLASSES), 1))
+                   for k in sorted({r["source"] for r in measured})},
         touches_total=len([x for x in touch_rows if x["task"] in {r["task"] for r in measured}]),
         touches_by_type=dict(Counter(x["type"] for x in touch_rows if x["task"] in {r["task"] for r in measured})),
         steer_purposes=dict(Counter(s["purpose"] for s in steer_rows if s["in_span"] and not s["script_template"])),
