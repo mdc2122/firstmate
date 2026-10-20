@@ -3166,8 +3166,8 @@ test_queue_ejection_ignores_comment_not_from_queue_app() {
   printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"},{"id":8,"name":"queue-mq/pytest","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/111/job/222"},{"id":9,"name":"queue-mq/evil","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":15368},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/666/job/667"}]}\n' \
     "$head" "$head" "$head" > "$dir/check-runs.json"
   cat > "$dir/comments.json" <<JSON
-[[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"Removed from merge queue: Check failed: [run tests and push](https://github.com/o/r/actions/runs/444/job/445)"}],
-[{"created_at":"2026-10-14T02:46:00Z","user":{"login":"mallory","type":"User"},"body":"Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/999/job/998)"}]]
+[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"Removed from merge queue: Check failed: [run tests and push](https://github.com/o/r/actions/runs/444/job/445)"}]
+[{"created_at":"2026-10-14T02:46:00Z","user":{"login":"mallory","type":"User"},"body":"Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/999/job/998)"}]
 JSON
   queue_app_cycle "$dir" requested
   export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json"
