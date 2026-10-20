@@ -94,7 +94,9 @@
 // hold, for every wake kind: the close is bound to its own wake row (when the
 // close was observed, the row at the queue's current sequence carried exactly
 // that reason as its payload, or the decision-owned `needs-decision:` form of
-// the same signal); that row is no longer in state/.wake-queue; and no row still
+// the same signal); the delivered wake carries nothing beyond that reason (an
+// appended watcher failure or branch hand-back note always reaches the model);
+// that row is no longer in state/.wake-queue; and no row still
 // queued carries the same payload, so a multi-row signal batch is kept while any
 // of its rows waits. A close whose reason the watcher printed without appending
 // its own row (rows written by another owner, or none) has no own-row binding
@@ -180,6 +182,8 @@ type ReplacementActionableHandoff = {
 type UnconsumedWake = {
   content: string;
   pending: PendingActionableClose;
+  // The delivered message is the close's bare reason, with nothing appended.
+  reasonOnly: boolean;
   deliveredAt: number;
   repokes: number;
 };
@@ -421,10 +425,12 @@ function unackedRecoveryGeneration(): string {
 // Bind a close to its own wake row: the watcher queued that row, advancing the
 // sequence counter, immediately before printing the close's reason. A merge
 // poll's landing may queue later rows (a stall correction, a retried PR
-// registration) before it prints, so its own row is the newest `merged-<id>-`
-// check row instead. The row's payload is kept only when the pairing in the
-// header's "Supersession at delivery" proves the row is this close's own.
-function acknowledgementBinding(reason: string): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration" | "wakeQueuePayload"> {
+// registration) before it prints, so its own row is the `merged-<id>-<pr>`
+// check row for the task's recorded PR, appended after the arm cycle started
+// (sinceSeq); a landing whose outcome another owner already recorded queues
+// none. The row's payload is kept only when the pairing in the header's
+// "Supersession at delivery" proves the row is this close's own.
+function acknowledgementBinding(reason: string, sinceSeq?: number): Pick<PendingActionableClose, "wakeQueueSeq" | "recoveryGeneration" | "wakeQueuePayload"> {
   try {
     const seq = readFileSync(wakeQueueSeqFile, "utf8").trim();
     if (!/^[0-9]+$/.test(seq)) return {};
@@ -433,7 +439,10 @@ function acknowledgementBinding(reason: string): Pick<PendingActionableClose, "w
     const rows = readOptional(wakeQueue).split("\n").map((row) => row.split("\t")).filter((fields) => fields.length >= 5);
     const merged = line.match(/^check: (?:.*\/)?([A-Za-z0-9._-]+)\.check\.sh: merged$/);
     if (merged) {
-      const own = rows.filter(([, , kind, key]) => kind === "check" && key.startsWith(`merged-${merged[1]}-`)).at(-1);
+      const prs = readOptional(`${state}/${merged[1]}.meta`).split(/\r?\n/).filter((field) => field.startsWith("pr="));
+      if (prs.length !== 1 || sinceSeq === undefined) return binding;
+      const key = `merged-${merged[1]}-${prs[0].slice("pr=".length)}`;
+      const own = rows.filter(([, rowSeq, kind, rowKey]) => kind === "check" && rowKey === key && Number(rowSeq) > sinceSeq).at(-1);
       return own ? { ...binding, wakeQueueSeq: Number(own[1]), wakeQueuePayload: own.slice(4).join("\t") } : binding;
     }
     const own = rows.find((fields) => fields[1] === seq);
@@ -501,13 +510,13 @@ function triageLog(line: string): void {
   }
 }
 
-function createPendingActionable(message: string, predecessorArmPid: string): PendingActionableClose {
+function createPendingActionable(message: string, predecessorArmPid: string, sinceSeq?: number): PendingActionableClose {
   return {
     version: 1,
     token: `${process.pid}-${Date.now()}-${++replacementCoordinator.nextTokenId}`,
     message,
     predecessorArmPid,
-    ...acknowledgementBinding(message),
+    ...acknowledgementBinding(message, sinceSeq),
   };
 }
 
@@ -823,7 +832,11 @@ export default function (pi: ExtensionAPI) {
       `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
     );
     if (!generationIsLive(owner)) return false;
-    if (pending) owner.unconsumedWakes.set(pending.token, { content, pending, deliveredAt: Date.now(), repokes: 0 });
+    if (pending) {
+      owner.unconsumedWakes.set(pending.token, {
+        content, pending, reasonOnly: message === actionableLine(message), deliveredAt: Date.now(), repokes: 0,
+      });
+    }
     try {
       await pi.sendUserMessage(content, { deliverAs: mainIdle() ? "aside" : "followUp" });
     } catch (error) {
@@ -900,7 +913,7 @@ export default function (pi: ExtensionAPI) {
     for (const [token, wake] of owner.unconsumedWakes) {
       if (wake.content !== text) continue;
       owner.unconsumedWakes.delete(token);
-      const reason = supersededReason(wake.pending);
+      const reason = wake.reasonOnly ? supersededReason(wake.pending) : "";
       if (reason) {
         const line = `(${reason}): ${actionableLine(wake.pending.message)}`;
         const body = `watcher: superseded wake dropped ${line} - no action needed; do not run the drain for it.`;
@@ -1367,6 +1380,13 @@ export default function (pi: ExtensionAPI) {
       FM_WATCH_ARM_SCRIPT: armScript,
       FM_WATCH_PREDECESSOR_ARM_PID: predecessorArmPid,
     };
+    let sinceSeq: number | undefined;
+    try {
+      const seq = readOptional(wakeQueueSeqFile).trim() || "0";
+      if (/^[0-9]+$/.test(seq)) sinceSeq = Number(seq);
+    } catch {
+      // An unreadable sequence binds no merged close to a row; it then always replays.
+    }
     const armChild = spawn("bash", ["-lc", "config_dir=\"${FM_CONFIG_OVERRIDE:-$FM_HOME/config}\"; [ -f \"$config_dir/x-mode.env\" ] && . \"$config_dir/x-mode.env\"; exec \"$FM_WATCH_ARM_SCRIPT\" --restart"], {
       cwd: fmRoot,
       env,
@@ -1403,7 +1423,7 @@ export default function (pi: ExtensionAPI) {
       }
       const reason = completedActionableLine(stdout) || completedActionableLine(stderr);
       if (reason && !armPendingActionable.has(armChild)) {
-        const pending = createPendingActionable(reason, String(armChild.pid ?? ""));
+        const pending = createPendingActionable(reason, String(armChild.pid ?? ""), sinceSeq);
         armPendingActionable.set(armChild, pending);
         enqueuePendingActionable(owner, pending);
       }
@@ -1428,7 +1448,7 @@ export default function (pi: ExtensionAPI) {
       const classification = classifyClose(stdout, stderr, code, signal);
       const predecessor = String(armChild.pid ?? "");
       if (classification.kind === "actionable") {
-        const pending = armPendingActionable.get(armChild) ?? createPendingActionable(classification.message, predecessor);
+        const pending = armPendingActionable.get(armChild) ?? createPendingActionable(classification.message, predecessor, sinceSeq);
         enqueuePendingActionable(owner, pending);
         if (!generationIsLive(owner)) return;
         owner.retryFailures = 0;
