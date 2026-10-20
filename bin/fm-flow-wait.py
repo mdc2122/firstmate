@@ -21,7 +21,8 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
   W2 swarm transcripts   <home>/data/<id>/sessions/*.jsonl of --home and every local secondmate
                           home: the session directory a swarm root runs in (bin/fm-prime-swarm.sh
                           --session-dir, and hand-launched Prime/Grok swarms alike). A swarm has
-                          no launch brief; a session there whose first user message names
+                          no launch brief; a root session there (header rlmDepth 0 or absent,
+                          first message not a child prompt) whose first user message names
                           <home>/data/<id>/ (its kickoff or brief, compared with doubled letters
                           collapsed because a pasted kickoff can lose them) is a launch of task
                           <id> at that message, kind scout unless the backlog row says ship. Its
@@ -29,14 +30,20 @@ SOURCES (all read-only; the only writes are --out and the two caches in --cache-
                           appends status with: a call that opens state/<id>.status for append
                           (by path, or through a name an earlier call of the session bound to
                           it) appends every string literal in it that starts with a status verb.
+                          With no done: line yet, a swarm is in flight while its backlog row is
+                          under "In flight" or a session of it was active within IDLE_MIN_S of
+                          the readout instant.
   C  beads crew queue    <home>/data/beads/.beads/beads.db (mode=ro) of --home and every local
                           secondmate home: each bead labelled mirror:<row-id> is one launch of
                           that backlog row to the standing beads crew, which works it inside its
                           own long-running session and so never gets a launch brief per row.
                           Launch = the bead's created_at; its close is one status line at
-                          closed_at, `blocked:` when the close reason starts with "blocked" or
-                          "needs captain", else `done: <reason>`; an open bead keeps the row in
-                          flight. Kind scout unless the backlog row says ship. Touches are the
+                          closed_at: `blocked:` when the close reason starts with "blocked" or
+                          "needs captain"; `done: <reason>` only when the reason names delivered
+                          work (starts with done, shipped, merged, landed or verified, any case,
+                          or names a PR URL or a merge commit); any other reason (duplicate,
+                          superseded, wontfix, cancelled, empty, ...) is a `note:` that leaves the
+                          row closed-not-live. An open bead keeps the row in flight. Kind scout unless the backlog row says ship. Touches are the
                           supervisor actions that name the row; steers to the crew name the crew.
   A task is joined from the first of W, W2, C that has it (W2 and C never re-join a W task), and
   W2 and C tasks claim a PR only when no W task does (see the PR owner rule in build()).
@@ -377,6 +384,20 @@ def collapse(s):
     return re.sub(r"(.)\1+", r"\1", s)
 
 
+# bin/fm-prime-swarm.sh has the root prepend this rule to every child prompt
+SWARM_CHILD_RULE = "Rule: every reply you send must contain at least one tool call"
+
+
+def session_depth(f):
+    """The rlmDepth of a session's header line (0 for a root or a header without one)."""
+    try:
+        with open(f, errors="replace") as fh:
+            d = json.loads(fh.readline())
+        return int(d.get("rlmDepth") or 0) if isinstance(d, dict) and d.get("type") == "session" else 0
+    except (OSError, ValueError, TypeError):
+        return 0
+
+
 def scan_swarms(since_mtime, homes):
     """W2: one record per swarm-root session under <home>/data/<id>/sessions/ of each home."""
     sessions = []
@@ -384,13 +405,15 @@ def scan_swarms(since_mtime, homes):
         for f in sorted(glob.glob(os.path.join(home, "data", "*", "sessions", "*.jsonl"))):
             if os.path.getmtime(f) < since_mtime:
                 continue
+            if session_depth(f):
+                continue
             task = os.path.basename(os.path.dirname(os.path.dirname(f)))
             names = {collapse(os.path.join(p, "data", task, "")) for p in (home, os.path.realpath(home))}
 
             def swarm_launch(txt, rec, names=names, task=task, home=home):
                 if rec is not None:
                     return None
-                if not any(n in collapse(txt) for n in names):
+                if txt.lstrip().startswith(SWARM_CHILD_RULE) or not any(n in collapse(txt) for n in names):
                     return "abort"
                 return ("launch", dict(task=task, home=home, source="swarm", kind="scout", mode="", charter=False))
 
@@ -402,6 +425,8 @@ def scan_swarms(since_mtime, homes):
 
 # ---------------------------------------------------------------- beads crew queue (C)
 BEAD_BLOCKED_RE = re.compile(r"^\s*(blocked|needs captain)\b", re.I)
+BEAD_DONE_RE = re.compile(r"^\s*(done|shipped|merged|landed|verified)\b|https://github\.com/[^\s/]+/[^\s/]+/pull/\d+"
+                          r"|\bmerge commit\s+[0-9a-f]{7,40}\b|/commit/[0-9a-f]{7,40}\b", re.I)
 
 
 def scan_beads(homes):
@@ -427,7 +452,7 @@ def scan_beads(homes):
             events = [(spawn, "launch", None)]
             if end is not None and seen(end):
                 reason = " ".join((reason or "").split())
-                verb = "blocked" if BEAD_BLOCKED_RE.match(reason) else "done"
+                verb = "blocked" if BEAD_BLOCKED_RE.match(reason) else "done" if BEAD_DONE_RE.search(reason) else "note"
                 events.append((end, "status", (task, f"{verb}: {reason}")))
             sessions.append(dict(task=task, home=home, source="beads-crew", kind="scout", mode="", charter=False,
                                  file=f"{db}#{bead}", spawn=spawn, events=events, end_ts=events[-1][0],
@@ -972,6 +997,9 @@ def build(args):
         # merged event stream across sessions
         ev = sorted((e for s in t["sessions"] for e in s["events"]), key=lambda e: e[0])
         status = [(e[0],) + parse_status(e[2][1]) + (e[2][1],) for e in ev if e[1] == "status" and e[2][0] == tid]
+        # a swarm with no done: line yet is in flight while its row is or its session was just active
+        if t["source"] == "swarm" and not any(st[1] == "done" for st in status):
+            in_flight = in_flight or bl.get("section") == "in flight" or ev[-1][0] >= now - IDLE_MIN_S
         # steers: worker-side inbox reads (dedupe by at), live inbox, doorbell-only
         steers = {}
         for e in ev:

@@ -261,6 +261,22 @@ write(swarm, [
     call("2026-10-12T08:40:00Z", "code", "if 'done:' not in STATUS.read_text():\n    with STATUS.open('a') as f:\n"
          "        f.write('done: source B wins; report.md written\\n')", "stop"),
 ])
+# Child sessions in the swarm's session directory are not launches: one with rlmDepth 1,
+# and one whose first message is a child prompt naming the swarm's evidence directory.
+write(os.path.join(fm, "data", "swarm-a", "sessions", "c1.jsonl"), [
+    {"type": "session", "timestamp": "2026-10-12T08:05:00Z", "rlmDepth": 1},
+    user("2026-10-12T08:05:01Z", f"Read {fm}/data/swarm-a/kickof.md section 2 and report."),
+    call("2026-10-12T08:10:00Z", "code", "print(1)", "stop")])
+write(os.path.join(fm, "data", "swarm-a", "sessions", "c2.jsonl"), [
+    {"type": "session", "timestamp": "2026-10-12T08:06:00Z"},
+    user("2026-10-12T08:06:01Z", "Rule: every reply you send must contain at least one tool call until your evidence "
+         f"file is written. Your final step is writing {fm}/data/swarm-a/evidence/t1.md."),
+    call("2026-10-12T08:11:00Z", "code", "print(1)", "stop")])
+# A swarm still working at the readout instant with no done: line is in flight.
+write(os.path.join(fm, "data", "swarm-b", "sessions", "s.jsonl"), [
+    {"type": "session", "timestamp": "2026-10-12T21:00:00Z"},
+    user("2026-10-12T21:00:05Z", f"Read {fm}/data/swarm-b/kickoff.md and begin."),
+    call("2026-10-12T22:58:00Z", "code", "print(1)")])
 # A sessions directory whose first message names another directory is not a swarm launch.
 write(os.path.join(fm, "data", "notes", "sessions", "x.jsonl"),
       [user("2026-10-12T08:00:00Z", "Summarize these transcripts."),
@@ -276,13 +292,17 @@ db = sqlite3.connect(os.path.join(fm, "data", "beads", ".beads", "beads.db"))
 db.executescript("create table issues(id text, created_at text, closed_at text, close_reason text, deleted_at text);"
                  "create table labels(issue_id text, label text);")
 db.executemany("insert into issues values (?,?,?,?,null)", [
-    ("fm-1", "2026-10-12T09:00:00.000000+00:00", "2026-10-12T11:00:00.000000+00:00", "chore done: wrote the audit"),
+    ("fm-1", "2026-10-12T09:00:00.000000+00:00", "2026-10-12T11:00:00.000000+00:00", "done: wrote the audit in https://github.com/acme/vm/pull/7"),
     ("fm-2", "2026-10-12T09:30:00.000000+00:00", None, None),
     ("fm-3", "2026-10-12T06:00:00.000000+00:00", "2026-10-12T06:30:00.000000+00:00", "needs captain: which channel?"),
     ("fm-4", "2026-10-12T07:10:00.000000+00:00", "2026-10-12T07:20:00.000000+00:00", "done"),
-    ("fm-5", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:05:00.000000+00:00", "no mirror label")])
+    ("fm-5", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:05:00.000000+00:00", "no mirror label"),
+    ("fm-6", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:10:00.000000+00:00", "duplicate of fm-1"),
+    ("fm-7", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:10:00.000000+00:00", ""),
+    ("fm-8", "2026-10-12T10:00:00.000000+00:00", "2026-10-12T10:10:00.000000+00:00", "cancelled")])
 db.executemany("insert into labels values (?,?)", [("fm-1", "mirror:chore"), ("fm-1", "chore"), ("fm-2", "mirror:pending"),
-                                                   ("fm-3", "mirror:asks"), ("fm-4", "mirror:briefed")])
+                                                   ("fm-3", "mirror:asks"), ("fm-4", "mirror:briefed"),
+                                                   ("fm-6", "mirror:dup"), ("fm-7", "mirror:empty"), ("fm-8", "mirror:cancel")])
 db.commit()
 PY
   make_nm_db "$root/nm.sqlite"
@@ -296,12 +316,16 @@ PY
 )
   want='asks beads-crew scout 2026-10-12T06:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
 briefed launch-brief scout 2026-10-12T07:00:00Z 2026-10-12T07:30:00Z live-proven - human_answer=0.0 worker_stall=0.0
+cancel beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
 chore beads-crew scout 2026-10-12T09:00:00Z 2026-10-12T11:00:00Z live-proven - human_answer=0.0 worker_stall=0.0
+dup beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
+empty beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
 pending beads-crew scout 2026-10-12T09:30:00Z - in-flight - human_answer=0.0 worker_stall=0.0
-swarm-a swarm scout 2026-10-12T08:00:05Z 2026-10-12T08:40:00Z live-proven direct:1 human_answer=0.0 worker_stall=0.0'
+swarm-a swarm scout 2026-10-12T08:00:05Z 2026-10-12T08:40:00Z live-proven direct:1 human_answer=0.0 worker_stall=0.0
+swarm-b swarm scout 2026-10-12T21:00:05Z - in-flight - human_answer=0.0 worker_stall=0.0'
   assert_equals "$want" "$got" "swarm and beads-crew dispatches must be measured tasks beside the launch-brief ones"
   got=$(jq -c '.by_source | map_values(.measured)' "$root/out/summary.json")
-  assert_equals '{"beads-crew":3,"launch-brief":1,"swarm":1}' "$got" "summary splits measured tasks by join"
+  assert_equals '{"beads-crew":6,"launch-brief":1,"swarm":2}' "$got" "summary splits measured tasks by join"
   pass "a swarm root's session directory and a beads crew mirror bead each join their own task; a launch brief keeps its task"
 }
 
