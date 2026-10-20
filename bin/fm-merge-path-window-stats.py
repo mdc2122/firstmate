@@ -52,7 +52,9 @@ minutes, sum in hours.
                                  in the window, plus
                                  merge_to_next_arm_when_next_was_green[<class>]
                                  and arm_class_counts
-  release.*                      the harness's release stages, plus
+  release.*                      the harness's release stages, with
+                                 canary_to_promote and deploy_to_done over
+                                 tickets joined in the window, plus
                                  advance_lane (release-advance tickets joined
                                  in the window)
   pr_hours_in_window.<state>     {h, share}: green_unarmed_queue_busy,
@@ -97,11 +99,11 @@ def overlap(start, end, merged):
     return sum(max(0.0, min(end, be) - max(start, bs)) for bs, be in merged)
 
 
-def arm_class(pr, armed, merges):
-    """Classify a PR's auto-merge arm at epoch `armed` against the ledger's pr-merge rows."""
+def arm_class(repo, pr, armed, merges):
+    """Classify --repo PR `pr`'s auto-merge arm at epoch `armed` against the ledger's pr-merge rows."""
     if not armed:
         return None
-    tail = f"/pull/{pr}"
+    tail = f"github.com/{repo}/pull/{pr}"
     near = [x for x in merges if x["target"].endswith(tail)
             and armed - ARM_LEDGER_BEFORE_S <= x["epoch"] <= armed + ARM_LEDGER_AFTER_S]
     if not near:
@@ -133,7 +135,7 @@ def pr_hours(prs, busy, w0, w1):
     """Per-PR seconds in each PR_HOUR_STATES state inside [w0, w1].
 
     `prs` rows carry green, armed, mq_start, merged (None while open at --until),
-    and optionally joined and live; `busy` is the merged gitea-mq-occupied intervals.
+    and optionally mq_done, joined, and live; `busy` is the merged gitea-mq-occupied intervals.
     """
     per_pr = {}
     for r in prs:
@@ -141,7 +143,7 @@ def pr_hours(prs, busy, w0, w1):
             continue
         mine = per_pr.setdefault(r["pr"], {k: 0.0 for k in PR_HOUR_STATES})
         mine["open_at_until"] = r.get("merged") is None
-        s, e = max(r["green"], w0), min(r["armed"] or w1, w1)
+        s, e = max(r["green"], w0), min(r["armed"] or r.get("merged") or w1, w1)
         if e > s:
             b = overlap(s, e, busy)
             mine["green_unarmed_queue_busy"] += b
@@ -149,12 +151,29 @@ def pr_hours(prs, busy, w0, w1):
         if r["armed"]:
             mine["armed_not_enqueued"] += clip(r["armed"], r["mq_start"] or r.get("merged") or w1, w0, w1)
         if r["mq_start"]:
-            mine["in_queue"] += clip(r["mq_start"], r.get("merged") or w1, w0, w1)
+            mine["in_queue"] += clip(r["mq_start"], r.get("merged") or r.get("mq_done") or w1, w0, w1)
         if r.get("merged"):
             mine["merged_not_joined"] += clip(r["merged"], r.get("joined") or w1, w0, w1)
             if r.get("joined"):
                 mine["joined_not_live"] += clip(r["joined"], r.get("live") or w1, w0, w1)
     return per_pr
+
+
+def busy_intervals(rows, open_rows, w0, w1):
+    """Merged intervals gitea-mq held an entry: merged PRs until their merge, open ones until the check ended."""
+    busy = [(r["mq_start"], r["merged"]) for r in rows
+            if r["mq_start"] and r["merged"] and r["merged"] >= w0 and r["mq_start"] <= w1]
+    busy += [(r["mq_start"], r["mq_done"] or w1) for r in open_rows
+             if r["mq_start"] and r["mq_start"] <= w1 and (r["mq_done"] or w1) >= w0]
+    return merge_intervals(busy)
+
+
+def ticket_stages(tickets):
+    """Release stages over finished tickets (rows carry join, canary, promote, deploy, done)."""
+    done = [x for x in tickets if x["done"]]
+    return dict(join_to_done=qs([x["done"] - x["join"] for x in done]),
+                canary_to_promote=qs([x["promote"] - x["canary"] for x in done if x["canary"] and x["promote"]]),
+                deploy_to_done=qs([x["done"] - x["deploy"] for x in done if x["deploy"]]))
 
 
 def ci_window(repo, ci0, w1):
@@ -220,13 +239,11 @@ def release_window(win, repo_dir, w0, w1):
         rel_rows.append(dict(ticket=t, owner=j.get("owner"), sha=j.get("detail"), join=j["epoch"],
                              canary=stp.get("canary"), promote=stp.get("promote"), deploy=stp.get("deploy"),
                              done=done["epoch"] if done else None))
-    adv = [x for x in rel_rows if x["owner"] == "release-advance" and x["join"] >= w0 and x["done"]]
-    rel["advance_lane"] = dict(
-        tickets=len(adv),
-        join_to_done=qs([x["done"] - x["join"] for x in adv]),
-        canary_to_promote=qs([x["promote"] - x["canary"] for x in adv if x["promote"]]),
-        deploy_to_done=qs([x["done"] - x["deploy"] for x in adv if x["deploy"]]),
-    )
+    inw = [x for x in rel_rows if x["join"] >= w0 and x["done"]]
+    stages = ticket_stages(inw)
+    rel["canary_to_promote"], rel["deploy_to_done"] = stages["canary_to_promote"], stages["deploy_to_done"]
+    adv = [x for x in inw if x["owner"] == "release-advance"]
+    rel["advance_lane"] = dict(tickets=len(adv), **ticket_stages(adv))
     # per-PR merged -> join / live through the first finished release carrying its merge commit
     main_shas = subprocess.run(["git", "-C", repo_dir, "rev-list", "--first-parent", "origin/main",
                                 "--since=10 days ago"], capture_output=True, text=True).stdout.split()
@@ -266,7 +283,7 @@ def open_line_entries(repo, merge_line):
         arms = [T(e["created_at"]) for e in tl if e["event"] == "auto_squash_enabled"]
         g = next((c for c in ck if c["name"] == "gitea-mq"), {})
         return dict(pr=n, green=green, armed=max(arms) if arms and p["auto"] else None,
-                    mq_start=T(g.get("started_at")), merged=None, red=bool(bad))
+                    mq_start=T(g.get("started_at")), mq_done=T(g.get("completed_at")), merged=None, red=bool(bad))
 
     with ThreadPoolExecutor(6) as ex:
         return [x for x in ex.map(one, urls) if x]
@@ -298,6 +315,11 @@ def main():
     actions = a.actions or os.path.join(a.home, "state", "supervisor-actions.jsonl")
     merge_line = a.merge_line or os.path.join(a.home, "state", "merge-lines",
                                               "github@github.com@" + a.repo.replace("/", "%2F"))
+    rows, _ = H.github(a.repo, a.prs)
+    rows = sorted(rows, key=lambda r: r["merged"])
+    if not rows or rows[0]["merged"] > w0:
+        ap.error(f"the {len(rows)} merged PRs read do not reach back to --since; raise --prs, or the window "
+                 "lies beyond the harness's 150-closed-PR fetch")
     os.makedirs(a.out, exist_ok=True)
 
     ci_rows, ci = ci_window(a.repo, ci0, w1)
@@ -306,12 +328,10 @@ def main():
         w.writeheader()
         w.writerows(sorted(ci_rows, key=lambda r: r["created"]))
 
-    rows, _ = H.github(a.repo, a.prs)
-    rows = sorted(rows, key=lambda r: r["merged"])
     win = [r for r in rows if w0 <= r["merged"] <= w1]
     merges = ledger_merges(actions)
     for r in rows:
-        r["arm_class"] = arm_class(r["pr"], r["armed"], merges)
+        r["arm_class"] = arm_class(a.repo, r["pr"], r["armed"], merges)
     gh = dict(
         pr_head_pytest=qs([r["pr_pytest"] for r in win]),
         green_to_armed=qs([max(0, r["armed"] - r["green"]) for r in win if r["armed"] and r["green"]]),
@@ -332,10 +352,7 @@ def main():
     rel, rel_rows = release_window(win, repo_dir, w0, w1)
 
     open_rows = open_line_entries(a.repo, merge_line)
-    busy = [(r["mq_start"], r["merged"]) for r in rows
-            if r["mq_start"] and r["merged"] and r["merged"] >= w0 and r["mq_start"] <= w1]
-    busy += [(r["mq_start"], w1) for r in open_rows if r["mq_start"] and r["mq_start"] <= w1]
-    busy_m = merge_intervals(busy)
+    busy_m = busy_intervals(rows, open_rows, w0, w1)
     late = [dict(r, merged=None) for r in rows if r["merged"] > w1]
     per_pr = pr_hours(win + late + open_rows, busy_m, w0, w1)
     hours = {k: sum(d[k] for d in per_pr.values()) for k in PR_HOUR_STATES}
