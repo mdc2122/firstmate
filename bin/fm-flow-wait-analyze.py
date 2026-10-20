@@ -15,13 +15,15 @@ It also prints the coverage caveats every weekly readout states:
   * denominators by kind/outcome/zero-touch and by home, and the zero-touch live ships
   * supervisor_transcript_gaps: each hole of at least --gap-min-hours in the --home main
     home's supervisor transcript coverage (summary.json coverage.supervisor_transcripts)
-    that meets the window, with the settled tasks whose spawn..end span overlaps it,
-    since supervisor touches inside a hole went unseen before the action ledger
+    between the window start and now_cap, clipped to them, with the settled tasks whose
+    spawn..end span overlaps it, since supervisor touches inside a hole went unseen before
+    the action ledger
   * ended_after_cap: tasks whose END came after now_cap, and the wait hours clipped off
   * merge_queue hours by kind and yolo posture
   * uncovered_rows: the backlog rows closed in the window with no worker transcript
     (summary.json coverage), classed by why: swarm, secondmate / beads crew, a launch brief
-    before, inside, or after the window (from --sessions-dir), or no launch brief at all
+    before, inside, or after the window (a --sessions-dir session whose brief's own status
+    line names the row), or no launch brief at all
 
 Usage:
   bin/fm-flow-wait-analyze.py RUN_DIR [--home DIR] [--sessions-dir DIR] [--gap-min-hours H]
@@ -29,7 +31,7 @@ Usage:
   --home defaults to $FM_HOME, else this script's checkout root, and must be the --home the
   run accounted; --sessions-dir defaults to ~/.omp/agent/sessions.
 """
-import argparse, collections, csv, glob, importlib.util, json, os, re, statistics, sys
+import argparse, collections, csv, importlib.util, json, os, re, statistics, sys
 
 BIN = os.path.dirname(os.path.abspath(__file__))
 ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -139,22 +141,25 @@ def main_home_transcript(c):
     return os.path.exists(os.path.join(main_sessions, c["file"]))   # a summary from before coverage named its dir
 
 
-gaps, reach = [], None
-for first, last in sorted((c["first"], c["last"]) for c in SUMMARY["coverage"]["supervisor_transcripts"]
+cap = SUMMARY["now_cap"]
+lo_t, cap_t, min_s = fw.ts(since + "T00:00:00Z"), fw.ts(cap), args.gap_min_hours * 3600
+gaps, reach = [], lo_t
+for first, last in sorted((fw.ts(c["first"]), fw.ts(c["last"])) for c in SUMMARY["coverage"]["supervisor_transcripts"]
                           if main_home_transcript(c)):
-    if (reach is not None and first > reach and first > since and reach < until
-            and fw.ts(first) - fw.ts(reach) >= args.gap_min_hours * 3600):
-        gaps.append((reach, first))
-    reach = last if reach is None else max(reach, last)
+    end = min(first, cap_t)
+    if end > reach and end - reach >= min_s:
+        gaps.append((reach, end))
+    reach = max(reach, last)
+if cap_t > reach and cap_t - reach >= min_s:
+    gaps.append((reach, cap_t))
 out["supervisor_transcript_gaps"] = []
 for start, end in gaps:
-    ov = [x for x in settled if x["spawn"] < end and (x["end"] or "9") > start]
+    ov = [x for x in settled if fw.ts(x["spawn"]) < end and (not x["end"] or fw.ts(x["end"]) > start)]
     out["supervisor_transcript_gaps"].append(dict(
-        start=start, end=end, hours=round((fw.ts(end) - fw.ts(start)) / 3600, 1), settled=len(ov),
+        start=fw.iso(start), end=fw.iso(end), hours=round((end - start) / 3600, 1), settled=len(ov),
         zero_touch_any=sum(x["zero_touch"] == "True" for x in ov),
         zero_touch_live=[(x["task"], x["home"]) for x in ov if x["zero_touch"] == "True" and x["outcome"] == "live-proven"]))
 
-cap = SUMMARY["now_cap"]
 late = [x for x in tasks if x["end"] and x["end"] > cap]
 out["ended_after_cap"] = dict(n=len(late), tail_h=round(sum((fw.ts(x["end"]) - fw.ts(cap)) / 3600 for x in late), 1),
                               zero_touch=sum(x["zero_touch"] == "True" for x in late))
@@ -168,28 +173,17 @@ out["merge_queue_by_kind_yolo"] = {k: round(h, 1) for k, h in yo.items()}
 miss = SUMMARY["coverage"]["backlog_rows_closed_in_window_without_worker_transcript"]
 backlog = "".join(open(p, errors="replace").read() for p in
                   (os.path.join(args.home, "data", n) for n in ("done-archive.md", "backlog.md")) if os.path.exists(p))
-launch = collections.defaultdict(list)   # row id -> launch-brief session dates naming its inbox
-lo = fw.ts(since + "T00:00:00Z") - 14 * 86400
-for f in glob.glob(os.path.join(args.sessions_dir, "*", "*.jsonl")) if miss else []:
-    try:
-        if os.path.getmtime(f) < lo:
-            continue
-        with open(f, errors="replace") as fh:
-            head = fh.read(300000)
-    except OSError:
-        continue
-    if "FIRSTMATE_OP: v1 launch-brief" not in head:
-        continue
-    for m in miss:
-        if f"state/{m}.inbox" in head:
-            launch[m].append(os.path.basename(f)[:10])
+launch = collections.defaultdict(list)   # row id -> dates of the launch-brief sessions whose own task it is
+for rec in fw.scan_workers(lo_t - 14 * 86400) if miss else []:
+    if rec["task"] in miss:
+        launch[rec["task"]].append(os.path.basename(rec["file"])[:10])
 uncovered = {}
 for m in miss:
     row = re.search(r"^- \[.\] " + re.escape(m) + r" - (.*)$", backlog, re.M)
     line = row.group(1) if row else ""
-    if re.search(r"swarm|prime|grok", m + line, re.I):
+    if re.search(r"\b(swarm|prime|grok)\b", m + " " + line, re.I):
         k = "swarm (no fm-spawn launch brief)"
-    elif re.search(r"beads|secondmate|ab-beads|board-drain|supply", line, re.I) and m not in launch:
+    elif re.search(r"\b(beads|secondmate|board-drain|supply)\b", line, re.I) and m not in launch:
         k = "secondmate / beads crew"
     elif m in launch:
         d = max(launch[m])

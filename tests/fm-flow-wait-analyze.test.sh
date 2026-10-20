@@ -11,6 +11,9 @@
 # and the action ledger must not close it. The same summary without the
 # per-transcript dir field (a run from before it was recorded) must find the
 # same hole from the transcript files present in the main home's session dir.
+# Holes at the window start and before now_cap count too, clipped to the window.
+# A launch brief joins the row its own status-append line names, not any row
+# whose inbox it mentions, and "primary" in a title is not a swarm marker.
 set -u
 
 # shellcheck source=tests/lib.sh disable=SC1091
@@ -89,7 +92,7 @@ transcripts = [
 for c in transcripts:
     if "/" not in c["file"]:
         open(os.path.join(sess, "-mate" if c["file"] == "mate.jsonl" else "-fm", c["file"]), "w").write("{}\n")
-miss = ["prime-swarm-plan", "beads-row", "before-row", "after-row", "inwin-row", "direct-row"]
+miss = ["prime-swarm-plan", "beads-row", "before-row", "after-row", "inwin-row", "direct-row", "primary-guard"]
 json.dump(dict(window=["2026-10-09", "2026-10-15"], now_cap=d(15),
                coverage=dict(supervisor_transcripts=transcripts,
                              backlog_rows_closed_in_window_without_worker_transcript=miss)),
@@ -99,10 +102,20 @@ open(os.path.join(fm, "data", "done-archive.md"), "w").write(
     "- [x] beads-row - Fix the flake the beads crew found (kind: ship) (done 2026-10-12)\n"
     "- [x] prime-swarm-plan - Plan the next run (kind: scout) (reported 2026-10-11)\n")
 open(os.path.join(fm, "data", "backlog.md"), "w").write(
-    "## Done\n- [x] direct-row - Captain call recorded directly (kind: ship) (done 2026-10-13)\n")
-brief = "\u2063FIRSTMATE_OP: v1 launch-brief: inbox is {}/state/{}.inbox\n"
+    "## Done\n- [x] direct-row - Captain call recorded directly (kind: ship) (done 2026-10-13)\n"
+    "- [x] primary-guard - Guard the primary home against reuse (kind: ship) (done 2026-10-12)\n")
+
+def launch(stamp, row, task_text=""):
+    brief = ("\u2063FIRSTMATE_OP: v1 launch-brief\n" + task_text +
+             f"Report: echo \"{{state}}: {{one short line}}\" >> '{fm}/state/{row}.status'\n"
+             f"Inbox: {fm}/state/{row}.inbox\n")
+    line = dict(type="message", timestamp=f"{stamp}T00:00:00Z", message=dict(role="user", content=brief))
+    open(os.path.join(sess, "-w", f"{stamp}T00-00-00-000Z_{row}.jsonl"), "w").write(json.dumps(line) + "\n")
+
 for stamp, row in (("2026-10-01", "before-row"), ("2026-10-15", "after-row"), ("2026-10-10", "inwin-row")):
-    open(os.path.join(sess, "-w", f"{stamp}T00-00-00-000Z_x.jsonl"), "w").write(json.dumps(brief.format(fm, row)) + "\n")
+    launch(stamp, row)
+# A secondmate's own brief naming another row's inbox is not that row's launch brief.
+launch("2026-10-12", "mate-self", f"Hand the fix to {fm}/state/direct-row.inbox\n")
 # A session naming a row's inbox without a launch brief must not count as one.
 open(os.path.join(sess, "-w", "2026-10-11T00-00-00-000Z_y.jsonl"), "w").write(f"see {fm}/state/direct-row.inbox\n")
 PY
@@ -133,8 +146,8 @@ ended_after_cap {"n": 2, "tail_h": 9.0, "zero_touch": 1}
 merge_queue_by_kind_yolo {"scout/yolo=-": 0.0, "ship/yolo=-": 2.0, "ship/yolo=off": 1.0, "ship/yolo=on": 6.0}
 by_home {"primary": 6, "secondmate:/m": 1}
 zero_touch_live_ships [["before-gap", "https://github.com/o/r/pull/2", "merged"]]
-uncovered_rows {"in-window launch brief, session-match miss": {"ids": ["inwin-row"], "n": 1}, "no launch brief anywhere (firstmate-direct, captain call, or done by another task'"'"'s worker)": {"ids": ["direct-row"], "n": 1}, "secondmate / beads crew": {"ids": ["beads-row"], "n": 1}, "spawned before window": {"ids": ["before-row"], "n": 1}, "spawned on/after window end": {"ids": ["after-row"], "n": 1}, "swarm (no fm-spawn launch brief)": {"ids": ["prime-swarm-plan"], "n": 1}}
-uncovered_rows_total 6
+uncovered_rows {"in-window launch brief, session-match miss": {"ids": ["inwin-row"], "n": 1}, "no launch brief anywhere (firstmate-direct, captain call, or done by another task'"'"'s worker)": {"ids": ["direct-row", "primary-guard"], "n": 2}, "secondmate / beads crew": {"ids": ["beads-row"], "n": 1}, "spawned before window": {"ids": ["before-row"], "n": 1}, "spawned on/after window end": {"ids": ["after-row"], "n": 1}, "swarm (no fm-spawn launch brief)": {"ids": ["prime-swarm-plan"], "n": 1}}
+uncovered_rows_total 7
 merge_queue_items {"ge5h_n": 1, "ge5h_sum": 6.0, "n": 3, "sum": 9.0, "top10_sum": 9.0}'
   assert_equals "$want" "$got" "coverage caveats on the fixture run"
   pass "gap overlap, cap-clipped tail, merge_queue concentration, and uncovered rows are derived from one run"
@@ -150,5 +163,26 @@ test_summary_without_transcript_dirs_finds_the_same_gap() {
   pass "a summary recorded before transcript dirs finds the main-home gap from the session files"
 }
 
+test_edge_gaps_are_clipped_to_window_start_and_now_cap() {
+  local run="$TMP_ROOT/edge" got want
+  mkdir -p "$run"
+  make_run "$run" 1
+  python3 - "$run/out/summary.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+s = json.load(open(p))
+s["coverage"]["supervisor_transcripts"] = [
+    dict(first="2026-10-07T00:00:00Z", last="2026-10-08T00:00:00Z", file="a.jsonl", dir="-fm"),
+    dict(first="2026-10-09T03:00:00Z", last="2026-10-14T18:00:00Z", file="c.jsonl", dir="-fm"),
+]
+json.dump(s, open(p, "w"))
+PY
+  got=$(caveats "$run" | grep '^supervisor_transcript_gaps ')
+  want='supervisor_transcript_gaps [{"end": "2026-10-09T03:00:00Z", "hours": 3.0, "settled": 1, "start": "2026-10-09T00:00:00Z", "zero_touch_any": 1, "zero_touch_live": [["before-gap", "primary"]]}, {"end": "2026-10-15T00:00:00Z", "hours": 6.0, "settled": 3, "start": "2026-10-14T18:00:00Z", "zero_touch_any": 2, "zero_touch_live": [["late-b", "primary"]]}]'
+  assert_equals "$want" "$got" "holes at the window start and before now_cap, clipped to the window"
+  pass "supervisor transcript holes at the window start and before now_cap are reported, clipped to the window"
+}
+
 test_breakdowns
+test_edge_gaps_are_clipped_to_window_start_and_now_cap
 test_summary_without_transcript_dirs_finds_the_same_gap
