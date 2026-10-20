@@ -37,8 +37,14 @@
 #                     queue check has any status of its own;
 #                     <auto-merge-enabled> is true or false and <detail> names
 #                     each queue check as the waiting line does
-#   clear             any of that does not hold: merged, closed, a draft, a
-#                     red or pending check, no merge-queue app on the base, or
+#   ci-pending <head-sha> <detail>
+#                     the pull request is open and not a draft, and no check
+#                     outside the merge-queue app's is red, but one is still
+#                     pending or is required and not yet reported; <detail>
+#                     names each such check as "<name> pending" or "<name> not
+#                     reported", on any base branch
+#   clear             none of that holds: merged, closed, a draft, a red
+#                     check, or green with no merge-queue app on the base or
 #                     a queue check that has reported
 # and nothing when the answer is unknown, exactly as above.
 #
@@ -66,15 +72,21 @@ if [ "${1:-}" = --disable-auto ]; then
 fi
 
 # Every check outside <names> that is red, pending, or required but not yet
-# reported, one per line; exits nonzero when that cannot be read.
+# reported, as a JSON array of {name, state} with state "red", "pending", or
+# "not reported"; exits nonzero when that cannot be read.
 not_green_outside() {  # <pull-request-json> <base> <head> <names-json>
-  local json=$1 base=$2 head=$3 names=$4 red producers missing
+  local json=$1 base=$2 head=$3 names=$4 red pending producers missing
   red=$(fm_pr_github_checks_not_green "$json") || return 1
+  red=$(printf '%s' "$red" | jq -Rsc 'split("\n") | map(select(length > 0))' 2>/dev/null) || return 1
+  pending=$(fm_pr_github_checks_pending "$json" "$red") || return 1
   fm_pr_github_read_required_contexts "$FM_PR_OWNER" "$FM_PR_REPO" "$base" || return 1
   producers=$(fm_pr_github_read_check_producers "$FM_PR_OWNER" "$FM_PR_REPO" "$head" "$FM_PR_GITHUB_REQUIRED") || return 1
   missing=$(fm_pr_github_required_checks_missing "$json" "$FM_PR_GITHUB_REQUIRED" "$producers") || return 1
-  printf '%s\n%s\n' "$red" "$missing" | jq -Rr --argjson names "$names" \
-    'select(length > 0) | select(. as $n | any($names[]; . == $n) | not)' 2>/dev/null || return 1
+  jq -nc --argjson names "$names" --argjson red "$red" --arg pending "$pending" --arg missing "$missing" '
+    ($pending | split("\n")) as $p
+    | [($red[] | {name: ., state: (. as $n | if any($p[]; . == $n) then "pending" else "red" end)}),
+       ($missing | split("\n")[] | select(length > 0) | {name: ., state: "not reported"})]
+    | map(select(.name as $n | any($names[]; . == $n) | not))' 2>/dev/null || return 1
 }
 
 if [ "${1:-}" = --unhanded ]; then
@@ -87,15 +99,21 @@ if [ "${1:-}" = --unhanded ]; then
   fm_pr_github_read_queue_app_checks "$FM_PR_OWNER" "$FM_PR_REPO" "$base" "$json" || exit 0
   names=$FM_PR_GITHUB_QUEUE_APP_CHECKS
   fm_pr_github_auto_merge_parse "$json" "$names" || exit 0
-  [ "$FM_PR_GITHUB_AUTO_STATE" = OPEN ] && [ "$names" != '[]' ] \
-    && [ "$FM_PR_GITHUB_AUTO_REPORTED" = false ] || { echo clear; exit 0; }
+  [ "$FM_PR_GITHUB_AUTO_STATE" = OPEN ] || { echo clear; exit 0; }
   case "$(fm_pr_json_draft_state "$json")" in
     false) ;;
     true) echo clear; exit 0 ;;
     *) exit 0 ;;
   esac
   blocking=$(not_green_outside "$json" "$base" "$FM_PR_GITHUB_AUTO_HEAD" "$names") || exit 0
-  [ -z "$blocking" ] || { echo clear; exit 0; }
+  if [ "$blocking" != '[]' ]; then
+    pending=$(printf '%s' "$blocking" | jq -r 'if any(.[]; .state == "red") then ""
+      else map(.name + " " + .state) | join(", ") | gsub("[\r\n]"; " ") end' 2>/dev/null) || exit 0
+    [ -n "$pending" ] || { echo clear; exit 0; }
+    echo "ci-pending $FM_PR_GITHUB_AUTO_HEAD $pending"
+    exit 0
+  fi
+  [ "$names" != '[]' ] && [ "$FM_PR_GITHUB_AUTO_REPORTED" = false ] || { echo clear; exit 0; }
   echo "unhanded $FM_PR_GITHUB_AUTO_HEAD $FM_PR_GITHUB_AUTO_ENABLED ${FM_PR_GITHUB_AUTO_DETAIL:-no queue check reported}"
   exit 0
 fi

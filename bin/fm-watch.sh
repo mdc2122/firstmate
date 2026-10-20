@@ -161,9 +161,9 @@
 #                          disabled. Once per PR and new head, for every task;
 #                          a yolo poll re-verifies the new head next cycle
 #   check: <check>: merge-queue stalled: merge queue has not picked up or finished <url> after <n> min at head <head>
-#                          the queue has held the same head with an unchanged
-#                          queue status for FM_MERGE_LINE_STALL_SECS; once per
-#                          PR, head, and queue status (queue_stall_episode)
+#                          the queue has held the same head, whatever its
+#                          status, for FM_MERGE_LINE_STALL_SECS; once per PR
+#                          and head (queue_stall_episode)
 #   check: <check>: merge-queue silent: <url> has been green for <n> min at head <head> with no merge-queue status (<detail>); <auto-merge>
 #                          an armed PR on a merge-queue-app base, green apart
 #                          from the queue's own checks, has had no queue status
@@ -171,8 +171,13 @@
 #                          to the queue (pr_queue_merge_tick) or not
 #                          (pr_queue_unhanded_tick); <auto-merge> says whether
 #                          auto-merge was ever requested and who must request
-#                          it. Once per PR and head; a queue
-#                          status that appears or moves ends the episode
+#                          it. Once per PR and head; for a PR never handed
+#                          over, a queue status that appears ends the episode
+#   check: <check>: ci pending: <url> has waited <n> min at head <head> for CI that has not finished (<detail>)
+#                          an armed PR never handed to a merge queue, with no
+#                          red check, has had a check pending or a required
+#                          check unreported for FM_MERGE_LINE_STALL_SECS
+#                          (pr_queue_unhanded_tick); once per PR and head
 #   check: <check>: merge-queue refused while away <url> at <head>: <detail>
 #                          the yolo poll's merge of a green head-of-line PR was
 #                          refused because its base branch merges only through
@@ -2820,11 +2825,11 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # queue (an entry the queue does not hold, for any reason, is skipped; a
 # window entry queued behind another waits on the tests ahead of it, so it
 # keeps no episode, and one whose first queued entry changes ahead of it
-# starts over), queue_stall_episode raises one wake per pull request, head,
-# and queue status after MERGE_LINE_STALL_SECS: "merge-queue silent" when no
-# queue check has any status of its own, "merge-queue stalled" when one has
-# but has not moved. A queue status that moves restarts the episode, so a
-# queue that is processing the pull request stays silent. Called
+# starts over), queue_stall_episode raises one wake per pull request and
+# head after MERGE_LINE_STALL_SECS: "merge-queue silent" when no queue check
+# has any status of its own, "merge-queue stalled" when one has. A queue
+# status that changes at the same head does not restart the clock, so a
+# queue that keeps re-testing one head without landing it still wakes. Called
 # with the poll's merged verdict too: PR_QUEUE_HOLD stays 1 then unless the
 # landing is confirmed at the handed-over head or its authority was revoked,
 # and the caller defers that landing rather than credit it.
@@ -2890,11 +2895,11 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
       reported=${detail%% *}
       detail=${detail#* }
       if [ "$reported" = false ]; then
-        queue_stall_episode "$id" "$c" "$url" "$head" "$reported $detail" \
+        queue_stall_episode "$id" "$c" "$url" "$head" queue \
           "merge-queue silent: $url has been green for " \
           " min at head $head with no merge-queue status ($detail); auto-merge was requested when it was handed to the queue"
       else
-        queue_stall_episode "$id" "$c" "$url" "$head" "$reported $detail" \
+        queue_stall_episode "$id" "$c" "$url" "$head" queue \
           "merge-queue stalled: merge queue has not picked up or finished $url after " \
           " min at head $head"
       fi
@@ -2933,18 +2938,19 @@ pr_queue_merge_revoke_authority() {  # <id> <url>
   fi
 }
 
-# One merge-queue wait episode for a pull request and head, kept in
+# One merge-path wait episode for a pull request and head, kept in
 # state/<id>.queue-stall as "<url> <head> <first-seen-epoch> <alerted>
-# <status-key>", where <status-key> is a checksum of the queue's status as
-# last read: any change of URL, head, or queue status starts a fresh episode,
-# so a queue whose status moves never wakes, and one that stays put for
-# MERGE_LINE_STALL_SECS wakes once with "<prefix><minutes><suffix>". The
-# record retires with the merged poll and at teardown.
-queue_stall_episode() {  # <id> <check-path> <url> <head> <status> <prefix> <suffix>
-  local id=$1 c=$2 url=$3 head=$4 key prefix=$6 suffix=$7 file now age reason tmp
+# <kind>", where <kind> is what the pull request waits on: "queue" once it is
+# handed to the queue, "unhanded" while green but never handed over, and "ci"
+# while its checks have not finished. A change of URL, head, or kind starts a
+# fresh episode; nothing else restarts the clock, so a wait that lasts
+# MERGE_LINE_STALL_SECS from its first reading wakes once with
+# "<prefix><minutes><suffix>". The record retires with the merged poll and at
+# teardown.
+queue_stall_episode() {  # <id> <check-path> <url> <head> <kind> <prefix> <suffix>
+  local id=$1 c=$2 url=$3 head=$4 key=$5 prefix=$6 suffix=$7 file now age reason tmp
   local rec_url='' rec_head='' first='' alerted='' rec_key=''
   file="$STATE/$id.queue-stall"
-  key=$(printf '%s' "$5" | cksum | tr -d ' ')
   now=$(date +%s)
   if [ -f "$file" ] && [ ! -L "$file" ]; then
     read -r rec_url rec_head first alerted rec_key < "$file" || true
@@ -2985,7 +2991,10 @@ queue_stall_episode() {  # <id> <check-path> <url> <head> <status> <prefix> <suf
 # yolo=on task's own poll, or the guarded merge once the captain approves. A
 # clear reading ends the episode, and an unknown one changes nothing. A head
 # whose hand-off was refused while away already woke through
-# pr_queue_away_refused_tick and keeps that one wake.
+# pr_queue_away_refused_tick and keeps that one wake. The same probe reports
+# an armed pull request on any base whose checks have not finished, with none
+# red, and that wait wakes once per pull request and head after the same
+# bound as "ci pending", so CI that never reports does not stall silently.
 pr_queue_unhanded_tick() {  # <id> <check-path> <url>
   local id=$1 c=$2 url=$3 verdict head enabled detail requested away
   [ ! -e "$STATE/$id.queue-merge" ] && [ ! -L "$STATE/$id.queue-merge" ] || return 0
@@ -2993,6 +3002,15 @@ pr_queue_unhanded_tick() {  # <id> <check-path> <url>
   verdict=${FM_CHECK_RESULT%%$'\n'*}
   case "$verdict" in
     clear) rm -f "$STATE/$id.queue-stall"; return 0 ;;
+    'ci-pending '*' '*)
+      detail=${verdict#ci-pending }
+      head=${detail%% *}
+      detail=${detail#* }
+      fm_pr_head_valid "$head" || return 0
+      queue_stall_episode "$id" "$c" "$url" "$head" ci \
+        "ci pending: $url has waited " " min at head $head for CI that has not finished ($detail)"
+      return 0
+      ;;
     'unhanded '*' '*' '*) ;;
     *) return 0 ;;
   esac
@@ -3013,7 +3031,7 @@ pr_queue_unhanded_tick() {  # <id> <check-path> <url>
   if [ -f "$away" ] && [ ! -L "$away" ] && [ "$(cat "$away")" = "$url $head" ]; then
     return 0
   fi
-  queue_stall_episode "$id" "$c" "$url" "$head" "unhanded $enabled $detail" \
+  queue_stall_episode "$id" "$c" "$url" "$head" unhanded \
     "merge-queue silent: $url has been green for " \
     " min at head $head with no merge-queue status ($detail); $requested"
 }
