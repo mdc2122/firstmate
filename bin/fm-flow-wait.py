@@ -83,7 +83,7 @@ HUMAN TOUCH (applied uniformly, spawn < t <= end):
   re-point     supervisor fm-pr-check, fm-pr-merge (non-dry-run), or fm-merge-line
                front/enqueue/remove/declare on the task or one of its PRs.
   relaunch     supervisor fm-control relaunch/exit/interrupt on the task, or a second
-               launch-brief session for the task.
+               launch of the task (launch-brief session, swarm root session, or mirror bead).
   direct       any other user message typed into the worker window.
 
 END (live-and-proven):
@@ -94,7 +94,8 @@ END (live-and-proven):
         A task whose only PRs are on third-party upstreams ends at its done: line
         (the merge is not the fleet's to make). Merged but not yet live = in-flight.
   scout last done: status line.
-  outcome in-flight = task record (state/<id>.meta) still present or awaiting release;
+  outcome in-flight = task record (state/<id>.meta) still present or awaiting release
+          (W2 and C tasks: the in-flight signal of their source above);
   closed-not-live = record gone without reaching END.
 
 WAIT CLASSES (per task, overlaps resolved by PRIORITY, clipped to [spawn, end] and window):
