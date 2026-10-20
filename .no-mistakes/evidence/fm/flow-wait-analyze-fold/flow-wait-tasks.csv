@@ -1,0 +1,5 @@
+task,home,kind,mode,yolo,backlog_kind,excluded,spawn,end,end_how,outcome,in_flight,span_h,sessions,prs,touches,touch_types,first_touch,first_touch_detail,zero_touch,wait_decision_park_h,wait_human_answer_h,wait_ci_h,wait_merge_queue_h,wait_release_h,wait_worker_stall_h,wait_handoff_idle_h,nm_parked_h
+w-early,primary,scout,,,scout,,2026-10-09T02:00:00Z,2026-10-09T05:00:00Z,done: status line,live-proven,False,3.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+w-span,primary,scout,,,,,2026-10-10T06:00:00Z,2026-10-12T06:00:00Z,done: status line,live-proven,False,48.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+mate-self,primary,scout,,,,,2026-10-12T00:00:00Z,,,closed-not-live,False,0.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+w-late,primary,scout,,,,,2026-10-13T00:00:00Z,2026-10-14T20:00:00Z,done: status line,live-proven,False,44.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0

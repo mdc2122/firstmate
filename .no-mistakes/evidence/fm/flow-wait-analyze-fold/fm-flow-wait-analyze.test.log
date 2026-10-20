@@ -1,0 +1,3 @@
+ok - gap overlap, cap-clipped tail, merge_queue concentration, and uncovered rows are derived from one run
+ok - supervisor transcript holes at the window start and before now_cap are reported, clipped to the window
+ok - a summary recorded before transcript dirs finds the main-home gap from the session files

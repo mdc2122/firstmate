@@ -1,0 +1,177 @@
+{
+ "touch_categories_settled": [],
+ "tasks_touched_by_category_settled": [],
+ "counterfactual_zero_touch_live": {
+  "baseline": 3,
+  "minus_merge_release_handoffs": 3,
+  "minus_handoffs_and_decision_answers": 3,
+  "minus_handoffs_decisions_relaunch": 3,
+  "settled_denominator": 4
+ },
+ "ship_touches_per_task": {
+  "n": 2,
+  "median": 0.0,
+  "mean": 0.0
+ },
+ "scout_touches_per_task": {
+  "n": 2,
+  "median": 0.0,
+  "mean": 0.0
+ },
+ "decision_answers": {
+  "total": 0,
+  "no_mistakes_gate": 0,
+  "captain": 0
+ },
+ "merge_queue_per_item_h": {
+  "n": 2,
+  "median": 4.5,
+  "p90": 2.0,
+  "sum": 9.0,
+  "top10_sum": 9.0,
+  "ge5h_n": 1,
+  "ge5h_sum": 7.0,
+  "top": [
+   [
+    "o/r#6",
+    "w-late",
+    7.0
+   ],
+   [
+    "o/r#5",
+    "w-span",
+    2.0
+   ]
+  ]
+ },
+ "release_per_item_h": {
+  "n": 0,
+  "median": null,
+  "p90": null,
+  "sum": 0.0,
+  "top10_sum": 0.0,
+  "ge5h_n": 0,
+  "ge5h_sum": 0.0,
+  "top": []
+ },
+ "ci_per_item_h": {
+  "n": 1,
+  "median": 4.0,
+  "p90": 4.0,
+  "sum": 4.0,
+  "top10_sum": 4.0,
+  "ge5h_n": 0,
+  "ge5h_sum": 0,
+  "top": [
+   [
+    "o/r#6",
+    "w-late",
+    4.0
+   ]
+  ]
+ },
+ "hours_by_day_and_class": {
+  "2026-10-11": {
+   "merge_queue": 2.0
+  },
+  "2026-10-13": {
+   "ci": 4.0,
+   "merge_queue": 7.0,
+   "worker_stall": 24.0
+  }
+ },
+ "by_kind_outcome_zero_touch": {
+  "scout|closed-not-live|True": 1,
+  "scout|live-proven|True": 1,
+  "ship|live-proven|True": 2
+ },
+ "by_home": {
+  "primary": 4
+ },
+ "zero_touch_live_ships": [
+  [
+   "w-span",
+   "https://github.com/o/r/pull/5",
+   "merged"
+  ],
+  [
+   "w-late",
+   "",
+   ""
+  ]
+ ],
+ "supervisor_transcript_gaps": [
+  {
+   "start": "2026-10-09T00:00:00Z",
+   "end": "2026-10-09T01:00:00Z",
+   "hours": 1.0,
+   "settled": 0,
+   "zero_touch_any": 0,
+   "zero_touch_live": []
+  },
+  {
+   "start": "2026-10-10T12:00:00Z",
+   "end": "2026-10-11T12:00:00Z",
+   "hours": 24.0,
+   "settled": 1,
+   "zero_touch_any": 1,
+   "zero_touch_live": [
+    [
+     "w-span",
+     "primary"
+    ]
+   ]
+  },
+  {
+   "start": "2026-10-13T06:00:00Z",
+   "end": "2026-10-14T00:00:00Z",
+   "hours": 18.0,
+   "settled": 2,
+   "zero_touch_any": 2,
+   "zero_touch_live": [
+    [
+     "w-late",
+     "primary"
+    ]
+   ]
+  }
+ ],
+ "ended_after_cap": {
+  "n": 1,
+  "tail_h": 6.0,
+  "zero_touch": 1
+ },
+ "merge_queue_by_kind_yolo": {
+  "scout/yolo=-": 0.0,
+  "ship/yolo=off": 2.0,
+  "ship/yolo=on": 7.0
+ },
+ "uncovered_rows": {
+  "secondmate / beads crew": {
+   "n": 1,
+   "ids": [
+    "beads-fix"
+   ]
+  },
+  "no launch brief anywhere (firstmate-direct, captain call, or done by another task's worker)": {
+   "n": 2,
+   "ids": [
+    "cited-only",
+    "primary-home-guard"
+   ]
+  },
+  "spawned before window": {
+   "n": 1,
+   "ids": [
+    "old-launch"
+   ]
+  },
+  "swarm (no fm-spawn launch brief)": {
+   "n": 1,
+   "ids": [
+    "prime-swarm-plan"
+   ]
+  }
+ },
+ "uncovered_rows_total": 5
+}
