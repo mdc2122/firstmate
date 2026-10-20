@@ -1,0 +1,7 @@
+ok - the queue window opens past an unarmed or ownerless head, never past an armed or fronted one
+ok - the watcher queues yolo=on entries past an unarmed merge-line head without a human
+ok - the queue window opens only behind a queued head and ends at a fronted entry
+ok - a queue-app base arms the window's green entries in line order, and an ejection skips forward
+ok - a pending earlier entry holds the queue window behind it, and a red one is skipped
+ok - a declared merge line lands its head first and hands off to the next PR in the same sweep
+ALL SELECTED TESTS PASSED

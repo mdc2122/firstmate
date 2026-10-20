@@ -1,0 +1,2 @@
+not ok - an armed green entry was held behind an unarmed head: held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r; its head is not in a merge queue
+not ok - the entries behind an unarmed head were not handed to the queue in line order: 

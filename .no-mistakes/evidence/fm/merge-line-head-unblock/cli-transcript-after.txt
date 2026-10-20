@@ -1,0 +1,81 @@
+=== S1: head pull/1 armed by live yolo=on task, not queued (guard: must hold)
+$ fm-merge-line.sh show
+  merge line github.com/o/r
+    1. https://github.com/o/r/pull/1 task=task-a head
+    2. https://github.com/o/r/pull/2 task=task-b held
+    3. https://github.com/o/r/pull/3 task=task-c held
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r; its head is not in a merge queue
+  -> exit 3
+
+=== S1b: same head's task drops yolo=on (unarmed head): window opens past it
+$ fm-merge-line.sh show
+  merge line github.com/o/r
+    1. https://github.com/o/r/pull/1 task=task-a head
+    2. https://github.com/o/r/pull/2 task=task-b held
+    3. https://github.com/o/r/pull/3 task=task-c held
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+  -> exit 0
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/3
+held: https://github.com/o/r/pull/3 waits for https://github.com/o/r/pull/2 ahead of it in the merge line for github.com/o/r to reach the merge queue first
+  -> exit 3
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/1
+  -> exit 0
+$ fm-merge-line.sh head
+  https://github.com/o/r/pull/1
+
+=== S2: head's task record deleted (ownerless head): window opens past it
+$ fm-merge-line.sh show
+  merge line github.com/o/r
+    1. https://github.com/o/r/pull/1 task=task-a head
+    2. https://github.com/o/r/pull/2 task=task-b held
+    3. https://github.com/o/r/pull/3 task=task-c held
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+  -> exit 0
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/3
+held: https://github.com/o/r/pull/3 waits for https://github.com/o/r/pull/2 ahead of it in the merge line for github.com/o/r to reach the merge queue first
+  -> exit 3
+
+=== S3: fronted non-yolo head (guard: must still hold)
+$ fm-merge-line.sh show
+  merge line github.com/o/r
+    1. https://github.com/o/r/pull/1 task=task-a head fronted
+    2. https://github.com/o/r/pull/2 task=task-b held
+    3. https://github.com/o/r/pull/3 task=task-c held
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r; its head is not in a merge queue
+  -> exit 3
+
+=== S4: window size 1 behind an unarmed head admits only the first armed entry
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+  -> exit 0
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/3
+held: https://github.com/o/r/pull/3 waits for https://github.com/o/r/pull/2 ahead of it in the merge line for github.com/o/r to reach the merge queue first
+  -> exit 3
+
+=== S5: stalled middle entry (pull/2 unarmed) is skipped, not a blocker, for pull/3; pull/2 itself still in window
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/3
+  -> exit 0
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/4
+held: https://github.com/o/r/pull/4 waits for https://github.com/o/r/pull/3 ahead of it in the merge line for github.com/o/r to reach the merge queue first
+  -> exit 3
+$ fm-merge-line.sh gate --window https://github.com/o/r/pull/2
+  -> exit 0
+
+=== S6: plain (non-merge-queue) base, unarmed head: one watcher sweep merges nothing behind it
+forge pr merge calls: []
+  triage: [2026-10-19T22:36:37-0500] merge line holds task-b: held: https://github.com/o/r/pull/2 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+  triage: [2026-10-19T22:36:42-0500] merge line holds task-c: held: https://github.com/o/r/pull/3 waits behind https://github.com/o/r/pull/1 in the merge line for github.com/o/r
+
+=== S7: merge-queue base, unarmed head: one watcher sweep hands pull/2, pull/3 to the queue in order
+forge pr merge calls: [2 3 ]
+  gh pr merge 2 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+  gh pr merge 3 --repo o/r --match-head-commit 0123456789abcdef0123456789abcdef01234567 --squash --auto
+  task-a.queue-merge: <none>
+  task-b.queue-merge: https://github.com/o/r/pull/2 0123456789abcdef0123456789abcdef01234567 requested ["queue-mq"]
+  task-c.queue-merge: https://github.com/o/r/pull/3 0123456789abcdef0123456789abcdef01234567 requested ["queue-mq"]
+$ fm-merge-line.sh show
+  merge line github.com/o/r
+    1. https://github.com/o/r/pull/1 task=task-a head
+    2. https://github.com/o/r/pull/2 task=task-b held
+    3. https://github.com/o/r/pull/3 task=task-c held
