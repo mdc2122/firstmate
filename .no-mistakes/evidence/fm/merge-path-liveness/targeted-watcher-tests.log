@@ -1,0 +1,9 @@
+ok - a merge-queue branch is handed to auto-merge once and recorded as landed only once the forge reads MERGED
+ok - a pull request the queue holds past the stall window wakes firstmate once per head
+ok - a handed-over PR with no queue status wakes once past the bound and the episode retires on merge
+ok - a queue cycling its status at one head stays silent inside the bound and wakes once at it
+ok - an armed green PR never handed to the queue wakes once naming auto-merge, and the episode retires on a queue status or merge
+ok - a red PR never handed to the queue starts no queue-liveness episode
+ok - CI pending or unreported past the bound wakes once per PR head
+ok - CI finishing inside the bound stays silent and hands the clock to the queue wait
+ok - a merge-queue branch refused while away wakes firstmate once per head

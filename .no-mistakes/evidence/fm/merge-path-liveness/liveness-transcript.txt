@@ -1,0 +1,26 @@
+=== Scenario A: PR 825 shape (armed, green, base requires queue-mq, auto-merge never requested, non-yolo)
+probe: unhanded 0123456789abcdef0123456789abcdef01234567 false queue-mq not reported
+--- cycle 1 (inside bound) watcher output
+    check: <case>/t-pr825/home/state/z-stop.check.sh: stop-cycle
+--- episode record
+    https://github.com/o/r/pull/1 0123456789abcdef0123456789abcdef01234567 1792471116 0 unhanded
+--- cycle 2 (15 min later) watcher output
+    check: <case>/t-pr825/home/state/task-a.check.sh: merge-queue silent: https://github.com/o/r/pull/1 has been green for 15 min at head 0123456789abcdef0123456789abcdef01234567 with no merge-queue status (queue-mq not reported); auto-merge was never requested, so the queue was never asked to take it; it waits for an approved guarded merge (bin/fm-pr-merge.sh) to hand it over
+--- cycle 3 (same head, still silent) watcher output
+    check: <case>/t-pr825/home/state/z-stop.check.sh: stop-cycle
+merge requests sent by watcher: 0
+
+=== Scenario A2: same shape, yolo=on task, auto-merge enabled by hand but no recorded hand-off
+probe: unhanded 0123456789abcdef0123456789abcdef01234567 true queue-mq EXPECTED
+
+=== Scenario B: CI pending forever on an armed PR
+probe: ci-pending 0123456789abcdef0123456789abcdef01234567 ci pending
+--- cycle 1 (inside bound)
+    check: <case>/t-ci/home/state/z-stop.check.sh: stop-cycle
+--- cycle 2 (15 min later)
+    check: <case>/t-ci/home/state/task-a.check.sh: ci pending: https://github.com/o/r/pull/1 has waited 15 min at head 0123456789abcdef0123456789abcdef01234567 for CI that has not finished (ci pending)
+--- cycle 3 (same head)
+    check: <case>/t-ci/home/state/z-stop.check.sh: stop-cycle
+
+=== Scenario C: red CI is not a liveness wait
+probe: clear
