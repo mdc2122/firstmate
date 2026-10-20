@@ -1,0 +1,26 @@
+[host] registered audit.check.sh via real fm-check-register.sh (exit 0) 
+[host] omp received wake #1 (aside): ⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: check: /tmp/fmlive.95wr/home/state/audit.check.sh: audit window unreviewed
+[host] queue after first wake:
+1792475559	1	check	/tmp/fmlive.95wr/home/state/audit.check.sh	check: /tmp/fmlive.95wr/home/state/audit.check.sh: audit window unreviewed
+[host] real fm-wake-drain.sh stdout:
+1792475559	1	check	/tmp/fmlive.95wr/home/state/audit.check.sh	check: /tmp/fmlive.95wr/home/state/audit.check.sh: audit window unreviewed
+[host] main acknowledged through row 1 (exit 0)
+[host] registered deploy.check.sh via real fm-check-register.sh (exit 0) 
+[host] omp received wake #2 (aside): ⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: check: /tmp/fmlive.95wr/home/state/deploy.check.sh: deploy failed on host b
+[host] queue at consumption (second row still queued):
+1792475572	2	check	/tmp/fmlive.95wr/home/state/deploy.check.sh	check: /tmp/fmlive.95wr/home/state/deploy.check.sh: deploy failed on host b
+
+=== model context after omp hands over the backlog ===
+--- message 0 ---
+captain: status?
+--- message 1 ---
+⁣FIRSTMATE_OP: v1 watcher: watcher: superseded wake dropped (wake row 1 already acknowledged): check: /tmp/fmlive.95wr/home/state/audit.check.sh: audit window unreviewed - no action needed; do not run the drain for it.
+--- message 2 ---
+⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: check: /tmp/fmlive.95wr/home/state/deploy.check.sh: deploy failed on host b
+
+Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.
+
+=== state/.watch-triage.log (drop lines) ===
+[2026-10-20T00:52:56-0500] omp extension dropped superseded wake (wake row 1 already acknowledged): check: /tmp/fmlive.95wr/home/state/audit.check.sh: audit window unreviewed
+
+RESULT acknowledged-wake-dropped=true queued-wake-kept=true
