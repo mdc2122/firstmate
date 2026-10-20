@@ -3417,8 +3417,9 @@ while :; do
           # PR is attempted only when the line's windowed gate - which the
           # merge path enforces again, and which reads earlier window entries'
           # checks from the forge, so it is bounded like any check - admits it:
-          # on a merge-queue-app base whose head is queued, the queue orders
-          # the entry, and on every other base the plain hold above stands.
+          # on a merge-queue-app base whose head is queued or stalled
+          # (bin/fm-merge-line.sh's QUEUE WINDOW), the queue orders the
+          # entry, and on every other base the plain hold above stands.
           line_window=0
           if [ -z "$out" ] && [ "$pr_line_held" -eq 1 ] \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then

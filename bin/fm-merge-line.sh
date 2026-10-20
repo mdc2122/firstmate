@@ -25,8 +25,15 @@
 # queue never receives an entry ahead of one before it that may yet go green,
 # whatever order the watcher visits them in; only an earlier red, ejected,
 # closed, or merged entry is skipped. The window opens only behind a
-# queued head: with the head not queued, or a window size of 1, the single-head
-# gate above is the whole contract. A fronted entry that no queue holds blocks
+# queued or stalled head: with the head neither, the single-head gate above is
+# the whole contract, and a window size of 1 hands the queue one entry at a
+# time. A stalled entry is one no
+# merge poll will ever hand to the queue - not fronted, not queued, and either
+# ownerless (the task whose poll arms it has no state/<id>.meta) or armed only
+# by a task without yolo=on - so the window skips it, head or not, while it
+# stays listed and prune's unowned wake still names an ownerless one; an
+# entry armed by a live yolo=on task but not yet queued still holds the
+# window shut behind it. A fronted entry that no queue holds blocks
 # the window behind it exactly as it blocks the head, so a constraint PR
 # fronted during a freeze is never overtaken. A queue ejection, a red entry,
 # or an entry no poll arms simply never lands from the window; the queue and
@@ -117,8 +124,8 @@
 #   fm-merge-line.sh gate [--window] <pr-url> exit 0 when the PR may merge now
 #                                               (no line, the head, or - with
 #                                               --window on a merge-queue-app
-#                                               base whose head is queued -
-#                                               one of the first
+#                                               base whose head is queued or
+#                                               stalled - one of the first
 #                                               FM_MERGE_LINE_QUEUE_WINDOW
 #                                               armed entries); exit 3 and
 #                                               print why when it is held;
@@ -396,11 +403,12 @@ effective_head() {
 # The window: the first FM_MERGE_LINE_QUEUE_WINDOW eligible entries starting
 # at the effective head, one per line. An entry is eligible when a task's poll
 # arms it or it is fronted; an entry whose task's queue record reads ejected
-# is skipped, not re-armed. A fronted entry the queue does not hold is listed
+# is skipped, not re-armed, and a stalled entry other than <gated-url> is
+# skipped too. A fronted entry the queue does not hold is listed
 # and ends the listing: the queue holds nothing behind a fronted entry it does
 # not hold, so a constraint PR fronted during a freeze is never overtaken.
-# Whether the window is open at all (the head is queued) is the caller's
-# check, not this listing's.
+# Whether the window is open at all (the head is queued or stalled) is the
+# caller's check, not this listing's.
 FM_MERGE_LINE_QUEUE_WINDOW=${FM_MERGE_LINE_QUEUE_WINDOW:-3}
 case "$FM_MERGE_LINE_QUEUE_WINDOW" in
   ''|*[!0-9]*|0|1) FM_MERGE_LINE_QUEUE_WINDOW=1 ;;
@@ -415,11 +423,22 @@ queue_recorded() {  # <url> <status>
 queued_head() {  # <url>
   queue_recorded "$1" requested
 }
-window_entries() {
+# A stalled entry is one no poll will ever hand to the queue: not fronted, not
+# queued, and not armed by a live (owned) task whose meta records yolo=on.
+stalled() {  # <url>
+  local id
+  fronted "$1" && return 1
+  queued_head "$1" && return 1
+  owned "$1" || return 0
+  id=$(armed_task "$1")
+  [ "$(grep '^yolo=' "$STATE/$id.meta" 2>/dev/null | tail -1 | cut -d= -f2-)" != on ]
+}
+window_entries() {  # <gated-url>
   local e n=0
   for e in ${ENTRIES[@]+"${ENTRIES[@]}"}; do
     if [ -n "$(armed_task "$e")" ]; then
       queue_recorded "$e" ejected && continue
+      [ "$e" != "$1" ] && stalled "$e" && continue
       printf '%s\n' "$e"
       n=$((n + 1))
       fronted "$e" && ! queued_head "$e" && return 0
@@ -503,7 +522,7 @@ cmd_gate() {  # [--window] <url>
   head=$(effective_head) || head=
   [ "$head" = "$url" ] && return 0
   if [ "$mode" = --window ]; then
-    if [ -z "$head" ] || ! queued_head "$head"; then
+    if [ -z "$head" ] || { ! queued_head "$head" && ! stalled "$head"; }; then
       printf 'held: %s waits behind %s in the merge line for %s; its head is not in a merge queue\n' \
         "$url" "${head:-<none armed>}" "$(repo_label)"
       return "$FM_MERGE_LINE_HELD"
@@ -516,7 +535,7 @@ cmd_gate() {  # [--window] <url>
           "$url" "$e" "$(repo_label)"
         return "$FM_MERGE_LINE_HELD"
       fi
-    done < <(window_entries)
+    done < <(window_entries "$url")
     [ "$admitted" = 1 ] && return 0
     printf 'held: %s is outside the queue window (first %s) of the merge line for %s\n' \
       "$url" "$FM_MERGE_LINE_QUEUE_WINDOW" "$(repo_label)"

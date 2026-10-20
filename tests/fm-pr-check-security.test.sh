@@ -4045,6 +4045,73 @@ test_merge_line_queue_window_gates_without_a_queued_head() {
   pass "the queue window opens only behind a queued head and ends at a fronted entry"
 }
 
+# A head no yolo=on poll will ever hand to the queue - armed only by a task
+# without yolo=on, or ownerless because its task's record is gone - opens the
+# window past it, while it stays listed; a head armed by a live yolo=on task
+# but not yet queued, and a fronted head even without yolo=on, still hold.
+test_merge_line_queue_window_opens_past_a_stalled_head() {
+  local dir state rc
+  dir=$(queue_line_case queue-window-stalled-head 3)
+  state="$dir/home/state"
+
+  set +e
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "an armed green entry passed an armed yolo=on head not yet queued: $(cat "$dir/wg.out")"
+  assert_grep 'head is not in a merge queue' "$dir/wg.out" "the armed head's hold did not say why"
+
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "an armed green entry was held behind an unarmed head: $(cat "$dir/wg.out")"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/3 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "the window skipped an earlier green entry along with the unarmed head"
+  assert_grep 'waits for https://github.com/o/r/pull/2 ahead of it' "$dir/wg.out" \
+    "the entry behind did not wait for the first armed entry"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/1 ] \
+    || fail "the unarmed head left its place in the line"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/1 >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "the unarmed head lost its own place at the head"
+
+  merge_line "$dir" front https://github.com/o/r/pull/1 >/dev/null || fail "front refused"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "a fronted head without yolo=on was overtaken: $(cat "$dir/wg.out")"
+  merge_line "$dir" remove https://github.com/o/r/pull/1 || fail "could not remove the fronted PR"
+  merge_line "$dir" enqueue https://github.com/o/r/pull/1 || fail "could not re-enqueue pull/1"
+
+  rm -f "$state/task-b.meta"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/3 > "$dir/wg.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "an armed green entry was held behind an ownerless head: $(cat "$dir/wg.out")"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/2 ] \
+    || fail "the ownerless head was dropped from the line"
+  pass "the queue window opens past an unarmed or ownerless head, never past an armed or fronted one"
+}
+
+# End to end: the line's head is green but armed only by a task without
+# yolo=on, so no poll will ever queue it. One watcher sweep hands the yolo=on
+# entries behind it to the merge queue in line order, and the head stays.
+test_merge_line_watcher_queues_past_an_unarmed_head() {
+  local dir state
+  dir=$(queue_line_case queue-window-unarmed-head 3)
+  state="$dir/home/state"
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+
+  queue_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 3 ' ] \
+    || fail "the entries behind an unarmed head were not handed to the queue in line order: $(grep '^pr merge' "$dir/gh.log")"
+  [ ! -e "$state/task-a.queue-merge" ] || fail "the unarmed head was handed to the queue"
+  [ "$(cut -d' ' -f3 "$state/task-b.queue-merge")" = requested ] \
+    || fail "pull/2's queue hand-off was not recorded: $(cat "$state/task-b.queue-merge" 2>/dev/null)"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/1 ] \
+    || fail "the unarmed head left the line"
+  pass "the watcher queues yolo=on entries past an unarmed merge-line head without a human"
+}
+
 test_merge_line_front_reorders() {
   local dir
   dir=$(make_case merge-line-front)
@@ -4636,6 +4703,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry
 test_merge_line_window_entry_queue_stall_starts_at_the_head
 test_merge_line_queue_stall_skips_an_unqueued_red_head
 test_merge_line_queue_window_gates_without_a_queued_head
+test_merge_line_queue_window_opens_past_a_stalled_head
+test_merge_line_watcher_queues_past_an_unarmed_head
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
