@@ -1242,9 +1242,11 @@ def build(args):
                 continue   # background compute finished: not a wait
             else:
                 iv.append((a[0], b[0], "worker_stall", f"idle until {nxt_kind}" + (" (error stop)" if a[2] == "error" else "")))
-        # tail: last event to horizon with no resume (a beads-crew row has no transcript to idle in)
+        # tail: last event to horizon with no resume (a beads-crew row has no transcript to idle in;
+        # a swarm root idles only once its turn ended, not mid call or waiting on its children)
         last = ev[-1]
-        if last[0] < horizon - IDLE_MIN_S and t["source"] != "beads-crew":
+        if (last[0] < horizon - IDLE_MIN_S and t["source"] != "beads-crew"
+                and (t["source"] != "swarm" or last[1] == "turn_end")):
             iv.append((last[0], horizon, "worker_stall", "no worker activity to end of span"))
         iv = [x for x in iv if x[1] > x[0] and x[2] in PRIORITY]
         lo, hi = max(spawn, since), min(horizon, now)

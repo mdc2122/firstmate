@@ -329,7 +329,7 @@ dup beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 w
 empty beads-crew scout 2026-10-12T10:00:00Z - closed-not-live - human_answer=0.0 worker_stall=0.0
 pending beads-crew scout 2026-10-12T09:30:00Z - in-flight - human_answer=0.0 worker_stall=0.0
 swarm-a swarm scout 2026-10-12T08:00:05Z 2026-10-12T08:40:00Z live-proven direct:1 human_answer=0.0 worker_stall=0.0
-swarm-b swarm scout 2026-10-12T21:00:05Z - in-flight - human_answer=0.0 worker_stall=1.0
+swarm-b swarm scout 2026-10-12T21:00:05Z - in-flight - human_answer=0.0 worker_stall=0.0
 swarm-c swarm scout 2026-10-12T21:00:05Z - closed-not-live - human_answer=0.0 worker_stall=0.0'
   assert_equals "$want" "$got" "swarm and beads-crew dispatches must be measured tasks beside the launch-brief ones"
   got=$(jq -c '.by_source | map_values(.measured)' "$root/out/summary.json")
