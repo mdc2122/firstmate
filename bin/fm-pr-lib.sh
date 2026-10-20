@@ -531,10 +531,14 @@ fm_pr_github_checks_pending() {  # <pull-request-json> <check-names-json>
 
 # One live read of a GitHub pull request's auto-merge state, shared by
 # bin/fm-pr-merge.sh after it requests auto-merge and by
-# bin/fm-pr-queue-state.sh. Sets FM_PR_GITHUB_AUTO_STATE (OPEN, MERGED, or
+# bin/fm-pr-queue-state.sh; fm_pr_github_auto_merge_parse classifies a
+# payload that one view already holds. Sets FM_PR_GITHUB_AUTO_STATE (OPEN, MERGED, or
 # CLOSED), FM_PR_GITHUB_AUTO_HEAD, FM_PR_GITHUB_AUTO_ENABLED (true or false),
-# and FM_PR_GITHUB_AUTO_DETAIL, which names each given check with the
-# conclusion, state, or status of its latest rollup entry, or "not reported".
+# FM_PR_GITHUB_AUTO_DETAIL, which names each given check with the
+# conclusion, state, or status of its latest rollup entry, or "not reported",
+# and FM_PR_GITHUB_AUTO_REPORTED, true when any given check has a status of
+# its own and false when every one is unreported or only EXPECTED (the
+# placeholder the forge shows for a required check nobody has posted).
 # Returns 1 when the read failed or the payload was unreadable.
 # shellcheck disable=SC2034  # Consumed by bin/fm-pr-merge.sh and bin/fm-pr-queue-state.sh.
 {
@@ -542,28 +546,43 @@ FM_PR_GITHUB_AUTO_STATE=
 FM_PR_GITHUB_AUTO_HEAD=
 FM_PR_GITHUB_AUTO_ENABLED=
 FM_PR_GITHUB_AUTO_DETAIL=
+FM_PR_GITHUB_AUTO_REPORTED=
 }
 # shellcheck disable=SC2034  # Results consumed by bin/fm-pr-merge.sh and bin/fm-pr-queue-state.sh.
 fm_pr_github_read_auto_merge() {  # <pr-url> <check-names-json>
-  local url=$1 names=$2 json fields line
-  local total=0 named=0 state='' head='' enabled='' detail=''
+  local json
   FM_PR_GITHUB_AUTO_STATE=
   FM_PR_GITHUB_AUTO_HEAD=
   FM_PR_GITHUB_AUTO_ENABLED=
   FM_PR_GITHUB_AUTO_DETAIL=
-  json=$(gh pr view "$url" --json state,headRefOid,autoMergeRequest,statusCheckRollup 2>/dev/null) || return 1
+  FM_PR_GITHUB_AUTO_REPORTED=
+  json=$(gh pr view "$1" --json state,headRefOid,autoMergeRequest,statusCheckRollup 2>/dev/null) || return 1
+  fm_pr_github_auto_merge_parse "$json" "$2"
+}
+# shellcheck disable=SC2034  # Results consumed by bin/fm-pr-merge.sh and bin/fm-pr-queue-state.sh.
+fm_pr_github_auto_merge_parse() {  # <pull-request-json> <check-names-json>
+  local json=$1 names=$2 fields line
+  local total=0 named=0 state='' head='' enabled='' detail='' reported=''
+  FM_PR_GITHUB_AUTO_STATE=
+  FM_PR_GITHUB_AUTO_HEAD=
+  FM_PR_GITHUB_AUTO_ENABLED=
+  FM_PR_GITHUB_AUTO_DETAIL=
+  FM_PR_GITHUB_AUTO_REPORTED=
   [ -n "$json" ] || return 1
   fields=$(printf '%s' "$json" | jq -r --argjson names "$names" '
     if type != "object" or (.statusCheckRollup | type) != "array" then error("unreadable") else . end
     | .statusCheckRollup as $reported
+    | [$names[] | . as $name
+        | {name: $name, entry: ([$reported[] | select((if .__typename == "CheckRun" then .name else .context end) == $name)] | last)}] as $latest
     | "state=" + ((.state // "") | tostring),
       "head=" + ((.headRefOid // "") | tostring),
       "enabled=" + (if (.autoMergeRequest | type) == "object" then "true" else "false" end),
-      "detail=" + ([$names[] | . as $name
-        | ([$reported[] | select((if .__typename == "CheckRun" then .name else .context end) == $name)] | last) as $entry
-        | $name + " " + (if $entry == null then "not reported"
-            elif $entry.__typename == "CheckRun" then ($entry.conclusion // $entry.status // "unknown")
-            else ($entry.state // "unknown") end)
+      "reported=" + (any($latest[]; .entry != null
+        and (.entry.__typename == "CheckRun" or .entry.state != "EXPECTED")) | tostring),
+      "detail=" + ([$latest[]
+        | .name + " " + (if .entry == null then "not reported"
+            elif .entry.__typename == "CheckRun" then (.entry.conclusion // .entry.status // "unknown")
+            else (.entry.state // "unknown") end)
         ] | join(", ") | gsub("[\r\n]"; " "))
     ' 2>/dev/null) || return 1
   while IFS= read -r line; do
@@ -572,6 +591,7 @@ fm_pr_github_read_auto_merge() {  # <pr-url> <check-names-json>
       state=*) state=${line#state=} ;;
       head=*) head=${line#head=} ;;
       enabled=*) enabled=${line#enabled=} ;;
+      reported=*) reported=${line#reported=} ;;
       detail=*) detail=${line#detail=} ;;
       *) continue ;;
     esac
@@ -579,13 +599,14 @@ fm_pr_github_read_auto_merge() {  # <pr-url> <check-names-json>
   done <<FIELDS
 $fields
 FIELDS
-  [ "$named" -eq 4 ] && [ "$total" -eq 4 ] || return 1
+  [ "$named" -eq 5 ] && [ "$total" -eq 5 ] || return 1
   case "$state" in OPEN|MERGED|CLOSED) ;; *) return 1 ;; esac
   fm_pr_head_valid "$head" || return 1
   FM_PR_GITHUB_AUTO_STATE=$state
   FM_PR_GITHUB_AUTO_HEAD=$head
   FM_PR_GITHUB_AUTO_ENABLED=$enabled
   FM_PR_GITHUB_AUTO_DETAIL=$detail
+  FM_PR_GITHUB_AUTO_REPORTED=$reported
 }
 
 # state/<id>.queue-merge records the pull request bin/fm-pr-merge.sh handed to
