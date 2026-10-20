@@ -1319,6 +1319,9 @@ while [ ! -f "$TMP_ROOT/launch.entered" ]; do
   [ "$launch_wait" -le 1500 ] || fail "remote respawn never reached its blocked launch"
   sleep 0.02
 done
+mkdir -p "$PARENT/state/pending-replies/archive"
+printf 'task_id=ios\nphase=resolved\n' > "$PARENT/state/pending-replies/archive/aaaaaaaaaaaaaaaa"
+printf 'task_id=other\nphase=resolved\n' > "$PARENT/state/pending-replies/archive/bbbbbbbbbbbbbbbb"
 remote_env "$ROOT/bin/fm-teardown.sh" ios > "$TMP_ROOT/teardown-serialized.out" 2>&1 &
 teardown_pid=$!
 sleep 0.2
@@ -1342,6 +1345,10 @@ assert_absent "$PARENT/state/ios.meta" "remote retirement did not remove parent 
 assert_absent "$PARENT/state/.backlog-handoff-ios.wake-pending" \
   "remote retirement left receiver wake state that could poison a replacement route"
 assert_absent "$retired_wake_rec" "remote retirement left the retired receiver wake correlation"
+assert_absent "$PARENT/state/pending-replies/archive/aaaaaaaaaaaaaaaa" \
+  "remote retirement left the retired task's archived pending reply"
+assert_present "$PARENT/state/pending-replies/archive/bbbbbbbbbbbbbbbb" \
+  "remote retirement removed another task's archived pending reply"
 assert_no_grep '- ios ' "$PARENT/data/secondmates.md" "remote retirement did not remove the registry route"
 jq -e --arg workspace "$SIBLING_WORKSPACE" --arg pane "$SIBLING_PANE" '
   any(.workspaces[]; .workspace_id == $workspace and .label == "2ndmate-macos")
