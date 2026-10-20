@@ -1,0 +1,22 @@
+[
+ {
+  "ticket": "t1",
+  "owner": "firstmate",
+  "sha": "267f7cee",
+  "join": 1792149000,
+  "canary": 1792149600,
+  "promote": 1792149900,
+  "deploy": 1792150200,
+  "done": 1792150800
+ },
+ {
+  "ticket": "t3",
+  "owner": "release-advance",
+  "sha": "d537e35b",
+  "join": 1792156200,
+  "canary": 1792156500,
+  "promote": 1792156680,
+  "deploy": 1792156800,
+  "done": 1792157400
+ }
+]

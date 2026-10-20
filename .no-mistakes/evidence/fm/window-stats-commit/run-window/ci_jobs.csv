@@ -1,0 +1,3 @@
+run,created,kind,branch,runner,labels,job_s,test_s
+1,2026-10-16T10:05:00Z,pull_request,feat-a,studio-runner,x,600.0,420.0
+2,2026-10-16T11:20:00Z,merge_branch,gitea-mq/42,github-hosted 7,x,1200.0,960.0

@@ -1,0 +1,291 @@
+$ bin/fm-merge-path-window-stats.py --since 2026-10-16T10:00:00Z --until 2026-10-16T14:00:00Z --repo o/r --repo-dir $FIX/repo --home $FIX/home --out $EVIDENCE/run-window   # gh-axi = fixture server
+{
+ "window": {
+  "since": "2026-10-16T10:00:00Z",
+  "until": "2026-10-16T14:00:00Z",
+  "ci_since": "2026-10-16T10:00:00Z",
+  "merged_prs": [
+   101,
+   102,
+   103
+  ],
+  "open_line_entries": [
+   200,
+   201
+  ]
+ },
+ "ci": {
+  "github-hosted 7": {
+   "all": {
+    "job": {
+     "n": 1,
+     "p50": 20.0,
+     "p90": 20.0,
+     "max": 20.0,
+     "sum_h": 0.3
+    },
+    "test_step": {
+     "n": 1,
+     "p50": 16.0,
+     "p90": 16.0,
+     "max": 16.0,
+     "sum_h": 0.3
+    }
+   },
+   "merge_branch": {
+    "job": {
+     "n": 1,
+     "p50": 20.0,
+     "p90": 20.0,
+     "max": 20.0,
+     "sum_h": 0.3
+    },
+    "test_step": {
+     "n": 1,
+     "p50": 16.0,
+     "p90": 16.0,
+     "max": 16.0,
+     "sum_h": 0.3
+    }
+   }
+  },
+  "studio-runner": {
+   "all": {
+    "job": {
+     "n": 1,
+     "p50": 10.0,
+     "p90": 10.0,
+     "max": 10.0,
+     "sum_h": 0.2
+    },
+    "test_step": {
+     "n": 1,
+     "p50": 7.0,
+     "p90": 7.0,
+     "max": 7.0,
+     "sum_h": 0.1
+    }
+   },
+   "pull_request": {
+    "job": {
+     "n": 1,
+     "p50": 10.0,
+     "p90": 10.0,
+     "max": 10.0,
+     "sum_h": 0.2
+    },
+    "test_step": {
+     "n": 1,
+     "p50": 7.0,
+     "p90": 7.0,
+     "max": 7.0,
+     "sum_h": 0.1
+    }
+   }
+  }
+ },
+ "github": {
+  "pr_head_pytest": {
+   "n": 3,
+   "p50": 50.0,
+   "p90": 50.0,
+   "max": 90.0,
+   "sum_h": 2.7
+  },
+  "green_to_armed": {
+   "n": 3,
+   "p50": 20.0,
+   "p90": 20.0,
+   "max": 40.0,
+   "sum_h": 1.2
+  },
+  "armed_to_enqueued": {
+   "n": 3,
+   "p50": 5.0,
+   "p90": 5.0,
+   "max": 5.0,
+   "sum_h": 0.2
+  },
+  "mq_merge_branch_test": {
+   "n": 3,
+   "p50": 45.0,
+   "p90": 45.0,
+   "max": 45.0,
+   "sum_h": 1.9
+  },
+  "mq_enqueued_to_merged": {
+   "n": 3,
+   "p50": 45.0,
+   "p90": 45.0,
+   "max": 45.0,
+   "sum_h": 1.9
+  },
+  "merge_to_next_merge_when_next_was_green": {
+   "n": 2,
+   "p50": 60.0,
+   "p90": 60.0,
+   "max": 60.0,
+   "sum_h": 2.0
+  },
+  "merge_to_next_arm_when_next_was_green": {
+   "n": 2,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.3
+  },
+  "merge_to_next_arm_when_next_was_green[watcher]": null,
+  "merge_to_next_arm_when_next_was_green[hand]": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  },
+  "merge_to_next_arm_when_next_was_green[unledgered]": {
+   "n": 1,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.2
+  },
+  "arm_class_counts": {
+   "watcher": 1,
+   "hand": 1,
+   "unledgered": 1
+  }
+ },
+ "release": {
+  "merged_to_live": {
+   "n": 3,
+   "p50": 40.0,
+   "p90": 40.0,
+   "max": 90.0,
+   "sum_h": 2.7
+  },
+  "merged_to_release_join": {
+   "n": 3,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 70.0,
+   "sum_h": 1.5
+  },
+  "canary_to_promote": {
+   "n": 2,
+   "p50": 4.0,
+   "p90": 3.0,
+   "max": 5.0,
+   "sum_h": 0.1
+  },
+  "deploy_to_done": {
+   "n": 2,
+   "p50": 10.0,
+   "p90": 10.0,
+   "max": 10.0,
+   "sum_h": 0.3
+  },
+  "advance_lane": {
+   "tickets": 1,
+   "join_to_done": {
+    "n": 1,
+    "p50": 20.0,
+    "p90": 20.0,
+    "max": 20.0,
+    "sum_h": 0.3
+   },
+   "canary_to_promote": {
+    "n": 1,
+    "p50": 3.0,
+    "p90": 3.0,
+    "max": 3.0,
+    "sum_h": 0.1
+   },
+   "deploy_to_done": {
+    "n": 1,
+    "p50": 10.0,
+    "p90": 10.0,
+    "max": 10.0,
+    "sum_h": 0.2
+   }
+  }
+ },
+ "pr_hours_in_window": {
+  "green_unarmed_queue_busy": {
+   "h": 1.17,
+   "share": 0.156
+  },
+  "green_unarmed_queue_idle": {
+   "h": 1.17,
+   "share": 0.156
+  },
+  "armed_not_enqueued": {
+   "h": 0.25,
+   "share": 0.033
+  },
+  "in_queue": {
+   "h": 2.25,
+   "share": 0.3
+  },
+  "merged_not_joined": {
+   "h": 1.5,
+   "share": 0.2
+  },
+  "joined_not_live": {
+   "h": 1.17,
+   "share": 0.156
+  },
+  "total_h": 7.5
+ },
+ "queue_wall": {
+  "window_h": 4.0,
+  "busy_h": 2.42
+ },
+ "per_pr_hours": {
+  "101": {
+   "green_unarmed_queue_busy": 0.0,
+   "green_unarmed_queue_idle": 0.167,
+   "armed_not_enqueued": 0.083,
+   "in_queue": 0.417,
+   "merged_not_joined": 0.167,
+   "joined_not_live": 0.5,
+   "open_at_until": false
+  },
+  "102": {
+   "green_unarmed_queue_busy": 0.167,
+   "green_unarmed_queue_idle": 0.167,
+   "armed_not_enqueued": 0.083,
+   "in_queue": 0.75,
+   "merged_not_joined": 1.167,
+   "joined_not_live": 0.333,
+   "open_at_until": false
+  },
+  "103": {
+   "green_unarmed_queue_busy": 0.5,
+   "green_unarmed_queue_idle": 0.167,
+   "armed_not_enqueued": 0.083,
+   "in_queue": 0.75,
+   "merged_not_joined": 0.167,
+   "joined_not_live": 0.333,
+   "open_at_until": false
+  },
+  "104": {
+   "green_unarmed_queue_busy": 0.333,
+   "green_unarmed_queue_idle": 0.167,
+   "armed_not_enqueued": 0.0,
+   "in_queue": 0.0,
+   "merged_not_joined": 0.0,
+   "joined_not_live": 0.0,
+   "open_at_until": true
+  },
+  "200": {
+   "green_unarmed_queue_busy": 0.167,
+   "green_unarmed_queue_idle": 0.5,
+   "armed_not_enqueued": 0.0,
+   "in_queue": 0.333,
+   "merged_not_joined": 0.0,
+   "joined_not_live": 0.0,
+   "open_at_until": true
+  }
+ }
+}
+rc=0

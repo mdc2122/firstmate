@@ -1,0 +1,20 @@
+[
+ {
+  "pr": 200,
+  "green": 1792155600.0,
+  "armed": null,
+  "mq_start": 1792158000.0,
+  "mq_done": null,
+  "merged": null,
+  "red": false
+ },
+ {
+  "pr": 201,
+  "green": null,
+  "armed": 1792155900.0,
+  "mq_start": 1792156800.0,
+  "mq_done": 1792157400.0,
+  "merged": null,
+  "red": true
+ }
+]

@@ -1,0 +1,9 @@
+$ ... --since 2026-10-16T10:00:00Z --until 2026-10-16T14:00:00Z --prs 3 --out $EVIDENCE/run-prs3
+                                     [--merge-line MERGE_LINE] --out OUT
+fm-merge-path-window-stats.py: error: the 3 merged PRs read do not reach back to --since; raise --prs, or the window lies beyond the harness's 150-closed-PR fetch
+rc=2 out_dir_exists=no
+$ ... --since 2026-10-16T14:00:00Z --until 2026-10-16T10:00:00Z
+fm-merge-path-window-stats.py: error: --until must be later than --since
+rc=2
+$ ... --prs 4 (oldest read = PR 101 merged 11:00, exactly reaches? no: since 10:00)
+since=11:00 --prs 4 rc=0
