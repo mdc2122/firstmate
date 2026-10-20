@@ -148,12 +148,13 @@
 #                          conclusion and reason. One wake per handed-over head,
 #                          and the yolo poll does not re-queue that head
 #                          (pr_queue_merge_tick). The task's worker also
-#                          receives one steer naming the PR, the failing tests
+#                          receives, when yolo=on, one steer naming the PR, the failing tests
 #                          read from the queue run's own log, and that run,
 #                          ordering the supported pipeline rerun on the current
 #                          base - never a hand rebase or forge branch update
-#                          (pr_mq_ejection_steer); once per handed-over head,
-#                          and never while a queue run is still in flight.
+#                          (pr_mq_ejection_steer); its probe is read once per
+#                          handed-over head, and a reading taken while a queue
+#                          run is still in flight steers nobody.
 #   check: <check>: merge-queue hand-off cancelled: <url> moved from verified head <old> to <new>, ...
 #                          a PR handed to its merge-queue app read at another
 #                          head: its merge authority was revoked and auto-merge
@@ -359,10 +360,8 @@ case "$PR_GREEN_BLOCKED_SECS" in
 esac
 PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base rerun steers per pull request per rolling hour
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
-PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
+PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one rerun steer, behind-base or merge-queue ejection (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
-MQ_EJECTION_STEER_TIMEOUT=${FM_MQ_EJECTION_STEER_TIMEOUT:-30}  # seconds allowed for one ejection rerun steer (bin/fm-send.sh)
-case "$MQ_EJECTION_STEER_TIMEOUT" in ''|*[!0-9]*|0) MQ_EJECTION_STEER_TIMEOUT=30 ;; esac
 MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head or queue-held-head age before its one wake
 case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
@@ -2540,7 +2539,7 @@ retire_merged_pr_poll() {  # <id> <url> <check-path>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.mq-ejection" \
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" \
     "$STATE/$id.merge-line-stall" \
     "$STATE/$id.queue-merge" "$STATE/$id.queue-away-refused" "$STATE/$id.queue-stall"
   # A landed PR leaves its repository's merge line so the next PR becomes the
@@ -2627,89 +2626,102 @@ pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
   return 1
 }
 
-# One bin/fm-send.sh steer per behind pull-request head, asking the worker for
-# the supported pipeline rerun (never a hand rebase, a hand push, or a forge
-# branch update: the pipeline owns the branch and its required attestation is
-# bound to the head it pushed). The previous run's post-green CI monitor is
-# often still live on the branch and never rebases a behind pull request, yet
-# its custody blocks both the local sync and the rerun, so the steer has the
-# worker abort that run first, but only when it is the sole active run and
-# its only active step is ci after checks passed, confirming the cancel
-# through axi status; any other active run is never aborted and is reported
-# blocked instead. A rerun also refuses when the worker's local branch is not
-# the pull request's head, which is the usual state after an earlier rerun
-# rebased and pushed from the pipeline's own copy, so the steer next has the
-# worker bring its local branch to that head: the pipeline's offered sync or
-# custody recovery when it has one, otherwise a fetch of the pull request head
-# and git reset --keep onto it once git cherry shows every local commit is
-# already in that head, and a blocked report instead when one is missing.
-# state/<id>.pr-behind-rerun keeps one "<url> <head-sha>
-# <epoch>" line per delivered steer for the task's current pull request: a
-# head already listed is never steered again, and at most
-# PR_BEHIND_RERUN_PER_HOUR steers go out per pull request in any rolling hour.
-# It survives the episode's clear readings (the rerun's own pending CI is one)
-# so the cap spans reruns, and retires with the merged poll and at teardown.
-# Only a delivered steer is recorded, so a refused send (another supervision
-# actor's lease, a retired endpoint) retries on a later sweep.
-pr_behind_rerun_steer() {  # <id> <url> <head>
-  local id=$1 url=$2 head=$3 file now recent msg tmp
-  [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
-  file="$STATE/$id.pr-behind-rerun"
-  now=$(date +%s)
-  if [ -f "$file" ] && [ ! -L "$file" ]; then
-    awk -v u="$url" -v h="$head" '$1 == u && $2 == h { found = 1 } END { exit !found }' "$file" \
-      && return 0
-    recent=$(awk -v u="$url" -v since=$((now - 3600)) '$1 == u && $3 + 0 > since { n++ } END { print n + 0 }' "$file")
-    if [ "$recent" -ge "$PR_BEHIND_RERUN_PER_HOUR" ]; then
-      triage_log "behind-rerun steer for $id withheld: $recent already sent for $url within the hour"
-      return 0
-    fi
-  fi
-  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
-  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
-    run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
-  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
-    triage_log "behind-rerun steer for $id refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
-    return 0
-  fi
-  triage_log "behind-rerun steer sent to $id for $url at $head"
+# Both rerun steers below - a green pull request behind its base, and a
+# merge-queue ejection - go to a yolo=on task's worker through this one
+# mechanism and ask for the supported pipeline rerun, never a hand rebase, a
+# hand push, or a forge branch update: the pipeline owns the branch and its
+# required attestation is bound to the head it pushed. The previous run's
+# post-green CI monitor is often still live on the branch and never rebases a
+# behind pull request, yet its custody blocks both the local sync and the
+# rerun, so each steer has the worker abort that run first, but only when it
+# is the sole active run and its only active step is ci after checks passed,
+# confirming the cancel through axi status; any other active run is never
+# aborted and is reported blocked instead. A rerun also refuses when the
+# worker's local branch is not the pull request's head, which is the usual
+# state after an earlier rerun rebased and pushed from the pipeline's own copy,
+# so each steer next has the worker bring its local branch to that head: the
+# pipeline's offered sync or custody recovery when it has one, otherwise a
+# fetch of the pull request head and git reset --keep onto it once git cherry
+# shows every local commit is already in that head, and a blocked report
+# instead when one is missing.
+# state/<id>.pr-behind-rerun keeps one "<url> <head-sha> <epoch> <reason>" line
+# per steered head for the task's current pull request, <reason> being behind
+# or ejection (a line without one is behind), so each reason has its own
+# once-per-head rule. It survives the episode's clear readings (the rerun's own
+# pending CI is one) so the behind cap spans reruns, and retires with the
+# merged poll and at teardown.
+pr_rerun_steer_seen() {  # <id> <url> <head> <reason>
+  local file="$STATE/$1.pr-behind-rerun"
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  awk -v u="$2" -v h="$3" -v r="$4" \
+    '$1 == u && $2 == h && ($4 == "" ? "behind" : $4) == r { found = 1 } END { exit !found }' "$file"
+}
+
+pr_rerun_steer_record() {  # <id> <url> <head> <reason> <epoch>
+  local file="$STATE/$1.pr-behind-rerun" tmp
   tmp=$(mktemp "$STATE/.pr-behind-rerun.XXXXXX") || return 0
   if {
-    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
-    printf '%s %s %s\n' "$url" "$head" "$now"
+    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$2" '$1 == u' "$file"; fi
+    printf '%s %s %s %s\n' "$2" "$3" "$5" "$4"
   } > "$tmp" && mv -f -- "$tmp" "$file"; then
     return 0
   fi
   rm -f "$tmp"
 }
 
-# One bin/fm-send.sh steer per merge-queue ejection, asking the worker for the
-# supported pipeline rerun on the current base: the queue tested the handed-over
-# head against the moved base and ejected it on failing tests, so the fix is the
-# pipeline's own rerun (which rebases onto that base and revalidates), never a
-# hand rebase, a hand push, or a forge branch update. The steer names the pull
-# request, the failing tests, and the queue run, all read by
-# bin/fm-mq-ejection.sh from the queue's own ejection comment and the failing
-# run's log; the probe prints nothing while a queue run is still in flight, so
-# an ejection that has not finished is never steered. The previous run's
-# post-green CI monitor may still hold the branch and blocks a bare rerun, so
-# the steer has the worker abort that run first, but only when it is the sole
-# active run and its only active step is ci after checks passed, confirming the
-# cancel through axi status; any other active run is reported blocked instead.
-# That rerun may also have left the worker's local branch behind the pull
-# request's head, so the steer next has the worker bring it to that head the
-# same way pr_behind_rerun_steer does.
-# state/<id>.mq-ejection keeps one "<url> <head-sha> <epoch>" line per delivered
-# steer, so a head is never steered twice; it retires with the merged poll and
-# at teardown, and only a delivered steer is recorded so a refused send retries
-# on a later sweep.
-pr_mq_ejection_steer() {  # <id> <url> <head>
-  local id=$1 url=$2 head=$3 file verdict detail run_url failure msg tmp now
-  file="$STATE/$id.mq-ejection"
-  if [ -f "$file" ] && [ ! -L "$file" ]; then
-    awk -v u="$url" -v h="$head" '$1 == u && $2 == h { found = 1 } END { exit !found }' "$file" \
-      && return 0
+# The abort and local-sync steps both rerun steers open with.
+pr_rerun_steer_steps() {  # <url> <head>
+  printf '%s' "First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $2, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${1##*/}/head, confirm git cherry $2 HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $2; if a local commit is missing from the PR head, stop and report blocked instead."
+}
+
+# Sends one rerun steer through bin/fm-send.sh; returns 0 only when it was
+# delivered.
+pr_rerun_steer_send() {  # <id> <reason> <msg>
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$1" "$3" || exit 1
+  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+    triage_log "$2 rerun steer for $1 refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
+    return 1
   fi
+}
+
+# One behind-base rerun steer per behind pull-request head, recorded only once
+# delivered so a refused send (another supervision actor's lease, a retired
+# endpoint) retries on a later sweep; at most PR_BEHIND_RERUN_PER_HOUR go out
+# per pull request in any rolling hour.
+pr_behind_rerun_steer() {  # <id> <url> <head>
+  local id=$1 url=$2 head=$3 file now recent msg
+  [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
+  pr_rerun_steer_seen "$id" "$url" "$head" behind && return 0
+  file="$STATE/$id.pr-behind-rerun"
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    recent=$(awk -v u="$url" -v since=$((now - 3600)) \
+      '$1 == u && ($4 == "" || $4 == "behind") && $3 + 0 > since { n++ } END { print n + 0 }' "$file")
+    if [ "$recent" -ge "$PR_BEHIND_RERUN_PER_HOUR" ]; then
+      triage_log "behind-rerun steer for $id withheld: $recent already sent for $url within the hour"
+      return 0
+    fi
+  fi
+  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. $(pr_rerun_steer_steps "$url" "$head") Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  pr_rerun_steer_send "$id" behind "$msg" || return 0
+  triage_log "behind-rerun steer sent to $id for $url at $head"
+  pr_rerun_steer_record "$id" "$url" "$head" behind "$now"
+}
+
+# One merge-queue ejection steer per handed-over head: the queue tested that
+# head against the moved base and ejected it on failing tests, so the fix is
+# the pipeline's own rerun, which rebases onto that base and revalidates. The
+# steer names the pull request, the failing tests, and the queue run, all read
+# by bin/fm-mq-ejection.sh from the queue app's own ejection comment and the
+# failing run's log. The probe is read once per head, whatever it reads: a
+# silent reading (a queue run still in flight, auto-merge cancelled by hand,
+# an unreadable forge) or a refused send is recorded like a delivered steer
+# and not re-read until the head moves.
+pr_mq_ejection_steer() {  # <id> <url> <head>
+  local id=$1 url=$2 head=$3 verdict detail run_url='' failure='' msg
+  [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
+  pr_rerun_steer_seen "$id" "$url" "$head" ejection && return 0
   run_check_capture "$SCRIPT_DIR/fm-mq-ejection.sh" "$url" "$head" \
     "$FM_PR_QUEUE_MERGE_CHECKS" || exit 1
   verdict=${FM_CHECK_RESULT%%$'\n'*}
@@ -2720,26 +2732,16 @@ pr_mq_ejection_steer() {  # <id> <url> <head>
       run_url=${detail%% *}
       failure=${detail#* }
       ;;
-    *) return 0 ;;
   esac
-  [ -n "$run_url" ] && [ -n "$failure" ] || return 0
-  msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
-  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
-    run_action_capture "$MQ_EJECTION_STEER_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
-  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
-    triage_log "ejection steer for $id refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
-    return 0
+  if [ -n "$run_url" ] && [ -n "$failure" ]; then
+    msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. $(pr_rerun_steer_steps "$url" "$head") Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+    if pr_rerun_steer_send "$id" ejection "$msg"; then
+      triage_log "ejection rerun steer sent to $id for $url at $head (run $run_url)"
+    fi
+  else
+    triage_log "ejection probe for $id read no ejection for $url at $head; not re-read at this head"
   fi
-  triage_log "ejection steer sent to $id for $url at $head (run $run_url)"
-  now=$(date +%s)
-  tmp=$(mktemp "$STATE/.mq-ejection.XXXXXX") || return 0
-  if {
-    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
-    printf '%s %s %s\n' "$url" "$head" "$now"
-  } > "$tmp" && mv -f -- "$tmp" "$file"; then
-    return 0
-  fi
-  rm -f "$tmp"
+  pr_rerun_steer_record "$id" "$url" "$head" ejection "$(date +%s)"
 }
 
 # <held> 1 marks a PR held behind its merge-line head (bin/fm-merge-line.sh):
@@ -2905,8 +2907,8 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
   # recorded head has ejected it. The worker hears about the ejection itself,
   # not only through firstmate: the queue's failing tests and run reach it as
   # the one steer that orders the supported pipeline rerun
-  # (pr_mq_ejection_steer, idempotent per head, so a refused send retries on a
-  # later sweep while the wake below still fires once).
+  # (pr_mq_ejection_steer, yolo=on only and read once per head, while the wake
+  # below still fires once for every task).
   pr_mq_ejection_steer "$id" "$url" "$head"
   [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] || return 0
   reason="check: $c: merge-queue ejected $url at $head: $detail"

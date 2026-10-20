@@ -3152,7 +3152,9 @@ test_queue_ejection_steers_one_supported_rerun() {
   queue_app_cycle "$dir" after
   case "$(cat "$dir/after.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one ejection woke firstmate twice: $(cat "$dir/after.out")" ;; esac
   [ "$(ejection_steers "$state")" = 1 ] || fail "the same ejection steered its worker twice: $(ejection_steers "$state")"
-  [ -f "$state/task-a.mq-ejection" ] || fail "the delivered ejection steer was not recorded"
+  awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection" { f = 1 } END { exit !f }' \
+    "$state/task-a.pr-behind-rerun" 2>/dev/null \
+    || fail "the delivered ejection steer was not recorded in the shared rerun-steer record"
   pass "a queue ejection steers one supported pipeline rerun naming the PR, failing tests, and queue run"
 }
 
@@ -3201,8 +3203,38 @@ test_queue_run_still_in_flight_steers_nobody() {
   unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
   [ "$(ejection_steers "$state")" = 0 ] \
     || fail "a queue run still in flight steered its worker: $(cat "$state"/task-a.inbox/*.msg)"
-  [ ! -e "$state/task-a.mq-ejection" ] || fail "an in-flight queue run recorded an ejection"
-  pass "a merge-queue run still in flight never steers the worker"
+  # The silent reading is recorded for this head and not re-read every sweep:
+  # only a moved head earns another probe.
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" again
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a silent ejection reading was re-read at the same head: $(cat "$state"/task-a.inbox/*.msg)"
+  [ "$(awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection"' "$state/task-a.pr-behind-rerun" | wc -l | tr -d ' ')" = 1 ] \
+    || fail "the silent ejection reading was not recorded once for its head: $(cat "$state/task-a.pr-behind-rerun" 2>/dev/null)"
+  pass "a merge-queue run still in flight never steers the worker, and its reading is not re-read at that head"
+}
+
+# Only a yolo=on worker is steered on an ejection; any other task's ejection
+# reaches firstmate through the ejection wake alone.
+test_queue_ejection_steers_no_non_yolo_worker() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(ejection_case queue-ejected-attended)
+  state="$dir/home/state"
+  queue_app_cycle "$dir" requested
+  sed 's/^yolo=on$/yolo=off/' "$state/task-a.meta" > "$state/task-a.meta.next" \
+    && mv "$state/task-a.meta.next" "$state/task-a.meta"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  grep -F "merge-queue ejected $url at $head" "$state/.wake-queue" >/dev/null \
+    || fail "a non-yolo task's ejection did not wake firstmate: $(cat "$state/.wake-queue")"
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a non-yolo worker was steered on an ejection: $(cat "$state"/task-a.inbox/*.msg)"
+  [ ! -e "$state/task-a.pr-behind-rerun" ] || fail "a non-yolo task's ejection was recorded as a rerun steer"
+  pass "a queue ejection steers no non-yolo worker and still wakes firstmate"
 }
 
 # Authority granted for the handed-over head never covers another: a head
@@ -4424,6 +4456,7 @@ test_queue_ejection_wakes_once_and_is_not_requeued
 test_queue_ejection_steers_one_supported_rerun
 test_queue_ejection_ignores_comment_not_from_queue_app
 test_queue_run_still_in_flight_steers_nobody
+test_queue_ejection_steers_no_non_yolo_worker
 test_queue_head_moved_while_waiting_is_disabled_and_reverified
 test_queue_landing_at_unverified_head_is_not_credited
 test_queue_head_moved_for_non_yolo_task_wakes_once

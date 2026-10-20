@@ -1116,8 +1116,7 @@ FM_MERGE_LINE_QUEUE_WINDOW=3   # merge-line entries a merge-queue app base may h
 FM_MERGE_LINE_PRUNE_TIMEOUT=90   # seconds allowed for one per-sweep merge-line prune (bin/fm-merge-line.sh prune), which reads every listed entry from its forge; capped at a third of the watcher stale grace
 FM_MERGE_LINE_PRUNE_READ_TIMEOUT=20   # seconds allowed for each forge read inside that prune; all of one prune's reads share a budget of two thirds of FM_MERGE_LINE_PRUNE_TIMEOUT, and once one read times out or that budget is spent, prune starts no further read that sweep and still prunes the entries it read
 FM_PR_BEHIND_RERUN_PER_HOUR=3   # rerun steers per pull request per rolling hour sent to a yolo=on worker whose green pull request is behind its base; one per head; bin/fm-watch.sh owns the record
-FM_PR_BEHIND_RERUN_TIMEOUT=30   # seconds allowed for one such bin/fm-send.sh steer
-FM_MQ_EJECTION_STEER_TIMEOUT=30   # seconds allowed for one merge-queue ejection rerun steer (bin/fm-send.sh)
+FM_PR_BEHIND_RERUN_TIMEOUT=30   # seconds allowed for one such bin/fm-send.sh steer, and for one merge-queue ejection rerun steer
 FM_MQ_EJECTION_LOG_TIMEOUT=15   # seconds allowed for reading the failing queue run's log; capped at 25 so the whole ejection probe fits FM_CHECK_TIMEOUT
 FM_MAIL_CHECK_BUDGET=15   # seconds allowed for one standing mail poll; valid 5..25, cut to fit FM_CHECK_TIMEOUT
 FM_MAIL_POLL_MAX_WAKES=20   # per-poll wake cap for a mail poll; valid 1..200, keeps a flood from flooding firstmate
