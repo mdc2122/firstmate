@@ -1,0 +1,20 @@
+# live readout (no --as-of), kickoffs name resolved home path
+scanning worker transcripts ...
+  0 launch-brief sessions
+  6 swarm sessions, 5 beads crew dispatches
+scanning supervisor transcripts ...
+warning: release queue /private/tmp/fmw-e2e/real/none.jsonl missing; every merged mdc2122/viral-moment ship stays in-flight
+flash: 0 ambiguous records
+mate-bead beads-crew scout 2026-10-12T14:00:00Z - in-flight - stall=0.0
+mate-swarm swarm scout 2026-10-12T09:00:00Z 2026-10-12T09:30:00Z live-proven - stall=0.0
+quiet-bead beads-crew scout 2026-10-12T12:00:00Z 2026-10-12T12:30:00Z live-proven - stall=0.0
+steered-bead beads-crew scout 2026-10-12T12:00:00Z 2026-10-12T13:00:00Z live-proven steer:1 stall=0.0
+super beads-crew scout 2026-10-12T12:00:00Z - closed-not-live - stall=0.0
+sw-gone swarm scout 2026-10-12T10:00:00Z - closed-not-live - stall=0.0
+sw-live swarm scout 2026-10-12T10:00:00Z - in-flight - stall=0.0
+sw-ship swarm ship 2026-10-12T11:00:00Z 2026-10-12T11:10:00Z live-proven relaunch:1 stall=0.07
+sw-stall swarm scout 2026-10-12T10:00:00Z - in-flight - stall=13.92
+
+# same world, kickoffs name /tmp (symlink to /private/tmp), --home /tmp/...
+  0 launch-brief sessions
+  0 swarm sessions, 5 beads crew dispatches

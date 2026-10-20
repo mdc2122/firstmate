@@ -1,0 +1,76 @@
+# fm-flow-wait.py: swarm and beads-crew dispatches are measured (live CLI transcript)
+Disposable home: /tmp/fmflow-live.vpaZ/home/fm (reached as /tmp -> /private/tmp, so it is a symlinked home), secondmate /tmp/fmflow-live.vpaZ/home/mate.
+Swarm kickoff text from 'bin/fm-prime-swarm.sh swarm-live --dry-run'; backlog rows from 'bin/fm-tasks-axi.sh add --start' and 'done'.
+Beads crew queue: a real br 0.7.4 beads.db, built with 'br create -l mirror:<row>' and 'br close -r <reason>'.
+Every run: --since 2026-10-19 --until 2026-10-21 --no-github --no-flash
+
+## 1. BASE (ea2011aa), --as-of 2026-10-20T05:00Z, beads in secondmate home: swarms and crew rows are invisible
+  briefed (no source column at base) scout 2026-10-20T02:00:00Z 2026-10-20T02:30:00Z live-proven - zero_touch=True worker_stall=0.0
+
+## 2. HEAD, same input
+  briefed launch-brief scout 2026-10-20T02:00:00Z 2026-10-20T02:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  briefed beads-crew scout 2026-10-20T04:17:23Z 2026-10-20T04:17:24Z live-proven - zero_touch=True worker_stall=0.0
+  crew-blocked beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-caps beads-crew scout 2026-10-20T04:17:23Z 2026-10-20T04:17:24Z live-proven - zero_touch=True worker_stall=0.0
+  crew-merge beads-crew scout 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  crew-notdone beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-open beads-crew scout 2026-10-20T04:17:23Z - in-flight - zero_touch=True worker_stall=0.0
+  crew-super beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-wontfix beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  shiprow beads-crew ship 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-done swarm scout 2026-10-20T00:30:05Z 2026-10-20T01:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-done beads-crew scout 2026-10-20T04:17:23Z 2026-10-20T04:17:24Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-live swarm scout 2026-10-20T03:00:05Z - in-flight - zero_touch=True worker_stall=0.0
+  swarm-quit swarm scout 2026-10-20T01:00:05Z - closed-not-live - zero_touch=True worker_stall=0.0
+  stderr:
+    scanning worker transcripts ...
+      1 launch-brief sessions
+      3 swarm sessions, 10 beads crew dispatches
+    scanning supervisor transcripts ...
+  by_source: {"beads-crew":{"measured":10,"settled":9,"zero_touch_live":5,"wait_hours":0.0},"launch-brief":{"measured":1,"settled":1,"zero_touch_live":1,"wait_hours":0.0},"swarm":{"measured":3,"settled":2,"zero_touch_live":1,"wait_hours":0.0}}
+  (briefed and swarm-done appear twice here because the bead lives in the secondmate home; tasks are keyed by (home, row).)
+
+## 3. HEAD, beads queue in the same home as the launch brief and swarm: no re-join
+  briefed launch-brief scout 2026-10-20T02:00:00Z 2026-10-20T02:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  crew-blocked beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-caps beads-crew scout 2026-10-20T04:17:23Z 2026-10-20T04:17:24Z live-proven - zero_touch=True worker_stall=0.0
+  crew-merge beads-crew scout 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  crew-notdone beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-open beads-crew scout 2026-10-20T04:17:23Z - in-flight - zero_touch=True worker_stall=0.0
+  crew-super beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-wontfix beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  shiprow beads-crew ship 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-done swarm scout 2026-10-20T00:30:05Z 2026-10-20T01:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-live swarm scout 2026-10-20T03:00:05Z - in-flight - zero_touch=True worker_stall=0.0
+  swarm-quit swarm scout 2026-10-20T01:00:05Z - closed-not-live - zero_touch=True worker_stall=0.0
+  by_source measured: {"beads-crew":8,"launch-brief":1,"swarm":3}
+
+## 4. HEAD live readout (no --as-of): swarm-live row still under In flight, swarm-quit row moved to Done
+  swarm-done swarm scout 2026-10-20T00:30:05Z 2026-10-20T01:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-live swarm scout 2026-10-20T03:00:05Z - in-flight - zero_touch=True worker_stall=0.0
+  swarm-quit swarm scout 2026-10-20T01:00:05Z - closed-not-live - zero_touch=True worker_stall=0.0
+  after 'fm-tasks-axi.sh done swarm-live':
+  swarm-live swarm scout 2026-10-20T03:00:05Z - closed-not-live - zero_touch=True worker_stall=0.0
+
+## 5. HEAD --as-of 05:00 adversarial: swarm-stall root stopped at 03:10 (turn_end) and runs past --as-of; swarm-live is mid-call at 03:30;
+##    direct supervisor steer on crew-open; automation (fm-watch.sh) steer on crew-wontfix
+  briefed launch-brief scout 2026-10-20T02:00:00Z 2026-10-20T02:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  crew-blocked beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-caps beads-crew scout 2026-10-20T04:17:23Z 2026-10-20T04:17:24Z live-proven - zero_touch=True worker_stall=0.0
+  crew-merge beads-crew scout 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  crew-notdone beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-open beads-crew scout 2026-10-20T04:17:23Z - in-flight steer:1 zero_touch=False worker_stall=0.0
+  crew-super beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  crew-wontfix beads-crew scout 2026-10-20T04:17:23Z - closed-not-live - zero_touch=True worker_stall=0.0
+  shiprow beads-crew ship 2026-10-20T04:17:22Z 2026-10-20T04:17:23Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-done swarm scout 2026-10-20T00:30:05Z 2026-10-20T01:30:00Z live-proven - zero_touch=True worker_stall=0.0
+  swarm-live swarm scout 2026-10-20T03:00:05Z - in-flight - zero_touch=True worker_stall=0.0
+  swarm-quit swarm scout 2026-10-20T01:00:05Z - closed-not-live - zero_touch=True worker_stall=0.0
+  swarm-stall swarm scout 2026-10-20T03:00:05Z - in-flight - zero_touch=True worker_stall=1.83
+
+## bundled test: bash tests/fm-flow-wait-ledger.test.sh
+  ok - touches read from the action ledger and an archived inbox classify the fixture exactly as the transcript baseline
+  ok - a ledger row written by firstmate automation is never a human touch
+  ok - a launch brief joins the task its status-append line names, not a status log its task text cites
+  ok - a swarm root's session directory and a beads crew mirror bead each join their own task; a launch brief keeps its task
+  ok - a swarm under a home reached through a symlink is measured

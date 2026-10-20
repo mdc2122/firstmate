@@ -1,0 +1,10 @@
+task,home,kind,mode,yolo,backlog_kind,excluded,spawn,end,end_how,outcome,in_flight,span_h,sessions,prs,touches,touch_types,first_touch,first_touch_detail,zero_touch,wait_decision_park_h,wait_human_answer_h,wait_ci_h,wait_merge_queue_h,wait_release_h,wait_worker_stall_h,wait_handoff_idle_h,nm_parked_h,source
+mate-swarm,secondmate:/private/tmp/fmw-e2e/real/home/mate,scout,,,,,2026-10-12T09:00:00Z,2026-10-12T09:30:00Z,done: status line,live-proven,False,0.5,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,swarm
+sw-gone,primary,scout,,,,,2026-10-12T10:00:00Z,,,closed-not-live,False,0.08,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,swarm
+sw-live,primary,scout,,,scout,,2026-10-12T10:00:00Z,,,in-flight,True,14.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,swarm
+sw-stall,primary,scout,,,,,2026-10-12T10:00:00Z,,,in-flight,True,14.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,13.92,0.0,0.0,swarm
+sw-ship,primary,ship,,,ship,,2026-10-12T11:00:00Z,2026-10-12T11:10:00Z,done: status line,live-proven,False,0.17,2,,1,relaunch:1,2026-10-12T11:05:00Z,new swarm launch,False,0.0,0.0,0.0,0.0,0.0,0.07,0.0,0.0,swarm
+steered-bead,primary,scout,,,,,2026-10-12T12:00:00Z,2026-10-12T13:00:00Z,done: status line,live-proven,False,1.0,1,,1,steer:1,2026-10-12T12:15:00Z,[body-not-captured/firstmate] ,False,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,beads-crew
+quiet-bead,primary,scout,,,,,2026-10-12T12:00:00Z,2026-10-12T12:30:00Z,done: status line,live-proven,False,0.5,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,beads-crew
+super,primary,scout,,,,,2026-10-12T12:00:00Z,,,closed-not-live,False,0.67,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,beads-crew
+mate-bead,secondmate:/private/tmp/fmw-e2e/real/home/mate,scout,,,,,2026-10-12T14:00:00Z,,,in-flight,True,10.0,1,,0,,,,True,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,beads-crew

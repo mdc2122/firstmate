@@ -1,0 +1,111 @@
+{
+ "window": [
+  "2026-10-12",
+  "2026-10-13"
+ ],
+ "generated": "2026-10-20T04:13:48Z",
+ "now_cap": "2026-10-13T00:00:00Z",
+ "tasks_spawned": 9,
+ "excluded": 0,
+ "measured": 9,
+ "settled": 6,
+ "live_proven": 4,
+ "closed_not_live": 2,
+ "in_flight": 3,
+ "zero_touch_live": 2,
+ "zero_touch_share_of_settled_pct": 33.3,
+ "zero_touch_share_of_live_pct": 50.0,
+ "in_flight_untouched_so_far": 3,
+ "upper_bound_if_all_untouched_inflight_land_pct": 55.6,
+ "by_kind": {
+  "scout": {
+   "settled": 5,
+   "zero_touch_live": 2,
+   "live": 3
+  },
+  "ship": {
+   "settled": 1,
+   "zero_touch_live": 0,
+   "live": 1
+  }
+ },
+ "by_source": {
+  "beads-crew": {
+   "measured": 4,
+   "settled": 3,
+   "zero_touch_live": 1,
+   "wait_hours": 0.0
+  },
+  "swarm": {
+   "measured": 5,
+   "settled": 3,
+   "zero_touch_live": 1,
+   "wait_hours": 14.0
+  }
+ },
+ "touches_total": 2,
+ "touches_by_type": {
+  "relaunch": 1,
+  "steer": 1
+ },
+ "steer_purposes": {
+  "body-not-captured": 1
+ },
+ "steer_answerers": {
+  "firstmate": 1
+ },
+ "script_steers_excluded": 0,
+ "flash_classified_rows": {
+  "steers": 0,
+  "pauses": 0
+ },
+ "wait_hours_by_class": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 14.0,
+  "of_which_handoff_idle": 0.0
+ },
+ "wait_hours_by_class_live_tasks": {
+  "decision_park": 0.0,
+  "human_answer": 0.0,
+  "ci": 0.0,
+  "merge_queue": 0.0,
+  "release": 0.0,
+  "worker_stall": 0.1
+ },
+ "top_tasks_by_class": {
+  "decision_park": [],
+  "human_answer": [],
+  "ci": [],
+  "merge_queue": [],
+  "release": [],
+  "worker_stall": [
+   {
+    "task": "sw-stall",
+    "hours": 13.92
+   },
+   {
+    "task": "sw-ship",
+    "hours": 0.07
+   }
+  ],
+  "handoff_idle": []
+ },
+ "coverage": {
+  "supervisor_transcripts": [
+   {
+    "first": "2026-10-12T12:15:00Z",
+    "last": "2026-10-12T12:15:00Z",
+    "file": "state/supervisor-actions.jsonl"
+   }
+  ],
+  "supervisor_unresolved_variable_targets": {},
+  "backlog_rows_closed_in_window_without_worker_transcript": [],
+  "owned_prs_unresolved": {},
+  "gh_cache_entries": 0,
+  "releases_indexed": 0
+ }
+}

@@ -1,0 +1,3 @@
+task,at,type,detail,source,classified_by
+sw-ship,2026-10-12T11:05:00Z,relaunch,new swarm launch,worker-transcript,rule
+steered-bead,2026-10-12T12:15:00Z,steer,[body-not-captured/firstmate] ,supervisor-fm-send,rule
