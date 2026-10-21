@@ -180,15 +180,34 @@ git -C "$HOST_ROOT/repos/proj.git" branch fm/t3 fm/t2
 git -C "$HOST_ROOT/repos/proj.git" worktree add -q "$HOST_ROOT/worktrees/t3" fm/t3
 mkdir -p "$HOST_ROOT/tasks/t3" "$HOST_ROOT/sessions/t3"
 touch "$HOST_ROOT/tasks/t3/status"
-sh -c 'trap "echo late > \"$1/late.txt\"; exit 0" TERM; while :; do sleep 0.1; done' _ "$HOST_ROOT/worktrees/t3" &
-WORKER_PID=$!
-printf '%s\n' "$WORKER_PID" > "$HOST_ROOT/run/t3.pid"
+# Workers are detached from this shell so an exited one is reaped, as on a host.
+( sh -c 'trap "echo late > \"$1/late.txt\"; exit 0" TERM; while :; do sleep 0.1; done' _ "$HOST_ROOT/worktrees/t3" &
+  echo $! > "$HOST_ROOT/run/t3.pid" )
+WORKER_PID=$(cat "$HOST_ROOT/run/t3.pid")
 out=$(fleet_cmd release t3 2>&1)
 expect_code 1 $? "release refuses when the stopping worker leaves uncommitted work"
 assert_contains "$out" "has uncommitted work" "the refusal names the uncommitted work"
 assert_contains "$(cat "$HOME_DIR/data/t3/fleet/uncommitted.patch")" "late.txt" \
   "the saved patch holds what the worker wrote while stopping"
 assert_present "$HOST_ROOT/worktrees/t3/late.txt" "the host worktree keeps the unsaved work"
-kill "$WORKER_PID" 2>/dev/null; wait "$WORKER_PID" 2>/dev/null
+kill -9 "$WORKER_PID" 2>/dev/null
 
-pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order"
+# --- a worker that ignores SIGTERM is killed before release snapshots -------
+( sh -c 'trap "" TERM; while :; do sleep 0.1; done' &
+  echo $! > "$HOST_ROOT/run/t3.pid" )
+WORKER_PID=$(cat "$HOST_ROOT/run/t3.pid")
+fleet_cmd stop t3 >/dev/null 2>&1
+expect_code 0 $? "stop succeeds once a SIGTERM-ignoring worker is killed"
+kill -0 "$WORKER_PID" 2>/dev/null
+expect_code 1 $? "the worker that ignored SIGTERM is gone after stop"
+assert_absent "$HOST_ROOT/run/t3.pid" "the pid file goes only with the worker"
+
+# --- a released task is never synced again ----------------------------------
+printf '%s' "$(date +%s)" > "$HOST_ROOT/tasks/t2/turn-ended"
+rm -f "$HOME_DIR/state/t2.turn-ended"
+FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync >/dev/null 2>&1
+fleet_cmd sync t2 >/dev/null 2>&1
+expect_code 0 $? "syncing a released task is a quiet no-op"
+assert_absent "$HOME_DIR/state/t2.turn-ended" "a released task's host turn marker raises no wake"
+
+pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order, stop escalation, released sync"

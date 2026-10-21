@@ -116,7 +116,8 @@ Sync mirrors the host's status log into `state/<id>.status`, turn-end markers in
 - Agent exit or crash: `fm-fleet.sh resume <id>` relaunches omp in the same host endpoint and worktree with `--resume` on the saved session, so the conversation history continues; it refuses while the old omp is alive or the host does not answer.
 - Results: `fm-fleet.sh fetch <id>` fetches `fm/<id>` into the project as `refs/fleet/<id>`, saves the uncommitted diff (tracked and untracked) to `data/<id>/fleet/uncommitted.patch`, and archives the omp session and status log to `data/<id>/fleet/session.tar`, without touching the host worktree or index.
 - Host lost: fetch what the host still serves, then launch the work again as a new task; placement chooses another host.
-- Release: `fm-fleet.sh release <id>` stops the worker first, so nothing changes after the snapshot, then fetches, refuses while uncommitted work exists (resume the worker to commit it, or set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), and otherwise closes its endpoint and removes the host worktree while keeping the branch on both sides.
+- Release: `fm-fleet.sh release <id>` stops the worker first (SIGTERM, then SIGKILL after 10 seconds; it refuses if omp still survives), so nothing changes after the snapshot, then fetches, refuses while uncommitted work exists (resume the worker to commit it, or set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), and otherwise closes its endpoint and removes the host worktree while keeping the branch on both sides.
+  A released task is no longer synced, so its old host markers never wake firstmate.
   A launch that failed before its worktree existed releases the same way: the missing worktree yields an empty patch and nothing to remove.
 - Cleanup: `bin/fm-teardown.sh` refuses a fleet task until it has been released, because its local landed-work checks cannot see a worktree on another host; `--force` does not lift that refusal.
 

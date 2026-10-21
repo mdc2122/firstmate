@@ -624,16 +624,21 @@ EOF
 # sync): the mirror reads the local length, fetches the tail past it, and
 # appends, so overlapping syncs would duplicate or skip status bytes. A sync
 # that dies holding the lock frees it through the lock's dead-owner recovery.
+# A released task is never synced again: release marks it under this lock.
 cmd_sync() {
   local id=$1 rec alias root out local_len remote_len section line lock
   require_fleet
+  mkdir -p "$FLEET_STATE"
+  lock="$FLEET_STATE/.$id.sync.lock"
+  fm_lock_acquire_wait "$lock"
+  if [ -n "$(task_field "$id" fleet_released)" ]; then
+    fm_lock_release "$lock"
+    return 0
+  fi
   rec=$(task_host_record "$id")
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
-  mkdir -p "$FLEET_STATE"
-  lock="$FLEET_STATE/.$id.sync.lock"
-  fm_lock_acquire_wait "$lock"
   local_len=$(wc -c <"$STATE/$id.status" 2>/dev/null | tr -d ' ') || local_len=0
   # Deliver home-side steering records the host has not seen yet: stage the
   # body under a dot name (fleet_ssh_put reads it from stdin), then rename it
@@ -733,12 +738,13 @@ cmd_stop() {
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
-  stop_worker "$alias" || die "could not reach $(task_field "$id" fleet_host) to stop $id"
+  stop_worker "$alias" || die "could not stop $id on $(task_field "$id" fleet_host): the host did not answer or its omp survived SIGKILL"
   endpoint_close "$rec" "$(endpoint_of "$id")"
 }
 
 # stop_worker <alias>: end the omp recorded in $R_PID and wait (up to 10 s)
-# for it to exit, so nothing writes to the worktree afterwards.
+# for it to exit, then SIGKILL it, so nothing writes to the worktree
+# afterwards. A pid that survives keeps its pid file and fails the call.
 stop_worker() {
   fleet_ssh "$1" "
 pid=\$(cat $(sq "$R_PID") 2>/dev/null)
@@ -748,6 +754,11 @@ case \"\$pid\" in
     kill \"\$pid\" 2>/dev/null || true
     n=0
     while kill -0 \"\$pid\" 2>/dev/null && [ \$n -lt 50 ]; do sleep 0.2; n=\$((n + 1)); done
+    if kill -0 \"\$pid\" 2>/dev/null; then
+      kill -9 \"\$pid\" 2>/dev/null || true
+      sleep 1
+      kill -0 \"\$pid\" 2>/dev/null && { echo \"omp pid \$pid survived SIGKILL\" >&2; exit 1; }
+    fi
     ;;
 esac
 rm -f $(sq "$R_PID")
@@ -858,7 +869,7 @@ cmd_release() {
   proj=$(task_field "$id" project)
   remote_paths "$root" "$id"
   r_repo="$root/repos/$(basename "$proj").git"
-  stop_worker "$alias" || die "could not reach the host to release $id; its slot is still held"
+  stop_worker "$alias" || die "could not stop $id on its host (unreachable, or its omp survived SIGKILL); nothing was released"
   cmd_fetch "$id"
   patch="$DATA/$id/fleet/uncommitted.patch"
   if [ -s "$patch" ] && [ "${FM_FLEET_RELEASE_DISCARD:-0}" != 1 ]; then
@@ -867,9 +878,11 @@ cmd_release() {
   endpoint_close "$rec" "$(endpoint_of "$id")"
   fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
     || die "could not remove the worktree on $(task_field "$id" fleet_host); the work stays there and $id is not released"
-  rm -f "$FLEET_STATE/$id.reservation" "$FLEET_STATE/$id.turn" "$FLEET_STATE/$id.busy"
   # bin/fm-teardown.sh refuses a fleet task until this marker exists.
+  fm_lock_acquire_wait "$FLEET_STATE/.$id.sync.lock"
+  rm -f "$FLEET_STATE/$id.reservation" "$FLEET_STATE/$id.turn" "$FLEET_STATE/$id.busy"
   set_task_field "$id" fleet_released "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  fm_lock_release "$FLEET_STATE/.$id.sync.lock"
   echo "released $id; branch kept as refs/fleet/$id in $proj and fm/$id on the host mirror; saved work in $DATA/$id/fleet"
 }
 
