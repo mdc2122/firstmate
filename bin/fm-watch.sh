@@ -216,6 +216,13 @@
 #                          captain's own recorded deferral; one wake per episode
 #                          (bin/fm-far-holds.sh check, every
 #                          FM_FAR_HOLDS_INTERVAL, default 900s)
+#   check: release-stopped <repo>: release stopped after <n> consecutive ...; step <step>: <error>
+#                          a project's release queue ledger shows its release
+#                          advance failed or refused to start
+#                          FM_RELEASE_STOPPED_AFTER (default 2) times in a row;
+#                          one wake per episode, checked every cycle while
+#                          config/release-ledgers exists
+#                          (bin/fm-release-stopped.sh check)
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -3331,6 +3338,18 @@ while :; do
   # WAKE_QUEUE_STALL_SECS raises a check wake and the active alert channel.
   # Observation failure is reported but never stops the cycle.
   wake_queue_stall_tick || echo "watcher: wake-queue stall observation failed" >&2
+
+  # Release-stopped alarm (bin/fm-release-stopped.sh owns the ledger signal, the
+  # one-wake-per-episode record, and the durable append). It runs every cycle
+  # while config/release-ledgers exists, because it reads only local files and
+  # a stopped release must wake within one cycle of its second failure.
+  if [ -f "$CONFIG/release-ledgers" ]; then
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" \
+      run_check_capture "$SCRIPT_DIR/fm-release-stopped.sh" check || exit 1
+    if [ -n "$FM_CHECK_RESULT" ]; then
+      wake "$FM_CHECK_RESULT"
+    fi
+  fi
 
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this

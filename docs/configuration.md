@@ -569,6 +569,23 @@ The first matching line wins, and a matching line that is malformed means no poi
 Without a matching line every resume watch for that repository waits for the merge only, and an explicit `live` arm is refused.
 This section owns the schema; `bin/fm-resume-watch.sh` owns when a watch uses it.
 
+## Release-stopped alarm (config/release-ledgers)
+
+`config/release-ledgers` is an optional local, gitignored file that is not inherited by secondmate homes.
+It lets [`bin/fm-release-stopped.sh`](../bin/fm-release-stopped.sh) wake firstmate once per episode when a project's release advance fails or refuses to start twice in a row, so merged work does not sit unreleased with nobody told.
+Each line that is not blank and not a `#` comment holds two whitespace-separated fields:
+
+```text
+<repository-url> <ledger-file>
+```
+
+- `<repository-url>` names the project in the wake, such as `https://github.com/owner/repo`.
+- `<ledger-file>` is an absolute path to the project's release queue ledger, the JSON Lines file its release chain appends one object to per release event, such as `<checkout>/.runtime/release-queue/queue.jsonl`.
+
+A line with any other field count is ignored.
+While this file exists the watcher runs the check on every poll cycle, and without it nothing is checked.
+This section owns the schema; `bin/fm-release-stopped.sh` owns which ledger lines count as release outcomes, the episode record, and its tunables.
+
 ## Watched tool updates (config/watched-tools.json)
 
 `config/watched-tools.json` is an optional local, gitignored list of the tools this home depends on.
