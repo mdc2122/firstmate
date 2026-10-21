@@ -1004,6 +1004,8 @@ Both signals are durable evidence a runner claimed: ownership is the only eviden
 A healthy launch therefore confirms on the first poll and the window only bounds a launch that has not yet proved itself - one that died before claiming, or one merely too slow to claim inside the window; confirmation cannot tell those apart, and a launch that proves itself on a later cycle closes its failure episode without a retraction wake.
 A launch whose registration is retired or replaced before it confirms counts as neither started nor failed and raises or closes no failure episode, because the runner correctly declines a generation that no longer exists.
 All of a cycle's launches share one window, so a home full of sources that cannot start costs the same bounded wait as one.
+`FM_PROCEVENT_SOURCE_LOCK_TIMEOUT` (default 5, whole seconds) bounds how long `reconcile` waits for one source's lock before leaving that source for the next pass, so a wedged or foreign holder can never stall the watcher.
+Claims owned by another home are skipped before any lock is taken.
 
 Keep this window well below `FM_POLL`.
 `bin/fm-watch.sh` runs `reconcile` once per supervision cycle, so a source that cannot start makes every cycle wait up to the confirm window before the rest of that cycle runs.
@@ -1131,6 +1133,7 @@ FM_PROCEVENT_OWNER_LEASE_SECONDS=600    # how long a source runner keeps going w
 FM_PROCEVENT_OWNER_CHECK_SECONDS=15     # a runner guard's detection interval, read twice per interval; 1..3600
 FM_PROCEVENT_LAUNCH_FLOOR_SECONDS=1     # minimum interval between launches of one registration generation's source command; 1..3600
 FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=3   # how long reconcile waits for the runners it started to prove they are running; 1..600, keep well below FM_POLL
+FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=5      # longest reconcile waits for one source lock before deferring that source to the next pass
 FM_WHEN_OUTPUT_TAIL_BYTES=8192          # bound on the command-output tail inside one condition->action outcome document
 FM_CODEX_WATCH_CHECKPOINT=180   # seconds per foreground watcher checkpoint in Codex primary supervision
 FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh

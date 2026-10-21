@@ -3677,4 +3677,73 @@ kill -0 -"$CRASH_PID" 2>/dev/null \
 pass "a group whose leader died to something else is still refused, not signalled"
 kill -KILL -"$CRASH_PID" 2>/dev/null || true
 
+# --- reconcile never waits on a foreign home's claim lock -------------------
+HFOREIGN="$TMP_ROOT/reconcile-foreign-claim"; new_home "$HFOREIGN"
+printf '%s\n%s\nforeign-skip-token\nforeign-skip-identity\n' \
+  "$TMP_ROOT/reconcile-gone-home" 999999 > "$FM_PROCEVENT_CLAIM_ROOT/foreign-skip-src.claim"
+chmod 0600 "$FM_PROCEVENT_CLAIM_ROOT/foreign-skip-src.claim"
+FOREIGN_READY="$TMP_ROOT/foreign-skip-ready"; FOREIGN_RELEASE="$TMP_ROOT/foreign-skip-release"
+hold_source_lock foreign-skip-src "$FOREIGN_READY" "$FOREIGN_RELEASE"
+wait_for "$FOREIGN_READY" || fail "the foreign-claim fixture could not hold its source lock"
+FOREIGN_RC="$TMP_ROOT/foreign-reconcile.rc"; FOREIGN_OUT="$TMP_ROOT/foreign-reconcile.out"
+(
+  pe "$HFOREIGN" reconcile > "$FOREIGN_OUT" 2>&1
+  printf '%s\n' "$?" > "$FOREIGN_RC"
+) &
+foreign_reconcile_pid=$!
+foreign_deadline=$((SECONDS + 15))
+while kill -0 "$foreign_reconcile_pid" 2>/dev/null && [ "$SECONDS" -lt "$foreign_deadline" ]; do
+  sleep 0.1
+done
+if kill -0 "$foreign_reconcile_pid" 2>/dev/null; then
+  : > "$FOREIGN_RELEASE"
+  wait "$foreign_reconcile_pid" 2>/dev/null || true
+  wait "$HOLDER_PID" 2>/dev/null || true
+  fail "reconcile waited on a foreign home's source lock"
+fi
+: > "$FOREIGN_RELEASE"
+wait "$foreign_reconcile_pid" 2>/dev/null || true
+wait "$HOLDER_PID" 2>/dev/null || true
+[ "$(cat "$FOREIGN_RC" 2>/dev/null)" = 0 ] \
+  || fail "reconcile failed over a foreign claim: $(cat "$FOREIGN_OUT")"
+assert_present "$FM_PROCEVENT_CLAIM_ROOT/foreign-skip-src.claim" \
+  "a foreign claim is left for its own home to settle"
+pass "reconcile skips a foreign claim without taking its source lock"
+
+# --- reconcile bounds a held source lock and retries next pass --------------
+HLOCAL="$TMP_ROOT/reconcile-local-claim"; new_home "$HLOCAL"
+LOCAL_TRIGGER="$TMP_ROOT/local-held-trigger"
+pe_register "$HLOCAL" lavish local-held-src -- "$BLOCKER" "$LOCAL_TRIGGER" "held" >/dev/null
+LOCAL_READY="$TMP_ROOT/local-held-ready"; LOCAL_RELEASE="$TMP_ROOT/local-held-release"
+hold_source_lock local-held-src "$LOCAL_READY" "$LOCAL_RELEASE"
+wait_for "$LOCAL_READY" || fail "the local-claim fixture could not hold its source lock"
+LOCAL_RC="$TMP_ROOT/local-reconcile.rc"; LOCAL_OUT="$TMP_ROOT/local-reconcile.out"
+(
+  FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=1 pe "$HLOCAL" reconcile > "$LOCAL_OUT" 2>&1
+  printf '%s\n' "$?" > "$LOCAL_RC"
+) &
+local_reconcile_pid=$!
+local_deadline=$((SECONDS + 15))
+while kill -0 "$local_reconcile_pid" 2>/dev/null && [ "$SECONDS" -lt "$local_deadline" ]; do
+  sleep 0.1
+done
+if kill -0 "$local_reconcile_pid" 2>/dev/null; then
+  : > "$LOCAL_RELEASE"
+  wait "$local_reconcile_pid" 2>/dev/null || true
+  wait "$HOLDER_PID" 2>/dev/null || true
+  fail "reconcile ignored FM_PROCEVENT_SOURCE_LOCK_TIMEOUT on a held source lock"
+fi
+: > "$LOCAL_RELEASE"
+wait "$local_reconcile_pid" 2>/dev/null || true
+wait "$HOLDER_PID" 2>/dev/null || true
+assert_contains "$(cat "$LOCAL_OUT")" "started=0" \
+  "a lock held past the bound defers the source instead of starting it"
+assert_absent "$FM_PROCEVENT_CLAIM_ROOT/local-held-src.claim" \
+  "a deferred source owns no claim"
+pe "$HLOCAL" reconcile >/dev/null
+wait_for "$FM_PROCEVENT_CLAIM_ROOT/local-held-src.claim" \
+  || fail "the deferred source was not retried on the next reconcile"
+pe "$HLOCAL" retire local-held-src >/dev/null
+pass "reconcile bounds a held source lock and retries that source next pass"
+
 printf '\nall procevent tests passed\n'
