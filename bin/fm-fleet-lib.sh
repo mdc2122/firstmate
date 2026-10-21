@@ -272,8 +272,9 @@ fm_fleet_pressure_reason() {
 # - a busy process: busy now, no hold;
 # - over a ceiling: busy once observed over for FM_FLEET_BUSY_HOLD, or at once
 #   when the 1-minute load average itself is over the ceiling, because that
-#   average already spans the hold. A gap since the previous sample longer
-#   than the hold restarts that run, since an unobserved gap proves nothing;
+#   average already spans the hold. Persistence is judged across consecutive
+#   samples; a gap longer than FM_FLEET_CLEAR_HOLD since the previous sample
+#   restarts the run, since such a gap proves nothing either way;
 # - clear: a busy host turns available only when FM_FLEET_CLEAR_HOLD has
 #   passed since it was last observed busy and the 5-minute load average is
 #   under the ceiling, so a burst inside an unsampled gap still holds it busy;
@@ -289,7 +290,7 @@ fm_fleet_availability() {
     last_busy=$(fm_fleet_host_field "$prev" last_busy -)
     last=$(fm_fleet_host_field "$prev" last 0)
     case "$last" in ''|*[!0-9]*) last=0 ;; esac
-    [ "$((now - last))" -le "$FM_FLEET_BUSY_HOLD" ] || over=-
+    [ "$((now - last))" -le "$FM_FLEET_CLEAR_HOLD" ] || over=-
   fi
   if [ -z "$s" ]; then
     printf 'unknown unreachable\n'; return 0

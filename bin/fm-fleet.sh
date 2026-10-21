@@ -125,6 +125,13 @@ task_field() {  # <id> <key>
   fm_meta_get "$(meta_of "$1")" "$2"
 }
 
+set_task_field() {  # <id> <key> <value>: replace one meta field atomically
+  local meta tmp
+  meta=$(meta_of "$1")
+  tmp="$STATE/.$1.meta.fleet.$$"
+  { grep -v "^$2=" "$meta" || true; printf '%s=%s\n' "$2" "$3"; } >"$tmp" && mv "$tmp" "$meta"
+}
+
 task_host_record() {  # <id>
   local host
   host=$(task_field "$1" fleet_host)
@@ -281,6 +288,136 @@ EOF
 
 # --- launch -----------------------------------------------------------------
 
+# --- worker endpoint: Herdr (visible in studio2's Herdr view) or tmux -------
+#
+# session=herdr hosts the worker in a workspace of the host's own
+# `fm-fleet` Herdr server, driven from this machine through the saved-machine
+# profile fleet-<host> (`herdr --machine fleet-<host> ...`), so the worker
+# shows in this machine's Herdr sidebar under that machine with no SSH command.
+# session=tmux (the default and the fallback) hosts it in a detached tmux
+# session fm-<id> on the host. The endpoint string recorded as fleet_endpoint=
+# is `herdr:<workspace-id>/<pane-id>` or `tmux:fm-<id>`.
+
+host_session() {  # <record>
+  fm_fleet_host_field "$1" session tmux
+}
+
+herdr_machine() {  # <record> -> saved-machine label
+  printf 'fleet-%s' "${1%% *}"
+}
+
+# fleet_herdr <record> <herdr args...>: one API command on the host's fm-fleet
+# Herdr server through this machine's saved-machine profile.
+fleet_herdr() {
+  local rec=$1
+  shift
+  herdr --machine "$(herdr_machine "$rec")" "$@"
+}
+
+# endpoint_start <record> <id>: start the staged launcher; prints the endpoint.
+endpoint_start() {
+  local rec=$1 id=$2 alias out ws pane
+  alias=$(fm_fleet_host_field "$rec" ssh)
+  case "$(host_session "$rec")" in
+    herdr)
+      out=$(fleet_herdr "$rec" workspace create --cwd "$R_WT" --label "fm-$id" --no-focus) || return 1
+      ws=$(printf '%s' "$out" | jq -r '.result.workspace.workspace_id // empty')
+      pane=$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty')
+      [ -n "$ws" ] && [ -n "$pane" ] || { echo "fm-fleet: herdr returned no workspace or pane for fm-$id" >&2; return 1; }
+      fleet_herdr "$rec" pane run "$pane" "$R_TASK/launch.sh" >/dev/null || {
+        fleet_herdr "$rec" workspace close "$ws" >/dev/null 2>&1 || true
+        return 1
+      }
+      printf 'herdr:%s/%s\n' "$ws" "$pane"
+      ;;
+    *)
+      fleet_ssh "$alias" "set -e
+tmux has-session -t $(sq "=fm-$id") 2>/dev/null && { echo 'tmux session already exists' >&2; exit 1; }
+tmux new-session -d -s $(sq "fm-$id") -c $(sq "$R_WT") $(sq "$R_TASK/launch.sh")
+tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
+" || return 1
+      printf 'tmux:fm-%s\n' "$id"
+      ;;
+  esac
+}
+
+# endpoint_of <id>: the recorded endpoint (older records have none: tmux).
+endpoint_of() {
+  local e
+  e=$(task_field "$1" fleet_endpoint)
+  printf '%s' "${e:-tmux:fm-$1}"
+}
+
+# endpoint_exists <record> <endpoint>: 0 present, 1 absent, 2 unreadable.
+endpoint_exists() {
+  local rec=$1 ep=$2 alias out
+  alias=$(fm_fleet_host_field "$rec" ssh)
+  case "$ep" in
+    herdr:*)
+      out=$(fleet_herdr "$rec" pane get "${ep##*/}" 2>&1) && return 0
+      case "$out" in *pane_not_found*|*"not found"*) return 1 ;; esac
+      return 2
+      ;;
+    tmux:*)
+      out=$(fleet_ssh "$alias" "tmux has-session -t $(sq "=${ep#tmux:}") 2>/dev/null && echo yes || echo no") || return 2
+      [ "$out" = yes ] && return 0
+      return 1
+      ;;
+  esac
+  return 2
+}
+
+endpoint_capture() {  # <record> <endpoint> <lines>
+  local rec=$1 ep=$2 n=$3
+  case "$ep" in
+    herdr:*) fleet_herdr "$rec" pane read "${ep##*/}" --source recent --lines "$n" ;;
+    tmux:*) fleet_ssh "$(fm_fleet_host_field "$rec" ssh)" "tmux capture-pane -p -t $(sq "=${ep#tmux:}:") -S -$n" ;;
+  esac
+}
+
+endpoint_type_line() {  # <record> <endpoint> <text>: literal text, then Enter
+  local rec=$1 ep=$2 text=$3
+  case "$ep" in
+    herdr:*)
+      fleet_herdr "$rec" pane send-text "${ep##*/}" "$text" >/dev/null && sleep 0.4 &&
+        fleet_herdr "$rec" pane send-keys "${ep##*/}" enter >/dev/null
+      ;;
+    tmux:*)
+      fleet_ssh "$(fm_fleet_host_field "$rec" ssh)" \
+        "tmux send-keys -t $(sq "=${ep#tmux:}:") -l $(sq "$text") && sleep 0.4 && tmux send-keys -t $(sq "=${ep#tmux:}:") Enter"
+      ;;
+  esac
+}
+
+endpoint_close() {  # <record> <endpoint>
+  local rec=$1 ep=$2
+  case "$ep" in
+    herdr:*)
+      local ws=${ep#herdr:}
+      fleet_herdr "$rec" workspace close "${ws%%/*}" >/dev/null 2>&1 || true
+      ;;
+    tmux:*) fleet_ssh "$(fm_fleet_host_field "$rec" ssh)" "tmux kill-session -t $(sq "=${ep#tmux:}") 2>/dev/null || true" ;;
+  esac
+}
+
+# endpoint_relaunch <record> <id> <endpoint>: run the staged launcher again in
+# the task's own endpoint when it still exists (its shell is back at a prompt
+# after the agent exited), or start a fresh endpoint. Prints the endpoint.
+endpoint_relaunch() {
+  local rec=$1 id=$2 ep=$3 rc=0
+  endpoint_exists "$rec" "$ep" || rc=$?
+  case "$ep:$rc" in
+    herdr:*:0)
+      fleet_herdr "$rec" pane run "${ep##*/}" "$R_TASK/launch.sh" >/dev/null || return 1
+      printf '%s\n' "$ep"
+      return 0
+      ;;
+    *:2) echo "fm-fleet: the endpoint $ep did not answer; refusing to start a second copy" >&2; return 1 ;;
+  esac
+  endpoint_close "$rec" "$ep"
+  endpoint_start "$rec" "$id"
+}
+
 cmd_launch() {
   local id=$1 proj=$2
   shift 2
@@ -331,27 +468,26 @@ git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.na
   remote_extension "$R_TASK" | fleet_ssh_put "$alias" "$R_TASK/omp-ext.ts"
   cat "$FM_ROOT/.omp/fm-worker-overlay.yml" | fleet_ssh_put "$alias" "$R_TASK/overlay.yml"
 
-  # 3. Start the worker in a detached tmux session on the host.
+  # 3. Start the worker in the host's session (Herdr or tmux, per session=).
   launch_sh=$(remote_launch_script "$id" "$model" "$effort" "")
   printf '%s\n' "$launch_sh" | fleet_ssh_put "$alias" "$R_TASK/launch.sh"
-  fleet_ssh "$alias" "set -e
-chmod 700 $(sq "$R_TASK/launch.sh")
-tmux has-session -t $(sq "=fm-$id") 2>/dev/null && { echo 'tmux session already exists' >&2; exit 1; }
-tmux new-session -d -s $(sq "fm-$id") -c $(sq "$R_WT") $(sq "$R_TASK/launch.sh")
-tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
-" || { rm -f "$FLEET_STATE/$id.reservation"; die "could not start the worker on $host"; }
+  fleet_ssh "$alias" "chmod 700 $(sq "$R_TASK/launch.sh")" \
+    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not stage the worker launcher on $host"; }
+  local endpoint
+  endpoint=$(endpoint_start "$rec" "$id") \
+    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not start the worker on $host"; }
   # The worker counts in the host's own sample once its pid file exists, so
   # the reservation is released then; a worker that never starts leaves the
   # reservation to expire at its deadline instead.
   local started=0 _
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     if fleet_ssh "$alias" "pid=\$(cat $(sq "$R_PID") 2>/dev/null) && kill -0 \"\$pid\" 2>/dev/null" 2>/dev/null; then
       started=1
       break
     fi
     sleep 1
   done
-  [ "$started" = 1 ] || die "the worker on $host did not start; its reservation expires on its own (inspect: ssh -t $alias tmux attach -t =fm-$id)"
+  [ "$started" = 1 ] || die "the worker on $host did not start ($endpoint); its reservation expires on its own"
   rm -f "$FLEET_STATE/$id.reservation"
 
   # 4. Record the task in this home: a meta that ordinary tools read, plus an
@@ -368,6 +504,8 @@ tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
     echo "kind=ship"
     echo "fleet_host=$host"
     echo "fleet_os=$os"
+    echo "fleet_session=$(host_session "$rec")"
+    echo "fleet_endpoint=$endpoint"
     echo "fleet_branch=$branch"
     echo "fleet_base=$base"
     [ -z "$model" ] || echo "model=$model"
@@ -376,7 +514,7 @@ tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
   mv "$tmp" "$meta"
   touch "$STATE/$id.status"
   mkdir -p "$STATE/$id.inbox/handled"
-  echo "launched $id on $host worktree=$R_WT session=fm-$id"
+  echo "launched $id on $host worktree=$R_WT endpoint=$endpoint"
 }
 
 # fleet_ssh_put <alias> <remote-path>: write stdin to a host file (0600).
@@ -492,48 +630,58 @@ tail -c +$((local_len + 1)) \"\$s\"
 # pane, then Enter. Best-effort, like the local doorbell: the inbox record is
 # the delivery and its move into handled/ is the acknowledgement.
 cmd_ring() {
-  local id=$1 rec alias root line
+  local id=$1 rec root line
   require_fleet
   rec=$(task_host_record "$id")
-  alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
   line=$(fm_task_inbox_doorbell_line "$R_TASK/inbox/x.msg") || die "could not build the doorbell line"
-  fleet_ssh "$alias" "tmux send-keys -t $(sq "=fm-$id:") -l $(sq "$line") && sleep 0.4 && tmux send-keys -t $(sq "=fm-$id:") Enter"
+  endpoint_type_line "$rec" "$(endpoint_of "$id")" "$line"
 }
 
 cmd_peek() {
-  local id=$1 n=${2:-40} rec alias
+  local id=$1 n=${2:-40} rec
   require_fleet
   rec=$(task_host_record "$id")
-  alias=$(fm_fleet_host_field "$rec" ssh)
-  fleet_ssh "$alias" "tmux capture-pane -p -t $(sq "=fm-$id:") -S -$n"
+  endpoint_capture "$rec" "$(endpoint_of "$id")" "$n"
 }
 
+# attach: how a human opens the worker. A Herdr worker is already in this
+# machine's Herdr view under fleet-<host>, workspace fm-<id>.
 cmd_attach() {
-  local id=$1 rec alias
+  local id=$1 rec ep
   require_fleet
   rec=$(task_host_record "$id")
-  alias=$(fm_fleet_host_field "$rec" ssh)
-  printf 'ssh -t %s tmux attach -t %s\n' "$alias" "$(sq "=fm-$id")"
+  ep=$(endpoint_of "$id")
+  case "$ep" in
+    herdr:*) printf 'open Herdr on this machine; select %s, workspace fm-%s (or: herdr --remote %s --session fm-fleet)\n' \
+      "$(herdr_machine "$rec")" "$id" "$(fm_fleet_host_field "$rec" ssh)" ;;
+    *) printf 'ssh -t %s tmux attach -t %s\n' "$(fm_fleet_host_field "$rec" ssh)" "$(sq "=${ep#tmux:}")" ;;
+  esac
 }
 
-# state: the recovery-grade verdict, read on the host from the tmux session
-# and the recorded omp pid. An SSH failure is unreadable, never dead.
+# state: the recovery-grade verdict from the endpoint and the recorded omp
+# pid. alive = omp runs; dead = endpoint present, omp gone; missing = endpoint
+# gone; unreadable = the host or its Herdr did not answer (never death).
 cmd_state() {
-  local id=$1 rec alias root out
+  local id=$1 rec alias root out rc=0
   require_fleet
   rec=$(task_host_record "$id")
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
   out=$(fleet_ssh "$alias" "
-if ! tmux has-session -t $(sq "=fm-$id") 2>/dev/null; then echo missing; exit 0; fi
 pid=\$(cat $(sq "$R_PID") 2>/dev/null)
 case \"\$pid\" in ''|*[!0-9]*) echo dead; exit 0 ;; esac
 if kill -0 \"\$pid\" 2>/dev/null; then echo alive; else echo dead; fi
 " 2>/dev/null) || { echo unreadable; return 0; }
-  case "$out" in alive|dead|missing) echo "$out" ;; *) echo unreadable ;; esac
+  [ "$out" = alive ] && { echo alive; return 0; }
+  endpoint_exists "$rec" "$(endpoint_of "$id")" || rc=$?
+  case "$rc" in
+    0) echo dead ;;
+    1) echo missing ;;
+    *) echo unreadable ;;
+  esac
 }
 
 # --- fetch / resume / release -----------------------------------------------
@@ -554,7 +702,7 @@ cmd_fetch() {
   mkdir -p "$out"
   git -C "$proj" fetch -q "$alias:$r_repo" "+refs/heads/fm/$id:refs/fleet/$id" \
     || die "could not fetch fm/$id from $(task_field "$id" fleet_host)"
-  fleet_ssh "$alias" "cd $(sq "$R_WT") && git add -A -N . && git diff --binary HEAD" >"$out/uncommitted.patch" \
+  fleet_ssh "$alias" "cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/uncommitted.patch" \
     || die "could not read the uncommitted diff from the host"
   fleet_ssh "$alias" "cd $(sq "$R_ROOT") && tar -cf - $(sq "sessions/$id") $(sq "tasks/$id/status")" >"$out/session.tar" \
     || die "could not archive the omp session from the host"
@@ -563,7 +711,7 @@ cmd_fetch() {
 }
 
 cmd_resume() {
-  local id=$1 rec alias root model effort sess
+  local id=$1 rec alias root model effort sess ep
   require_fleet
   rec=$(task_host_record "$id")
   alias=$(fm_fleet_host_field "$rec" ssh)
@@ -578,13 +726,10 @@ cmd_resume() {
   model=$(task_field "$id" model)
   effort=$(task_field "$id" effort)
   remote_launch_script "$id" "$model" "$effort" "$sess" | fleet_ssh_put "$alias" "$R_TASK/launch.sh"
-  fleet_ssh "$alias" "set -e
-chmod 700 $(sq "$R_TASK/launch.sh")
-tmux kill-session -t $(sq "=fm-$id") 2>/dev/null || true
-tmux new-session -d -s $(sq "fm-$id") -c $(sq "$R_WT") $(sq "$R_TASK/launch.sh")
-tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
-"
-  echo "resumed $id on $(task_field "$id" fleet_host) from $sess"
+  fleet_ssh "$alias" "chmod 700 $(sq "$R_TASK/launch.sh")" || die "could not stage the resume launcher"
+  ep=$(endpoint_relaunch "$rec" "$id" "$(endpoint_of "$id")") || die "could not restart the worker on $(task_field "$id" fleet_host)"
+  set_task_field "$id" fleet_endpoint "$ep"
+  echo "resumed $id on $(task_field "$id" fleet_host) in $ep from $sess"
 }
 
 cmd_release() {
@@ -602,10 +747,12 @@ cmd_release() {
     die "task $id has uncommitted work on its host (saved to $patch); have the worker commit it, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough"
   fi
   fleet_ssh "$alias" "
-tmux kill-session -t $(sq "=fm-$id") 2>/dev/null || true
+pid=\$(cat $(sq "$R_PID") 2>/dev/null)
+case \"\$pid\" in ''|*[!0-9]*) ;; *) kill \"\$pid\" 2>/dev/null || true ;; esac
 rm -f $(sq "$R_PID")
-cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT") 2>/dev/null || true
 " || die "could not reach the host to release $id; its slot is still held"
+  endpoint_close "$rec" "$(endpoint_of "$id")"
+  fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT") 2>/dev/null || true" || true
   rm -f "$FLEET_STATE/$id.reservation" "$FLEET_STATE/$id.turn" "$FLEET_STATE/$id.busy"
   echo "released $id; branch kept as refs/fleet/$id in $proj and fm/$id on the host mirror"
 }
