@@ -3687,7 +3687,7 @@ hold_source_lock foreign-skip-src "$FOREIGN_READY" "$FOREIGN_RELEASE"
 wait_for "$FOREIGN_READY" || fail "the foreign-claim fixture could not hold its source lock"
 FOREIGN_RC="$TMP_ROOT/foreign-reconcile.rc"; FOREIGN_OUT="$TMP_ROOT/foreign-reconcile.out"
 (
-  pe "$HFOREIGN" reconcile > "$FOREIGN_OUT" 2>&1
+  FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=60 pe "$HFOREIGN" reconcile > "$FOREIGN_OUT" 2>&1
   printf '%s\n' "$?" > "$FOREIGN_RC"
 ) &
 foreign_reconcile_pid=$!
@@ -3706,6 +3706,8 @@ wait "$foreign_reconcile_pid" 2>/dev/null || true
 wait "$HOLDER_PID" 2>/dev/null || true
 [ "$(cat "$FOREIGN_RC" 2>/dev/null)" = 0 ] \
   || fail "reconcile failed over a foreign claim: $(cat "$FOREIGN_OUT")"
+assert_contains "$(cat "$FOREIGN_OUT")" "uncertain=0" \
+  "a skipped foreign claim is not counted as a deferred lock wait"
 assert_present "$FM_PROCEVENT_CLAIM_ROOT/foreign-skip-src.claim" \
   "a foreign claim is left for its own home to settle"
 pass "reconcile skips a foreign claim without taking its source lock"
