@@ -654,9 +654,10 @@ test_two_backstops_then_signal_present_each_done_line_once() {
   if grep -F 'shipped' "$signal_out" >/dev/null; then
     fail "the signal drain re-presented a backstop-presented done line: $(cat "$signal_out")"
   fi
-  grep -F 'two.status: working: lane one' "$signal_out" >/dev/null \
-    && grep -F 'two.status: working: lane two' "$signal_out" >/dev/null \
-    || fail "the signal drain lost the other unread status lines: $(cat "$signal_out")"
+  if ! grep -F 'two.status: working: lane one' "$signal_out" >/dev/null \
+    || ! grep -F 'two.status: working: lane two' "$signal_out" >/dev/null; then
+    fail "the signal drain lost the other unread status lines: $(cat "$signal_out")"
+  fi
   pass "two backstop-presented done lines are each shown once, and a delayed signal still annotates the other unread lines"
 }
 
