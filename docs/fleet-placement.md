@@ -119,7 +119,7 @@ Sync mirrors the host's status log into `state/<id>.status`, turn-end markers in
 - Release: `fm-fleet.sh release <id>` stops the worker first (SIGTERM, then SIGKILL after 10 seconds; it refuses if omp still survives), so nothing changes after the snapshot, then fetches, refuses while uncommitted work exists (resume the worker to commit it, or set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), and otherwise closes its endpoint and removes the host worktree while keeping the branch on both sides.
   A released task is no longer synced, so its old host markers never wake firstmate, and `sync`, `ring`, `key`, `type`, `stop`, `fetch`, `resume`, and `release` refuse it with exit 5 (teardown treats that as already closed), so the saved work in `data/<id>/fleet` is never overwritten.
   `fetch` replaces the saved patch, session archive, and head only when every read succeeds.
-  A launch that failed before its worktree existed releases the same way: the missing worktree yields an empty patch and nothing to remove.
+  When the host worktree is already gone (a launch that failed before creating it, or a release interrupted after removing it), `fetch` and `release` keep every saved file in `data/<id>/fleet` byte-identical, adding an empty patch only when none was saved, and release records the task as released with nothing to remove.
 - Cleanup: `bin/fm-teardown.sh` refuses a fleet task until it has been released, because its local landed-work checks cannot see a worktree on another host; `--force` does not lift that refusal.
 
 ## Host removal

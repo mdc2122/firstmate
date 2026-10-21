@@ -43,7 +43,8 @@ shift
 if [ "$*" = "sh -s" ]; then
   script=$(cat)
   case "$script" in *"${FM_FAKE_SSH_FAIL_ON:-}"*) [ -z "${FM_FAKE_SSH_FAIL_ON:-}" ] || exit 255 ;; esac
-  printf '%s\n' "$script" | exec sh -s
+  printf '%s\n' "$script" | sh -s
+  exit $?
 fi
 exec sh -c "$*"
 SH
@@ -230,5 +231,19 @@ FM_FAKE_SSH_FAIL_ON="tar -cf" fleet_cmd fetch t3 >/dev/null 2>&1
 expect_code 1 $? "a fetch whose session archive drops fails"
 assert_equals "older saved patch" "$(cat "$HOME_DIR/data/t3/fleet/uncommitted.patch")" \
   "a failed fetch leaves the earlier saved patch in place"
+
+# --- a gone host worktree never clobbers the saved patch --------------------
+printf 'diff --git a/only b/only\nonly copy of the work\n' > "$HOME_DIR/data/t3/fleet/uncommitted.patch"
+cp "$HOME_DIR/data/t3/fleet/uncommitted.patch" "$TMP_ROOT/t3.patch.before"
+git -C "$HOST_ROOT/repos/proj.git" worktree remove --force "$HOST_ROOT/worktrees/t3"
+fleet_cmd fetch t3 >/dev/null 2>&1
+expect_code 0 $? "fetch with the host worktree gone still fetches the branch"
+cmp -s "$TMP_ROOT/t3.patch.before" "$HOME_DIR/data/t3/fleet/uncommitted.patch"
+expect_code 0 $? "fetch keeps the saved patch byte-identical when the worktree is gone"
+out=$(fleet_cmd release t3 2>&1)
+expect_code 0 $? "release of a task whose worktree is gone records the release: $out"
+cmp -s "$TMP_ROOT/t3.patch.before" "$HOME_DIR/data/t3/fleet/uncommitted.patch"
+expect_code 0 $? "release keeps the saved patch byte-identical when the worktree is gone"
+assert_contains "$(cat "$HOME_DIR/state/t3.meta")" "fleet_released=" "the task is marked released"
 
 pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order, stop escalation, released task refusal, atomic fetch"

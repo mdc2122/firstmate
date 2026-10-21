@@ -829,11 +829,14 @@ if kill -0 \"\$pid\" 2>/dev/null; then echo alive; else echo dead; fi
 # fetch: bring the worker's branch home as refs/fleet/<id> in the local
 # project, and save its uncommitted diff (tracked and untracked) plus a
 # session archive under data/<id>/fleet/, replacing the saved copies only when
-# every read succeeded. Never touches the host worktree. A
-# worktree the host reports absent (a launch that failed before creating it)
-# has nothing uncommitted, so its patch is empty.
+# every read of an existing worktree succeeded. Never touches the host
+# worktree. When the host reports the worktree absent (a launch that failed
+# before creating it, or a release interrupted after removing it), every saved
+# artifact stays byte-identical, missing ones are added (an empty patch), and
+# FETCH_WT_ABSENT=1 tells the caller.
+FETCH_WT_ABSENT=0
 cmd_fetch() {
-  local id=$1 rec alias root proj r_repo out
+  local id=$1 rec alias root proj r_repo out rc=0 f
   require_fleet
   rec=$(task_host_record "$id")
   alias=$(fm_fleet_host_field "$rec" ssh)
@@ -845,15 +848,27 @@ cmd_fetch() {
   mkdir -p "$out"
   git -C "$proj" fetch -q "$alias:$r_repo" "+refs/heads/fm/$id:refs/fleet/$id" \
     || die "could not fetch fm/$id from $(task_field "$id" fleet_host)"
-  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/.uncommitted.patch.$$" \
-    || { rm -f "$out/.uncommitted.patch.$$"; die "could not read the uncommitted diff from the host"; }
+  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 7; cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/.uncommitted.patch.$$" || rc=$?
+  case "$rc" in
+    0) FETCH_WT_ABSENT=0 ;;
+    7) FETCH_WT_ABSENT=1 ;;
+    *) rm -f "$out/.uncommitted.patch.$$"; die "could not read the uncommitted diff from the host" ;;
+  esac
   fleet_ssh "$alias" "cd $(sq "$R_ROOT") && tar -cf - $(sq "sessions/$id") $(sq "tasks/$id/status")" >"$out/.session.tar.$$" \
     || { rm -f "$out/.uncommitted.patch.$$" "$out/.session.tar.$$"; die "could not archive the omp session from the host"; }
   git -C "$proj" rev-parse "refs/fleet/$id" >"$out/.head.$$"
-  mv "$out/.uncommitted.patch.$$" "$out/uncommitted.patch"
-  mv "$out/.session.tar.$$" "$out/session.tar"
-  mv "$out/.head.$$" "$out/head"
-  echo "fetched $id: branch refs/fleet/$id at $(cut -c1-12 <"$out/head") ($(wc -c <"$out/uncommitted.patch" | tr -d ' ') bytes uncommitted) into $out"
+  for f in uncommitted.patch session.tar head; do
+    if [ "$FETCH_WT_ABSENT" = 1 ] && [ -e "$out/$f" ]; then
+      rm -f "$out/.$f.$$"
+    else
+      mv "$out/.$f.$$" "$out/$f"
+    fi
+  done
+  if [ "$FETCH_WT_ABSENT" = 1 ]; then
+    echo "fetched $id: branch refs/fleet/$id; the host worktree is gone, so the saved work in $out was kept as it was ($(wc -c <"$out/uncommitted.patch" | tr -d ' ') bytes uncommitted)"
+  else
+    echo "fetched $id: branch refs/fleet/$id at $(cut -c1-12 <"$out/head") ($(wc -c <"$out/uncommitted.patch" | tr -d ' ') bytes uncommitted) into $out"
+  fi
 }
 
 cmd_resume() {
@@ -890,11 +905,11 @@ cmd_release() {
   stop_worker "$alias" || die "could not stop $id on its host (unreachable, or its omp survived SIGKILL); nothing was released"
   cmd_fetch "$id"
   patch="$DATA/$id/fleet/uncommitted.patch"
-  if [ -s "$patch" ] && [ "${FM_FLEET_RELEASE_DISCARD:-0}" != 1 ]; then
+  if [ "$FETCH_WT_ABSENT" = 0 ] && [ -s "$patch" ] && [ "${FM_FLEET_RELEASE_DISCARD:-0}" != 1 ]; then
     die "task $id has uncommitted work on its host (saved to $patch); the worker is stopped: resume it to commit the work, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough"
   fi
   endpoint_close "$rec" "$(endpoint_of "$id")"
-  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
+  [ "$FETCH_WT_ABSENT" = 1 ] || fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
     || die "could not remove the worktree on $(task_field "$id" fleet_host); the work stays there and $id is not released"
   # bin/fm-teardown.sh refuses a fleet task until this marker exists.
   fm_lock_acquire_wait "$FLEET_STATE/.$id.sync.lock"
