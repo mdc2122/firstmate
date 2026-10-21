@@ -199,7 +199,7 @@ test_candidates_exclude_serial_classes() {
     tests/fm-backend-herdr-smoke.test.sh \
     tests/fm-afk-inject-e2e.test.sh \
     tests/fm-pi-primary-live-e2e.test.sh \
-    tests/fm-pr-check-security.test.sh \
+    tests/fm-pr-check-security-1.test.sh \
     tests/fm-backend-cmux-smoke.test.sh; do
     printf '%s\n' "$listed" | grep -Fxq "$banned" \
       && fail "serial-class script must not be a parallel candidate: $banned"
@@ -249,8 +249,10 @@ test_family_map_labels_this_contract() {
   safe_max=$("$RUNNER" --concurrent-safe-family-jobs-max pure-contract-unit)
   [ "$safe_max" -eq 4 ] || fail "runner exposed the wrong contract-unit family worker cap: $safe_max"
   scheduled_first=$("$RUNNER" --list-scheduled --family watcher-wake-lock | head -n 1)
-  [ "$scheduled_first" = tests/fm-watch-triage.test.sh ] \
-    || fail "runner scheduled the watcher family out of longest-hint order: $scheduled_first"
+  case "$scheduled_first" in
+    tests/fm-watch-triage-[1-4].test.sh) ;;
+    *) fail "runner scheduled the watcher family out of longest-hint order: $scheduled_first" ;;
+  esac
   pass "isolation-proof contract test is family-mapped"
 }
 

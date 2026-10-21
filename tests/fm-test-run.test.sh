@@ -669,7 +669,7 @@ test_family_proofs_run_in_separate_concurrent_phases() {
   chmod +x "$repo/bin/fm-test-run.sh"
   for script in \
     fm-calm-pi-extension.test.sh fm-vendor-auth-probe.test.sh \
-    fm-pr-check-security.test.sh fm-teardown.test.sh; do
+    fm-pr-check-security-1.test.sh fm-teardown.test.sh; do
     cat >"$repo/tests/$script" <<'SH'
 #!/usr/bin/env bash
 sleep 1
@@ -679,7 +679,7 @@ SH
   done
 
   (cd "$repo" && bin/fm-test-run.sh \
-      tests/fm-pr-check-security.test.sh tests/fm-calm-pi-extension.test.sh \
+      tests/fm-pr-check-security-1.test.sh tests/fm-calm-pi-extension.test.sh \
       tests/fm-teardown.test.sh tests/fm-vendor-auth-probe.test.sh --jobs 4) \
     >"$tmp/out" 2>"$tmp/err" \
     || fail "cross-family phase fixture failed: $(cat "$tmp/err")"
@@ -1593,17 +1593,18 @@ fm_run_timed() {
   "$@"
 }
 SH
-  for f in fm-watch-triage.test.sh fm-brief.test.sh; do
+  for f in fm-session-start.test.sh fm-brief.test.sh; do
     printf '#!/usr/bin/env bash\necho "ok - %s"\n' "$f" >"$repo/tests/$f"
   done
   BOUNDS_LOG="$tmp/bounds" "$runner" --jobs 1 --per-script-timeout-secs auto \
-    tests/fm-watch-triage.test.sh tests/fm-brief.test.sh >"$tmp/out" 2>&1 \
+    tests/fm-session-start.test.sh tests/fm-brief.test.sh >"$tmp/out" 2>&1 \
     || fail "auto-bounded run failed: $(cat "$tmp/out")"
-  slow=$(awk '/fm-watch-triage/ { print $1 }' "$tmp/bounds")
+  slow=$(awk '/fm-session-start/ { print $1 }' "$tmp/bounds")
   ordinary=$(awk '/fm-brief/ { print $1 }' "$tmp/bounds")
   [ -n "$slow" ] && [ -n "$ordinary" ] || fail "auto did not bound every script: $(cat "$tmp/bounds")"
-  # fm-watch-triage's slowest healthy CI run measured 1250s.
-  [ "$slow" -gt 1250 ] || fail "auto would kill fm-watch-triage's measured healthy run: bound ${slow}s"
+  # fm-session-start's slowest healthy CI run measured 224s and its manual
+  # entry is 500s; the split watch-triage drivers stay on the 400s default.
+  [ "$slow" -gt 224 ] || fail "auto would kill fm-session-start's measured healthy run: bound ${slow}s"
   [ "$ordinary" -gt 0 ] && [ "$ordinary" -lt "$slow" ] \
     || fail "an ordinary script must get a positive bound below the slow script's: ${ordinary}s vs ${slow}s"
 
@@ -1819,7 +1820,7 @@ test_herdr_ci_family_run_has_a_step_timeout() {
   # the 75-minute job cap. Parse the workflow as YAML so nested `with.name`
   # artifact keys cannot masquerade as the step contract.
   command -v ruby >/dev/null 2>&1 \
-    || fail "ruby is required to parse .github/workflows/ci.yml as YAML"
+    || fail "ruby is required to parse .github/workflows/nightly.yml as YAML"
   local json job_timeout step_timeout
   json=$(ruby -ryaml -rjson -e '
 doc = YAML.load_file(ARGV[0])
@@ -1833,8 +1834,8 @@ puts JSON.generate(
   "job_timeout" => job.fetch("timeout-minutes"),
   "step_timeout" => step.fetch("timeout-minutes")
 )
-' "$ROOT/.github/workflows/ci.yml") \
-    || fail "could not parse tests-herdr timeouts from ci.yml"
+' "$ROOT/.github/workflows/nightly.yml") \
+    || fail "could not parse tests-herdr timeouts from nightly.yml"
   job_timeout=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["job_timeout"])' <<<"$json") \
     || fail "could not read job timeout from parsed workflow"
   step_timeout=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["step_timeout"])' <<<"$json") \
@@ -1896,7 +1897,7 @@ test_stock_workflow_counts_final_attempt_and_reports_failure() {
   ruby -ryaml -e '
     step = YAML.load_file(ARGV[0]).fetch("jobs").fetch("macos-stock-bash").fetch("steps").find { |s| s["run"] }
     puts step.fetch("run")
-  ' "$ROOT/.github/workflows/ci.yml" >"$tmp/step.sh"
+  ' "$ROOT/.github/workflows/nightly.yml" >"$tmp/step.sh"
   python3 - "$tmp/step.sh" "$tmp/check.sh" <<'PYTEST'
 from pathlib import Path
 import sys

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# fm-pr-check-security-4.test.sh - independent case group 4 of 4, split from the
+# former fm-pr-check-security.test.sh so no PR-gate script carries the whole suite.
+# The helper setup and case bodies live in tests/fm-pr-check-security-cases.sh; this
+# driver only selects its group. Run it alone or in a CI serial shard.
+set -u
+
+# shellcheck source=tests/fm-pr-check-security-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fm-pr-check-security-cases.sh"
+
+test_authority_retirement_preserves_replacement
+test_merged_poll_reports_upward_from_a_secondmate_home_once
+test_different_merged_pr_for_same_task_is_not_absorbed
+test_persistent_secondmate_retirement_is_poll_only
+test_retirement_crash_recovery
+test_external_merge_transition_retires_only_terminal_poll
+test_retirement_refuses_replacement_and_nonterminal_results
+test_retirement_queue_failure_and_receipt_tampering
+test_gitlab_merged_poll_retires
+test_invalid_entrypoints_have_zero_side_effects
+test_valid_recording_and_merge_derivation
+test_rejected_metacharacter_bytes_are_inert
+test_static_poll_contract
+test_atomic_interruption_leaves_no_partial_artifact
+test_concurrent_watcher_sees_only_complete_publication
+test_poll_publication_refuses_unsafe_destinations
+test_live_artifact_single_link_and_privacy_validation
+test_postrename_poll_validation_revokes_and_retries
+test_bootstrap_leaves_unauthenticated_checks
+test_custom_snapshot_cleanup_on_signal
+test_returned_custom_check_descendants_are_drained
+test_teardown_removes_poll_artifacts

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# fm-watch-triage-1.test.sh - independent case group 1 of 4, split from the
+# former fm-watch-triage.test.sh so no PR-gate script carries the whole suite.
+# The helper setup and case bodies live in tests/fm-watch-triage-cases.sh; this
+# driver only selects its group. Run it alone or in a CI serial shard.
+set -u
+
+# shellcheck source=tests/fm-watch-triage-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fm-watch-triage-cases.sh"
+
+test_status_span_actionable_classifier
+test_status_span_survives_a_later_routine_append
+test_status_span_respects_decision_closure
+test_malformed_seen_signature_reads_the_whole_log
+test_stale_is_terminal_classifier
+test_classifier_primitives
+test_crew_is_provably_working_classifier
+test_status_is_paused_classifier
+test_crew_absorb_class_classifier
+test_crew_worktree_written_since_classifier
+test_empty_write_prune_widens_the_probe
+test_empty_write_prune_from_the_environment_widens_the_probe
+test_worktree_write_probe_is_wall_clock_bounded
+test_signal_crew_provably_working_classifier
+test_secondmate_status_signal_never_absorbed_classifier
+test_provably_working_signal_absorbed
+test_turn_ended_provably_working_absorbed
+test_turn_ended_not_working_surfaced
+test_unrecorded_task_signal_absorbed
+test_turn_ended_churning_pane_absorbed
+test_turn_ended_churn_within_open_window_absorbed
+test_turn_ended_churn_resets_prior_stale_classification
+test_turn_ended_churn_resets_wedge_state_before_stale_poll
+test_turn_ended_still_pane_surfaced
+test_turn_ended_malformed_prior_hash_surfaced
+test_turn_ended_trailing_newline_prior_hash_surfaced
+test_secondmate_turn_ended_churning_pane_surfaced
+test_turn_ended_colliding_window_key_surfaced
+test_turn_ended_duplicate_endpoint_records_surfaced
+test_turn_ended_mixed_positive_evidence_batch_absorbed
+test_turn_ended_mixed_positive_evidence_batch_default_off

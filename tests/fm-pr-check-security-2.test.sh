@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# fm-pr-check-security-2.test.sh - independent case group 2 of 4, split from the
+# former fm-pr-check-security.test.sh so no PR-gate script carries the whole suite.
+# The helper setup and case bodies live in tests/fm-pr-check-security-cases.sh; this
+# driver only selects its group. Run it alone or in a CI serial shard.
+set -u
+
+# shellcheck source=tests/fm-pr-check-security-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fm-pr-check-security-cases.sh"
+
+test_merge_line_prune_read_budget_prunes_what_it_read
+test_merge_line_prune_leaves_an_owned_open_entry_and_wakes_once_it_loses_its_poll
+test_merge_line_queue_window_arms_green_entries_in_line_order
+test_merge_line_queue_window_waits_for_an_earlier_green_entry
+test_merge_line_queue_window_holds_behind_a_pending_entry
+test_merge_line_window_entry_queue_stall_starts_at_the_head
+test_merge_line_queue_stall_skips_an_unqueued_red_head
+test_merge_line_queue_window_gates_without_a_queued_head
+test_merge_line_queue_window_opens_past_a_stalled_head
+test_merge_line_watcher_queues_past_an_unarmed_head
+test_merged_poll_retries_a_failed_upward_report
+test_self_merge_and_poll_publish_one_outcome
+test_merged_poll_row_carries_the_merge_authority
+test_merged_poll_row_names_no_authority_when_no_record_grants_one
+test_ready_line_never_rebinds_away_from_an_armed_open_pr
+test_ready_span_with_several_prs_keeps_the_first_armed_and_wakes_for_the_rest
+test_poll_survives_keys_appended_after_pr_metadata
+test_ready_line_with_trailing_prose_arms
+test_valid_ready_line_wins_over_later_unparseable_mention
+test_unparseable_pr_mention_queues_notice
+test_done_line_without_pr_mention_arms_nothing
+test_refused_ready_line_arm_is_queued
+test_yolo_poll_merges_a_green_pr
+test_yolo_poll_reports_only_for_non_yolo_and_red

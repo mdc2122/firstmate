@@ -1,0 +1,279 @@
+name: Nightly
+
+# Everything that is too slow or too platform-specific for the PR gate lives
+# here: the full canonical lint, the real-Herdr family, stock macOS Bash, a
+# native-Windows seam check, and the timing aggregate. The fast gate itself is
+# reused from ci.yml so PR, merge queue, and nightly cannot drift apart.
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The same PR gate, including 24 serial shards and both parallel lanes. It
+  # runs on the self-hosted pool through vars.RUNS_ON because workflow_call is
+  # maintainer-triggered and never runs fork code.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # Full canonical ShellCheck over every root, split byte-wise. The PR gate
+  # only lints changed files, so this is where an untouched file is proven.
+  lint-full:
+    name: Full lint ${{ matrix.partition }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned ShellCheck
+        run: |
+          set -eu
+          bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install pinned actionlint
+        run: |
+          set -eu
+          bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: bin/fm-lint.sh --partition ${{ matrix.partition }}of12
+        env:
+          FM_LINT_JOBS: '1'
+
+  # Required real-Herdr lane: pinned install, serial real-herdr-gated family,
+  # hard-fail on "skip: herdr not found". If a genuine platform invariant fails
+  # (focus, cleanup, default-session tripwire), keep the failure evidence and
+  # move the job to macOS rather than skip assertions.
+  tests-herdr:
+    name: Behavior tests (Herdr)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Require tools for real Herdr
+        run: |
+          set -eu
+          command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
+          command -v python3 >/dev/null || { echo "::error::python3 is required"; exit 1; }
+          command -v curl >/dev/null || { echo "::error::curl is required"; exit 1; }
+          command -v tar >/dev/null || { echo "::error::tar is required"; exit 1; }
+          jq --version
+          python3 --version
+      - name: Install pinned Herdr
+        run: |
+          set -eu
+          bin/fm-install-herdr.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install pinned Treehouse
+        run: |
+          set -eu
+          bin/fm-install-treehouse.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Assert Herdr pin and protocol floor
+        run: |
+          set -eu
+          command -v herdr >/dev/null || { echo "::error::herdr not on PATH after install"; exit 1; }
+          command -v treehouse >/dev/null || { echo "::error::treehouse not on PATH after install"; exit 1; }
+          herdr --version
+          treehouse --version
+          status=$(herdr status --json)
+          printf '%s\n' "$status"
+          version=$(printf '%s' "$status" | jq -r '.client.version // empty')
+          protocol=$(printf '%s' "$status" | jq -r '.client.protocol // empty')
+          [ "$version" = "0.7.4" ] || {
+            echo "::error::expected exact Herdr pin 0.7.4, got ${version:-<empty>}"
+            exit 1
+          }
+          case "$protocol" in
+            ''|*[!0-9]*) echo "::error::could not read client protocol"; exit 1 ;;
+          esac
+          [ "$protocol" -ge 16 ] || {
+            echo "::error::herdr protocol $protocol is below the required floor 16"
+            exit 1
+          }
+      - name: Start default Herdr session for fleet-state tripwire
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-herdr"
+          nohup herdr server >"$RUNNER_TEMP/fm-herdr/default-server.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/fm-herdr/default-server.pid"
+          attempt=0
+          while [ "$attempt" -lt 150 ]; do
+            running=$(herdr status --json 2>/dev/null | jq -r '.server.running // false' || echo false)
+            if [ "$running" = true ]; then
+              herdr session list --json | jq -e '
+                [.sessions[]? | select(.default == true and .name == "default" and .running == true)]
+                | length == 1
+              ' >/dev/null
+              echo "default Herdr session is running"
+              exit 0
+            fi
+            sleep 0.2
+            attempt=$((attempt + 1))
+          done
+          echo "::error::default Herdr server did not become ready"
+          cat "$RUNNER_TEMP/fm-herdr/default-server.log" || true
+          exit 1
+      - name: Snapshot pre-suite Herdr sessions
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-herdr"
+          bin/fm-herdr-ci-cleanup.sh snapshot "$RUNNER_TEMP/fm-herdr/sessions-before.json"
+      - name: Run real-Herdr family (serial, required)
+        timeout-minutes: 24
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 1380
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-test"
+          bin/fm-test-run.sh --family real-herdr-gated \
+            --per-script-timeout-secs auto --retry-infra-flakes \
+            --fail-on-gate-skip 'herdr not found' \
+            --json "$RUNNER_TEMP/fm-test/fm-test-timing-herdr.json"
+      - name: Cleanup job-owned Herdr lab sessions
+        if: always()
+        run: |
+          set -eu
+          bin/fm-herdr-ci-cleanup.sh teardown "$RUNNER_TEMP/fm-herdr/sessions-before.json" || {
+            echo "::warning::lab session cleanup reported a problem; see logs"
+            herdr session list --json || true
+            exit 1
+          }
+      - name: Upload Herdr timing and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-test-timing-herdr
+          path: |
+            ${{ runner.temp }}/fm-test/fm-test-timing-herdr.json
+            ${{ runner.temp }}/fm-herdr/sessions-before.json
+            ${{ runner.temp }}/fm-herdr/default-server.log
+          if-no-files-found: warn
+
+  macos-stock-bash:
+    name: Stock macOS Bash snapshot compatibility
+    runs-on: macos-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run snapshot consumers with stock Bash
+        timeout-minutes: 14
+        shell: /bin/bash {0}
+        env:
+          PATH: /bin:/usr/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin
+        run: |
+          set -eu
+          deadline=$((SECONDS + 780))
+          run_stock_test() {
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || remaining=1
+            FM_TEST_STEP_BUDGET_SECS="$remaining" FM_TEST_SCRIPT_BASH=/bin/bash \
+              /bin/bash bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs auto \
+                --retry-infra-flakes "$1"
+          }
+          case "$BASH_VERSION" in
+            3.2.57*) ;;
+            *) echo "::error::expected stock macOS Bash 3.2.57, got $BASH_VERSION"; exit 1 ;;
+          esac
+          /bin/bash --version | head -1
+          command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
+
+          shell_inventory="$RUNNER_TEMP/fm-shell-inventory"
+          bin/fm-lint.sh --list-files > "$shell_inventory"
+          parse_fail=0
+          while IFS= read -r f; do
+            /bin/bash -n "$f" || { echo "::error::stock macOS Bash 3.2 failed to parse $f"; parse_fail=1; }
+          done < "$shell_inventory"
+          [ "$parse_fail" -eq 0 ] || { echo "::error::stock macOS Bash 3.2 parse sweep failed"; exit 1; }
+
+          command -v npm >/dev/null || { echo "::error::npm is required to install tasks-axi"; exit 1; }
+          npm install -g tasks-axi@0.2.5 >/dev/null
+          PATH="$(npm prefix -g)/bin:$PATH"
+          export PATH
+          command -v tasks-axi >/dev/null || { echo "::error::tasks-axi is required for the stock Bash regressions"; exit 1; }
+
+          check_stock_test() {
+            local output status=0 count
+            output=$(run_stock_test "$1") || status=$?
+            printf '%s\n' "$output"
+            [ "$status" -eq 0 ] || return "$status"
+            count=$(printf '%s\n' "$output" | awk '
+              /^FM_TEST_BEGIN / || /^FM_TEST_RETRY / { count=0 }
+              /^ok - / { count++ }
+              END { print count+0 }
+            ')
+            [ "$count" -eq "$2" ] || {
+              echo "::error::expected $2 passing cases for $1, got $count"
+              return 1
+            }
+          }
+          check_stock_test tests/fm-fleet-snapshot-view.test.sh 18
+          check_stock_test tests/fm-bearings-snapshot.test.sh 59
+
+          FM_TEST_ONLY=test_first_register_succeeds_with_empty_lock_list_under_bash32 \
+            check_stock_test tests/fm-public-followup.test.sh 1
+
+  # Native-Windows regression for the Pi extension's Bash seams. The test skips
+  # itself when process.platform is not win32, so a mislabeled runner cannot
+  # turn this into an accidental pass.
+  windows-shell-seams:
+    name: Windows Pi shell seams
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run native-Windows invocation test
+        run: bash tests/fm-pi-windows-shell-invocation.test.sh
+
+  tests-timing-aggregate:
+    name: Behavior timing aggregate (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - ci
+      - tests-herdr
+    if: always()
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download lane timing artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fm-test-timing-*
+          path: ${{ runner.temp }}/fm-test-aggregate
+          merge-multiple: true
+      - name: Build aggregate timing summary
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-test"
+          shopt -s nullglob
+          inputs=("$RUNNER_TEMP"/fm-test-aggregate/fm-test-timing-*.json)
+          if [ "${#inputs[@]}" -eq 0 ]; then
+            echo "::warning::no per-lane timing JSON found to aggregate"
+            exit 0
+          fi
+          bin/fm-test-run.sh --aggregate-json \
+            "$RUNNER_TEMP/fm-test/fm-test-timing-aggregate.json" \
+            "${inputs[@]}"
+      - name: Upload aggregate timing artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-test-timing-aggregate
+          path: ${{ runner.temp }}/fm-test/fm-test-timing-aggregate.json
+          if-no-files-found: warn

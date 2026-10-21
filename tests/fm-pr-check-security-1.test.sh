@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# fm-pr-check-security-1.test.sh - independent case group 1 of 4, split from the
+# former fm-pr-check-security.test.sh so no PR-gate script carries the whole suite.
+# The helper setup and case bodies live in tests/fm-pr-check-security-cases.sh; this
+# driver only selects its group. Run it alone or in a CI serial shard.
+set -u
+
+# shellcheck source=tests/fm-pr-check-security-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fm-pr-check-security-cases.sh"
+
+test_parser_matrix
+test_gitlab_merge_watch
+test_merged_poll_retires_once
+test_closed_terminal_done_task_keeps_pr_poll_without_stale_wakes
+test_green_unmergeable_pr_alerts_once_per_episode
+test_yolo_behind_pr_steers_one_rerun_per_head
+test_behind_rerun_steer_skips_non_yolo_red_and_other_blocks
+test_green_pr_with_unreported_required_check_does_not_alert
+test_green_pr_in_merge_queue_does_not_alert
+test_merged_poll_leaves_no_green_blocked_record
+test_merged_poll_reregistration_after_notification_is_absorbed
+test_merge_line_lands_head_first_and_hands_off_in_the_same_sweep
+test_merge_line_front_reorders
+test_merge_line_front_lands_an_unarmed_attended_merge
+test_merge_line_holds_behind_rerun_for_non_head
+test_repo_without_merge_line_is_unchanged
+test_merge_line_fronted_unarmed_head_holds_and_wakes_once_on_stall
+test_merge_line_merged_head_clears_every_stall_record_with_one_wake
+test_merge_line_closed_head_is_dropped_and_wakes
+test_merge_line_gate_serializes_without_queue_and_probe_hands_off
+test_merge_line_prune_drops_a_merged_head_and_the_next_lands_the_same_sweep
+test_merge_line_prune_drops_a_closed_non_head_entry
+test_merge_line_prune_wakes_once_per_unowned_open_entry_and_head
+test_merge_line_prune_read_timeout_keeps_partial_progress

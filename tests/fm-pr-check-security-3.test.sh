@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# fm-pr-check-security-3.test.sh - independent case group 3 of 4, split from the
+# former fm-pr-check-security.test.sh so no PR-gate script carries the whole suite.
+# The helper setup and case bodies live in tests/fm-pr-check-security-cases.sh; this
+# driver only selects its group. Run it alone or in a CI serial shard.
+set -u
+
+# shellcheck source=tests/fm-pr-check-security-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fm-pr-check-security-cases.sh"
+
+test_yolo_poll_queued_merge_keeps_polling
+test_yolo_poll_keeps_a_rebound_poll_armed
+test_yolo_poll_hands_queue_app_branch_to_auto_merge_until_merged
+test_queue_ejection_wakes_once_and_is_not_requeued
+test_queue_ejection_steers_one_supported_rerun
+test_queue_ejection_ignores_comment_not_from_queue_app
+test_queue_run_still_in_flight_steers_nobody
+test_queue_ejection_steers_no_non_yolo_worker
+test_queue_head_moved_while_waiting_is_disabled_and_reverified
+test_queue_landing_at_unverified_head_is_not_credited
+test_queue_head_moved_for_non_yolo_task_wakes_once
+test_queue_landing_with_unknown_head_is_deferred
+test_queue_wait_past_stall_window_wakes_once_per_head
+test_handed_queue_with_no_status_wakes_once_and_retires_on_merge
+test_cycling_queue_status_wakes_at_bound_from_first_hold
+test_never_handed_green_pr_wakes_once_naming_auto_merge
+test_never_handed_red_pr_starts_no_episode
+test_pending_ci_wakes_once_per_head
+test_ci_finishing_inside_bound_stays_silent
+test_queue_away_refusal_wakes_once_per_head
+test_yolo_merge_attempt_is_bounded
+test_authority_persistence_refuses_rebound_metadata
+test_authority_persists_before_control_unlock
+test_teardown_cannot_race_authority_consumption
