@@ -56,6 +56,14 @@
 # explicit paths. Each partition still runs the backend-purity check and
 # workflow lint. --list-files with --partition prints that partition's roots.
 #
+# --changed <ref> is the PR-gate lint: the canonical files changed since the
+# merge base with <ref>, linted with full source-aware analysis, plus the
+# workflow YAML check. It works even inside CI, where the default is the full
+# canonical set. A PR that touches no shell file still gets the workflow check.
+# Nightly keeps the full partitioned lint so a file no PR touched is still
+# proven. Base refs are compared through `git merge-base`, so a PR branch that
+# has advanced past main lints only its own change set.
+#
 # Optional quiet telemetry writes one bounded TSV snapshot of content and source
 # graph identity, wall/CPU/RSS, shard load, and competing ShellCheck processes.
 #
@@ -65,6 +73,7 @@
 #   fm-lint.sh <path>...               lint explicit roots with the same config
 #   fm-lint.sh --jobs <1|2> [path]...  override bounded worker count
 #   fm-lint.sh --partition <k>of<n>    lint one full-analysis canonical partition
+#   fm-lint.sh --changed <ref>         lint canonical files changed since <ref>
 #   fm-lint.sh --telemetry <path> ...  write a quiet metrics snapshot
 #   fm-lint.sh --required-version      print the ShellCheck pin
 #   fm-lint.sh --list-files            print the file set that would be linted
@@ -406,8 +415,18 @@ ANALYSIS_MODE=full
 LIST_FILES=0
 PARTITION=
 PARTITION_GIVEN=0
+CHANGED_BASE=
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --changed)
+      [ "$#" -ge 2 ] || { printf 'fm-lint.sh: --changed requires a git ref.\n' >&2; exit 2; }
+      CHANGED_BASE=$2
+      shift 2
+      ;;
+    --changed=*)
+      CHANGED_BASE=${1#*=}
+      shift
+      ;;
     --partition)
       [ "$#" -ge 2 ] || { printf 'fm-lint.sh: --partition requires <k>of<n>.\n' >&2; exit 2; }
       PARTITION=$2
@@ -491,6 +510,25 @@ if [ "$PARTITION_GIVEN" -eq 1 ]; then
   fi
 fi
 
+if [ -n "$CHANGED_BASE" ]; then
+  command -v git >/dev/null 2>&1 || {
+    printf 'fm-lint.sh: --changed requires git.\n' >&2
+    exit 2
+  }
+  git rev-parse --verify --quiet "$CHANGED_BASE^{commit}" >/dev/null 2>&1 || {
+    printf 'fm-lint.sh: --changed base ref is not a commit: %s\n' "$CHANGED_BASE" >&2
+    exit 2
+  }
+  [ "$PARTITION_GIVEN" -eq 0 ] || {
+    printf 'fm-lint.sh: --changed and --partition are separate modes.\n' >&2
+    exit 2
+  }
+  [ "$#" -eq 0 ] || {
+    printf 'fm-lint.sh: --changed selects its own paths and rejects explicit paths.\n' >&2
+    exit 2
+  }
+fi
+
 # fm_lint_partition_roots <k> <n> <root>...: print partition k's roots in their
 # given order. Largest-first greedy assignment by byte size to the least-loaded
 # partition (lowest index on ties) is deterministic for a given file set.
@@ -557,7 +595,14 @@ if [ "$#" -gt 0 ]; then
   ROOTS=("$@")
 else
   full_lint=1
-  if [ -z "$PARTITION" ] && [ "${GITHUB_ACTIONS:-}" != true ] && [ "${CI:-}" != true ] \
+  if [ -n "$CHANGED_BASE" ]; then
+    merge_base=$(git merge-base "$CHANGED_BASE" HEAD 2>/dev/null) || merge_base=
+    [ -n "$merge_base" ] || {
+      printf 'fm-lint.sh: --changed found no merge base with %s.\n' "$CHANGED_BASE" >&2
+      exit 2
+    }
+    full_lint=0
+  elif [ -z "$PARTITION" ] && [ "${GITHUB_ACTIONS:-}" != true ] && [ "${CI:-}" != true ] \
     && command -v git >/dev/null 2>&1 \
     && git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
     && [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" != main ]; then
@@ -590,7 +635,11 @@ else
     done < <(git diff --name-only --diff-filter=ACMR -z "$merge_base" -- 2>/dev/null | LC_ALL=C sort -z)
   fi
 fi
-if [ "$CHANGED_MODE" -eq 1 ] && [ "$FAST" -eq 0 ]; then
+# A local diff cannot judge cross-file codes, so local changed-file mode keeps
+# source following off. --changed runs in CI with the full canonical tree
+# present, so it keeps --external-sources and every code enabled; only the file
+# set shrinks.
+if [ "$CHANGED_MODE" -eq 1 ] && [ -z "$CHANGED_BASE" ] && [ "$FAST" -eq 0 ]; then
   FOLLOW_SOURCES=0
   EXCLUDE_CODES=$LOCAL_NOX_EXCLUDE
   ANALYSIS_MODE=local

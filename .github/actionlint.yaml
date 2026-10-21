@@ -1,0 +1,15 @@
+# actionlint does not know this repository's self-hosted runner labels.
+# They are declared here so a typo in a workflow is still an error while the
+# real labels stay valid: firstmate CI pool, the n100 overflow box, and the
+# per-host labels from CI-PROGRAM.md.
+self-hosted-runner:
+  labels:
+    - fast
+    - firstmate-ci
+    - desktop-linux
+    - strix
+    - studio1
+    - tmuxbot
+    - n100
+    - light
+    - overflow

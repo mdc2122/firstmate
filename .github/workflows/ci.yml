@@ -5,503 +5,68 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Merge queue. The queue merges a synthetic commit onto main; the full fast
+  # gate runs there too, and `ci-ok` is the only required context.
+  merge_group:
+  # Nightly calls this workflow so the full fast suite and the nightly-only
+  # lanes share one definition instead of drifting apart.
+  workflow_call:
 
 permissions:
   contents: read
 
 # Per-PR supersession: a new push to the same PR replaces that PR's in-flight
-# CI instead of letting superseded heads keep 13 jobs of hosted-runner work.
-# The group uses the PR number for pull_request events, so every run of one PR
-# shares a group, and falls back to the unique run id for push events, so each
-# main push gets its own group and is never cancelled. Cancellation is likewise
-# limited to pull_request events. Evidence and rationale: the September 12
-# Actions starvation report, section 3 "Workflow mechanics to ship first".
-# The compliance workflow deliberately keeps its own event-specific groups; do
-# not collapse it onto this simpler shape.
+# CI instead of letting superseded heads keep 24 shards of runner work.
+# merge_group runs are keyed by the queue's head SHA so two queue entries never
+# cancel each other; push runs stay keyed by run id and are never cancelled.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.merge_group.head_sha || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Full source-following ShellCheck over the canonical set, split into
-  # complete, disjoint partitions across runners. The whole set in one or two
-  # ShellCheck processes outgrew the 16 GB hosted runner and the runner was
-  # killed mid-lint with no findings. Heavy single roots alone peak near
-  # 10 GB, so each partition runs one root at a time (FM_LINT_JOBS=1).
+  # Incremental PR lint: only the canonical shell files changed against the
+  # base branch, plus the workflow YAML check. Nightly owns the full partitioned
+  # lint. The coverage guard and repo invariants ride here because they are
+  # seconds-long and do not deserve their own runner.
   lint:
-    name: Lint ${{ matrix.partition }}
-    runs-on: ubuntu-latest
-    # Hang tripwire only: lint executions measured at 14-16 minutes in the
-    # September 12 starvation report, so this leaves deliberate margin.
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2, 3, 4, 5, 6]
+    name: Lint (incremental)
+    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'merge_group' || github.event_name == 'workflow_call' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON(vars.RUNS_ON || '["ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - name: Install pinned ShellCheck
+        with:
+          fetch-depth: 0
+      - name: Ensure pinned ShellCheck
         run: |
           set -eu
-          bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned actionlint
+          current=$(shellcheck --version 2>/dev/null | awk '/^version:/ {print $2}' || true)
+          if [ "$current" != "0.11.0" ]; then
+            bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Ensure pinned actionlint
         run: |
           set -eu
-          bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # Single owner of the lint definition (shell file set, config, version,
-      # and GitHub workflow lint). Do not re-spell the checks here; keep CI
-      # and the pre-push gate on this script so a self-broken ci.yml still
-      # fails locally before merge.
-      - run: bin/fm-lint.sh --partition ${{ matrix.partition }}of${{ strategy.job-total }}
-        env:
-          FM_LINT_JOBS: '1'
-
-  # Deterministic proof that portable parallel shards + portable serial + Herdr
-  # equal the complete tests/*.test.sh inventory with no missing or duplicates,
-  # and that the portable serial CI shards partition that serial lane exactly.
-  test-coverage:
-    name: Test coverage guard
-    runs-on: ubuntu-latest
-    # Hang tripwire: the coverage guard is a seconds-long local computation.
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
+          current=$(actionlint --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$current" != "1.7.12" ]; then
+            bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Incremental shell and workflow lint
+        # The called workflow is nightly: the nightly lint-full matrix owns the
+        # full canonical set, so this step would duplicate it.
+        if: github.event_name != 'workflow_call'
+        run: |
+          set -eu
+          case "${{ github.event_name }}" in
+            pull_request|merge_group) base="origin/${{ github.base_ref || 'main' }}" ;;
+            *) base=HEAD^ ;;
+          esac
+          git rev-parse --verify --quiet "$base^{commit}" >/dev/null || base=HEAD^
+          echo "lint base: $base"
+          bin/fm-lint.sh --changed "$base"
       - name: Prove complete regression partition
         run: bin/fm-test-run.sh --check-coverage
-
-  # Two duration-balanced portable parallel shards of the Phase 2 proven-isolated
-  # set only. Composition owner: bin/fm-test-run.sh (docs/fm-test-portable-shards.md).
-  tests-portable-parallel-1:
-    name: Behavior portable parallel 1
-    runs-on: ubuntu-latest
-    # Shared deadline is an enclosing-step backstop: 1140s exceeds twice
-    # the measured green lane p90 (545s), with 60s for result reporting.
-    # Evidence and refresh procedure: docs/fm-test-portable-shards.md.
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Install pinned ShellCheck
-        run: |
-          set -eu
-          bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned actionlint
-        run: |
-          set -eu
-          bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install tasks-axi
-        run: |
-          set -eu
-          npm install -g tasks-axi
-          tasks-axi --version
-      - name: Install the Pi package for the Pi extension tests
-        run: |
-          set -eu
-          npm ci --prefix .opencode/plugins
-          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
-          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
-          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Run portable parallel shard 1
-        timeout-minutes: 20
-        env:
-          FM_TEST_STEP_BUDGET_SECS: 1140
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-test"
-          # Per-script bounds and the infra-flake retry list are owned by
-          # bin/fm-test-run.sh --help; every behavior lane passes both flags.
-          bin/fm-test-run.sh --lane portable-parallel-1 \
-            --per-script-timeout-secs auto --retry-infra-flakes \
-            --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
-            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-1.json"
-      - name: Upload shard 1 timing artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-test-timing-portable-parallel-1
-          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-parallel-1.json
-          if-no-files-found: warn
-
-  tests-portable-parallel-2:
-    name: Behavior portable parallel 2
-    runs-on: ubuntu-latest
-    # Same budget as shard 1; also exceeds twice this lane's 488s green p90.
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Install pinned ShellCheck
-        run: |
-          set -eu
-          bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned actionlint
-        run: |
-          set -eu
-          bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install tasks-axi
-        run: |
-          set -eu
-          npm install -g tasks-axi
-          tasks-axi --version
-      - name: Run portable parallel shard 2
-        timeout-minutes: 20
-        env:
-          FM_TEST_STEP_BUDGET_SECS: 1140
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-test"
-          bin/fm-test-run.sh --lane portable-parallel-2 \
-            --per-script-timeout-secs auto --retry-infra-flakes \
-            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-2.json"
-      - name: Upload shard 2 timing artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-test-timing-portable-parallel-2
-          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-parallel-2.json
-          if-no-files-found: warn
-
-  # Required portable serial remainder: watcher, lock, AFK, tmux, daemon,
-  # ambiguous, and other stateful tests. Real Herdr stays in tests-herdr.
-  # Split across separate runners so no two of these stateful scripts ever share
-  # a machine: each shard is still strictly serial in itself. Shard membership
-  # and the shard count both belong to bin/fm-test-run.sh, which refuses a lane
-  # whose "ofN" disagrees with it (docs/fm-test-portable-shards.md).
-  tests-portable-serial:
-    name: Behavior portable serial ${{ matrix.shard }}
-    runs-on: ubuntu-latest
-    # Current runners take up to ~25 min for the slowest shard: the lane sums to
-    # ~108 min of script time and tests/fm-watch-triage.test.sh alone runs
-    # ~15 min, so no five-way split stays near 20 min. This 62-minute cap
-    # preserves the timeout as a hang tripwire while allowing runner-speed and
-    # job-setup margin; it is not the expected healthy end of the lane.
-    timeout-minutes: 62
-    strategy:
-      # Every shard reports so one failure never hides another shard's result.
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Install pinned ShellCheck
-        run: |
-          set -eu
-          bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned actionlint
-        run: |
-          set -eu
-          bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Require tmux for e2e tests
-        run: |
-          set -eu
-          command -v tmux >/dev/null || {
-            echo "::error::tmux is required for real afk injection e2e coverage"
-            exit 1
-          }
-          tmux -V
-      - name: Install tasks-axi for backlog-handoff delegation
-        run: |
-          set -eu
-          npm install -g tasks-axi
-          tasks-axi --version
-      # The Pi extension tests read the installed Pi package's own types and
-      # runtime, so without it they gate-skip and pass silently. It is a public
-      # npm package and needs no credential, so CI can hold the real thing.
-      - name: Install the Pi package for the Pi extension tests
-        run: |
-          set -eu
-          npm ci --prefix .opencode/plugins
-          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
-          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
-          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Run portable serial shard ${{ matrix.shard }}
-        # 3360s exceeds twice the measured green serial p90 (1651s).
-        timeout-minutes: 57
-        env:
-          FM_TEST_STEP_BUDGET_SECS: 3360
-          # job-total rather than a literal, so shrinking or growing the matrix
-          # without matching bin/fm-test-run.sh is refused instead of quietly
-          # leaving a shard of the required lane unrun.
-          FM_SERIAL_LANE: portable-serial-${{ matrix.shard }}of${{ strategy.job-total }}
-          FM_SERIAL_SHARD: ${{ matrix.shard }}
-          FM_TEST_FAILURE_EVIDENCE_DIR: ${{ runner.temp }}/fm-test/failure-evidence
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-test"
-          # The Pi package is installed above and CI provides npm and tsc, so
-          # any missing typecheck prerequisite is a broken lane, not a valid skip.
-          bin/fm-test-run.sh --lane "$FM_SERIAL_LANE" \
-            --per-script-timeout-secs auto --retry-infra-flakes \
-            --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
-            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-serial-${FM_SERIAL_SHARD}.json"
-      - name: Upload portable serial shard ${{ matrix.shard }} timing artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-test-timing-portable-serial-${{ matrix.shard }}
-          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-serial-${{ matrix.shard }}.json
-          if-no-files-found: warn
-      - name: Upload bounded provisioning failure evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-provision-failure-serial-${{ matrix.shard }}
-          path: ${{ runner.temp }}/fm-test/failure-evidence/provision-*.txt
-          if-no-files-found: ignore
-
-  # Required real-Herdr lane: pinned install, serial real-herdr-gated family,
-  # hard-fail on "skip: herdr not found". Starts on Linux x86_64; if a genuine
-  # platform invariant fails (focus, cleanup, default-session tripwire), keep
-  # the failure evidence and move the job to macOS rather than skip assertions.
-  tests-herdr:
-    name: Behavior tests (Herdr)
-    runs-on: ubuntu-latest
-    # Healthy runs finish around 7 minutes. This job cap is a last-resort hang
-    # tripwire, not the expected end of the lane. The family-run step owns the
-    # tighter bound so a wedged suite fails fast with always() cleanup and
-    # timing artifacts still uploaded (docs/fm-test-portable-shards.md).
-    timeout-minutes: 75
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Require tools for real Herdr
-        run: |
-          set -eu
-          command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
-          command -v python3 >/dev/null || { echo "::error::python3 is required"; exit 1; }
-          command -v curl >/dev/null || { echo "::error::curl is required"; exit 1; }
-          command -v tar >/dev/null || { echo "::error::tar is required"; exit 1; }
-          jq --version
-          python3 --version
-      - name: Install pinned Herdr
-        run: |
-          set -eu
-          bin/fm-install-herdr.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned Treehouse
-        run: |
-          set -eu
-          # Several real-herdr-gated E2E scripts require treehouse for spawn
-          # worktree acquisition (presentation, workspace-per-home, autodetect).
-          bin/fm-install-treehouse.sh "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Assert Herdr pin and protocol floor
-        run: |
-          set -eu
-          command -v herdr >/dev/null || { echo "::error::herdr not on PATH after install"; exit 1; }
-          command -v treehouse >/dev/null || { echo "::error::treehouse not on PATH after install"; exit 1; }
-          herdr --version
-          treehouse --version
-          status=$(herdr status --json)
-          printf '%s\n' "$status"
-          version=$(printf '%s' "$status" | jq -r '.client.version // empty')
-          protocol=$(printf '%s' "$status" | jq -r '.client.protocol // empty')
-          [ "$version" = "0.7.4" ] || {
-            echo "::error::expected exact Herdr pin 0.7.4, got ${version:-<empty>}"
-            exit 1
-          }
-          case "$protocol" in
-            ''|*[!0-9]*) echo "::error::could not read client protocol"; exit 1 ;;
-          esac
-          [ "$protocol" -ge 16 ] || {
-            echo "::error::herdr protocol $protocol is below the required floor 16"
-            exit 1
-          }
-      - name: Start default Herdr session for fleet-state tripwire
-        run: |
-          set -eu
-          # Lab provision requires exactly one running default session so the
-          # default-session tripwire can arm. Start it headless; never use it
-          # for lab work (tests still refuse default and use fm-lab-* only).
-          mkdir -p "$RUNNER_TEMP/fm-herdr"
-          nohup herdr server >"$RUNNER_TEMP/fm-herdr/default-server.log" 2>&1 &
-          echo $! >"$RUNNER_TEMP/fm-herdr/default-server.pid"
-          attempt=0
-          while [ "$attempt" -lt 150 ]; do
-            running=$(herdr status --json 2>/dev/null | jq -r '.server.running // false' || echo false)
-            if [ "$running" = true ]; then
-              herdr session list --json | jq -e '
-                [.sessions[]? | select(.default == true and .name == "default" and .running == true)]
-                | length == 1
-              ' >/dev/null
-              echo "default Herdr session is running"
-              exit 0
-            fi
-            sleep 0.2
-            attempt=$((attempt + 1))
-          done
-          echo "::error::default Herdr server did not become ready"
-          cat "$RUNNER_TEMP/fm-herdr/default-server.log" || true
-          exit 1
-      - name: Snapshot pre-suite Herdr sessions
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-herdr"
-          bin/fm-herdr-ci-cleanup.sh snapshot "$RUNNER_TEMP/fm-herdr/sessions-before.json"
-      - name: Run real-Herdr family (serial, required)
-        # Comfortably above the ~7 min healthy wall and far below the 75 min
-        # job backstop. A hang must fail this step so cleanup still runs.
-        # 1380s exceeds twice the measured green Herdr p90 (668s).
-        timeout-minutes: 24
-        env:
-          FM_TEST_STEP_BUDGET_SECS: 1380
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-test"
-          # Serial only. Fail if any script reports herdr not found. Live
-          # harness credential tests stay outside this family (opt-in env only).
-          bin/fm-test-run.sh --family real-herdr-gated \
-            --per-script-timeout-secs auto --retry-infra-flakes \
-            --fail-on-gate-skip 'herdr not found' \
-            --json "$RUNNER_TEMP/fm-test/fm-test-timing-herdr.json"
-      - name: Cleanup job-owned Herdr lab sessions
-        if: always()
-        run: |
-          set -eu
-          bin/fm-herdr-ci-cleanup.sh teardown "$RUNNER_TEMP/fm-herdr/sessions-before.json" || {
-            echo "::warning::lab session cleanup reported a problem; see logs"
-            # Surface diagnostics without weakening the suite result above.
-            herdr session list --json || true
-            exit 1
-          }
-      - name: Upload Herdr timing and diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-test-timing-herdr
-          path: |
-            ${{ runner.temp }}/fm-test/fm-test-timing-herdr.json
-            ${{ runner.temp }}/fm-herdr/sessions-before.json
-            ${{ runner.temp }}/fm-herdr/default-server.log
-          if-no-files-found: warn
-
-  # Aggregate per-lane timing into one summary artifact for critical-path review.
-  tests-timing-aggregate:
-    name: Behavior timing aggregate
-    runs-on: ubuntu-latest
-    # Hang tripwire: aggregation is seconds of work over lane artifacts.
-    timeout-minutes: 5
-    needs:
-      - tests-portable-parallel-1
-      - tests-portable-parallel-2
-      - tests-portable-serial
-      - tests-herdr
-    if: always()
-    steps:
-      - uses: actions/checkout@v6
-      - name: Download lane timing artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: fm-test-timing-*
-          path: ${{ runner.temp }}/fm-test-aggregate
-          merge-multiple: true
-      - name: Build aggregate timing summary
-        run: |
-          set -eu
-          mkdir -p "$RUNNER_TEMP/fm-test"
-          shopt -s nullglob
-          inputs=("$RUNNER_TEMP"/fm-test-aggregate/fm-test-timing-*.json)
-          if [ "${#inputs[@]}" -eq 0 ]; then
-            echo "::warning::no per-lane timing JSON found to aggregate"
-            exit 0
-          fi
-          bin/fm-test-run.sh --aggregate-json \
-            "$RUNNER_TEMP/fm-test/fm-test-timing-aggregate.json" \
-            "${inputs[@]}"
-      - name: Upload aggregate timing artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fm-test-timing-aggregate
-          path: ${{ runner.temp }}/fm-test/fm-test-timing-aggregate.json
-          if-no-files-found: warn
-
-  macos-stock-bash:
-    name: Stock macOS Bash snapshot compatibility
-    runs-on: macos-latest
-    timeout-minutes: 16
-    steps:
-      - uses: actions/checkout@v6
-      - name: Run snapshot consumers with stock Bash
-        # 780s exceeds twice the measured green snapshot p90 (360s).
-        timeout-minutes: 14
-        shell: /bin/bash {0}
-        env:
-          PATH: /bin:/usr/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin
-        run: |
-          set -eu
-          deadline=$((SECONDS + 780))
-          run_stock_test() {
-            remaining=$((deadline - SECONDS))
-            [ "$remaining" -gt 0 ] || remaining=1
-            FM_TEST_STEP_BUDGET_SECS="$remaining" FM_TEST_SCRIPT_BASH=/bin/bash \
-              /bin/bash bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs auto \
-                --retry-infra-flakes "$1"
-          }
-          case "$BASH_VERSION" in
-            3.2.57*) ;;
-            *) echo "::error::expected stock macOS Bash 3.2.57, got $BASH_VERSION"; exit 1 ;;
-          esac
-          /bin/bash --version | head -1
-          command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
-
-          shell_inventory="$RUNNER_TEMP/fm-shell-inventory"
-          bin/fm-lint.sh --list-files > "$shell_inventory"
-          parse_fail=0
-          while IFS= read -r f; do
-            /bin/bash -n "$f" || { echo "::error::stock macOS Bash 3.2 failed to parse $f"; parse_fail=1; }
-          done < "$shell_inventory"
-          [ "$parse_fail" -eq 0 ] || { echo "::error::stock macOS Bash 3.2 parse sweep failed"; exit 1; }
-
-          command -v npm >/dev/null || { echo "::error::npm is required to install tasks-axi"; exit 1; }
-          npm install -g tasks-axi@0.2.5 >/dev/null
-          PATH="$(npm prefix -g)/bin:$PATH"
-          export PATH
-          command -v tasks-axi >/dev/null || { echo "::error::tasks-axi is required for the stock Bash regressions"; exit 1; }
-
-          check_stock_test() {
-            local output status=0 count
-            output=$(run_stock_test "$1") || status=$?
-            printf '%s\n' "$output"
-            [ "$status" -eq 0 ] || return "$status"
-            count=$(printf '%s\n' "$output" | awk '
-              /^FM_TEST_BEGIN / || /^FM_TEST_RETRY / { count=0 }
-              /^ok - / { count++ }
-              END { print count+0 }
-            ')
-            [ "$count" -eq "$2" ] || {
-              echo "::error::expected $2 passing cases for $1, got $count"
-              return 1
-            }
-          }
-          check_stock_test tests/fm-fleet-snapshot-view.test.sh 18
-          check_stock_test tests/fm-bearings-snapshot.test.sh 59
-
-          # The full public-followup suite is not a stock-bash snapshot; run only
-          # the empty-lock register regression under real /bin/bash 3.2.
-          FM_TEST_ONLY=test_first_register_succeeds_with_empty_lock_list_under_bash32 \
-            check_stock_test tests/fm-public-followup.test.sh 1
-
-  invariants:
-    name: Repo invariants
-    runs-on: ubuntu-latest
-    # Hang tripwire: the invariant checks are seconds-long file comparisons.
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
       - name: Compatibility pointers must stay intact
         run: |
           set -eu
@@ -522,3 +87,236 @@ jobs:
             printf '%s\n' "$tracked"
             exit 1
           fi
+
+  # Light workflow lint on the n100 overflow box. Deliberately absent from
+  # ci-ok's needs: n100 is spare capacity, and a required context there could
+  # sit pending forever if the box is offline. Same-repo pushes and PRs only;
+  # untrusted fork code never reaches this persistent host.
+  actionlint-light:
+    name: Workflow lint (n100 light)
+    if: github.event_name == 'push' || github.event_name == 'workflow_call' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: [self-hosted, n100, light, overflow]
+    timeout-minutes: 10
+    concurrency:
+      group: fm-n100-light
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run actionlint over every workflow
+        run: bin/fm-lint-workflows.sh
+
+  # Proven-isolated portable tests. Every script in these lanes carries a
+  # recorded concurrent-isolation proof, so the lane runs four workers on the
+  # four-vCPU runner; the longest script (fm-captain-hold-lifecycle, ~403 s)
+  # remains the floor and no further lane restructuring helps.
+  tests-portable-parallel-1:
+    name: Behavior portable parallel 1
+    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'merge_group' || github.event_name == 'workflow_call' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON(vars.RUNS_ON || '["ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Ensure pinned ShellCheck
+        run: |
+          set -eu
+          current=$(shellcheck --version 2>/dev/null | awk '/^version:/ {print $2}' || true)
+          if [ "$current" != "0.11.0" ]; then
+            bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Ensure pinned actionlint
+        run: |
+          set -eu
+          current=$(actionlint --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$current" != "1.7.12" ]; then
+            bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Install tasks-axi
+        run: |
+          set -eu
+          npm install -g tasks-axi
+          tasks-axi --version
+      - name: Install the Pi package for the Pi extension tests
+        run: |
+          set -eu
+          npm ci --prefix .opencode/plugins
+          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
+          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Run portable parallel shard 1
+        timeout-minutes: 18
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 1020
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-test"
+          bin/fm-test-run.sh --lane portable-parallel-1 --jobs 4 \
+            --per-script-timeout-secs auto --retry-infra-flakes \
+            --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
+            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-1.json"
+      - name: Upload shard 1 timing artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-test-timing-portable-parallel-1
+          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-parallel-1.json
+          if-no-files-found: warn
+
+  tests-portable-parallel-2:
+    name: Behavior portable parallel 2
+    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'merge_group' || github.event_name == 'workflow_call' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON(vars.RUNS_ON || '["ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Ensure pinned ShellCheck
+        run: |
+          set -eu
+          current=$(shellcheck --version 2>/dev/null | awk '/^version:/ {print $2}' || true)
+          if [ "$current" != "0.11.0" ]; then
+            bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Ensure pinned actionlint
+        run: |
+          set -eu
+          current=$(actionlint --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$current" != "1.7.12" ]; then
+            bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Install tasks-axi
+        run: |
+          set -eu
+          npm install -g tasks-axi
+          tasks-axi --version
+      - name: Run portable parallel shard 2
+        timeout-minutes: 18
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 1020
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-test"
+          bin/fm-test-run.sh --lane portable-parallel-2 --jobs 4 \
+            --per-script-timeout-secs auto --retry-infra-flakes \
+            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-parallel-2.json"
+      - name: Upload shard 2 timing artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-test-timing-portable-parallel-2
+          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-parallel-2.json
+          if-no-files-found: warn
+
+  # Serial remainder: 24 separate runners, each strictly serial inside itself.
+  # The two former 14-16 minute giants are split by case group into
+  # tests/fm-{pr-check-security,watch-triage}-<1..4>.test.sh, so the measured
+  # packed maximum is ~311 s (see docs/fm-test-portable-shards.md). Shard
+  # membership and count are owned by bin/fm-test-run.sh; a matrix that
+  # disagrees with PORTABLE_SERIAL_SHARDS is refused rather than silently
+  # dropping tests.
+  tests-portable-serial:
+    name: Behavior portable serial ${{ matrix.shard }}
+    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'merge_group' || github.event_name == 'workflow_call' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON(vars.RUNS_ON || '["ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 20
+    strategy:
+      # Every shard reports so one failure never hides another shard's result.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Ensure pinned ShellCheck
+        run: |
+          set -eu
+          current=$(shellcheck --version 2>/dev/null | awk '/^version:/ {print $2}' || true)
+          if [ "$current" != "0.11.0" ]; then
+            bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Ensure pinned actionlint
+        run: |
+          set -eu
+          current=$(actionlint --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$current" != "1.7.12" ]; then
+            bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Require tmux for e2e tests
+        run: |
+          set -eu
+          command -v tmux >/dev/null || {
+            echo "::error::tmux is required for real afk injection e2e coverage"
+            exit 1
+          }
+          tmux -V
+      - name: Install tasks-axi for backlog-handoff delegation
+        run: |
+          set -eu
+          npm install -g tasks-axi
+          tasks-axi --version
+      - name: Install the Pi package for the Pi extension tests
+        run: |
+          set -eu
+          npm ci --prefix .opencode/plugins
+          npm ls --prefix .opencode/plugins --depth 0 @earendil-works/pi-coding-agent
+          echo "FM_PI_PACKAGE_DIR=$GITHUB_WORKSPACE/.opencode/plugins/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/.opencode/plugins/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Run portable serial shard ${{ matrix.shard }}
+        timeout-minutes: 14
+        env:
+          FM_TEST_STEP_BUDGET_SECS: 780
+          FM_SERIAL_LANE: portable-serial-${{ matrix.shard }}of${{ strategy.job-total }}
+          FM_SERIAL_SHARD: ${{ matrix.shard }}
+          FM_TEST_FAILURE_EVIDENCE_DIR: ${{ runner.temp }}/fm-test/failure-evidence
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/fm-test"
+          bin/fm-test-run.sh --lane "$FM_SERIAL_LANE" \
+            --per-script-timeout-secs auto --retry-infra-flakes \
+            --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
+            --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-serial-${FM_SERIAL_SHARD}.json"
+      - name: Upload portable serial shard ${{ matrix.shard }} timing artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-test-timing-portable-serial-${{ matrix.shard }}
+          path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-serial-${{ matrix.shard }}.json
+          if-no-files-found: warn
+      - name: Upload bounded provisioning failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-provision-failure-serial-${{ matrix.shard }}
+          path: ${{ runner.temp }}/fm-test/failure-evidence/provision-*.txt
+          if-no-files-found: ignore
+
+  # The one required context. A skipped or cancelled dependency counts as a
+  # failure, so a silently missing shard cannot produce a green aggregate.
+  ci-ok:
+    name: ci-ok
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - tests-portable-parallel-1
+      - tests-portable-parallel-2
+      - tests-portable-serial
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Every required PR-gate job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -eu
+          printf '%s' "$NEEDS" | jq -e 'to_entries | map(.value.result) | all(. == "success")' >/dev/null || {
+            printf '::error::one or more required jobs did not succeed\n'
+            printf '%s\n' "$NEEDS"
+            exit 1
+          }
+          echo "all required PR-gate jobs succeeded"

@@ -109,7 +109,7 @@ exclusion_reason() {
     fm-spawn-dispatch-profile.test.sh|fm-spawn-worktree-settle.test.sh|fm-trace-context-spawn.test.sh)
       printf '%s\n' 'real isolated git worktrees plus spawn settle loops; gray zone until dedicated proof'
       ;;
-    fm-pr-check-security.test.sh)
+    fm-pr-check-security*.test.sh)
       printf '%s\n' 'watcher lock / migration / poll security surface; intentional shared-lock class'
       ;;
     fm-teardown.test.sh)
@@ -120,7 +120,7 @@ exclusion_reason() {
       ;;
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
     fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
-    fm-wake-queue.test.sh|fm-watch-checkpoint.test.sh|fm-watch-triage.test.sh|\
+    fm-wake-queue.test.sh|fm-watch-checkpoint.test.sh|fm-watch-triage*.test.sh|\
     fm-watcher-lock.test.sh)
       printf '%s\n' 'watcher/wake/lock family; intentional process locks and daemon races'
       ;;
@@ -203,7 +203,14 @@ fm-backend.test.sh
 fm-spawn-dispatch-profile.test.sh
 fm-spawn-worktree-settle.test.sh
 fm-trace-context-spawn.test.sh
-fm-pr-check-security.test.sh
+fm-pr-check-security-1.test.sh
+fm-pr-check-security-2.test.sh
+fm-pr-check-security-3.test.sh
+fm-pr-check-security-4.test.sh
+fm-watch-triage-1.test.sh
+fm-watch-triage-2.test.sh
+fm-watch-triage-3.test.sh
+fm-watch-triage-4.test.sh
 fm-teardown.test.sh
 fm-watcher-lock.test.sh
 fm-wake-queue.test.sh
