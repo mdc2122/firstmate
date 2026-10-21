@@ -2,6 +2,9 @@
 # fm-fleet.sh - place bounded omp ship workers on donor hosts with headroom.
 #
 # Usage:
+#   fm-fleet.sh setup <host> [--omp-version V]
+#                                          install omp and the gateway-only
+#                                          model config under the host's root
 #   fm-fleet.sh hosts                      sample every configured host and print
 #                                          one eligibility verdict per host
 #   fm-fleet.sh place <task-id>            pick a host and hold a reservation;
@@ -76,6 +79,8 @@ SSH_TIMEOUT=${FM_FLEET_SSH_TIMEOUT:-10}
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-task-inbox-lib.sh
+. "$SCRIPT_DIR/fm-task-inbox-lib.sh"
 
 die() {
   echo "fm-fleet: $*" >&2
@@ -102,9 +107,14 @@ require_fleet() {
 # fleet_ssh <alias> <remote-sh-source>: run POSIX sh source on the host with
 # stdin as the script. No agent forwarding, bounded connect and dead-peer
 # detection; exit 255 means the transport failed and completion is unknown.
+# The remote PATH is fixed rather than read from shell startup files, which a
+# non-interactive SSH command never sources: Homebrew and the account's own
+# ~/.local/bin and ~/bin come first so tmux, git, and herdr resolve on macOS.
+# shellcheck disable=SC2016 # expands on the host, not here
+FLEET_REMOTE_PATH='PATH="$HOME/.local/bin:$HOME/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"; export PATH'
 fleet_ssh() {
   local alias=$1 script=$2
-  printf '%s\n' "$script" | ssh -o BatchMode=yes -o ConnectTimeout="$SSH_TIMEOUT" \
+  printf '%s\n%s\n' "$FLEET_REMOTE_PATH" "$script" | ssh -o BatchMode=yes -o ConnectTimeout="$SSH_TIMEOUT" \
     -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ForwardAgent=no \
     -o ClearAllForwardings=yes "$alias" sh -s
 }
@@ -406,6 +416,7 @@ remote_launch_script() {
   [ -z "$effort" ] || flags="$flags --thinking $(sq "$effort")"
   cat <<EOF
 #!/bin/sh
+$FLEET_REMOTE_PATH
 echo \$\$ > $(sq "$R_PID")
 export PI_CODING_AGENT_DIR=$(sq "$R_ROOT/agent")
 export OMP_SKIP_SETUP=1 FM_OMP_HARNESS=omp FM_TASK_ID=$(sq "$id")
@@ -435,12 +446,15 @@ cmd_sync() {
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
   local_len=$(wc -c <"$STATE/$id.status" 2>/dev/null | tr -d ' ') || local_len=0
-  # Deliver home-side steering records that the host has not seen yet.
+  # Deliver home-side steering records the host has not seen yet: stage the
+  # body under a dot name (fleet_ssh_put reads it from stdin), then rename it
+  # into place only when neither the inbox nor handled/ already holds it.
   local f base
   for f in "$STATE/$id.inbox"/*.msg; do
     [ -f "$f" ] || continue
     base=${f##*/}
-    fleet_ssh "$alias" "[ -e $(sq "$R_TASK/inbox/$base") ] || [ -e $(sq "$R_TASK/inbox/handled/$base") ] || cat > $(sq "$R_TASK/inbox/.$base.tmp") && mv $(sq "$R_TASK/inbox/.$base.tmp") $(sq "$R_TASK/inbox/$base") 2>/dev/null; true" <"$f" >/dev/null 2>&1 || true
+    fleet_ssh_put "$alias" "$R_TASK/inbox/.$base.tmp" <"$f" || continue
+    fleet_ssh "$alias" "if [ -e $(sq "$R_TASK/inbox/$base") ] || [ -e $(sq "$R_TASK/inbox/handled/$base") ]; then rm -f $(sq "$R_TASK/inbox/.$base.tmp"); else mv $(sq "$R_TASK/inbox/.$base.tmp") $(sq "$R_TASK/inbox/$base"); fi" >/dev/null 2>&1 || true
   done
   out=$(fleet_ssh "$alias" "
 s=$(sq "$R_TASK/status"); [ -f \"\$s\" ] || : > \"\$s\"
@@ -471,6 +485,21 @@ tail -c +$((local_len + 1)) \"\$s\"
     [ -f "$STATE/$id.inbox/$base" ] && mv "$STATE/$id.inbox/$base" "$STATE/$id.inbox/handled/$base"
   done
   echo "synced $id: status=${remote_len:-0}B busy=$(cut -d' ' -f1 <"$FLEET_STATE/$id.busy")"
+}
+
+# ring <id>: type the constant steering doorbell (bin/fm-task-inbox-lib.sh's
+# fm_task_inbox_doorbell_line, naming the host-side inbox) into the worker's
+# pane, then Enter. Best-effort, like the local doorbell: the inbox record is
+# the delivery and its move into handled/ is the acknowledgement.
+cmd_ring() {
+  local id=$1 rec alias root line
+  require_fleet
+  rec=$(task_host_record "$id")
+  alias=$(fm_fleet_host_field "$rec" ssh)
+  root=$(fm_fleet_host_field "$rec" root)
+  remote_paths "$root" "$id"
+  line=$(fm_task_inbox_doorbell_line "$R_TASK/inbox/x.msg") || die "could not build the doorbell line"
+  fleet_ssh "$alias" "tmux send-keys -t $(sq "=fm-$id:") -l $(sq "$line") && sleep 0.4 && tmux send-keys -t $(sq "=fm-$id:") Enter"
 }
 
 cmd_peek() {
@@ -581,15 +610,97 @@ cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT") 2>/dev/null || t
   echo "released $id; branch kept as refs/fleet/$id in $proj and fm/$id on the host mirror"
 }
 
+# --- host setup -------------------------------------------------------------
+#
+# setup <host> [--omp-version V]: prepare <root> on one host. Installs the omp
+# release binary for the host's platform into <root>/bin/omp (checked against
+# the release's SHA256SUMS), writes <root>/agent/models.yml with only this
+# home's studio1-gateway providers (base URLs pointing at the gateway, keys by
+# environment-variable reference), and writes <root>/agent/gateway.env (0600)
+# carrying CLIPROXY_KEY taken from this home's environment. Nothing outside
+# <root> is touched: no shell profile, no ~/.omp, no Claude, Codex, or pi
+# credentials. Idempotent; rerunning updates omp and the gateway config.
+cmd_setup() {
+  local host=$1 rec alias root os version arch asset tmp models
+  shift
+  version=${FM_FLEET_OMP_VERSION:-}
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --omp-version) version=${2:?--omp-version needs a value}; shift 2 ;;
+      *) die "unknown setup option '$1'" ;;
+    esac
+  done
+  require_fleet
+  rec=$(fm_fleet_host_record "$HOSTS_FILE" "$host")
+  alias=$(fm_fleet_host_field "$rec" ssh)
+  root=$(fm_fleet_host_field "$rec" root)
+  os=$(fm_fleet_host_field "$rec" os)
+  [ -n "${CLIPROXY_KEY:-}" ] || die "CLIPROXY_KEY is not set in this environment; setup copies the gateway key from it"
+  if [ -z "$version" ]; then
+    version=$(omp --version 2>/dev/null | sed -n 's#^omp/##p')
+    [ -n "$version" ] || die "could not read the local omp version; pass --omp-version"
+  fi
+  arch=$(fleet_ssh "$alias" 'uname -m') || die "could not reach $host"
+  case "$os:$arch" in
+    darwin:arm64) asset=omp-darwin-arm64 ;;
+    darwin:x86_64) asset=omp-darwin-x64 ;;
+    linux:x86_64) asset=omp-linux-x64 ;;
+    linux:aarch64|linux:arm64) asset=omp-linux-arm64 ;;
+    *) die "no omp release asset for $os $arch" ;;
+  esac
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-fleet-setup.XXXXXX")
+  gh release download "v$version" -R can1357/oh-my-pi -D "$tmp" -p "$asset" -p SHA256SUMS.txt --clobber \
+    || { rm -rf "$tmp"; die "could not download omp v$version $asset"; }
+  (cd "$tmp" && grep " $asset\$" SHA256SUMS.txt | shasum -a 256 -c - >/dev/null) \
+    || { rm -rf "$tmp"; die "omp $asset failed its SHA256SUMS check"; }
+  models=$(gateway_models_yml) || { rm -rf "$tmp"; die "could not derive the gateway model config"; }
+  fleet_ssh "$alias" "mkdir -p $(sq "$root/bin") $(sq "$root/agent") $(sq "$root/run") $(sq "$root/tasks") $(sq "$root/sessions") $(sq "$root/worktrees") $(sq "$root/repos")" \
+    || { rm -rf "$tmp"; die "could not create $root on $host"; }
+  if ! fleet_ssh_put "$alias" "$root/bin/.omp.tmp" <"$tmp/$asset" ||
+    ! fleet_ssh "$alias" "chmod 755 $(sq "$root/bin/.omp.tmp") && mv $(sq "$root/bin/.omp.tmp") $(sq "$root/bin/omp")"; then
+    rm -rf "$tmp"
+    die "could not install omp on $host"
+  fi
+  rm -rf "$tmp"
+  printf '%s\n' "$models" | fleet_ssh_put "$alias" "$root/agent/models.yml"
+  printf 'export CLIPROXY_KEY=%s\n' "$(sq "$CLIPROXY_KEY")" | fleet_ssh_put "$alias" "$root/agent/gateway.env"
+  fleet_ssh "$alias" "$(sq "$root/bin/omp") --version"
+  echo "setup $host: omp v$version ($asset), gateway config at $root/agent"
+}
+
+# gateway_models_yml: this home's omp providers that point at the studio1
+# gateway (FM_FLEET_GATEWAY, default 100.69.240.64), with every API key
+# rewritten to the CLIPROXY_KEY environment reference. Providers that do not
+# go through the gateway, and every literal credential, are left out.
+gateway_models_yml() {
+  local src=${FM_FLEET_MODELS_YML:-$HOME/.omp/agent/models.yml}
+  python3 - "$src" "${FM_FLEET_GATEWAY:-100.69.240.64}" <<'PY'
+import sys, yaml
+src, gateway = sys.argv[1], sys.argv[2]
+data = yaml.safe_load(open(src)) or {}
+out = {}
+for name, prov in (data.get("providers") or {}).items():
+    if not isinstance(prov, dict) or gateway not in str(prov.get("baseUrl", "")):
+        continue
+    prov = dict(prov)
+    prov["apiKey"] = "CLIPROXY_KEY"
+    out[name] = prov
+if not out:
+    sys.exit("no gateway providers found")
+yaml.safe_dump({"providers": out}, sys.stdout, sort_keys=False)
+PY
+}
+
 [ "$#" -ge 1 ] || { usage >&2; exit 2; }
 cmd=$1
 shift
 case "$cmd" in
   -h|--help|help) usage ;;
   hosts) cmd_hosts ;;
+  setup) [ "$#" -ge 1 ] || die "usage: setup <host> [--omp-version V]"; cmd_setup "$@" ;;
   place) [ "$#" -eq 1 ] || die "usage: place <task-id>"; cmd_place "$1" ;;
   launch) [ "$#" -ge 2 ] || die "usage: launch <task-id> <project-dir> [--model M] [--effort E]"; cmd_launch "$@" ;;
-  sync|peek|attach|state|fetch|resume|release)
+  sync|ring|peek|attach|state|fetch|resume|release)
     [ "$#" -ge 1 ] || die "usage: $cmd <task-id>"
     valid_id "$1" || die "invalid task id '$1'"
     "cmd_$cmd" "$@"
