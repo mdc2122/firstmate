@@ -1,0 +1,19 @@
+# two simultaneous place calls; idlemac has 1 free slot, busymac (real probe) is busy; reservation TTL 40 s
+--- place ta
+ok idlemac spare_cpu=24.00 spare_mem_gb=330.13 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy load 72.62 > 50% of 32 cores (session=tmux, not in the Herdr view: live-test-no-herdr)
+idlemac
+[ta exit=0]
+--- place tb
+no idlemac full (1 of 1 slots) (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy cpu 53% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+fm-fleet: no host has headroom for tb; it stays queued - retry later
+[tb exit=4]
+--- reservations:
+ta.reservation: host=idlemac deadline=1792553733  now=1792553731
+--- no worker ever starts for the winner; after the deadline the slot frees itself
+$ place tc  (after deadline)
+ok idlemac spare_cpu=24.00 spare_mem_gb=334.69 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy load 85.70 > 50% of 32 cores (session=tmux, not in the Herdr view: live-test-no-herdr)
+idlemac
+[exit=0]

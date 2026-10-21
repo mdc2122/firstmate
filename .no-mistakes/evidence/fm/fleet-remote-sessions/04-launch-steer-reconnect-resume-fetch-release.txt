@@ -1,0 +1,206 @@
+# placement: busymac = real probe of this overloaded Mac; idlemac = idle donor (see 03)
+
+$ fl launch t1 /tmp/fmfleet-live.7i4lBk/proj --model gateway/test --effort low
+ok idlemac spare_cpu=24.00 spare_mem_gb=331.34 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy cpu 53% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+fm-fleet: idlemac (session=tmux, not in the Herdr view: live-test-no-herdr)
+launched t1 on idlemac worktree=/tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t1 endpoint=tmux:fm-t1
+[exit=0]
+
+$ cat /tmp/fmfleet-live.7i4lBk/home/state/t1.meta
+window=fleet:t1
+endpoint_task_id=t1
+worktree=/tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t1
+project=/private/tmp/fmfleet-live.7i4lBk/proj
+harness=omp
+kind=ship
+mode=local-only
+yolo=off
+backend=fleet
+spawn_gen=f1792553301.6974.3291
+fleet_host=idlemac
+fleet_os=darwin
+fleet_session=tmux
+fleet_branch=fm/t1
+fleet_base=9eebda625ebc1a3835ea7d7886573e86f98504f6
+model=gateway/test
+effort=low
+fleet_endpoint=tmux:fm-t1
+[exit=0]
+## slot accounting: the started worker counts in the host sample; a second task is queued
+
+$ fl hosts
+no idlemac full (1 of 1 slots) (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy cpu 53% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+[exit=0]
+
+$ fl place t2
+no idlemac full (1 of 1 slots) (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy cpu 52% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+fm-fleet: no host has headroom for t2; it stays queued - retry later
+[exit=4]
+## status visibility and steering
+
+$ fl state t1
+alive
+[exit=0]
+
+$ fl sync t1
+synced t1: status=67B busy=idle
+[exit=0]
+
+$ cat /tmp/fmfleet-live.7i4lBk/home/state/t1.status
+working: started in /tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t1
+[exit=0]
+
+$ env FM_HOME=/tmp/fmfleet-live.7i4lBk/home PATH=/tmp/fmfleet-live.7i4lBk/fakebin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/Users/studio2/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/Users/studio2/bin:/Users/studio2/.bun/bin:/Users/studio2/.grok/bin:/Users/studio2/.hermes/node/bin:/Users/studio2/.opencode/bin:/Users/studio2/.local/bin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/opt/homebrew/sbin:/Users/studio2/go/bin:/Users/studio2/.cargo/bin:/usr/local/sbin /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5E2HK992ZZ30KSH72VTD6DQ/bin/fm-send.sh t1 please also update README
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+[exit=3]
+
+$ fl sync t1
+synced t1: status=67B busy=idle
+[exit=0]
+
+$ ls /tmp/fmfleet-live.7i4lBk/home/state/t1.inbox /tmp/fmfleet-live.7i4lBk/home/state/t1.inbox/handled
+/tmp/fmfleet-live.7i4lBk/home/state/t1.inbox:
+handled
+
+/tmp/fmfleet-live.7i4lBk/home/state/t1.inbox/handled:
+[exit=0]
+
+$ cat /tmp/fmfleet-live.7i4lBk/home/state/t1.status
+working: started in /tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t1
+[exit=0]
+
+$ fl peek t1 20
+omp(fake) pid 17113 on Studio2s-Mac-Studio in /tmp/fmfleet-live.7i4lBk/idlehost/
+worktrees/t1 session=/tmp/fmfleet-live.7i4lBk/idlehost/sessions/t1/session-17925
+53307.jsonl
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[exit=0]
+
+$ env FM_HOME=/tmp/fmfleet-live.7i4lBk/home PATH=/tmp/fmfleet-live.7i4lBk/fakebin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/Users/studio2/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/Users/studio2/bin:/Users/studio2/.bun/bin:/Users/studio2/.grok/bin:/Users/studio2/.hermes/node/bin:/Users/studio2/.opencode/bin:/Users/studio2/.local/bin:/Library/Frameworks/Python.framework/Versions/3.13/bin:/opt/homebrew/sbin:/Users/studio2/go/bin:/Users/studio2/.cargo/bin:/usr/local/sbin FM_CREW_STATE_NO_FORGE=1 /Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5E2HK992ZZ30KSH72VTD6DQ/bin/fm-crew-state.sh t1
+state: working · source: status-log · started in /tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t1
+[exit=0]
+## reconnect: transport drop never reads as worker death
+
+$ env FM_LIVE_SSH_DOWN=1 /tmp/fmfleet-live.7i4lBk/fl state t1
+unreadable
+[exit=0]
+
+$ env FM_LIVE_SSH_DOWN=1 /tmp/fmfleet-live.7i4lBk/fl sync t1
+ssh: connect to host: Operation timed out
+unreachable
+[exit=3]
+
+$ fl state t1
+alive
+[exit=0]
+## crash and resume with the same omp session
+killing worker omp pid 17113
+
+$ fl state t1
+dead
+[exit=0]
+
+$ fl resume t1
+resumed t1 on idlemac in tmux:fm-t1 from /tmp/fmfleet-live.7i4lBk/idlehost/sessions/t1/session-1792553307.jsonl
+[exit=0]
+
+$ fl state t1
+alive
+[exit=0]
+
+$ sh -c cat /tmp/fmfleet-live.7i4lBk/idlehost/sessions/t1/*.jsonl
+{"event":"start","resume":"","pid":17113}
+{"event":"start","resume":"/tmp/fmfleet-live.7i4lBk/idlehost/sessions/t1/session-1792553307.jsonl","pid":58133}
+[exit=0]
+## fetch results home
+
+$ fl fetch t1
+fetched t1: branch refs/fleet/t1 at 9eebda625ebc (194 bytes uncommitted) into /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet
+[exit=0]
+
+$ git -C /tmp/fmfleet-live.7i4lBk/proj log --oneline refs/fleet/t1
+9eebda6 init
+[exit=0]
+
+$ cat /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet/uncommitted.patch
+diff --git a/WORK.txt b/WORK.txt
+new file mode 100644
+index 0000000..5ff9143
+--- /dev/null
++++ b/WORK.txt
+@@ -0,0 +1,2 @@
++uncommitted line from worker 17113
++uncommitted line from worker 58133
+[exit=0]
+
+$ tar -tf /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet/session.tar
+sessions/t1/
+sessions/t1/session-1792553307.jsonl
+tasks/t1/status
+[exit=0]
+## release refuses while uncommitted work exists, then discard-release
+
+$ fl release t1
+fetched t1: branch refs/fleet/t1 at 9eebda625ebc (194 bytes uncommitted) into /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet
+fm-fleet: task t1 has uncommitted work on its host (saved to /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet/uncommitted.patch); the worker is stopped: resume it to commit the work, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough
+[exit=1]
+
+$ fl state t1
+dead
+[exit=0]
+
+$ env FM_FLEET_RELEASE_DISCARD=1 /tmp/fmfleet-live.7i4lBk/fl release t1
+fetched t1: branch refs/fleet/t1 at 9eebda625ebc (194 bytes uncommitted) into /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet
+released t1; branch kept as refs/fleet/t1 in /private/tmp/fmfleet-live.7i4lBk/proj and fm/t1 on the host mirror; saved work in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet
+[exit=0]
+## released task: every host command refuses (exit 5), saved patch untouched
+
+$ fl fetch t1
+fm-fleet: task t1 was released at 2026-10-21T03:31:02Z; its saved work is in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet and nothing was changed
+[exit=5]
+
+$ fl release t1
+fm-fleet: task t1 was released at 2026-10-21T03:31:02Z; its saved work is in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet and nothing was changed
+[exit=5]
+
+$ fl resume t1
+fm-fleet: task t1 was released at 2026-10-21T03:31:02Z; its saved work is in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet and nothing was changed
+[exit=5]
+
+$ fl sync t1
+fm-fleet: task t1 was released at 2026-10-21T03:31:02Z; its saved work is in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet and nothing was changed
+[exit=5]
+
+$ fl stop t1
+fm-fleet: task t1 was released at 2026-10-21T03:31:02Z; its saved work is in /tmp/fmfleet-live.7i4lBk/home/data/t1/fleet and nothing was changed
+[exit=5]
+
+$ shasum -c /tmp/fmfleet-live.7i4lBk/t1.sum
+/tmp/fmfleet-live.7i4lBk/home/data/t1/fleet/uncommitted.patch: OK
+[exit=0]
+
+$ ls /tmp/fmfleet-live.7i4lBk/idlehost/worktrees
+[exit=0]

@@ -1,0 +1,5 @@
+$ fm-fleet.sh hosts   # home without config/fleet-hosts
+fm-fleet: fleet placement is off: /tmp/fmfleet-live.7i4lBk/offhome/config/fleet-hosts does not exist (docs/fleet-placement.md)
+exit=1
+$ fm-fleet.sh sync    # watcher path without config
+exit=0

@@ -1,0 +1,139 @@
+# t1 released, so idlemac's slot is free again
+
+$ fl launch t2 /tmp/fmfleet-live.7i4lBk/proj --model gateway/test --effort low
+ok idlemac spare_cpu=24.00 spare_mem_gb=333.34 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy cpu 55% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+fm-fleet: idlemac (session=tmux, not in the Herdr view: live-test-no-herdr)
+launched t2 on idlemac worktree=/tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t2 endpoint=tmux:fm-t2
+[exit=0]
+## steering: durable inbox record + the fleet delivery legs fm-send's fm_task_inbox_ring calls (sync, then ring)
+## (fm-send.sh itself refuses inside a no-mistakes gate agent: NO_MISTAKES_GATE guard)
+
+$ fl sync t2
+synced t2: status=67B busy=idle
+[exit=0]
+
+$ ls /tmp/fmfleet-live.7i4lBk/idlehost/tasks/t2/inbox
+0001.msg
+handled
+[exit=0]
+
+$ fl ring t2
+[exit=0]
+
+$ fl peek t2 6
+omp(fake) pid 4406 on Studio2s-Mac-Studio in /tmp/fmfleet-live.7i4lBk/idlehost/w
+orktrees/t2 session=/tmp/fmfleet-live.7i4lBk/idlehost/sessions/t2/session-179255
+3569.jsonl
+: Firstmate instruction waiting: list '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t
+2/inbox'/*.msg and, in numeric order, read and act on each, then mv each handled
+ file to '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t2/inbox'/handled/.
+got: : Firstmate instruction waiting: list '/tmp/fmfleet-live.7i4lBk/idlehost/ta
+sks/t2/inbox'/*.msg and, in numeric order, read and act on each, then mv each ha
+ndled file to '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t2/inbox'/handled/.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[exit=0]
+
+$ fl sync t2
+synced t2: status=100B busy=idle
+[exit=0]
+
+$ ls /tmp/fmfleet-live.7i4lBk/home/state/t2.inbox /tmp/fmfleet-live.7i4lBk/home/state/t2.inbox/handled
+/tmp/fmfleet-live.7i4lBk/home/state/t2.inbox:
+handled
+
+/tmp/fmfleet-live.7i4lBk/home/state/t2.inbox/handled:
+0001.msg
+[exit=0]
+
+$ cat /tmp/fmfleet-live.7i4lBk/home/state/t2.status
+working: started in /tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t2
+steer: please also update README
+[exit=0]
+
+$ fl type t2 status check from firstmate
+[exit=0]
+
+$ fl peek t2 4
+omp(fake) pid 4406 on Studio2s-Mac-Studio in /tmp/fmfleet-live.7i4lBk/idlehost/w
+orktrees/t2 session=/tmp/fmfleet-live.7i4lBk/idlehost/sessions/t2/session-179255
+3569.jsonl
+: Firstmate instruction waiting: list '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t
+2/inbox'/*.msg and, in numeric order, read and act on each, then mv each handled
+ file to '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t2/inbox'/handled/.
+got: : Firstmate instruction waiting: list '/tmp/fmfleet-live.7i4lBk/idlehost/ta
+sks/t2/inbox'/*.msg and, in numeric order, read and act on each, then mv each ha
+ndled file to '/tmp/fmfleet-live.7i4lBk/idlehost/tasks/t2/inbox'/handled/.
+status check from firstmate
+got: status check from firstmate
+
+
+
+
+
+
+
+
+
+
+
+
+
+[exit=0]
+## gone host worktree never clobbers the saved patch
+
+$ fl fetch t2
+fetched t2: branch refs/fleet/t2 at 9eebda625ebc (155 bytes uncommitted) into /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet
+[exit=0]
+fe7b1766edbec72d7ebbadd0bf54e090d781b131  /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/uncommitted.patch
+4c1eaa18685b8dd313ba09daeddd045e678097d2  /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/session.tar
+cae010d292a2f96e085d9fe7a9478d62dc131cfc  /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/head
+
+$ fl stop t2
+[exit=0]
+simulate an interrupted release / lost worktree: remove the host worktree directly
+
+$ git -C /tmp/fmfleet-live.7i4lBk/idlehost/repos/proj.git worktree remove --force /tmp/fmfleet-live.7i4lBk/idlehost/worktrees/t2
+[exit=0]
+
+$ fl fetch t2
+fetched t2: branch refs/fleet/t2; the host worktree is gone, so the saved work in /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet was kept as it was (155 bytes uncommitted)
+[exit=0]
+
+$ shasum -c /tmp/fmfleet-live.7i4lBk/t2.sum
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/uncommitted.patch: OK
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/session.tar: OK
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/head: OK
+[exit=0]
+
+$ fl release t2
+fetched t2: branch refs/fleet/t2; the host worktree is gone, so the saved work in /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet was kept as it was (155 bytes uncommitted)
+released t2; branch kept as refs/fleet/t2 in /private/tmp/fmfleet-live.7i4lBk/proj and fm/t2 on the host mirror; saved work in /tmp/fmfleet-live.7i4lBk/home/data/t2/fleet
+[exit=0]
+
+$ shasum -c /tmp/fmfleet-live.7i4lBk/t2.sum
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/uncommitted.patch: OK
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/session.tar: OK
+/tmp/fmfleet-live.7i4lBk/home/data/t2/fleet/head: OK
+[exit=0]
+
+$ grep fleet_released /tmp/fmfleet-live.7i4lBk/home/state/t2.meta
+fleet_released=2026-10-21T03:34:10Z
+[exit=0]
+
+$ fl sync
+[exit=0]

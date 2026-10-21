@@ -1,0 +1,15 @@
+# real probe of this Mac (busymac): { 81.32 82.16 72.83 } on 32 cores, pressure level 1
+# default holds (60s busy / 300s clear); first sample is t=0
+$ fm-fleet.sh hosts  (t=0)
+ok idlemac spare_cpu=24.00 spare_mem_gb=336.75 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac rising: cpu 52% > 50% for 0s (busy after 60s) (session=tmux, not in the Herdr view: live-test-no-herdr)
+state: state=available over_since=1792551920 last_busy=- last=1792551920
+$ fm-fleet.sh hosts  (second sample; state file shows it ran 76 s after the first over-ceiling sample)
+ok idlemac spare_cpu=24.00 spare_mem_gb=338.47 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy load 78.87 > 50% of 32 cores (session=tmux, not in the Herdr view: live-test-no-herdr)
+state: state=busy over_since=1792551920 last_busy=1792551996 last=1792551996
+$ fm-fleet.sh hosts  (third sample, 143 s after the first)
+ok idlemac spare_cpu=24.00 spare_mem_gb=333.47 (session=tmux, not in the Herdr view: live-test-no-herdr)
+no busymac busy load 96.04 > 50% of 32 cores (session=tmux, not in the Herdr view: live-test-no-herdr)
+state: state=busy over_since=1792551920 last_busy=1792552063 last=1792552063
+# verdict: over-ceiling CPU held 'rising' (no new work, state still available) until >=60 s of persistence, then busy; idlemac (idle donor) stayed eligible

@@ -1,0 +1,30 @@
+# FM_FLEET_BUSY_HOLD=8 FM_FLEET_CLEAR_HOLD=120 (one real probe of this overloaded Mac takes ~20-35 s, so samples are ~30 s apart)
+# idlemac = real probe of this Mac via ssh shim seam, cpu_pct/load rewritten to an idle donor; spikes injected via cpu_pct
+## 1. brief spike: one over-ceiling sample, then clear -> stays available
+$ hosts (spike cpu 90%)
+no idlemac rising: cpu 90% > 50% for 0s (busy after 8s) (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=available over_since=1792552974 last_busy=- last=1792552974  now=1792552978
+$ hosts (next sample, clear)
+ok idlemac spare_cpu=24.00 spare_mem_gb=333.15 (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=available over_since=- last_busy=- last=1792553001  now=1792553006
+## 2. sustained: over ceiling across consecutive samples >= 8 s apart -> busy
+$ hosts (cpu 90%)
+no idlemac rising: cpu 90% > 50% for 0s (busy after 8s) (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=available over_since=1792553032 last_busy=- last=1792553032  now=1792553036
+$ hosts (cpu 90% again)
+no idlemac busy cpu 90% > 50% (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=busy over_since=1792553032 last_busy=1792553066 last=1792553066  now=1792553071
+## 3. clear samples: busy holds until 120 s with no busy observation
+$ hosts (clear)
+no idlemac busy clear for 28s (available after 120s) (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=busy over_since=- last_busy=1792553066 last=1792553094  now=1792553096
+$ hosts (clear)
+no idlemac busy clear for 49s (available after 120s) (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=busy over_since=- last_busy=1792553066 last=1792553115  now=1792553117
+$ hosts (clear, after waiting past the clear hold)
+ok idlemac spare_cpu=24.00 spare_mem_gb=330.72 (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=available over_since=- last_busy=1792553066 last=1792553197  now=1792553201
+## 4. busy_procs: a running process named FmFakeCIJob (symlink to /bin/sleep, pid 90638) makes the host busy on the first sample, no hold
+$ hosts (FmFakeCIJob running, fresh state)
+no idlemac busy FmFakeCIJob running (session=tmux, not in the Herdr view: live-test-no-herdr)
+  idlemac state: state=busy over_since=1792553268 last_busy=1792553268 last=1792553268
