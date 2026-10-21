@@ -112,4 +112,10 @@ FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync t1 >/dev/
 assert_present "$HOME_DIR/state/t1.inbox/handled/001.msg" "the host acknowledgement moves the home record to handled/"
 assert_absent "$HOST_ROOT/tasks/t1/inbox/001.msg" "a handled record is not delivered again"
 
-pass "fleet backend: validation, agent state, capture, status mirror, steering"
+# --- teardown never removes an unreleased fleet task ------------------------
+out=$(FM_HOME="$HOME_DIR" FM_TEARDOWN_GUARD_DONE=1 PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-teardown.sh" t1 2>&1)
+expect_code 1 $? "teardown refuses a fleet task that was not released"
+assert_contains "$out" "run bin/fm-fleet.sh release t1 first" "the refusal names the release command"
+assert_present "$HOME_DIR/state/t1.meta" "the refused teardown keeps the task record"
+
+pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate"

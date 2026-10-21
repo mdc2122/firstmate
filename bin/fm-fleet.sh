@@ -828,9 +828,12 @@ case \"\$pid\" in ''|*[!0-9]*) ;; *) kill \"\$pid\" 2>/dev/null || true ;; esac
 rm -f $(sq "$R_PID")
 " || die "could not reach the host to release $id; its slot is still held"
   endpoint_close "$rec" "$(endpoint_of "$id")"
-  fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT") 2>/dev/null || true" || true
+  fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
+    || die "could not remove the worktree on $(task_field "$id" fleet_host); the work stays there and $id is not released"
   rm -f "$FLEET_STATE/$id.reservation" "$FLEET_STATE/$id.turn" "$FLEET_STATE/$id.busy"
-  echo "released $id; branch kept as refs/fleet/$id in $proj and fm/$id on the host mirror"
+  # bin/fm-teardown.sh refuses a fleet task until this marker exists.
+  set_task_field "$id" fleet_released "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "released $id; branch kept as refs/fleet/$id in $proj and fm/$id on the host mirror; saved work in $DATA/$id/fleet"
 }
 
 # --- host setup -------------------------------------------------------------
