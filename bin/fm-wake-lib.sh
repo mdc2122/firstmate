@@ -2402,10 +2402,11 @@ fm_wake_status_cursor_offset() {  # <validated-status-path> -> already-presented
 # already-presented cursor from classify-lib. Lines whose bytes begin before
 # that offset are not replayed, and the one line ending exactly at
 # <skip-end-offset> (the event the status outcome backstop already presented,
-# its receipt) is not replayed either. Prints nothing and returns 1 when no
+# its receipt) is not replayed either; FM_WAKE_EVENT_LINE still names the
+# newest unread line, skipped or not. Prints nothing and returns 1 when no
 # unread non-blank line remains.
 fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min-offset> [<end-offset>] [<skip-end-offset>]
-  local path=$1 min_offset=$3 end_offset=${4:-} skip_end=${5:-0} result size chunk chunk_start
+  local path=$1 min_offset=$3 end_offset=${4:-} skip_end=${5:-0} result size chunk chunk_start tagged
   local LC_ALL=C
   FM_WAKE_EVENT_LINE=
   FM_WAKE_UNREAD_LINES=
@@ -2436,16 +2437,18 @@ fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min
   [ -n "$chunk" ] || return 1
   [ "$min_offset" -lt "$size" ] || return 1
   chunk_start=$min_offset
-  FM_WAKE_UNREAD_LINES=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" '
+  tagged=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" '
     BEGIN { pos = start + 0 }
     {
       line_start = pos
       pos += length($0) + 1
-      if ($0 ~ /[^[:space:]]/ && line_start >= min && !(skip + 0 > 0 && pos == skip + 0)) print $0
+      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((skip + 0 > 0 && pos == skip + 0) ? "-" : "+") $0
     }
   ') || return 1
+  FM_WAKE_UNREAD_LINES=$(printf '%s\n' "$tagged" | LC_ALL=C sed -n 's/^+//p')
   [ -n "$FM_WAKE_UNREAD_LINES" ] || return 1
-  FM_WAKE_EVENT_LINE=$(printf '%s\n' "$FM_WAKE_UNREAD_LINES" | tail -1)
+  FM_WAKE_EVENT_LINE=$(printf '%s\n' "$tagged" | tail -1)
+  FM_WAKE_EVENT_LINE=${FM_WAKE_EVENT_LINE#?}
   FM_WAKE_EVENT_LINE=$(printf '%s' "$FM_WAKE_EVENT_LINE" | LC_ALL=C tr '\t\r' '  ')
 }
 

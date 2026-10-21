@@ -220,6 +220,8 @@ test_successful_backstop_is_idempotent_without_consuming_delayed_annotation() {
   fi
   grep -F 'receipt-task.status: working: lane one' "$signal_out" >/dev/null \
     || fail "the backstop receipt consumed the delayed signal's other unread status context: $(cat "$signal_out")"
+  grep -F 'wake annotation: unread wake-EVENT since last drain, not current state: receipt-task.status: working: lane one' "$signal_out" >/dev/null \
+    || fail "a line older than the backstop-presented done line was labelled the latest event: $(cat "$signal_out")"
 
   printf 'working: lane two\n' >> "$state/receipt-task.status"
   append_wake "$state" signal receipt-task.status 'signal: receipt-task.status' \
@@ -597,6 +599,8 @@ test_backstop_then_signal_presents_each_done_line_once() {
   fi
   [ "$(cat "$first_out" "$signal_out" | grep -cF 'seller recording cannot be recorded')" -eq 1 ] \
     || fail "the earlier done line was not presented exactly once across both drains: $(cat "$first_out" "$signal_out")"
+  grep -F 'wake annotation: unread wake-EVENT since last drain, not current state: ab.status: done: seller recording cannot be recorded' "$signal_out" >/dev/null \
+    || fail "the earlier done line was labelled the latest event though the stow line is newer: $(cat "$signal_out")"
   pass "a backstop-presented done line is not re-annotated by the next drain's signal, and the earlier unread done line is still presented once"
 }
 
