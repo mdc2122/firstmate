@@ -619,6 +619,47 @@ test_backstop_then_signal_presents_each_done_line_once() {
   pass "a backstop-presented done line is not re-annotated by the next drain's signal, and the earlier unread done line is still presented once"
 }
 
+# Two backstop presentations before the delayed signal drains: the second
+# backstop overwrote the first one's receipt, so the signal annotation used to
+# re-present the first done line. Every backstop-presented line is skipped,
+# while the other unread lines are still annotated.
+test_two_backstops_then_signal_present_each_done_line_once() {
+  local dir state first_out second_out signal_out err
+  dir=$(make_case two-backstops-then-signal)
+  state="$dir/state"
+  first_out="$dir/first.out"
+  second_out="$dir/second.out"
+  signal_out="$dir/signal.out"
+  err="$dir/signal.err"
+
+  printf 'working: lane one\ndone: A shipped\n' > "$state/two.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$first_out" 2>/dev/null \
+    || fail "first backstop drain failed"
+  backstop_body "$first_out" | grep -F 'two done: A shipped' >/dev/null \
+    || fail "the first drain's backstop did not present done: A: $(cat "$first_out")"
+
+  printf 'working: lane two\ndone: B shipped\n' >> "$state/two.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$second_out" 2>/dev/null \
+    || fail "second backstop drain failed"
+  backstop_body "$second_out" | grep -F 'two done: B shipped' >/dev/null \
+    || fail "the second drain's backstop did not present done: B: $(cat "$second_out")"
+  if grep -F 'A shipped' "$second_out" >/dev/null; then
+    fail "the second backstop drain re-presented done: A: $(cat "$second_out")"
+  fi
+
+  append_wake "$state" signal two.status 'signal: two.status' \
+    || fail "could not queue the delayed signal row"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$signal_out" 2> "$err" \
+    || fail "signal drain failed: $(cat "$err")"
+  if grep -F 'shipped' "$signal_out" >/dev/null; then
+    fail "the signal drain re-presented a backstop-presented done line: $(cat "$signal_out")"
+  fi
+  grep -F 'two.status: working: lane one' "$signal_out" >/dev/null \
+    && grep -F 'two.status: working: lane two' "$signal_out" >/dev/null \
+    || fail "the signal drain lost the other unread status lines: $(cat "$signal_out")"
+  pass "two backstop-presented done lines are each shown once, and a delayed signal still annotates the other unread lines"
+}
+
 test_uncovered_keyless_captain_events_surface_on_the_next_main_drain
 test_newer_task_outcome_and_routine_latest_events_stay_silent
 test_older_or_other_task_outcome_cannot_hide_a_new_captain_event
@@ -639,3 +680,4 @@ test_overbound_routine_event_stays_silent
 test_backstop_output_is_bounded
 test_annotated_done_line_is_not_reprinted_by_the_backstop
 test_backstop_then_signal_presents_each_done_line_once
+test_two_backstops_then_signal_present_each_done_line_once

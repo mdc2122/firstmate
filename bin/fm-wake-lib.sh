@@ -2400,12 +2400,12 @@ fm_wake_status_cursor_offset() {  # <validated-status-path> -> already-presented
 
 # O_NOFOLLOW read of every still-unread status byte. min-offset is the
 # already-presented cursor from classify-lib. Lines whose bytes begin before
-# that offset are not replayed, and the one line ending exactly at
-# <skip-end-offset> (the event the status outcome backstop already presented,
-# its receipt) is not replayed either; FM_WAKE_EVENT_LINE still names the
+# that offset are not replayed, and no line ending exactly at one of the
+# comma-separated <skip-end-offsets> (events the status outcome backstop
+# already presented) is replayed either; FM_WAKE_EVENT_LINE still names the
 # newest unread line, skipped or not. Prints nothing and returns 1 when no
 # unread non-blank line remains.
-fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min-offset> [<end-offset>] [<skip-end-offset>]
+fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min-offset> [<end-offset>] [<skip-end-offsets>]
   local path=$1 min_offset=$3 end_offset=${4:-} skip_end=${5:-0} result size chunk chunk_start tagged
   local LC_ALL=C
   FM_WAKE_EVENT_LINE=
@@ -2438,12 +2438,16 @@ fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min
   [ "$min_offset" -lt "$size" ] || return 1
   chunk_start=$min_offset
   tagged=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" -v end="$size" '
-    BEGIN { pos = start + 0 }
+    BEGIN {
+      pos = start + 0
+      n = split(skip, ends, ",")
+      for (i = 1; i <= n; i++) if (ends[i] + 0 > 0) skipped[ends[i] + 0] = 1
+    }
     {
       line_start = pos
       pos += length($0) + 1
       line_end = (pos > end + 0) ? end + 0 : pos
-      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((skip + 0 > 0 && line_end == skip + 0) ? "-" : "+") $0
+      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((line_end in skipped) ? "-" : "+") $0
     }
   ') || return 1
   FM_WAKE_UNREAD_LINES=$(printf '%s\n' "$tagged" | LC_ALL=C sed -n 's/^+//p')
@@ -2522,10 +2526,10 @@ EOF
     fi
     if [ -n "$endpoint" ] && [ "$offset" -ge "$endpoint" ]; then continue; fi
     # The status outcome backstop presents a task's latest captain-facing
-    # event once and records its end offset as its receipt; a signal row for
-    # that task arriving later presents its other unread lines, not that one
-    # again.
-    backstop=$(status_outcome_backstop_cursor_offset "$path" 2>/dev/null) || backstop=0
+    # event once and records the end offset of every line it presented; a
+    # signal row for that task arriving later presents its other unread lines,
+    # not those again.
+    backstop=$(status_outcome_backstop_presented_ends "$path" 2>/dev/null) || backstop=0
     if ! fm_wake_unread_events "$path" 0 "$offset" "$endpoint" "$backstop"; then
       # Annotation enrichment is supplemental to the already-printed durable
       # wake rows. A file that disappears, rotates, or becomes unreadable after
