@@ -47,6 +47,11 @@ umask 022
 # strips this to verify real refusal.
 export FM_GATE_REFUSE_BYPASS=1
 
+# Leave host full-suite pytest runs out of the validations lane
+# (bin/fm-wip-caps-lib.sh HOST SUITES), so a suite running elsewhere on a busy
+# host never refuses a fixture spawn. tests/fm-wip-caps.test.sh restores it.
+export FM_WIP_HOST_SUITES=off
+
 # Clear the task-worker marker bin/fm-spawn.sh exports into ship and scout
 # panes. This suite builds git-init fixture repositories whose primary checkout
 # it runs a copied bin/fm-test-run.sh in, and that runner refuses the primary
@@ -126,6 +131,26 @@ FM_TEST_OWNER_IDENTITY=$(fm_test_pid_identity "$$") || {
 # into another home's live runners.
 
 FM_TEST_PROCEVENT_REGISTRY=$(mktemp "${TMPDIR:-/tmp}/.fm-test-procevent.$$.XXXXXX") || return 1
+
+# Unit tests must never write the machine-wide process-event claim root: stale
+# claims there are shared by every home, and reconcile must settle only the
+# claims its own home owns. Every test shell gets a private sandbox, and an
+# explicit real root is refused rather than trusted.
+_fm_real_claim_root="${XDG_STATE_HOME:-$HOME/.local/state}/firstmate/procevent-claims"
+if [ -n "${FM_PROCEVENT_CLAIM_ROOT:-}" ]; then
+  case "$FM_PROCEVENT_CLAIM_ROOT" in
+    "$_fm_real_claim_root"|"$HOME/.local/state/firstmate/procevent-claims")
+      printf 'tests: refusing to run with the machine-wide procevent claim root: %s\n' \
+        "$FM_PROCEVENT_CLAIM_ROOT" >&2
+      exit 1
+      ;;
+  esac
+else
+  FM_PROCEVENT_CLAIM_ROOT="${TMPDIR:-/tmp}/fm-test-claims.$$"
+  export FM_PROCEVENT_CLAIM_ROOT
+  FM_TEST_CLEANUP_DIRS+=("$FM_PROCEVENT_CLAIM_ROOT")
+fi
+unset _fm_real_claim_root
 
 fm_test_track_procevent_home() {  # <home> [claim-root]
   [ -n "${1:-}" ] || return 1

@@ -11,7 +11,7 @@ The shared orchestrator behavior lives in [`AGENTS.md`](../AGENTS.md) - edit it 
 This section is the single owner of the top-level operational-home layout; producer script headers and their help own exact child-file fields and mutation contracts.
 The tracked code root contains the shared instruction, skill, documentation, workflow, and `bin/` surfaces, while each effective `FM_HOME` contains private operational directories.
 `data/` holds durable private fleet records such as the project and secondmate registries, captain preferences, optional shared captain preferences, learnings, backlog, briefs, scout reports, each torn-down task's archived status log and steering inbox under `data/<id>/status` and `data/<id>/inbox/` and each retired local secondmate home's action ledger and child evidence under `data/retired-secondmates/<id>/` (`bin/fm-teardown.sh`), and explicitly installed content-addressed extension packages under `data/extensions/packages/`.
-`state/` holds runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, inactive terminal-outcome receipts under `state/terminal-outcomes/`, enabled extension working namespaces under `state/extensions/`, away-mode state, generated Relay artifacts, parent-side remote ledger copies under `state/secondmate-summary-cache/`, one-shot Bearings reconcile requests under `state/reconcile-notify/`, private secondmate config-reread generations with their retry and quarantine state, per-task steering-inbox records under `state/<id>.inbox/` (`bin/fm-task-inbox-lib.sh`), parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`), per-repository merge lines under `state/merge-lines/` (`bin/fm-merge-line.sh`), and the append-only supervisor action ledger `state/supervisor-actions.jsonl` (`bin/fm-action-ledger-lib.sh`).
+`state/` holds runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, inactive terminal-outcome receipts under `state/terminal-outcomes/`, enabled extension working namespaces under `state/extensions/`, away-mode state, generated Relay artifacts, parent-side remote ledger copies under `state/secondmate-summary-cache/`, one-shot Bearings reconcile requests under `state/reconcile-notify/`, private secondmate config-reread generations with their retry and quarantine state, per-task steering-inbox records under `state/<id>.inbox/` (`bin/fm-task-inbox-lib.sh`), parent-owned secondmate pending-reply records under `state/pending-replies/` with settled resolved records retained under `state/pending-replies/archive/` (`bin/fm-pending-reply-lib.sh`), per-repository merge lines under `state/merge-lines/` (`bin/fm-merge-line.sh`), and the append-only supervisor action ledger `state/supervisor-actions.jsonl` (`bin/fm-action-ledger-lib.sh`).
 `config/` holds local gitignored operating choices, including explicit extension bindings under `config/extensions.d/`, and `projects/` holds the local project clones that Firstmate reads but changes only through the narrow guarded and concrete captain-approved exceptions in `AGENTS.md`.
 Untracked files and directories whose names begin with `scratchpad` are also gitignored, so temporary scratch does not make porcelain-based secondmate sync guards treat a home as dirty.
 
@@ -223,9 +223,16 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Fleet placement (config/fleet-hosts)
+
+The optional local, gitignored `config/fleet-hosts` lists donor hosts on which `bin/fm-fleet.sh` may place bounded omp ship workers; its absence keeps every fleet command refused and every task on this machine.
+Placement state lives under `state/fleet/` (per-host availability and per-task reservations), and fleet task records carry `backend=fleet` plus `fleet_*` fields that `bin/fm-fleet.sh` writes.
+The file is home-local and is not inherited by secondmate homes.
+[`fleet-placement.md`](fleet-placement.md) owns setup, launch, monitoring, recovery, and removal; `bin/fm-fleet-lib.sh`'s header owns the line grammar, defaults, and placement rule.
+
 ## Gate defaults (.no-mistakes.yaml)
 
-The tracked `.no-mistakes.yaml` selects `agent: [claude, pi]`: Opus (Claude) first, with Sol (Pi) as fallback.
+The tracked `.no-mistakes.yaml` selects `agent: [pi, claude]`, matching the global review seat order: Pi (the `surplus-dsv41-flash-1017-max` DeepSeek V4.1 Flash seat) first, with Claude as fallback.
 Both agents have verified project-instruction neutralization controls, as required for every fallback member by this repository's `disable_project_settings: true` guard.
 Cursor is omitted because its ACP adapter has no verified neutralization control; including it makes the guard refuse the chain before the first step.
 The `agent` override is trusted-only and read from the default-branch copy, so a branch changing it is still validated with the default branch's current selection.
@@ -395,6 +402,7 @@ The [Claude adapter reference](../.agents/skills/harness-adapters/references/har
 
 Each home caps work in progress per lane: validations (a ship before its pull request), merges (a ship whose pull request awaits its merge), reviews, and investigations.
 `bin/fm-spawn.sh` refuses a fresh ship or scout whose lane is at its cap, naming the lane, the cap, and every task occupying it, and leaves the backlog item Queued; `bin/fm-queue-zero.sh` lists a ready row for dispatch only while its lane has a free slot.
+The validations lane also counts every live full-suite pytest run on the machine, including runs from secondmate homes, other agents, and no-mistakes pipelines, so a host already busy with suites refuses new validation work.
 Scout promotion also enforces lane admission before changing task metadata; when refused, finish existing work and retry rather than starting replacement work.
 A ship registering its PR enters the merges lane only while that lane has a free slot; otherwise `bin/fm-pr-check.sh` arms nothing and queues the registration, and queued registrations arm in order as merges finish, after cleanup, and on each PR sweep, each with its own notification.
 A merge ordered through `bin/fm-pr-merge.sh` records its PR without that check, so a completion is never queued behind the cap.
@@ -542,6 +550,25 @@ A changed remote home instead receives one durably recorded marked re-read instr
 The locked bootstrap inheritance pass uses the same placement-specific behavior; see `secondmate-provisioning` for the single contract owner.
 That live discovery starts from `state/*.meta` records with `kind=secondmate`; `data/secondmates.md` only backfills `home=` for older or incomplete meta records.
 Skipped items, such as a destination checkout that does not yet gitignore the item, are visible warnings but not hard failures.
+
+## Resume watch release pointers (config/resume-live-pointers)
+
+`config/resume-live-pointers` is an optional local, gitignored file that is not inherited by secondmate homes.
+It lets [`bin/fm-resume-watch.sh`](../bin/fm-resume-watch.sh) wait for a PR's merge to reach a running release instead of only for the merge itself, for a repository whose release is an atomically switched pointer.
+Each line that is not blank and not a `#` comment holds three whitespace-separated fields:
+
+```text
+<repository-url> <repo-dir> <pointer-file>
+```
+
+- `<repository-url>` is the PR URL up to and excluding `/pull/<n>` or `/-/merge_requests/<n>`, such as `https://github.com/owner/repo`.
+- `<repo-dir>` is an absolute path to a git store that holds the released tags and the merged commits.
+- `<pointer-file>` is an absolute path to a file whose first line names the tag currently live.
+
+A PR is live once its merge commit is an ancestor of that tag's commit.
+The first matching line wins, and a matching line that is malformed means no pointer for that repository.
+Without a matching line every resume watch for that repository waits for the merge only, and an explicit `live` arm is refused.
+This section owns the schema; `bin/fm-resume-watch.sh` owns when a watch uses it.
 
 ## Watched tool updates (config/watched-tools.json)
 
@@ -893,6 +920,7 @@ For built-ins, silence remains independent of the keyed-answer feed below: suppr
 For Lavish that verdict covers exactly one shape - a session the adapter classifies `ended` that carries no queued content block at all, which is a review surface closed with nothing said.
 Any recognized top-level `prompts` or `feedback` block counts as content regardless of its declared count, and a malformed header makes the result indeterminate rather than empty.
 A `Send & End` close carrying the captain's answer arrives as `status: feedback` with `session_ended`, so it classifies `feedback` and is announced unchanged, as is any `ended` result that still carries content, and every `waiting`, `missing`, `unknown`, or unreadable result.
+For the `when` adapter it covers exactly one shape: a `fired` outcome of a watch whose trust-validated spec names this repo's `bin/fm-resume-action.sh` as its action, which is a resume steer already durably recorded in the worker's inbox and the action ledger; every other `when` outcome, and every other watch, still wakes.
 
 Whether a captured result ends its source is adapter knowledge, never the runner's.
 After capture - and after initial `check` publication for the default ordering - the runner asks the immutable captured owner through the built-in `terminal` command or external `result.terminal` operation and retires the registration on exit 0 alone, dropping only the exact registration generation captured by its claim and releasing that claim only after removal succeeds under one source boundary; a missing command, an error, or any other exit keeps the source armed, so an adapter with no notion of ending needs no change.
@@ -984,10 +1012,12 @@ Both signals are durable evidence a runner claimed: ownership is the only eviden
 A healthy launch therefore confirms on the first poll and the window only bounds a launch that has not yet proved itself - one that died before claiming, or one merely too slow to claim inside the window; confirmation cannot tell those apart, and a launch that proves itself on a later cycle closes its failure episode without a retraction wake.
 A launch whose registration is retired or replaced before it confirms counts as neither started nor failed and raises or closes no failure episode, because the runner correctly declines a generation that no longer exists.
 All of a cycle's launches share one window, so a home full of sources that cannot start costs the same bounded wait as one.
-
-Keep this window well below `FM_POLL`.
+Keep the confirm window well below `FM_POLL`.
 `bin/fm-watch.sh` runs `reconcile` once per supervision cycle, so a source that cannot start makes every cycle wait up to the confirm window before the rest of that cycle runs.
 Raising the confirm window lengthens every supervision cycle and delays wake delivery by up to that much.
+
+`FM_PROCEVENT_SOURCE_LOCK_TIMEOUT` (default 5, whole seconds) bounds how long `reconcile` waits for one source's lock, whether publishing a pending result or settling a claim, before leaving that source for the next pass, so a wedged or foreign holder can never stall the watcher.
+Claims owned by another home are skipped before any lock is taken.
 
 A source that can never start is reported as `failed=` with a non-zero exit on every `reconcile`, rather than counted as `started` and retried silently as though it were healthy, so a wedged source stays visible instead of presenting as armed.
 That count reaches only whoever runs the command, because `bin/fm-watch.sh` discards `reconcile`'s output and exit status, so an unconfirmed launch is also announced through the wake queue: `reconcile` publishes a durable `check` wake (`procevent:<id>:launch-failed:<registration-identity>-<episode-nonce>`) once per failure episode, and later cycles stay silent for that episode until a launch of that source confirms, after which a fresh failure announces again under a fresh key, because the watcher never re-surfaces a key it has already surfaced.
@@ -1092,11 +1122,12 @@ FM_PR_SWEEP_TIMEOUT=90   # seconds allowed for one whole forge-side PR sweep; ca
 FM_PR_SWEEP_GH_TIMEOUT=20   # seconds allowed for each GitHub read inside a sweep
 FM_PR_SWEEP_ARM_TIMEOUT=60   # seconds allowed for one bin/fm-pr-check.sh arm inside a sweep
 FM_PR_GREEN_BLOCKED_SECS=1800   # seconds an armed GitHub merge poll's pull request may stay green but unmergeable before one wake per episode; bin/fm-watch.sh owns the episode
-FM_MERGE_LINE_QUEUE_WINDOW=3   # merge-line entries a merge-queue app base may hold queued at once, counting the line's queued head (1 keeps the single-head gate; bin/fm-merge-line.sh owns the window)
+FM_MERGE_LINE_QUEUE_WINDOW=3   # merge-line entries a merge-queue app base may hold queued at once, counting the line's queued head (1 hands the queue one entry at a time; bin/fm-merge-line.sh owns the window)
 FM_MERGE_LINE_PRUNE_TIMEOUT=90   # seconds allowed for one per-sweep merge-line prune (bin/fm-merge-line.sh prune), which reads every listed entry from its forge; capped at a third of the watcher stale grace
 FM_MERGE_LINE_PRUNE_READ_TIMEOUT=20   # seconds allowed for each forge read inside that prune; all of one prune's reads share a budget of two thirds of FM_MERGE_LINE_PRUNE_TIMEOUT, and once one read times out or that budget is spent, prune starts no further read that sweep and still prunes the entries it read
 FM_PR_BEHIND_RERUN_PER_HOUR=3   # rerun steers per pull request per rolling hour sent to a yolo=on worker whose green pull request is behind its base; one per head; bin/fm-watch.sh owns the record
-FM_PR_BEHIND_RERUN_TIMEOUT=30   # seconds allowed for one such bin/fm-send.sh steer
+FM_PR_BEHIND_RERUN_TIMEOUT=30   # seconds allowed for one such bin/fm-send.sh steer, and for one merge-queue ejection rerun steer
+FM_MQ_EJECTION_LOG_TIMEOUT=15   # seconds allowed for reading the failing queue run's log; capped at 25 so the whole ejection probe fits FM_CHECK_TIMEOUT
 FM_MAIL_CHECK_BUDGET=15   # seconds allowed for one standing mail poll; valid 5..25, cut to fit FM_CHECK_TIMEOUT
 FM_MAIL_POLL_MAX_WAKES=20   # per-poll wake cap for a mail poll; valid 1..200, keeps a flood from flooding firstmate
 FM_MAIL_TIMEOUT=20   # mail-plane IMAP/SMTP socket timeout in seconds; invalid or non-positive values become 20
@@ -1110,6 +1141,7 @@ FM_PROCEVENT_OWNER_LEASE_SECONDS=600    # how long a source runner keeps going w
 FM_PROCEVENT_OWNER_CHECK_SECONDS=15     # a runner guard's detection interval, read twice per interval; 1..3600
 FM_PROCEVENT_LAUNCH_FLOOR_SECONDS=1     # minimum interval between launches of one registration generation's source command; 1..3600
 FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=3   # how long reconcile waits for the runners it started to prove they are running; 1..600, keep well below FM_POLL
+FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=5      # longest reconcile waits for one source lock before deferring that source to the next pass
 FM_WHEN_OUTPUT_TAIL_BYTES=8192          # bound on the command-output tail inside one condition->action outcome document
 FM_CODEX_WATCH_CHECKPOINT=180   # seconds per foreground watcher checkpoint in Codex primary supervision
 FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh
@@ -1188,6 +1220,7 @@ FM_SEND_SLEEP=0.4       # seconds between fm-send typed-plane submit checks
 FM_SEND_SETTLE=1        # seconds fm-send waits after a successful typed-plane submit; 0 disables
 FM_SEND_RESTORE_WAIT=2  # seconds fm-send polls the muse composer to prove the restored prompt before the post-Escape clear
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after marked-request delivery before a completed turn without a correlated parent report is eligible for its one recovery repost
+FM_PENDING_REPLY_ARCHIVE_AFTER_SECS=3600   # seconds a resolved pending-reply record with no open escalation stays scanned before the watcher tick moves it to state/pending-replies/archive/; malformed values use 3600
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
 FM_SUPERVISOR_BACKEND=             # optional supervisor pane backend override; tmux/herdr only, otherwise detects $TMUX_PANE then HERDR_ENV/HERDR_PANE_ID before tmux fallback
 FM_SUPERVISOR_TARGET=              # optional supervisor pane target override; tmux target or herdr <session>:<pane-id>, otherwise auto-detected

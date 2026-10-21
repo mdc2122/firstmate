@@ -1018,7 +1018,7 @@ status_presentation_cursor_offset() {  # <status-file>
     while IFS=$(printf '\t') read -r row_task ident legacy backstop extra; do
       [ -n "$row_task" ] || continue
       [ -z "$extra" ] || return 1
-      case "$legacy:$backstop" in *[!0-9:]*) return 1 ;; esac
+      case "$legacy:$backstop" in *[!0-9:,]*) return 1 ;; esac
       [ -n "$legacy" ] && [ -n "$ident" ] || return 1
       if [ "$row_task" = "$task" ]; then
         [ -z "$offset" ] || return 1
@@ -1051,7 +1051,17 @@ EOF
 }
 
 status_outcome_backstop_cursor_offset() {  # <status-file>
-  local f=$1 state task manifest data row_task ident presented row_backstop backstop extra current size
+  local ends
+  ends=$(status_outcome_backstop_presented_ends "$1") || return 1
+  printf '%s' "${ends##*,}"
+}
+
+# Comma-separated ascending end offsets of the lines the status outcome
+# backstop presented for this status log and the presentation cursor has not
+# yet passed; the last one is the backstop receipt. Prints 0 when there are
+# none or the log's identity changed.
+status_outcome_backstop_presented_ends() {  # <status-file>
+  local f=$1 state task manifest data row_task ident presented row_backstop backstop extra current size end kept
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 1
   state=${f%/*}
   task=${f##*/}; task=${task%.status}
@@ -1063,7 +1073,7 @@ status_outcome_backstop_cursor_offset() {  # <status-file>
   while IFS=$(printf '\t') read -r row_task ident presented row_backstop extra; do
     [ -n "$row_task" ] || continue
     [ -z "$extra" ] || return 1
-    case "$presented:$row_backstop" in *[!0-9:]*) return 1 ;; esac
+    case "$presented:$row_backstop" in *[!0-9:,]*) return 1 ;; esac
     [ -n "$presented" ] && [ -n "$ident" ] || return 1
     if [ "$row_task" = "$task" ]; then
       current=$(_fm_open_decisions_file_ident "$f") || return 1
@@ -1072,14 +1082,41 @@ status_outcome_backstop_cursor_offset() {  # <status-file>
       case "$size" in ''|*[!0-9]*) return 1 ;; esac
       [ "$ident" = "$current" ] || { printf '0'; return 0; }
       backstop=${row_backstop:-0}
-      [ "$backstop" -le "$size" ] || backstop=0
-      printf '%s' "$backstop"
+      case "$backstop" in ,*|*,|*,,*) return 1 ;; esac
+      kept=
+      for end in ${backstop//,/ }; do
+        [ "$end" -gt 0 ] && [ "$end" -le "$size" ] || continue
+        kept="${kept:+$kept,}$end"
+      done
+      printf '%s' "${kept:-0}"
       return 0
     fi
   done <<EOF
 $data
 EOF
   printf '0'
+}
+
+# status_presented_outcome_covers <status-file>
+# 0 only when the log's last line is a terminal `done:`/`failed:` AND the
+# .status-presentation-cursor manifest row the drain committed when it printed
+# its status presentation (status_commit_presentation_snapshot) covers the
+# file's current size with a matching identity, meaning that terminal line
+# itself was already printed to firstmate. This is print-time evidence, not
+# acknowledgement. Any other answer (a non-terminal last verb, no manifest
+# row, stale identity, truncated coverage, or an unreadable file) returns 1 so
+# callers keep their ordinary surface rather than silently swallowing a real
+# outcome.
+status_presented_outcome_covers() {  # <status-file>
+  local f=$1 verb offset size
+  verb=$(status_line_verb "$(last_status_line "$f")")
+  case "$verb" in done|failed) ;; *) return 1 ;; esac
+  offset=$(status_presentation_cursor_offset "$f") || return 1
+  case "$offset" in ''|*[!0-9]*|0) return 1 ;; esac
+  size=$(_fm_status_file_size "$f") || return 1
+  size=${size//[[:space:]]/}
+  case "$size" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$offset" -ge "$size" ]
 }
 
 status_signal_seen_marker_path() {  # <state> <task-id>
@@ -1243,7 +1280,7 @@ status_retire_presentation_task() {  # <state> <task-id>
       while IFS=$(printf '\t') read -r row_task ident offset backstop extra; do
         [ -n "$row_task" ] || continue
         if [ -n "$extra" ] || [ -z "$ident" ]; then rc=1; break; fi
-        case "$offset:$backstop" in *[!0-9:]*) rc=1; break ;; esac
+        case "$offset:$backstop" in *[!0-9:,]*) rc=1; break ;; esac
         [ -n "$offset" ] || { rc=1; break; }
         [ "$row_task" != "$task" ] || found=1
       done <<EOF
@@ -1266,7 +1303,7 @@ EOF
       while IFS=$(printf '\t') read -r row_task ident offset backstop extra; do
         [ -n "$row_task" ] || continue
         if [ -n "$extra" ] || [ -z "$ident" ]; then rc=1; break; fi
-        case "$offset:$backstop" in *[!0-9:]*) rc=1; break ;; esac
+        case "$offset:$backstop" in *[!0-9:,]*) rc=1; break ;; esac
         [ -n "$offset" ] || { rc=1; break; }
         if [ "$row_task" != "$task" ]; then
           printf '%s\t%s\t%s\t%s\n' "$row_task" "$ident" "$offset" "${backstop:-0}" >> "$tmp" \
@@ -1337,14 +1374,23 @@ status_commit_presentation_snapshot() {  # <state> <snapshot>
     case "$size" in ''|*[!0-9]*) rm -f "$tmp"; return 1 ;; esac
     [ "$cur_ident" = "$ident" ] && [ "$endpoint" -le "$size" ] \
       || { rm -f "$tmp"; return 1; }
-    backstop=$(status_outcome_backstop_cursor_offset "$f") || { rm -f "$tmp"; return 1; }
+    backstop=$(status_outcome_backstop_presented_ends "$f") || { rm -f "$tmp"; return 1; }
     while IFS=$(printf '\t') read -r acknowledged_task acknowledged_endpoint; do
-      if [ "$acknowledged_task" = "$task" ]; then backstop=$acknowledged_endpoint; fi
+      if [ "$acknowledged_task" = "$task" ]; then backstop="$backstop,$acknowledged_endpoint"; fi
     done <<EOF
 ${STATUS_OUTCOME_BACKSTOP_ACKNOWLEDGED:-}
 EOF
-    case "$backstop" in ''|*[!0-9]*) rm -f "$tmp"; return 1 ;; esac
-    [ "$backstop" -le "$size" ] || { rm -f "$tmp"; return 1; }
+    case "$backstop" in ''|*[!0-9,]*) rm -f "$tmp"; return 1 ;; esac
+    backstop=$(printf '%s\n' "$backstop" | tr ',' '\n' | LC_ALL=C sort -nu | LC_ALL=C awk -v cursor="$endpoint" -v size="$size" -v cap=16 '
+      $0 + 0 > 0 { if ($0 + 0 > size + 0) bad = 1; e[++n] = $0 + 0 }
+      END {
+        if (bad) exit 1
+        for (i = 1; i <= n; i++) if (e[i] > cursor + 0 || i == n) keep[++k] = e[i]
+        first = k > cap ? k - cap + 1 : 1
+        out = ""
+        for (i = first; i <= k; i++) out = out (i > first ? "," : "") keep[i]
+        printf "%s", (k ? out : "0")
+      }') || { rm -f "$tmp"; return 1; }
     printf '%s\t%s\t%s\t%s\n' "$task" "$ident" "$endpoint" "$backstop" >> "$tmp" \
       || { rm -f "$tmp"; return 1; }
   done <<EOF
@@ -1654,8 +1700,8 @@ watch_window_markers_retire() {  # <state-dir> <window-key>
     "$state/.stale-since-$key" "$state/.wedge-escalations-$key" \
     "$state/.paused-$key" "$state/.paused-rechecked-$key" "$state/.paused-resurfaced-$key" \
     "$state/.writing-since-$key" "$state/.writing-resurfaced-$key" \
-    "$state/.waiting-resurfaced-$key" "$state/.churn-since-$key" \
-    "$state/.endpoint-gone-$key"
+    "$state/.waiting-resurfaced-$key" "$state/.done-stale-resurfaced-$key" \
+    "$state/.churn-since-$key" "$state/.endpoint-gone-$key"
 }
 
 # Capture the bytes of an append-only status log at or after <start-offset> under

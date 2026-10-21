@@ -14,6 +14,9 @@ The attestation must bind to the current PR head commit and report the review, t
 It evaluates every PR opening and body edit independently, reruns after head synchronization or reopening, and prevents a later edit from replacing an earlier pending compliance check.
 GitHub Actions and Dependabot are exempt so their automation keeps working, but other contributor PRs that do not satisfy the attestation contract will not be reviewed or merged.
 
+GitHub can stop running workflows on a fork without changing any workflow or setting the REST API reports, so a fork that registers no new runs after a push or PR event may still show every workflow `active` and Actions enabled.
+Check the fork's Actions tab for the banner "Workflows are not currently being run on this fork due to the scale of GitHub Actions usage"; only a repository maintainer can clear it, from that page in the web UI, and the workflow-enable and Actions-permissions API calls do not.
+
 ## Workflow
 
 1. Fork the repo, then clone the parent repo or set your local `origin` back to the parent (`git@github.com:kunchenguid/firstmate.git`).

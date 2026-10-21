@@ -930,7 +930,7 @@ require_recorded_pr_identity() {
 # the forge command, the same lock every line mutation takes, so a reorder
 # cannot land between that last gate and the merge it allowed. The one
 # widening is the line's queue window: with <queue-window> true the gate
-# admits an entry inside FM_MERGE_LINE_QUEUE_WINDOW behind a queued head, and
+# admits an entry inside FM_MERGE_LINE_QUEUE_WINDOW behind a queued or stalled head, and
 # only the queue-app branch below may pass that mode, because only a
 # merge-queue-app base serializes in the queue instead of through the line.
 require_merge_line_head() {  # [queue-window: true|false]

@@ -17,6 +17,9 @@ WATCH="$ROOT/bin/fm-watch.sh"
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
 REGISTER="$ROOT/bin/fm-check-register.sh"
 TMP_ROOT=$(fm_test_tmproot fm-pr-check-security)
+# Registering a PR arms its resume watch; keep those runners' claims private
+# to this suite and reap every case home's runners at exit.
+export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 REAL_CP=$(command -v cp)
 REAL_MV=$(command -v mv)
@@ -130,6 +133,7 @@ make_case() {
   fakebin="$dir/fakebin"
   fake_root="$dir/root"
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/home/config" "$dir/wt" "$fakebin" "$fake_root/bin"
+  fm_test_track_procevent_home "$dir/home" "$FM_PROCEVENT_CLAIM_ROOT"
   cat > "$fake_root/bin/fm-guard.sh" <<'SH'
 #!/usr/bin/env bash
 printf 'guard\n' >> "$FM_TEST_GUARD_LOG"
@@ -177,6 +181,17 @@ case "${1:-} ${2:-}" in
     ;;
 esac
 case " $* " in
+  *" api --paginate repos/"*"/issues/"*"/comments?per_page=100 "*)
+    if [ -n "${FM_TEST_GH_ISSUE_COMMENTS_JSON:-}" ]; then
+      cat "$FM_TEST_GH_ISSUE_COMMENTS_JSON"
+    else
+      printf '%s\n' '[[]]'
+    fi
+    ;;
+  *" run view "*)
+    [ -z "${FM_TEST_GH_RUN_LOG:-}" ] || cat "$FM_TEST_GH_RUN_LOG"
+    exit "${FM_TEST_GH_RUN_LOG_RC:-0}"
+    ;;
   *" api repos/"*"/issues/"*"/comments?per_page=100 "*|*" api repos/"*"/pulls/"*"/reviews?per_page=100 "*|*" api repos/"*"/pulls/"*"/comments?per_page=100 "*)
     printf '%s\n' '[[]]'
     ;;
@@ -3074,6 +3089,154 @@ test_queue_ejection_wakes_once_and_is_not_requeued() {
   pass "a queue ejection wakes firstmate once with its reason and the ejected head is not re-queued"
 }
 
+# A queue ejection is relayed to the worker, not only to firstmate: one steer
+# names the pull request, the failing tests read from the queue run's own log,
+# and that run, and orders the supported pipeline rerun on the current base
+# (never a hand rebase or forge update). It fires once per ejection even though
+# the poll keeps sweeping at the ejected record, and a queue run still in
+# flight steers nobody.
+ejection_steers() {  # <state>
+  find "$1/task-a.inbox" -name '*.msg' 2>/dev/null | wc -l | tr -d ' '
+}
+
+ejection_case() {  # <name>; echoes the case dir
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case "$1")
+  state="$dir/home/state"
+  printf '{"state":"OPEN","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"queue-mq","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    "$head" > "$dir/auto.json"
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1","output":{"title":"queue-mq","summary":"Check failed"}}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  cat > "$dir/comments.json" <<JSON
+[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"❌ Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/38500432987/job/115645870881)"}]
+JSON
+  cat > "$dir/run.log" <<'LOG'
+pytest	Run suite	2026-10-14T02:45:26.3720490Z FAILED tests/test_alpha.py::test_moved_base - AssertionError: boom
+pytest	Run suite	2026-10-14T02:45:26.3722192Z FAILED tests/test_beta.py::test_second - AssertionError: boom
+LOG
+  printf '%s\n' "$dir"
+}
+
+test_queue_ejection_steers_one_supported_rerun() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567 msg
+  dir=$(ejection_case queue-ejected-steer)
+  state="$dir/home/state"
+  queue_app_cycle "$dir" requested
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  grep -F "merge-queue ejected $url at $head" "$dir/home/state/.wake-queue" >/dev/null \
+    || fail "the ejection wake did not fire: $(cat "$dir/home/state/.wake-queue")"
+  [ "$(ejection_steers "$state")" = 1 ] \
+    || fail "an ejection did not steer its worker exactly once: $(ejection_steers "$state")"
+  msg=$(cat "$state"/task-a.inbox/*.msg)
+  case "$msg" in
+    *"$url"*) ;;
+    *) fail "the ejection steer did not name the PR: $msg" ;;
+  esac
+  case "$msg" in
+    *"tests/test_alpha.py::test_moved_base"*) ;;
+    *) fail "the ejection steer did not name the failing tests: $msg" ;;
+  esac
+  case "$msg" in
+    *"https://github.com/o/r/actions/runs/38500432987/job/115645870881"*) ;;
+    *) fail "the ejection steer did not name the queue run: $msg" ;;
+  esac
+  case "$msg" in
+    *"git reset --keep $head"*"no-mistakes rerun"*"current base"*"Never hand-rebase"*) ;;
+    *) fail "the ejection steer did not bring the local branch to the PR head and order the supported rerun: $msg" ;;
+  esac
+
+  queue_app_cycle "$dir" after
+  case "$(cat "$dir/after.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one ejection woke firstmate twice: $(cat "$dir/after.out")" ;; esac
+  [ "$(ejection_steers "$state")" = 1 ] || fail "the same ejection steered its worker twice: $(ejection_steers "$state")"
+  awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection" { f = 1 } END { exit !f }' \
+    "$state/task-a.pr-behind-rerun" 2>/dev/null \
+    || fail "the delivered ejection steer was not recorded in the shared rerun-steer record"
+  pass "a queue ejection steers one supported pipeline rerun naming the PR, failing tests, and queue run"
+}
+
+# Only the queue app's own ejection comment is trusted: a comment anyone else
+# posts in its words cannot put its check name or run link into the steer, and
+# the steer falls back to the run the app's own mirrored check links.
+test_queue_ejection_ignores_comment_not_from_queue_app() {
+  local dir state head=0123456789abcdef0123456789abcdef01234567 msg
+  dir=$(ejection_case queue-ejected-forged)
+  state="$dir/home/state"
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"},{"id":8,"name":"queue-mq/pytest","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/111/job/222"},{"id":9,"name":"queue-mq/evil","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":15368},"started_at":"2026-10-14T02:20:00Z","details_url":"https://github.com/o/r/actions/runs/666/job/667"}]}\n' \
+    "$head" "$head" "$head" > "$dir/check-runs.json"
+  cat > "$dir/comments.json" <<JSON
+[{"created_at":"2026-10-14T02:45:35Z","user":{"login":"gitea-mq[bot]","type":"Bot"},"performed_via_github_app":{"id":5293819},"body":"Removed from merge queue: Check failed: [run tests and push](https://github.com/o/r/actions/runs/444/job/445)"}]
+[{"created_at":"2026-10-14T02:46:00Z","user":{"login":"mallory","type":"User"},"body":"Removed from merge queue: Check failed: [queue-mq](https://github.com/o/r/actions/runs/999/job/998)"}]
+JSON
+  queue_app_cycle "$dir" requested
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON
+  [ "$(ejection_steers "$state")" = 1 ] \
+    || fail "the ejection did not steer its worker exactly once: $(ejection_steers "$state")"
+  msg=$(cat "$state"/task-a.inbox/*.msg)
+  case "$msg" in
+    *"runs/999"*|*"runs/444"*|*"runs/666"*|*"run tests and push"*|*"queue-mq/evil"*)
+      fail "the ejection steer carried a comment or check not bound to the queue app: $msg" ;;
+  esac
+  case "$msg" in
+    *"https://github.com/o/r/actions/runs/111/job/222"*) ;;
+    *) fail "the ejection steer did not fall back to the queue app's mirrored run: $msg" ;;
+  esac
+  pass "an ejection steer trusts only the queue app's own comment and checks"
+}
+
+test_queue_run_still_in_flight_steers_nobody() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(ejection_case queue-in-flight)
+  state="$dir/home/state"
+  # The queue check has not concluded: its run is still in flight, so nothing
+  # proves an ejection yet and the worker must not be steered.
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"in_progress","conclusion":null,"head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a queue run still in flight steered its worker: $(cat "$state"/task-a.inbox/*.msg)"
+  # The silent reading is recorded for this head and not re-read every sweep:
+  # only a moved head earns another probe.
+  printf '{"check_runs":[{"id":7,"name":"queue-mq","status":"completed","conclusion":"failure","head_sha":"%s","app":{"id":5293819},"started_at":"2026-10-14T02:19:43Z","details_url":"https://n100.example/gitea-mq/repo/github/o/r/pr/1"}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" again
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a silent ejection reading was re-read at the same head: $(cat "$state"/task-a.inbox/*.msg)"
+  [ "$(awk -v u="$url" -v h="$head" '$1 == u && $2 == h && $4 == "ejection"' "$state/task-a.pr-behind-rerun" | wc -l | tr -d ' ')" = 1 ] \
+    || fail "the silent ejection reading was not recorded once for its head: $(cat "$state/task-a.pr-behind-rerun" 2>/dev/null)"
+  pass "a merge-queue run still in flight never steers the worker, and its reading is not re-read at that head"
+}
+
+# Only a yolo=on worker is steered on an ejection; any other task's ejection
+# reaches firstmate through the ejection wake alone.
+test_queue_ejection_steers_no_non_yolo_worker() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(ejection_case queue-ejected-attended)
+  state="$dir/home/state"
+  queue_app_cycle "$dir" requested
+  sed 's/^yolo=on$/yolo=off/' "$state/task-a.meta" > "$state/task-a.meta.next" \
+    && mv "$state/task-a.meta.next" "$state/task-a.meta"
+  export FM_TEST_GH_ISSUE_COMMENTS_JSON="$dir/comments.json" FM_TEST_GH_RUN_LOG="$dir/run.log"
+  queue_app_cycle "$dir" ejected
+  unset FM_TEST_GH_ISSUE_COMMENTS_JSON FM_TEST_GH_RUN_LOG
+  grep -F "merge-queue ejected $url at $head" "$state/.wake-queue" >/dev/null \
+    || fail "a non-yolo task's ejection did not wake firstmate: $(cat "$state/.wake-queue")"
+  [ "$(ejection_steers "$state")" = 0 ] \
+    || fail "a non-yolo worker was steered on an ejection: $(cat "$state"/task-a.inbox/*.msg)"
+  [ ! -e "$state/task-a.pr-behind-rerun" ] || fail "a non-yolo task's ejection was recorded as a rerun steer"
+  pass "a queue ejection steers no non-yolo worker and still wakes firstmate"
+}
+
 # Authority granted for the handed-over head never covers another: a head
 # pushed while the queue still holds the pull request has its auto-merge
 # disabled and goes back through the guarded merge from scratch.
@@ -3166,6 +3329,207 @@ test_queue_wait_past_stall_window_wakes_once_per_head() {
   case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one queue stall woke firstmate twice: $(cat "$dir/again.out")" ;; esac
   [ "$(queue_app_merge_requests "$dir")" = 1 ] || fail "a stalled queue wait was handed to the queue again"
   pass "a pull request the queue holds past the stall window wakes firstmate once per head"
+}
+
+# Liveness of the merge path itself: a green pull request waiting on its
+# merge-queue app that has received no queue status at all - handed over, or
+# never handed over because auto-merge was never requested - wakes firstmate
+# once per pull request and head after the bound; a queue whose status moves
+# stays silent; and a merge retires the episode.
+backdate_queue_stall() {  # <state> <seconds>
+  local file="$1/task-a.queue-stall" url head first alerted key
+  read -r url head first alerted key < "$file" || fail "no queue-stall episode to backdate"
+  printf '%s %s %s %s %s\n' "$url" "$head" "$((first - $2))" "$alerted" "$key" > "$file"
+}
+
+queue_status_auto_json() {  # <dir> <queue-entry-json-or-empty> [auto-merge-json]
+  local entry=${2:+,$2} auto='{"mergeMethod":"SQUASH"}'
+  [ "$#" -lt 3 ] || auto=$3
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"0123456789abcdef0123456789abcdef01234567","baseRefName":"main","autoMergeRequest":%s,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}%s]}\n' \
+    "$auto" "$entry" > "$1/auto.json"
+}
+
+test_handed_queue_with_no_status_wakes_once_and_retires_on_merge() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case queue-silent-handed)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  [ -f "$state/task-a.queue-merge" ] || fail "the queue hand-off was not recorded"
+
+  # The queue app never posts its check: only the forge's EXPECTED placeholder.
+  queue_status_auto_json "$dir" '{"__typename":"StatusContext","context":"queue-mq","state":"EXPECTED"}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a silent queue woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" silent
+  case "$(cat "$dir/silent.out")" in
+    *"task-a.check.sh: merge-queue silent: $url has been green for 15 min at head $head with no merge-queue status (queue-mq EXPECTED); auto-merge was requested when it was handed to the queue") ;;
+    *) fail "a handed-over PR with no queue status past the bound did not wake once: $(cat "$dir/silent.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one silent queue woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 1 ] || fail "a silent queue wait was handed to the queue again"
+
+  printf '{"state":"MERGED","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[]}\n' "$head" > "$dir/auto.json"
+  queue_app_cycle "$dir" landed MERGED
+  case "$(cat "$dir/landed.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the landing was not reported: $(cat "$dir/landed.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "the merge did not retire the silent-queue episode"
+  pass "a handed-over PR with no queue status wakes once past the bound and the episode retires on merge"
+}
+
+test_cycling_queue_status_wakes_at_bound_from_first_hold() {
+  local dir state url=https://github.com/o/r/pull/1 status
+  dir=$(queue_app_case queue-cycling)
+  state="$dir/home/state"
+  : > "$dir/check-runs.json"
+  queue_app_cycle "$dir" requested
+  # A queue re-testing one head posts a new status each reading; inside the
+  # bound that is healthy processing and stays silent.
+  for status in QUEUED IN_PROGRESS QUEUED; do
+    queue_status_auto_json "$dir" "{\"__typename\":\"CheckRun\",\"name\":\"queue-mq\",\"status\":\"$status\",\"conclusion\":null}"
+    FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" "moving-$status"
+    case "$(cat "$dir/moving-$status.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a queue processing inside the bound ($status) woke firstmate: $(cat "$dir/moving-$status.out")" ;; esac
+  done
+  # Past the bound from when the queue first held the head, a status that
+  # changed again does not restart the clock.
+  backdate_queue_stall "$state" 900
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" stuck
+  case "$(cat "$dir/stuck.out")" in
+    *"task-a.check.sh: merge-queue stalled: merge queue has not picked up or finished $url after 15 min at head "*) ;;
+    *) fail "a queue cycling its status at one head past the bound did not wake: $(cat "$dir/stuck.out")" ;;
+  esac
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"QUEUED","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one cycling queue woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  pass "a queue cycling its status at one head stays silent inside the bound and wakes once at it"
+}
+
+# PR 825's shape: armed and green, the base requires the queue app's check,
+# and auto-merge was never requested, so no hand-off exists for the queue to
+# answer.
+unhanded_case() {  # <name> <yolo>; echoes the case dir
+  local dir state head=0123456789abcdef0123456789abcdef01234567
+  dir=$(queue_app_case "$1")
+  state="$dir/home/state"
+  sed "s/^yolo=on\$/yolo=$2/" "$state/task-a.meta" > "$state/task-a.meta.next" \
+    && mv "$state/task-a.meta.next" "$state/task-a.meta"
+  queue_status_auto_json "$dir" '' null
+  printf '{"check_runs":[{"id":3,"name":"ci","status":"completed","conclusion":"success","head_sha":"%s","app":{"id":15368}}]}\n' \
+    "$head" > "$dir/check-runs.json"
+  printf '%s\n' "$dir"
+}
+
+test_never_handed_green_pr_wakes_once_naming_auto_merge() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  dir=$(unhanded_case queue-never-handed off)
+  state="$dir/home/state"
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "an unhanded PR woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  [ -f "$state/task-a.queue-stall" ] || fail "an armed green PR never handed to the queue started no episode"
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" silent
+  case "$(cat "$dir/silent.out")" in
+    *"task-a.check.sh: merge-queue silent: $url has been green for 15 min at head $head with no merge-queue status (queue-mq not reported); auto-merge was never requested, so the queue was never asked to take it; it waits for an approved guarded merge"*) ;;
+    *) fail "a green PR never handed to the queue did not wake naming auto-merge: $(cat "$dir/silent.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one unhanded episode woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+  [ "$(queue_app_merge_requests "$dir")" = 0 ] || fail "the liveness monitor requested a merge for a non-yolo task"
+
+  # A queue status appearing ends the episode.
+  queue_status_auto_json "$dir" '{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}' null
+  queue_app_cycle "$dir" answered
+  [ ! -e "$state/task-a.queue-stall" ] || fail "a queue status appearing did not end the unhanded episode"
+
+  queue_status_auto_json "$dir" '' null
+  queue_app_cycle "$dir" restart
+  [ -f "$state/task-a.queue-stall" ] || fail "the unhanded episode did not restart"
+  printf '{"state":"MERGED","headRefOid":"%s","autoMergeRequest":null,"statusCheckRollup":[]}\n' "$head" > "$dir/auto.json"
+  queue_app_cycle "$dir" landed MERGED
+  case "$(cat "$dir/landed.out")" in check:*task-a.check.sh:*merged) ;; *) fail "the landing was not reported: $(cat "$dir/landed.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "the merge did not retire the unhanded episode"
+  pass "an armed green PR never handed to the queue wakes once naming auto-merge, and the episode retires on a queue status or merge"
+}
+
+ci_rollup_json() {  # <dir> <head> <ci-entries-json>
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"%s","baseRefName":"main","autoMergeRequest":null,"statusCheckRollup":[%s]}\n' \
+    "$2" "$3" > "$1/auto.json"
+}
+
+test_pending_ci_wakes_once_per_head() {
+  local dir state url=https://github.com/o/r/pull/1 head=0123456789abcdef0123456789abcdef01234567
+  local moved=fedcba9876543210fedcba9876543210fedcba98
+  dir=$(unhanded_case ci-pending off)
+  state="$dir/home/state"
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" fresh
+  case "$(cat "$dir/fresh.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "pending CI woke before the bound: $(cat "$dir/fresh.out")" ;; esac
+  [ -f "$state/task-a.queue-stall" ] || fail "pending CI on an armed PR started no episode"
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" stuck
+  case "$(cat "$dir/stuck.out")" in
+    *"task-a.check.sh: ci pending: $url has waited 15 min at head $head for CI that has not finished (ci pending)") ;;
+    *) fail "CI pending past the bound did not wake: $(cat "$dir/stuck.out")" ;;
+  esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" again
+  case "$(cat "$dir/again.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "one pending-CI episode woke firstmate twice: $(cat "$dir/again.out")" ;; esac
+
+  # A new head starts a new episode, and a required check that never reports
+  # is the same wait.
+  ci_rollup_json "$dir" "$moved" ''
+  printf '{"check_runs":[]}\n' > "$dir/check-runs.json"
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" moved
+  case "$(cat "$dir/moved.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a new head woke before its own bound: $(cat "$dir/moved.out")" ;; esac
+  backdate_queue_stall "$state" 900
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" moved-stuck
+  case "$(cat "$dir/moved-stuck.out")" in
+    *"task-a.check.sh: ci pending: $url has waited 15 min at head $moved for CI that has not finished (ci not reported)") ;;
+    *) fail "unreported CI at a new head past the bound did not wake: $(cat "$dir/moved-stuck.out")" ;;
+  esac
+  [ "$(queue_app_merge_requests "$dir")" = 0 ] || fail "the CI liveness monitor requested a merge"
+  pass "CI pending or unreported past the bound wakes once per PR head"
+}
+
+test_ci_finishing_inside_bound_stays_silent() {
+  local dir state head=0123456789abcdef0123456789abcdef01234567 kind
+  dir=$(unhanded_case ci-healthy off)
+  state="$dir/home/state"
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" running
+  case "$(cat "$dir/running.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "running CI inside the bound woke firstmate: $(cat "$dir/running.out")" ;; esac
+  # CI finishes green and the queue answers: nothing is waiting any more.
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"},{"__typename":"CheckRun","name":"queue-mq","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" green
+  case "$(cat "$dir/green.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "healthy CI and queue woke firstmate: $(cat "$dir/green.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "finished CI with a queue answer kept a wait episode"
+  # CI finishing green with no queue answer starts the queue's own clock.
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"IN_PROGRESS","conclusion":null}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" rerun
+  backdate_queue_stall "$state" 900
+  ci_rollup_json "$dir" "$head" '{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}'
+  FM_MERGE_LINE_STALL_SECS=600 queue_app_cycle "$dir" handed-to-queue-clock
+  case "$(cat "$dir/handed-to-queue-clock.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "the CI wait's age carried into the queue's wait: $(cat "$dir/handed-to-queue-clock.out")" ;; esac
+  read -r _ _ _ _ kind < "$state/task-a.queue-stall"
+  [ "$kind" = unhanded ] || fail "green CI did not start the unhanded queue episode: $kind"
+  pass "CI finishing inside the bound stays silent and hands the clock to the queue wait"
+}
+
+# A red pull request is not waiting on the queue, whatever the queue shows.
+test_never_handed_red_pr_starts_no_episode() {
+  local dir state
+  dir=$(unhanded_case queue-never-handed-red off)
+  state="$dir/home/state"
+  printf '{"state":"OPEN","isDraft":false,"headRefOid":"0123456789abcdef0123456789abcdef01234567","baseRefName":"main","autoMergeRequest":null,"statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]}\n' \
+    > "$dir/auto.json"
+  FM_MERGE_LINE_STALL_SECS=0 queue_app_cycle "$dir" red
+  case "$(cat "$dir/red.out")" in check:*z-stop.check.sh:*stop-cycle) ;; *) fail "a red PR raised a queue-liveness wake: $(cat "$dir/red.out")" ;; esac
+  [ ! -e "$state/task-a.queue-stall" ] || fail "a red PR started a queue-liveness episode"
+  pass "a red PR never handed to the queue starts no queue-liveness episode"
 }
 
 test_queue_landing_at_unverified_head_is_not_credited() {
@@ -3679,6 +4043,73 @@ test_merge_line_queue_window_gates_without_a_queued_head() {
   [ "$rc" -eq 3 ] || fail "the window opened behind a head no queue holds"
   assert_grep 'head is not in a merge queue' "$dir/wg.out" "the closed window's hold did not say why"
   pass "the queue window opens only behind a queued head and ends at a fronted entry"
+}
+
+# A head no yolo=on poll will ever hand to the queue - armed only by a task
+# without yolo=on, or ownerless because its task's record is gone - opens the
+# window past it, while it stays listed; a head armed by a live yolo=on task
+# but not yet queued, and a fronted head even without yolo=on, still hold.
+test_merge_line_queue_window_opens_past_a_stalled_head() {
+  local dir state rc
+  dir=$(queue_line_case queue-window-stalled-head 3)
+  state="$dir/home/state"
+
+  set +e
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "an armed green entry passed an armed yolo=on head not yet queued: $(cat "$dir/wg.out")"
+  assert_grep 'head is not in a merge queue' "$dir/wg.out" "the armed head's hold did not say why"
+
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "an armed green entry was held behind an unarmed head: $(cat "$dir/wg.out")"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/3 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "the window skipped an earlier green entry along with the unarmed head"
+  assert_grep 'waits for https://github.com/o/r/pull/2 ahead of it' "$dir/wg.out" \
+    "the entry behind did not wait for the first armed entry"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/1 ] \
+    || fail "the unarmed head left its place in the line"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/1 >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "the unarmed head lost its own place at the head"
+
+  merge_line "$dir" front https://github.com/o/r/pull/1 >/dev/null || fail "front refused"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/2 > "$dir/wg.out" 2>&1
+  rc=$?
+  [ "$rc" -eq 3 ] || fail "a fronted head without yolo=on was overtaken: $(cat "$dir/wg.out")"
+  merge_line "$dir" remove https://github.com/o/r/pull/1 || fail "could not remove the fronted PR"
+  merge_line "$dir" enqueue https://github.com/o/r/pull/1 || fail "could not re-enqueue pull/1"
+
+  rm -f "$state/task-b.meta"
+  merge_line "$dir" gate --window https://github.com/o/r/pull/3 > "$dir/wg.out" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "an armed green entry was held behind an ownerless head: $(cat "$dir/wg.out")"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/2 ] \
+    || fail "the ownerless head was dropped from the line"
+  pass "the queue window opens past an unarmed or ownerless head, never past an armed or fronted one"
+}
+
+# End to end: the line's head is green but armed only by a task without
+# yolo=on, so no poll will ever queue it. One watcher sweep hands the yolo=on
+# entries behind it to the merge queue in line order, and the head stays.
+test_merge_line_watcher_queues_past_an_unarmed_head() {
+  local dir state
+  dir=$(queue_line_case queue-window-unarmed-head 3)
+  state="$dir/home/state"
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+
+  queue_line_cycle "$dir" c1
+  [ "$(forge_merges "$dir")" = '2 3 ' ] \
+    || fail "the entries behind an unarmed head were not handed to the queue in line order: $(grep '^pr merge' "$dir/gh.log")"
+  [ ! -e "$state/task-a.queue-merge" ] || fail "the unarmed head was handed to the queue"
+  [ "$(cut -d' ' -f3 "$state/task-b.queue-merge")" = requested ] \
+    || fail "pull/2's queue hand-off was not recorded: $(cat "$state/task-b.queue-merge" 2>/dev/null)"
+  [ "$(merge_line "$dir" head https://github.com/o/r)" = https://github.com/o/r/pull/1 ] \
+    || fail "the unarmed head left the line"
+  pass "the watcher queues yolo=on entries past an unarmed merge-line head without a human"
 }
 
 test_merge_line_front_reorders() {
@@ -4272,6 +4703,8 @@ test_merge_line_queue_window_holds_behind_a_pending_entry
 test_merge_line_window_entry_queue_stall_starts_at_the_head
 test_merge_line_queue_stall_skips_an_unqueued_red_head
 test_merge_line_queue_window_gates_without_a_queued_head
+test_merge_line_queue_window_opens_past_a_stalled_head
+test_merge_line_watcher_queues_past_an_unarmed_head
 test_merged_poll_retries_a_failed_upward_report
 test_self_merge_and_poll_publish_one_outcome
 test_merged_poll_row_carries_the_merge_authority
@@ -4290,11 +4723,21 @@ test_yolo_poll_queued_merge_keeps_polling
 test_yolo_poll_keeps_a_rebound_poll_armed
 test_yolo_poll_hands_queue_app_branch_to_auto_merge_until_merged
 test_queue_ejection_wakes_once_and_is_not_requeued
+test_queue_ejection_steers_one_supported_rerun
+test_queue_ejection_ignores_comment_not_from_queue_app
+test_queue_run_still_in_flight_steers_nobody
+test_queue_ejection_steers_no_non_yolo_worker
 test_queue_head_moved_while_waiting_is_disabled_and_reverified
 test_queue_landing_at_unverified_head_is_not_credited
 test_queue_head_moved_for_non_yolo_task_wakes_once
 test_queue_landing_with_unknown_head_is_deferred
 test_queue_wait_past_stall_window_wakes_once_per_head
+test_handed_queue_with_no_status_wakes_once_and_retires_on_merge
+test_cycling_queue_status_wakes_at_bound_from_first_hold
+test_never_handed_green_pr_wakes_once_naming_auto_merge
+test_never_handed_red_pr_starts_no_episode
+test_pending_ci_wakes_once_per_head
+test_ci_finishing_inside_bound_stays_silent
 test_queue_away_refusal_wakes_once_per_head
 test_yolo_merge_attempt_is_bounded
 test_authority_persistence_refuses_rebound_metadata

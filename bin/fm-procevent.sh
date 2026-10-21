@@ -585,15 +585,15 @@ cmd_register_extension() {
 # events - and it republishes on every call regardless of any earlier
 # publication, so a result stays eligible for re-announcement across restarts
 # and drains until `fm_procevent_mark_handled` records it.
-publish_result() {  # <result-file>
-  local result=$1 id seq adapter line status=1
+publish_result() {  # <result-file> [lock-acquirer]
+  local result=$1 acquire=${2:-fm_procevent_source_lock_acquire} id seq adapter line status=1
   id=$(fm_procevent_result_source_id "$result")
   seq=$(fm_procevent_result_sequence "$result")
   fm_procevent_source_id_valid "$id" || return 1
   adapter=$(fm_procevent_result_adapter "$result" 2>/dev/null || true)
   [ -n "$adapter" ] || return 1
   line=$(fm_procevent_event_line "$adapter" "$id" "$seq") || return 1
-  fm_procevent_source_lock_acquire "$id" || return 1
+  "$acquire" "$id" || return 1
   if ! fm_procevent_is_handled "$STATE" "$id" "$seq"; then
     # A result its own adapter declares a routine no-op is recorded as handled
     # and never announced, so it neither wakes a handler now nor comes back on
@@ -622,12 +622,12 @@ publish_result() {  # <result-file>
   return "$status"
 }
 
-publish_pending() {  # [result-file-to-skip]
-  local skip=${1-} result published=0
+publish_pending() {  # [result-file-to-skip] [lock-acquirer]
+  local skip=${1-} acquire=${2-} result published=0
   while IFS= read -r result; do
     [ -n "$result" ] || continue
     [ "$result" = "$skip" ] && continue
-    if publish_result "$result"; then
+    if publish_result "$result" "$acquire"; then
       published=$((published + 1))
     fi
   done < <(fm_procevent_pending "$STATE")
@@ -1322,7 +1322,7 @@ cmd_reconcile() {
   fm_procevent_launch_confirm_seconds >/dev/null \
     || die "FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS must be whole seconds from $FM_PROCEVENT_LAUNCH_CONFIRM_MIN_SECONDS to $FM_PROCEVENT_LAUNCH_CONFIRM_MAX_SECONDS"
   owner_lease_refresh
-  published=$(publish_pending)
+  published=$(publish_pending "" fm_procevent_source_lock_acquire_bounded)
 
   # Stop a runner this home owns whose source is no longer registered. Without
   # this, unregistering a source that never completes leaves its child blocked
@@ -1331,13 +1331,32 @@ cmd_reconcile() {
     [ -e "$claim" ] || continue
     id=${claim##*/}; id=${id%.claim}
     fm_procevent_source_id_valid "$id" || continue
-    fm_procevent_source_lock_acquire "$id" || continue
-    if [ -f "$(source_file "$id")" ] && [ ! -L "$(source_file "$id")" ]; then
+    # Read the claim before taking the machine-wide source lock: a claim owned
+    # by another home is not ours to settle, and taking its lock is what makes
+    # a dead home's leftover claim stall this pass for everyone.
+    if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
+      # Claims are written atomically, so an unreadable one is real corruption.
+      # Keep it visible instead of silently skipping it.
+      uncertain=$((uncertain + 1))
+      continue
+    fi
+    fm_procevent_claim_owned_by_state "$STATE" "$FM_HOME" || continue
+    fm_procevent_source_lock_acquire_bounded "$id" || {
+      uncertain=$((uncertain + 1))
+      continue
+    }
+    # Re-read under the lock: ownership or the registration may have moved
+    # between the snapshot above and this point.
+    if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
+      uncertain=$((uncertain + 1))
       fm_procevent_source_lock_release "$id"
       continue
     fi
-    if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
-      uncertain=$((uncertain + 1))
+    if ! fm_procevent_claim_owned_by_state "$STATE" "$FM_HOME"; then
+      fm_procevent_source_lock_release "$id"
+      continue
+    fi
+    if [ -f "$(source_file "$id")" ] && [ ! -L "$(source_file "$id")" ]; then
       fm_procevent_source_lock_release "$id"
       continue
     fi
@@ -1345,10 +1364,6 @@ cmd_reconcile() {
     pid=$FM_PROCEVENT_CLAIM_PID
     token=$FM_PROCEVENT_CLAIM_TOKEN
     identity=$FM_PROCEVENT_CLAIM_IDENTITY
-    if ! fm_procevent_claim_owned_by_state "$STATE" "$FM_HOME"; then
-      fm_procevent_source_lock_release "$id"
-      continue
-    fi
     stop_runner_pid "$pid" "$identity"
     stop_state=$?
     case "$stop_state" in
@@ -1371,7 +1386,10 @@ cmd_reconcile() {
       [ -e "$rec" ] || continue
       id=${rec##*/}; id=${id%.source}
       fm_procevent_source_id_valid "$id" || continue
-      fm_procevent_source_lock_acquire "$id" || continue
+      fm_procevent_source_lock_acquire_bounded "$id" || {
+        uncertain=$((uncertain + 1))
+        continue
+      }
       if [ -f "$(source_file "$id")" ] && [ ! -L "$(source_file "$id")" ]; then
         fm_procevent_claim_state_locked "$id"
         claim_state=$?

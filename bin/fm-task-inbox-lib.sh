@@ -298,6 +298,15 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || true)" in
     dead|missing) return 3 ;;
   esac
+  # A fleet worker reads its inbox on its donor host: deliver the record
+  # there first, then ring a doorbell naming that host-side inbox
+  # (bin/fm-fleet.sh owns both legs). The local record stays the delivery
+  # proof; the mirrored move into handled/ is the acknowledgement.
+  if [ "$backend" = fleet ]; then
+    "$FM_BACKEND_LIB_DIR/fm-fleet.sh" sync "${target#fleet:}" >/dev/null 2>&1 || return 2
+    "$FM_BACKEND_LIB_DIR/fm-fleet.sh" ring "${target#fleet:}" >/dev/null 2>&1 || return 2
+    return 0
+  fi
   if ! line=$(fm_task_inbox_doorbell_line "$rec"); then
     return 2
   fi

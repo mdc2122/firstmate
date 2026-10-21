@@ -4,6 +4,9 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 TMP_ROOT=$(fm_test_tmproot fm-contributions)
+# Registering a PR arms its resume watch; keep those runners' claims private
+# to this suite and reap every home's runners at exit.
+export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
 NOW=2026-09-16T08:00:00Z
 HEAD_A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 HEAD_B=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -11,6 +14,7 @@ HEAD_B=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 new_home() {
   local home="$TMP_ROOT/$1"
   mkdir -p "$home/data" "$home/state" "$home/config" "$home/projects" "$home/fakebin"
+  fm_test_track_procevent_home "$home" "$FM_PROCEVENT_CLAIM_ROOT"
   printf '# Backlog\n\n## Queued\n' > "$home/data/backlog.md"
   printf '#!/bin/sh\nexit 1\n' > "$home/fakebin/tmux"
   printf '#!/bin/sh\nexit 0\n' > "$home/fakebin/no-mistakes"
@@ -501,8 +505,11 @@ test_watcher_surfaces_new_contribution_once() {
     updated_at:"2026-09-16T08:01:00Z",submitted_at:"2026-09-16T08:01:00Z"}]' > "$home/forge/comments.json"
   out="$home/watcher.out"
   rc=0
+  # Registering the PR also arms its resume watch, so the watcher's first cycle
+  # launches that runner and waits out its launch confirmation before the
+  # contribution wake surfaces; allow the same bound as the diagnostics case.
   with_home "$home" env FM_POLL=1 FM_SIGNAL_GRACE=0 FM_CHECK_INTERVAL=0 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 5 > "$out" 2> "$home/watcher.err" || rc=$?
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 15 > "$out" 2> "$home/watcher.err" || rc=$?
   [ "$rc" -eq 0 ] || fail "watcher did not surface the new contribution signal: $(cat "$home/watcher.err")"
   grep -E '^check: contributions delivery [0-9a-f]{64}$' "$out" >/dev/null \
     || fail "watcher did not surface the durable contribution wake: $(cat "$out")"
