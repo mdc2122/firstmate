@@ -21,6 +21,14 @@
 #
 # Record location (parent FM_HOME):
 #   state/pending-replies/<corr_id>
+#     every open record, plus a resolved record until it has settled past the
+#     retention window (see the archive note below)
+#   state/pending-replies/archive/<corr_id>
+#     a resolved record whose escalation is closed, moved out of the scanned
+#     directory so a watcher pass costs in proportion to OPEN records rather
+#     than to the home's entire request history. Archived records are retained,
+#     never deleted by this library; an unresolved record, and a resolved one
+#     whose escalation is still open, is never archived.
 # One more durable input, owned by bin/fm-procevent-remote-reply.sh and read
 # here: state/remote-replies/<task_id>.caught-up, the remote reply mirror's
 # watermark (see the remote reply-channel freshness section below).
@@ -105,6 +113,10 @@
 #                                 (tests); receives task_id and full message as args
 #   FM_PENDING_REPLY_NOW          optional fixed epoch for deterministic tests
 
+#   FM_PENDING_REPLY_ARCHIVE_AFTER_SECS
+#                                 default 3600; how long a settled resolved
+#                                 record stays in the scanned directory before
+#                                 the tick archives it
 # shellcheck source=bin/fm-marker-lib.sh
 _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || _FM_PENDING_REPLY_LIB_DIR="."
 # shellcheck source=bin/fm-marker-lib.sh
@@ -148,6 +160,22 @@ fm_pending_reply_dir() {  # <state-dir>
 
 fm_pending_reply_path() {  # <state-dir> <corr_id>
   printf '%s/%s' "$(fm_pending_reply_dir "$1")" "$2"
+}
+
+# Directory holding archived resolved records for <state-dir>. Kept beside the
+# scanned records, never inside them as an ordinary record.
+fm_pending_reply_archive_dir() {  # <state-dir>
+  printf '%s/archive' "$(fm_pending_reply_dir "$1")"
+}
+
+# Seconds a settled resolved record stays in the scanned directory. A malformed
+# override falls back to the default rather than delaying archival.
+fm_pending_reply_archive_after_secs() {
+  local s=${FM_PENDING_REPLY_ARCHIVE_AFTER_SECS:-3600}
+  case "$s" in
+    ''|*[!0-9]*) s=3600 ;;
+  esac
+  printf '%s' "$s"
 }
 
 # Privacy-safe correlation id: 16 lowercase hex chars (64 bits of entropy).
@@ -1357,6 +1385,55 @@ fm_pending_reply_restatement_copy_same_basename() {  # <state-dir> <corr_id> <se
   fm_parent_channel_append_once "$parent_status" "$line"
 }
 
+# Move one settled resolved record out of the scanned directory.
+# Settled means phase=resolved past the retention window, with either no
+# escalation ever opened or its escalation already closed. Idempotent and
+# race-safe: a record that changed, or that a concurrent tick archived first,
+# is left alone. An unresolved record is never passed to this function, and
+# nothing is ever deleted - the record keeps its bytes under archive/.
+fm_pending_reply_archive_settled() {  # <state-dir> <corr_id>
+  local state=$1 corr=$2 rec adir dest phase escalated closed resolved now key value
+  rec=$(fm_pending_reply_path "$state" "$corr")
+  [ -f "$rec" ] && [ ! -L "$rec" ] || return 0
+  phase=''
+  escalated=''
+  closed=''
+  resolved=''
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    case "$key" in
+      phase) phase=$value ;;
+      escalated_epoch) escalated=$value ;;
+      escalation_closed_epoch) closed=$value ;;
+      resolved_epoch) resolved=$value ;;
+    esac
+  done < "$rec"
+  [ "$phase" = resolved ] || return 0
+  if [ -n "$escalated" ]; then
+    [ -n "$closed" ] || return 0
+  fi
+  # A record without a completed resolution epoch is still mid-write or a
+  # legacy shape; leave it scanned rather than moving a partial record.
+  case "$resolved" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  now=$(fm_pending_reply_now)
+  [ $(( now - resolved )) -ge "$(fm_pending_reply_archive_after_secs)" ] || return 0
+  adir=$(fm_pending_reply_archive_dir "$state")
+  if [ -e "$adir" ] || [ -L "$adir" ]; then
+    [ -d "$adir" ] && [ ! -L "$adir" ] || return 1
+  else
+    mkdir -p "$adir" || return 1
+    chmod 700 "$adir" 2>/dev/null || true
+  fi
+  dest="$adir/$corr"
+  # Correlation ids identify one request, so archived history is never
+  # replaced by a later record that reused the name.
+  [ ! -e "$dest" ] && [ ! -L "$dest" ] || return 0
+  [ "$(fm_pending_reply_get "$rec" phase)" = resolved ] || return 0
+  mv -f -- "$rec" "$dest" 2>/dev/null || true
+  return 0
+}
+
 # One reconciliation tick for a single record: resolve, observe, recover, escalate.
 # busy_state is busy|idle|unknown for the secondmate endpoint.
 # secondmate_home may be empty when unknown.
@@ -1430,11 +1507,14 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
   return 0
 }
 
-# Scan every pending record for this parent state. Safe to call every poll.
-# Never scrapes secondmate conversation; uses only parent status, backend busy
-# state, and optional secondmate-home wrong-home path checks.
+# Scan every open pending record for this parent state, retry close on a
+# resolved record whose escalation is still open, and archive resolved records
+# once settled. Safe to call every poll: cost follows the open-record count,
+# not the home's request history. Never scrapes secondmate conversation; uses
+# only parent status, backend busy state, and optional secondmate-home
+# wrong-home path checks.
 fm_pending_reply_tick() {  # <state-dir>
-  local state=$1 dir rec corr task_id phase delivered meta backend target label busy sm_home harness remote_host
+  local state=$1 dir rec corr task_id phase delivered meta backend target label busy sm_home harness remote_host key value escalated closed
   local observation observation_task found i
   local -a observation_tasks=() observation_values=()
   dir=$(fm_pending_reply_dir "$state")
@@ -1444,16 +1524,36 @@ fm_pending_reply_tick() {  # <state-dir>
     case "$(basename "$rec")" in
       .*) continue ;;
     esac
-    corr=$(fm_pending_reply_get "$rec" corr_id)
+    # One read parses everything this pass needs; a resolved record then pays
+    # no per-field grep and no per-record lock.
+    corr=''
+    task_id=''
+    phase=''
+    escalated=''
+    closed=''
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+      case "$key" in
+        corr_id) corr=$value ;;
+        task_id) task_id=$value ;;
+        phase) phase=$value ;;
+        escalated_epoch) escalated=$value ;;
+        escalation_closed_epoch) closed=$value ;;
+      esac
+    done < "$rec"
     [ -n "$corr" ] || corr=$(basename "$rec")
-    task_id=$(fm_pending_reply_get "$rec" task_id)
-    phase=$(fm_pending_reply_get "$rec" phase)
     if [ "$phase" = resolved ]; then
-      # Cheap no-op unless an escalation for this record is still open; this is
-      # the retry that makes the close converge after a transient write failure.
-      fm_pending_reply_close_escalation "$state" "$corr" || true
+      # Retry an escalation close only while one is actually open: a settled
+      # record must not pay the per-record lock on every pass. That retry is
+      # what makes the close converge after a transient write failure.
+      if [ -n "$escalated" ] && [ -z "$closed" ]; then
+        fm_pending_reply_close_escalation "$state" "$corr" || true
+      fi
+      # Once settled, the record moves to archive/ and stops being scanned.
+      # Unresolved records and open escalations are never archived.
+      fm_pending_reply_archive_settled "$state" "$corr" || true
       continue
     fi
+
     fm_pending_reply_reconcile_delivery "$state" "$corr" || true
     phase=$(fm_pending_reply_get "$rec" phase)
     delivered=$(fm_pending_reply_get "$rec" delivered_epoch)

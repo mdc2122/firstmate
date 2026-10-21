@@ -1570,6 +1570,63 @@ test_escalated_undelivered_correlation_stays_retryable() {
   pass "an escalated correlation stays retryable only while undelivered"
 }
 
+test_settled_resolved_records_archive_recoverably() {
+  (
+    local home state corr open esc rec adir archived_before
+    home=$(setup_parent archive)
+    state="$home/state"
+    export FM_PENDING_REPLY_NOW=9000
+    corr=$(fm_pending_reply_create "$home" "$state" hibit "settled request")
+    fm_pending_reply_mark_delivered "$state" "$corr"
+    printf 'done [corr=%s]: complete\n' "$corr" > "$state/hibit.status"
+    fm_pending_reply_try_resolve "$state" "$corr" || fail "settled fixture should resolve"
+    rec=$(fm_pending_reply_path "$state" "$corr")
+    adir=$(fm_pending_reply_archive_dir "$state")
+
+
+    fm_pending_reply_tick "$state" || fail "tick before retention failed"
+    [ -f "$rec" ] || fail "a record younger than the retention window must stay scanned"
+
+    export FM_PENDING_REPLY_NOW=$((9000 + 3600))
+    fm_pending_reply_tick "$state" || fail "archive tick failed"
+    [ ! -e "$rec" ] || fail "a settled resolved record stayed in the scanned directory"
+    [ "$(fm_pending_reply_get "$adir/$corr" phase)" = resolved ] \
+      || fail "archived record lost its resolved phase"
+    [ "$(fm_pending_reply_get "$adir/$corr" resolved_epoch)" = 9000 ] \
+      || fail "archived record lost its resolution evidence"
+    archived_before=$(find "$adir" -maxdepth 1 -type f | wc -l | tr -d ' ')
+    [ "$archived_before" = 1 ] || fail "archive should hold exactly the settled record, got $archived_before"
+
+    # An unresolved record is never archived, however old it is.
+    open=$(fm_pending_reply_create "$home" "$state" hibit "open request")
+    fm_pending_reply_mark_delivered "$state" "$open"
+    fm_pending_reply_archive_settled "$state" "$open" \
+      || fail "archive attempt on an open record should be a clean no-op"
+    [ -f "$(fm_pending_reply_path "$state" "$open")" ] || fail "an unresolved record was archived"
+
+    # A resolved record whose escalation is still open is never archived...
+    esc=$(fm_pending_reply_create "$home" "$state" hibit "escalated request")
+    fm_pending_reply_mark_delivered "$state" "$esc"
+    rec=$(fm_pending_reply_path "$state" "$esc")
+    fm_pending_reply_set "$rec" phase resolved || fail "escalated fixture should resolve"
+    fm_pending_reply_set "$rec" resolved_epoch 9000 || fail "failed to age the resolved fixture"
+    fm_pending_reply_set "$rec" escalated_epoch 8900 || fail "failed to record the escalation"
+    fm_pending_reply_archive_settled "$state" "$esc" || fail "archive attempt on an open escalation failed"
+    [ -f "$rec" ] || fail "a resolved record with an open escalation was archived"
+
+    # ...and is archived once that escalation closes.
+    fm_pending_reply_set "$rec" escalation_closed_epoch 9400 || fail "failed to close the escalation"
+    fm_pending_reply_archive_settled "$state" "$esc" || fail "archive of a settled escalation failed"
+    [ ! -e "$rec" ] || fail "a settled escalated record was not archived"
+    [ -f "$adir/$esc" ] || fail "settled escalated record lost its archived copy"
+
+    # Nothing is ever deleted, and the archived records stay out of scans.
+    find "$adir" -maxdepth 1 -type f | grep -q "/$corr$" || fail "archived settled record vanished"
+    [ -f "$state/pending-replies/$open" ] || fail "archival disturbed the open record"
+    pass "settled records archive recoverably while open work stays scanned"
+  ) || fail "settled-record archival regression failed"
+}
+
 # --- run --------------------------------------------------------------------
 
 test_normal_correlated_reply_resolves_once
@@ -1611,5 +1668,6 @@ test_mechanical_helper_writes_parent_channel
 test_remote_parent_replies_is_not_wrong_home
 test_local_parent_replies_is_wrong_home_evidence
 test_escalated_undelivered_correlation_stays_retryable
+test_settled_resolved_records_archive_recoverably
 
 printf 'ok - all pending-reply tests passed\n'

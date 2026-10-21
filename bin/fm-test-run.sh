@@ -436,7 +436,7 @@ family_for_basename() {
     fm-teardown-endpoint-safety.test.sh)
       printf '%s\n' backend-dispatch
       ;;
-    fm-action-ledger.test.sh|fm-check-unregister.test.sh|fm-flow-wait-ledger.test.sh|\
+    fm-action-ledger.test.sh|fm-check-unregister.test.sh|fm-flow-wait-ledger.test.sh|fm-flow-wait-analyze.test.sh|\
     fm-pr-check-security.test.sh|fm-pr-merge.test.sh|fm-pr-sweep.test.sh|\
     fm-pr-reviewers.test.sh|fm-pr-state.test.sh|\
     fm-review-diff.test.sh|fm-teardown.test.sh|fm-followup-ledger.test.sh|fm-x-mode.test.sh)
@@ -465,6 +465,7 @@ family_for_basename() {
     fm-no-mistakes-required.test.sh|fm-peek-remote.test.sh|\
     fm-pending-reply.test.sh|fm-pi-branch-extension.test.sh|\
     fm-procevent-quota.test.sh|fm-procevent-when.test.sh|fm-procevent.test.sh|\
+    fm-resume-watch.test.sh|\
     fm-live-gate.test.sh|\
     fm-project-origin.test.sh|fm-public-followup.test.sh|fm-quota-choose.test.sh|\
     fm-remote-entrypoint.test.sh|fm-remote-secondmate-parent-binding.test.sh|\

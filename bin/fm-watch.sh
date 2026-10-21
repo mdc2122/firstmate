@@ -147,15 +147,37 @@
 #                          at that head; <detail> carries the queue check's
 #                          conclusion and reason. One wake per handed-over head,
 #                          and the yolo poll does not re-queue that head
-#                          (pr_queue_merge_tick)
+#                          (pr_queue_merge_tick). The task's worker also
+#                          receives, when yolo=on, one steer naming the PR, the failing tests
+#                          read from the queue run's own log, and that run,
+#                          ordering the supported pipeline rerun on the current
+#                          base - never a hand rebase or forge branch update
+#                          (pr_mq_ejection_steer); its probe is read once per
+#                          handed-over head, and a reading taken while a queue
+#                          run is still in flight steers nobody.
 #   check: <check>: merge-queue hand-off cancelled: <url> moved from verified head <old> to <new>, ...
 #                          a PR handed to its merge-queue app read at another
 #                          head: its merge authority was revoked and auto-merge
 #                          disabled. Once per PR and new head, for every task;
 #                          a yolo poll re-verifies the new head next cycle
 #   check: <check>: merge-queue stalled: merge queue has not picked up or finished <url> after <n> min at head <head>
-#                          the queue has held the same head for
-#                          FM_MERGE_LINE_STALL_SECS; once per PR and head
+#                          the queue has held the same head, whatever its
+#                          status, for FM_MERGE_LINE_STALL_SECS; once per PR
+#                          and head (queue_stall_episode)
+#   check: <check>: merge-queue silent: <url> has been green for <n> min at head <head> with no merge-queue status (<detail>); <auto-merge>
+#                          an armed PR on a merge-queue-app base, green apart
+#                          from the queue's own checks, has had no queue status
+#                          at all for FM_MERGE_LINE_STALL_SECS, whether handed
+#                          to the queue (pr_queue_merge_tick) or not
+#                          (pr_queue_unhanded_tick); <auto-merge> says whether
+#                          auto-merge was ever requested and who must request
+#                          it. Once per PR and head; for a PR never handed
+#                          over, a queue status that appears ends the episode
+#   check: <check>: ci pending: <url> has waited <n> min at head <head> for CI that has not finished (<detail>)
+#                          an armed PR never handed to a merge queue, with no
+#                          red check, has had a check pending or a required
+#                          check unreported for FM_MERGE_LINE_STALL_SECS
+#                          (pr_queue_unhanded_tick); once per PR and head
 #   check: <check>: merge-queue refused while away <url> at <head>: <detail>
 #                          the yolo poll's merge of a green head-of-line PR was
 #                          refused because its base branch merges only through
@@ -207,6 +229,10 @@
 #                          rows do not feed this escalation, observation is
 #                          read-only, and one parent notification covers each
 #                          no-progress episode
+# Idle-after-done stale bound (docs/watcher-continuity.md "Idle-after-done
+# stale bound"): a terminal done/failed pane whose outcome was already
+# presented, with no steer delivered since, re-surfaces at most once per
+# PAUSE_RESURFACE_SECS and is never wedge-escalated.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -349,7 +375,7 @@ case "$PR_GREEN_BLOCKED_SECS" in
 esac
 PR_BEHIND_RERUN_PER_HOUR=${FM_PR_BEHIND_RERUN_PER_HOUR:-3}  # yolo behind-base rerun steers per pull request per rolling hour
 case "$PR_BEHIND_RERUN_PER_HOUR" in ''|*[!0-9]*) PR_BEHIND_RERUN_PER_HOUR=3 ;; esac
-PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one behind-base rerun steer (bin/fm-send.sh)
+PR_BEHIND_RERUN_TIMEOUT=${FM_PR_BEHIND_RERUN_TIMEOUT:-30}  # seconds allowed for one rerun steer, behind-base or merge-queue ejection (bin/fm-send.sh)
 case "$PR_BEHIND_RERUN_TIMEOUT" in ''|*[!0-9]*|0) PR_BEHIND_RERUN_TIMEOUT=30 ;; esac
 MERGE_LINE_STALL_SECS=${FM_MERGE_LINE_STALL_SECS:-1800}  # held-green-behind-unchanged-head or queue-held-head age before its one wake
 case "$MERGE_LINE_STALL_SECS" in ''|*[!0-9]*) MERGE_LINE_STALL_SECS=1800 ;; esac
@@ -1611,6 +1637,30 @@ captain_call_stale_bound() {  # <window-key> <task>
   stale_wait_throttled "$key" "$STALE_WAIT_DECLARATION"
 }
 
+# Bound a terminal-outcome stale sighting whose completion was already
+# presented to firstmate: the pane is stale only because the task's cleanup is
+# still owed on the firstmate side (teardown refusal, ledger, holds,
+# observation bookkeeping). The worker finished; no wedge is possible, so the
+# caller gives it one bounded low-priority re-surface instead of the wedge
+# timer. Returns 0 when status_presented_outcome_covers proves the log's
+# last line is a terminal `done:`/`failed:` already presented in full AND no
+# steering-inbox record (pending or handled) is newer than that log: a steer
+# delivered after the outcome re-engaged the worker, so its idle pane is
+# ordinary stale again. Anything else - a still-unpresented terminal line, a
+# non-terminal line, or any unreadable record - keeps ordinary surfacing.
+# `blocked` and `needs-decision` keep the captain_call_stale_bound path.
+done_outcome_stale_bound() {  # <task>
+  local status="$STATE/$1.status" dir rec
+  [ -n "$1" ] || return 1
+  status_presented_outcome_covers "$status" || return 1
+  dir=$(fm_task_inbox_dir "$STATE" "$1")
+  for rec in "$dir"/*.msg "$dir"/handled/*.msg; do
+    [ -e "$rec" ] || continue
+    [ "$rec" -nt "$status" ] && return 1
+  done
+  return 0
+}
+
 # Surface a stale pane no classifier could resolve, so firstmate inspects it: it
 # may have finished through an interactive menu that wrote no status, be waiting on
 # a decision, or be wedged. pause_state_class deliberately answers `none` for a
@@ -2444,6 +2494,26 @@ home_summary_refresh_detached() {
   HOME_SUMMARY_PID=$!
 }
 
+# Fleet workers (bin/fm-fleet.sh, docs/fleet-placement.md) write their status,
+# turn-end and busy markers on their donor host. When this home opts in with
+# config/fleet-hosts, one detached `fm-fleet.sh sync` per cycle mirrors them
+# into this home's ordinary state files, so the signal scan below sees a
+# remote worker exactly like a local one. A still-running sync is never
+# doubled, and a slow or unreachable host never delays this loop.
+FLEET_SYNC_PID=
+fleet_sync_detached() {
+  [ -f "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/fleet-hosts" ] || return 0
+  if [ -n "$FLEET_SYNC_PID" ]; then
+    if kill -0 "$FLEET_SYNC_PID" 2>/dev/null; then
+      return 0
+    fi
+    wait "$FLEET_SYNC_PID" 2>/dev/null || true
+    FLEET_SYNC_PID=
+  fi
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-fleet.sh" sync </dev/null >/dev/null 2>&1 &
+  FLEET_SYNC_PID=$!
+}
+
 RECONCILE_REQUEST_PID=
 reconcile_requests_pending() {
   local request
@@ -2504,7 +2574,8 @@ retire_merged_pr_poll() {  # <id> <url> <check-path>
   else
     triage_log "merged PR poll retirement deferred because its canonical snapshot changed for $id"
   fi
-  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" "$STATE/$id.merge-line-stall" \
+  rm -f "$STATE/$id.pr-green-blocked" "$STATE/$id.pr-behind-rerun" \
+    "$STATE/$id.merge-line-stall" \
     "$STATE/$id.queue-merge" "$STATE/$id.queue-away-refused" "$STATE/$id.queue-stall"
   # A landed PR leaves its repository's merge line so the next PR becomes the
   # head (bin/fm-merge-line.sh; a no-op without a line).
@@ -2590,60 +2661,122 @@ pr_green_blocked_record() {  # <file> <url> <head> <first-epoch> <alerted>
   return 1
 }
 
-# One bin/fm-send.sh steer per behind pull-request head, asking the worker for
-# the supported pipeline rerun (never a hand rebase, a hand push, or a forge
-# branch update: the pipeline owns the branch and its required attestation is
-# bound to the head it pushed). The previous run's post-green CI monitor is
-# often still live on the branch and never rebases a behind pull request, yet
-# its custody blocks both the local sync and the rerun, so the steer has the
-# worker abort that run first, but only when it is the sole active run and
-# its only active step is ci after checks passed, confirming the cancel
-# through axi status; any other active run is never aborted and is reported
-# blocked instead. A rerun also refuses when the worker's local branch is not
-# the pull request's head, which is the usual state after an earlier rerun
-# rebased and pushed from the pipeline's own copy, so the steer next has the
-# worker bring its local branch to that head: the pipeline's offered sync or
-# custody recovery when it has one, otherwise a fetch of the pull request head
-# and git reset --keep onto it once git cherry shows every local commit is
-# already in that head, and a blocked report instead when one is missing.
-# state/<id>.pr-behind-rerun keeps one "<url> <head-sha>
-# <epoch>" line per delivered steer for the task's current pull request: a
-# head already listed is never steered again, and at most
-# PR_BEHIND_RERUN_PER_HOUR steers go out per pull request in any rolling hour.
-# It survives the episode's clear readings (the rerun's own pending CI is one)
-# so the cap spans reruns, and retires with the merged poll and at teardown.
-# Only a delivered steer is recorded, so a refused send (another supervision
-# actor's lease, a retired endpoint) retries on a later sweep.
+# Both rerun steers below - a green pull request behind its base, and a
+# merge-queue ejection - go to a yolo=on task's worker through this one
+# mechanism and ask for the supported pipeline rerun, never a hand rebase, a
+# hand push, or a forge branch update: the pipeline owns the branch and its
+# required attestation is bound to the head it pushed. The previous run's
+# post-green CI monitor is often still live on the branch and never rebases a
+# behind pull request, yet its custody blocks both the local sync and the
+# rerun, so each steer has the worker abort that run first, but only when it
+# is the sole active run and its only active step is ci after checks passed,
+# confirming the cancel through axi status; any other active run is never
+# aborted and is reported blocked instead. A rerun also refuses when the
+# worker's local branch is not the pull request's head, which is the usual
+# state after an earlier rerun rebased and pushed from the pipeline's own copy,
+# so each steer next has the worker bring its local branch to that head: the
+# pipeline's offered sync or custody recovery when it has one, otherwise a
+# fetch of the pull request head and git reset --keep onto it once git cherry
+# shows every local commit is already in that head, and a blocked report
+# instead when one is missing.
+# state/<id>.pr-behind-rerun keeps one "<url> <head-sha> <epoch> <reason>" line
+# per steered head for the task's current pull request, <reason> being behind
+# or ejection (a line without one is behind), so each reason has its own
+# once-per-head rule. It survives the episode's clear readings (the rerun's own
+# pending CI is one) so the behind cap spans reruns, and retires with the
+# merged poll and at teardown.
+pr_rerun_steer_seen() {  # <id> <url> <head> <reason>
+  local file="$STATE/$1.pr-behind-rerun"
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  awk -v u="$2" -v h="$3" -v r="$4" \
+    '$1 == u && $2 == h && ($4 == "" ? "behind" : $4) == r { found = 1 } END { exit !found }' "$file"
+}
+
+pr_rerun_steer_record() {  # <id> <url> <head> <reason> <epoch>
+  local file="$STATE/$1.pr-behind-rerun" tmp
+  tmp=$(mktemp "$STATE/.pr-behind-rerun.XXXXXX") || return 0
+  if {
+    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$2" '$1 == u' "$file"; fi
+    printf '%s %s %s %s\n' "$2" "$3" "$5" "$4"
+  } > "$tmp" && mv -f -- "$tmp" "$file"; then
+    return 0
+  fi
+  rm -f "$tmp"
+}
+
+# The abort and local-sync steps both rerun steers open with.
+pr_rerun_steer_steps() {  # <url> <head>
+  printf '%s' "First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $2, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${1##*/}/head, confirm git cherry $2 HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $2; if a local commit is missing from the PR head, stop and report blocked instead."
+}
+
+# Sends one rerun steer through bin/fm-send.sh; returns 0 only when it was
+# delivered.
+pr_rerun_steer_send() {  # <id> <reason> <msg>
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$1" "$3" || exit 1
+  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
+    triage_log "$2 rerun steer for $1 refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
+    return 1
+  fi
+}
+
+# One behind-base rerun steer per behind pull-request head, recorded only once
+# delivered so a refused send (another supervision actor's lease, a retired
+# endpoint) retries on a later sweep; at most PR_BEHIND_RERUN_PER_HOUR go out
+# per pull request in any rolling hour.
 pr_behind_rerun_steer() {  # <id> <url> <head>
-  local id=$1 url=$2 head=$3 file now recent msg tmp
+  local id=$1 url=$2 head=$3 file now recent msg
   [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
+  pr_rerun_steer_seen "$id" "$url" "$head" behind && return 0
   file="$STATE/$id.pr-behind-rerun"
   now=$(date +%s)
   if [ -f "$file" ] && [ ! -L "$file" ]; then
-    awk -v u="$url" -v h="$head" '$1 == u && $2 == h { found = 1 } END { exit !found }' "$file" \
-      && return 0
-    recent=$(awk -v u="$url" -v since=$((now - 3600)) '$1 == u && $3 + 0 > since { n++ } END { print n + 0 }' "$file")
+    recent=$(awk -v u="$url" -v since=$((now - 3600)) \
+      '$1 == u && ($4 == "" || $4 == "behind") && $3 + 0 > since { n++ } END { print n + 0 }' "$file")
     if [ "$recent" -ge "$PR_BEHIND_RERUN_PER_HOUR" ]; then
       triage_log "behind-rerun steer for $id withheld: $recent already sent for $url within the hour"
       return 0
     fi
   fi
-  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. First, if no-mistakes axi status shows an active run on this branch: when it is the only active run and its only active step is ci reporting all checks passed and still monitoring, stop it with no-mistakes axi abort and confirm through no-mistakes axi status that it is cancelled; for any other active run do not abort it, stop and report blocked instead. Next bring your local branch to that PR head: if git rev-parse HEAD is not $head, run no-mistakes axi status and, when branch_sync.next_action is sync or recover_custody, run its exact command; otherwise run git fetch origin refs/pull/${url##*/}/head, confirm git cherry $head HEAD prints no + line (every local commit is already in the PR head), then git reset --keep $head; if a local commit is missing from the PR head, stop and report blocked instead. Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
-  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_ROOT_OVERRIDE="$FM_ROOT" \
-    run_action_capture "$PR_BEHIND_RERUN_TIMEOUT" "$SCRIPT_DIR/fm-send.sh" "$id" "$msg" || exit 1
-  if [ "$FM_ACTION_STATUS" -ne 0 ]; then
-    triage_log "behind-rerun steer for $id refused or failed (rc=$FM_ACTION_STATUS): $(printf '%s' "$FM_CHECK_RESULT" | tr '\r\n' '  ')"
-    return 0
-  fi
+  msg="PR $url is green but GitHub refuses the merge because the branch is behind its base branch (strict up-to-date rule), at PR head $head. $(pr_rerun_steer_steps "$url" "$head") Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases and revalidates; never hand-rebase or push the branch yourself. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+  pr_rerun_steer_send "$id" behind "$msg" || return 0
   triage_log "behind-rerun steer sent to $id for $url at $head"
-  tmp=$(mktemp "$STATE/.pr-behind-rerun.XXXXXX") || return 0
-  if {
-    if [ -f "$file" ] && [ ! -L "$file" ]; then awk -v u="$url" '$1 == u' "$file"; fi
-    printf '%s %s %s\n' "$url" "$head" "$now"
-  } > "$tmp" && mv -f -- "$tmp" "$file"; then
-    return 0
+  pr_rerun_steer_record "$id" "$url" "$head" behind "$now"
+}
+
+# One merge-queue ejection steer per handed-over head: the queue tested that
+# head against the moved base and ejected it on failing tests, so the fix is
+# the pipeline's own rerun, which rebases onto that base and revalidates. The
+# steer names the pull request, the failing tests, and the queue run, all read
+# by bin/fm-mq-ejection.sh from the queue app's own ejection comment and the
+# failing run's log. The probe is read once per head, whatever it reads: a
+# silent reading (a queue run still in flight, auto-merge cancelled by hand,
+# an unreadable forge) or a refused send is recorded like a delivered steer
+# and not re-read until the head moves.
+pr_mq_ejection_steer() {  # <id> <url> <head>
+  local id=$1 url=$2 head=$3 verdict detail run_url='' failure='' msg
+  [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ] || return 0
+  pr_rerun_steer_seen "$id" "$url" "$head" ejection && return 0
+  run_check_capture "$SCRIPT_DIR/fm-mq-ejection.sh" "$url" "$head" \
+    "$FM_PR_QUEUE_MERGE_CHECKS" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    'ejection '*' '*' '*)
+      detail=${verdict#ejection }
+      detail=${detail#* }
+      run_url=${detail%% *}
+      failure=${detail#* }
+      ;;
+  esac
+  if [ -n "$run_url" ] && [ -n "$failure" ]; then
+    msg="The merge queue ejected PR $url at head $head after its queue run around $run_url failed: $failure. The queue tested that head against the moved base branch, so the current base's tests are what failed. $(pr_rerun_steer_steps "$url" "$head") Then run the supported pipeline rerun (no-mistakes rerun) in your worktree and drive it through its gates as before, so the pipeline rebases this work onto the current base, reproduces the named failures there, and revalidates; fix what it reports through the pipeline. Never hand-rebase, never push the branch yourself, and never update the branch through the forge. When CI is green again, report done: PR $url checks green; the armed merge poll lands it."
+    if pr_rerun_steer_send "$id" ejection "$msg"; then
+      triage_log "ejection rerun steer sent to $id for $url at $head (run $run_url)"
+    fi
+  else
+    triage_log "ejection probe for $id read no ejection for $url at $head; not re-read at this head"
   fi
-  rm -f "$tmp"
+  pr_rerun_steer_record "$id" "$url" "$head" ejection "$(date +%s)"
 }
 
 # <held> 1 marks a PR held behind its merge-line head (bin/fm-merge-line.sh):
@@ -2707,22 +2840,22 @@ pr_green_blocked_tick() {  # <id> <check-path> <url> [held]
 # external, and an auto-merge still enabled on the new head is disabled before
 # the hold drops; that retirement wakes once (the record it retires is the
 # per-head guard), and a yolo poll re-verifies the new head from scratch on its
-# next cycle. While the queue holds the same head past MERGE_LINE_STALL_SECS,
-# counted from when the pull request became the first entry of its merge line
-# that is handed to the queue (an entry the queue does not hold, for any
-# reason, is skipped; a window entry queued behind another waits on the tests
-# ahead of it, so it keeps no episode, and one whose first queued entry changes
-# ahead of it starts over), one wake per
-# pull request and head says the queue has not picked it up or finished; state/<id>.queue-stall keeps that episode as "<url> <head>
-# <first-seen-epoch> <alerted>" and retires with the merged poll and at
-# teardown. The record retires with the merged poll and at teardown. Called
+# next cycle. While the queue holds the same head, counted from when the pull
+# request became the first entry of its merge line that is handed to the
+# queue (an entry the queue does not hold, for any reason, is skipped; a
+# window entry queued behind another waits on the tests ahead of it, so it
+# keeps no episode, and one whose first queued entry changes ahead of it
+# starts over), queue_stall_episode raises one wake per pull request and
+# head after MERGE_LINE_STALL_SECS: "merge-queue silent" when no queue check
+# has any status of its own, "merge-queue stalled" when one has. A queue
+# status that changes at the same head does not restart the clock, so a
+# queue that keeps re-testing one head without landing it still wakes. Called
 # with the poll's merged verdict too: PR_QUEUE_HOLD stays 1 then unless the
 # landing is confirmed at the handed-over head or its authority was revoked,
 # and the caller defers that landing rather than credit it.
 PR_QUEUE_HOLD=0
 pr_queue_merge_tick() {  # <id> <check-path> <url>
-  local id=$1 c=$2 url=$3 file verdict head detail reason stall now age line_head
-  local rec_url='' rec_head='' first='' alerted=''
+  local id=$1 c=$2 url=$3 file verdict head detail reason reported line_head
 
   PR_QUEUE_HOLD=0
   file="$STATE/$id.queue-merge"
@@ -2773,38 +2906,37 @@ pr_queue_merge_tick() {  # <id> <check-path> <url>
       [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] \
         || fm_pr_queue_merge_record_write "$STATE" "$id" "$url" "$FM_PR_QUEUE_MERGE_HEAD" \
           requested "$FM_PR_QUEUE_MERGE_CHECKS" || true
-      stall="$STATE/$id.queue-stall"
       line_head=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
         "$SCRIPT_DIR/fm-merge-line.sh" head --queued "$url" 2>/dev/null) || line_head=$url
       if [ -n "$line_head" ] && [ "$line_head" != "$url" ]; then
-        rm -f "$stall"
+        rm -f "$STATE/$id.queue-stall"
         return 0
       fi
-      now=$(date +%s)
-      if [ -f "$stall" ] && [ ! -L "$stall" ]; then
-        read -r rec_url rec_head first alerted < "$stall" || true
+      reported=${detail%% *}
+      detail=${detail#* }
+      if [ "$reported" = false ]; then
+        queue_stall_episode "$id" "$c" "$url" "$head" queue \
+          "merge-queue silent: $url has been green for " \
+          " min at head $head with no merge-queue status ($detail); auto-merge was requested when it was handed to the queue"
+      else
+        queue_stall_episode "$id" "$c" "$url" "$head" queue \
+          "merge-queue stalled: merge queue has not picked up or finished $url after " \
+          " min at head $head"
       fi
-      case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
-      if [ "$rec_url" != "$url" ] || [ "$rec_head" != "$head" ]; then
-        first=$now
-        alerted=0
-        pr_green_blocked_record "$stall" "$url" "$head" "$first" 0 || return 0
-      fi
-      [ "$alerted" = 1 ] && return 0
-      age=$((now - first))
-      [ "$age" -ge "$MERGE_LINE_STALL_SECS" ] || return 0
-      reason="check: $c: merge-queue stalled: merge queue has not picked up or finished $url after $((age / 60)) min at head $head"
-      fm_wake_append check "$c" "$reason" || exit 1
-      pr_green_blocked_record "$stall" "$url" "$head" "$first" 1 || exit 1
-      pr_poll_control_release || exit 1
-      touch "$STATE/.last-check"
-      wake "$reason"
+      return 0
       ;;
     merged\ *)
       PR_QUEUE_HOLD=0
       return 0
       ;;
   esac
+  # A queue that cancelled auto-merge while the pull request stayed open at the
+  # recorded head has ejected it. The worker hears about the ejection itself,
+  # not only through firstmate: the queue's failing tests and run reach it as
+  # the one steer that orders the supported pipeline rerun
+  # (pr_mq_ejection_steer, yolo=on only and read once per head, while the wake
+  # below still fires once for every task).
+  pr_mq_ejection_steer "$id" "$url" "$head"
   [ "$FM_PR_QUEUE_MERGE_STATUS" = requested ] || return 0
   reason="check: $c: merge-queue ejected $url at $head: $detail"
   fm_wake_append check "$c" "$reason" || exit 1
@@ -2824,6 +2956,104 @@ pr_queue_merge_revoke_authority() {  # <id> <url>
     triage_log "merge-queue record for $id held: revoking the merge authority granted for its verified head failed"
     return 1
   fi
+}
+
+# One merge-path wait episode for a pull request and head, kept in
+# state/<id>.queue-stall as "<url> <head> <first-seen-epoch> <alerted>
+# <kind>", where <kind> is what the pull request waits on: "queue" once it is
+# handed to the queue, "unhanded" while green but never handed over, and "ci"
+# while its checks have not finished. A change of URL, head, or kind starts a
+# fresh episode; nothing else restarts the clock, so a wait that lasts
+# MERGE_LINE_STALL_SECS from its first reading wakes once with
+# "<prefix><minutes><suffix>". The record retires with the merged poll and at
+# teardown.
+queue_stall_episode() {  # <id> <check-path> <url> <head> <kind> <prefix> <suffix>
+  local id=$1 c=$2 url=$3 head=$4 key=$5 prefix=$6 suffix=$7 file now age reason tmp
+  local rec_url='' rec_head='' first='' alerted='' rec_key=''
+  file="$STATE/$id.queue-stall"
+  now=$(date +%s)
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    read -r rec_url rec_head first alerted rec_key < "$file" || true
+  fi
+  case "$first" in ''|*[!0-9]*) rec_url='' ;; esac
+  if [ "$rec_url" != "$url" ] || [ "$rec_head" != "$head" ] || [ "$rec_key" != "$key" ]; then
+    first=$now
+    alerted=0
+  fi
+  age=$((now - first))
+  if [ "$alerted" != 1 ] && [ "$age" -ge "$MERGE_LINE_STALL_SECS" ]; then
+    reason="check: $c: $prefix$((age / 60))$suffix"
+    fm_wake_append check "$c" "$reason" || exit 1
+    alerted=1
+  else
+    reason=
+  fi
+  tmp=$(mktemp "$STATE/.queue-stall.XXXXXX") || exit 1
+  if ! { printf '%s %s %s %s %s\n' "$url" "$head" "$first" "$alerted" "$key" > "$tmp" \
+    && mv -f -- "$tmp" "$file"; }; then
+    rm -f "$tmp"
+    [ -z "$reason" ] || exit 1
+    return 0
+  fi
+  [ -n "$reason" ] || return 0
+  pr_poll_control_release || exit 1
+  touch "$STATE/.last-check"
+  wake "$reason"
+}
+
+# An armed pull request with no recorded queue hand-off (no
+# state/<id>.queue-merge) whose base branch merges only through a merge-queue
+# app, which is green apart from that app's checks and has no queue status at
+# all, is waiting on a queue that was never asked or never answered.
+# bin/fm-pr-queue-state.sh --unhanded reads it, and queue_stall_episode wakes
+# once per pull request and head after MERGE_LINE_STALL_SECS, naming whether
+# auto-merge was ever requested and, when it was not, who must request it: a
+# yolo=on task's own poll, or the guarded merge once the captain approves. A
+# clear reading ends the episode, and an unknown one changes nothing. A head
+# whose hand-off was refused while away already woke through
+# pr_queue_away_refused_tick and keeps that one wake. The same probe reports
+# an armed pull request on any base whose checks have not finished, with none
+# red, and that wait wakes once per pull request and head after the same
+# bound as "ci pending", so CI that never reports does not stall silently.
+pr_queue_unhanded_tick() {  # <id> <check-path> <url>
+  local id=$1 c=$2 url=$3 verdict head enabled detail requested away
+  [ ! -e "$STATE/$id.queue-merge" ] && [ ! -L "$STATE/$id.queue-merge" ] || return 0
+  run_check_capture "$SCRIPT_DIR/fm-pr-queue-state.sh" --unhanded "$url" || exit 1
+  verdict=${FM_CHECK_RESULT%%$'\n'*}
+  case "$verdict" in
+    clear) rm -f "$STATE/$id.queue-stall"; return 0 ;;
+    'ci-pending '*' '*)
+      detail=${verdict#ci-pending }
+      head=${detail%% *}
+      detail=${detail#* }
+      fm_pr_head_valid "$head" || return 0
+      queue_stall_episode "$id" "$c" "$url" "$head" ci \
+        "ci pending: $url has waited " " min at head $head for CI that has not finished ($detail)"
+      return 0
+      ;;
+    'unhanded '*' '*' '*) ;;
+    *) return 0 ;;
+  esac
+  detail=${verdict#unhanded }
+  head=${detail%% *}
+  detail=${detail#* }
+  enabled=${detail%% *}
+  detail=${detail#* }
+  fm_pr_head_valid "$head" || return 0
+  if [ "$enabled" = true ]; then
+    requested='auto-merge is enabled, but no guarded queue hand-off was recorded and the queue has not answered'
+  elif [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
+    requested='auto-merge was never requested, so the queue was never asked to take it; the yolo merge has not handed it over'
+  else
+    requested='auto-merge was never requested, so the queue was never asked to take it; it waits for an approved guarded merge (bin/fm-pr-merge.sh) to hand it over'
+  fi
+  away="$STATE/$id.queue-away-refused"
+  if [ -f "$away" ] && [ ! -L "$away" ] && [ "$(cat "$away")" = "$url $head" ]; then
+    return 0
+  fi
+  queue_stall_episode "$id" "$c" "$url" "$head" unhanded \
+    "merge-queue silent: $url has been green for " \
+    " min at head $head with no merge-queue status ($detail); $requested"
 }
 
 # The yolo merge of a green head-of-line pull request whose base branch merges
@@ -3073,6 +3303,9 @@ while :; do
     home_summary_refresh_detached
   fi
 
+  # Mirror fleet workers' remote status home (no-op without config/fleet-hosts).
+  fleet_sync_detached
+
   # Bearings publishes reconcile asks as local one-shot request files and
   # returns before any mate delivery. Supervision owns their later delivery;
   # a skipped or failed request remains durable for another poll.
@@ -3207,8 +3440,9 @@ while :; do
           # PR is attempted only when the line's windowed gate - which the
           # merge path enforces again, and which reads earlier window entries'
           # checks from the forge, so it is bounded like any check - admits it:
-          # on a merge-queue-app base whose head is queued, the queue orders
-          # the entry, and on every other base the plain hold above stands.
+          # on a merge-queue-app base whose head is queued or stalled
+          # (bin/fm-merge-line.sh's QUEUE WINDOW), the queue orders the
+          # entry, and on every other base the plain hold above stands.
           line_window=0
           if [ -z "$out" ] && [ "$pr_line_held" -eq 1 ] \
             && [ "$(fm_meta_get "$STATE/$id.meta" yolo)" = on ]; then
@@ -3298,6 +3532,11 @@ EOF
       fi
       if [ "$is_pr_poll" -eq 1 ] && [ "$provider" = github ]; then
         pr_green_blocked_tick "$id" "$c" "$url" "$pr_line_held"
+        # A PR its merge line still holds is not due for the queue yet; its
+        # wait is the line's (merge_line_stall_tick), not the queue's.
+        if [ "$pr_line_held" -eq 0 ] || [ "$line_window" -eq 1 ]; then
+          pr_queue_unhanded_tick "$id" "$c" "$url"
+        fi
       fi
       pr_poll_control_release || exit 1
     done
@@ -3557,6 +3796,22 @@ EOF
               rm -f "$ssf"
               clear_write_tracking "$key"
               triage_log "absorbed stale (open captain call already surfaced for this status): $w"
+            elif done_outcome_stale_bound "$task"; then
+              # A terminal `done:`/`failed:` status already presented to
+              # firstmate (the .status-presentation-cursor coverage record),
+              # with no steer delivered since, whose pane is stale only
+              # because cleanup is still owed: teardown refusal on an
+              # unresolved follow-up ledger, a captain hold, or observation
+              # bookkeeping. It is not a wedge - the worker finished - so it
+              # gets one bounded low-priority re-surface per
+              # PAUSE_RESURFACE_SECS and never an escalation timer.
+              printf '%s' "$h" > "$sf"
+              rm -f "$ssf"
+              clear_write_tracking "$key"
+              resurface_absorbed "$w" "$STATE/.done-stale-resurfaced-$key" 999999 \
+                "stale: $w (terminal outcome already presented; cleanup is blocked on firstmate-side work, not a wedge; one low-priority recheck per PAUSE_RESURFACE_SECS)" \
+                "done-stale:$(status_observed_signature "$STATE/$task.status")" "$PAUSE_RESURFACE_SECS"
+              triage_log "absorbed stale (done outcome already presented; cleanup-pending, not wedgeable): $w"
             else
               fm_wake_append stale "$w" "stale: $w" || exit 1
               stale_wait_record "$key"

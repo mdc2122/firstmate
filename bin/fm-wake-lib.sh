@@ -2400,10 +2400,13 @@ fm_wake_status_cursor_offset() {  # <validated-status-path> -> already-presented
 
 # O_NOFOLLOW read of every still-unread status byte. min-offset is the
 # already-presented cursor from classify-lib. Lines whose bytes begin before
-# that offset are not replayed. Prints nothing and returns 1 when no unread
-# non-blank line exists.
-fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min-offset> [<end-offset>]
-  local path=$1 min_offset=$3 end_offset=${4:-} result size chunk chunk_start
+# that offset are not replayed, and no line ending exactly at one of the
+# comma-separated <skip-end-offsets> (events the status outcome backstop
+# already presented) is replayed either; FM_WAKE_EVENT_LINE still names the
+# newest unread line, skipped or not. Prints nothing and returns 1 when no
+# unread non-blank line remains.
+fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min-offset> [<end-offset>] [<skip-end-offsets>]
+  local path=$1 min_offset=$3 end_offset=${4:-} skip_end=${5:-0} result size chunk chunk_start tagged
   local LC_ALL=C
   FM_WAKE_EVENT_LINE=
   FM_WAKE_UNREAD_LINES=
@@ -2434,16 +2437,23 @@ fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min
   [ -n "$chunk" ] || return 1
   [ "$min_offset" -lt "$size" ] || return 1
   chunk_start=$min_offset
-  FM_WAKE_UNREAD_LINES=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" '
-    BEGIN { pos = start + 0 }
+  tagged=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" -v end="$size" '
+    BEGIN {
+      pos = start + 0
+      n = split(skip, ends, ",")
+      for (i = 1; i <= n; i++) if (ends[i] + 0 > 0) skipped[ends[i] + 0] = 1
+    }
     {
       line_start = pos
       pos += length($0) + 1
-      if ($0 ~ /[^[:space:]]/ && line_start >= min) print $0
+      line_end = (pos > end + 0) ? end + 0 : pos
+      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((line_end in skipped) ? "-" : "+") $0
     }
   ') || return 1
+  FM_WAKE_UNREAD_LINES=$(printf '%s\n' "$tagged" | LC_ALL=C sed -n 's/^+//p')
   [ -n "$FM_WAKE_UNREAD_LINES" ] || return 1
-  FM_WAKE_EVENT_LINE=$(printf '%s\n' "$FM_WAKE_UNREAD_LINES" | tail -1)
+  FM_WAKE_EVENT_LINE=$(printf '%s\n' "$tagged" | tail -1)
+  FM_WAKE_EVENT_LINE=${FM_WAKE_EVENT_LINE#?}
   FM_WAKE_EVENT_LINE=$(printf '%s' "$FM_WAKE_EVENT_LINE" | LC_ALL=C tr '\t\r' '  ')
 }
 
@@ -2453,10 +2463,15 @@ fm_wake_latest_event() {  # <validated-status-path> <tail-byte-cap>
 
 # Print supplemental drain-time context only after the caller has committed the
 # raw queue consumption and released the append lock.
+# FM_WAKE_ANNOTATED_THROUGH lists "<task>\t<endpoint>" for every status log whose
+# annotations this call printed through <endpoint>, so the same drain's status
+# outcome backstop does not print that latest event a second time.
+FM_WAKE_ANNOTATED_THROUGH=
 fm_wake_print_annotations() {  # <deduped-raw-rows> [<presentation-snapshot>]
   local rows=$1 snapshot=${2:-} manifest status_key mode path prefix line task endpoint
-  local snapshot_task snapshot_endpoint _snapshot_ident offset last_event event_line
+  local snapshot_task snapshot_endpoint _snapshot_ident offset backstop last_event event_line
   local LC_ALL=C
+  FM_WAKE_ANNOTATED_THROUGH=
 
   manifest=$(fm_wake_annotation_manifest "$rows" | awk -F '\t' '
     {
@@ -2510,7 +2525,12 @@ EOF
       [ -n "$endpoint" ] || continue
     fi
     if [ -n "$endpoint" ] && [ "$offset" -ge "$endpoint" ]; then continue; fi
-    if ! fm_wake_unread_events "$path" 0 "$offset" "$endpoint"; then
+    # The status outcome backstop presents a task's latest captain-facing
+    # event once and records the end offset of every line it presented; a
+    # signal row for that task arriving later presents its other unread lines,
+    # not those again.
+    backstop=$(status_outcome_backstop_presented_ends "$path" 2>/dev/null) || backstop=0
+    if ! fm_wake_unread_events "$path" 0 "$offset" "$endpoint" "$backstop"; then
       # Annotation enrichment is supplemental to the already-printed durable
       # wake rows. A file that disappears, rotates, or becomes unreadable after
       # the snapshot must not suppress annotations for other status files; the
@@ -2533,6 +2553,7 @@ EOF
     done <<EOF
 $FM_WAKE_UNREAD_LINES
 EOF
+    [ -z "$endpoint" ] || FM_WAKE_ANNOTATED_THROUGH="$FM_WAKE_ANNOTATED_THROUGH${status_key%.status}"$'\t'"$endpoint"$'\n'
   done <<EOF
 $manifest
 EOF

@@ -501,6 +501,14 @@ ok - unacknowledged recovery is announced at most once per generation and the su
 FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=59357
 ```
 
+The inactive-outcome backstop and the idle-after-done stale class were verified on 2026-10-19 with a real `bin/fm-watch.sh` subprocess against fake tmux, the real drain, and the real inactive-outcome scanner:
+
+```sh
+tests/fm-done-outcome.test.sh
+```
+
+Observed guarantee: a terminal outcome printed by a drain whose turn was interrupted before `--ack-through`, an unpresented one, and a crew-state `done` behind a presented non-terminal last line all still queue the `inactive-outcome` backstop; and a cleanup-pending `done:` pane wakes once, absorbs a new pane hash inside the resurface window, and never wedge-escalates, a newly presented terminal outcome gets its own first wake, while a steer delivered after the outcome makes its next idle sighting wake as ordinary stale.
+
 Deterministic entry points:
 
 ```sh
@@ -510,6 +518,7 @@ tests/fm-watcher-lock.test.sh
 tests/fm-watch-arm.test.sh
 tests/fm-watch-recovery-loop.test.sh
 tests/fm-wake-queue.test.sh
+tests/fm-done-outcome.test.sh
 tests/fm-subagent-pretool-check.test.sh
 tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh

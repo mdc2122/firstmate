@@ -774,7 +774,7 @@ remote_teardown_locks_release() {
 }
 
 remote_recovery_paths_validate() {
-  local mode=${1:-initial} handoff_dir outbox pending_dir real rec
+  local mode=${1:-initial} handoff_dir outbox pending_dir real rec arec
   handoff_dir="$DATA/handoff"
   outbox="$handoff_dir/$ID.outbox.md"
   pending_dir="$STATE/pending-replies"
@@ -819,6 +819,18 @@ remote_recovery_paths_validate() {
     fi
     for rec in "$pending_dir"/*; do
       [ -e "$rec" ] || [ -L "$rec" ] || continue
+      # bin/fm-pending-reply-lib.sh archives settled resolved records here;
+      # every other entry must still be one regular record file.
+      if [ "$rec" = "$pending_dir/archive" ]; then
+        [ -d "$rec" ] && [ ! -L "$rec" ] \
+          || { echo "REFUSED: pending-replies archive is unsafe" >&2; return 1; }
+        for arec in "$rec"/*; do
+          [ -e "$arec" ] || [ -L "$arec" ] || continue
+          [ -f "$arec" ] && [ ! -L "$arec" ] \
+            || { echo "REFUSED: pending-replies archive contains an unsafe entry" >&2; return 1; }
+        done
+        continue
+      fi
       [ -f "$rec" ] && [ ! -L "$rec" ] \
         || { echo "REFUSED: pending-replies contains an unsafe recovery entry" >&2; return 1; }
     done
@@ -829,13 +841,22 @@ remote_recovery_paths_validate() {
 }
 
 remote_pending_replies_cleanup() {
-  local rec
+  local rec arec
   [ "$REMOTE_PENDING_DIR_PRESENT" -eq 1 ] || return 0
   (
     CDPATH='' cd -- "$STATE/pending-replies" 2>/dev/null || exit 1
     [ "$(pwd -P)" = "$REMOTE_PENDING_DIR_REAL" ] || exit 1
     for rec in ./*; do
       [ -e "$rec" ] || [ -L "$rec" ] || continue
+      if [ "$rec" = ./archive ]; then
+        [ -d "$rec" ] && [ ! -L "$rec" ] || exit 1
+        for arec in "$rec"/*; do
+          [ -e "$arec" ] || [ -L "$arec" ] || continue
+          [ -f "$arec" ] && [ ! -L "$arec" ] || exit 1
+          [ "$(fm_meta_get "$arec" task_id)" = "$ID" ] && rm -f -- "$arec"
+        done
+        continue
+      fi
       [ -f "$rec" ] && [ ! -L "$rec" ] || exit 1
       [ "$(fm_meta_get "$rec" task_id)" = "$ID" ] && rm -f -- "$rec"
     done
@@ -994,7 +1015,8 @@ remote_secondmate_teardown() {
   }
   status_retire_presentation_task "$STATE" "$ID" || return 1
   fm_backlog_atomic_transition remove "$STATE/$ID.meta" "task record" "$STATE" || return 1
-  rm -f -- "$STATE/$ID.turn-ended" "$STATE/$ID.progress"
+  rm -f -- "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
+    "$(fm_wake_signal_seen_path "$STATE" "$STATE/$ID.turn-ended")"
   printf 'teardown %s complete (remote %s:%s)\n' "$ID" "$remote_host" "$remote_home"
   return 0
 }
@@ -1072,6 +1094,17 @@ elif [ "$TREEHOUSE_SLOT_LOCK_REQUIRED" = 1 ]; then
 fi
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ -n "$MODE" ] || MODE=no-mistakes
+
+# A fleet task's worktree, branch, and omp session live on its donor host, so
+# none of the local landed-work checks below can see them. Teardown therefore
+# refuses until `bin/fm-fleet.sh release <id>` has fetched the work home and
+# freed the host (docs/fleet-placement.md "Recovery"); a release leaves
+# fleet_released= in the record. --force does not lift this: discarding remote
+# work is a release with FM_FLEET_RELEASE_DISCARD=1, never a teardown.
+if [ "$BACKEND" = fleet ] && [ -z "$(fm_meta_get "$META" fleet_released)" ]; then
+  echo "REFUSED: fleet task $ID still holds its work on $(fm_meta_get "$META" fleet_host); run bin/fm-fleet.sh release $ID first (it fetches the branch, uncommitted diff, and omp session home). Nothing was changed." >&2
+  exit 1
+fi
 
 # A record accepted as a legacy incarnation (no spawn_gen, --legacy-record
 # given) may be torn down only when its recorded endpoint is confidently gone
@@ -1359,6 +1392,9 @@ remove_pr_poll_artifacts() {
   validate_pr_poll_cleanup "$state_dir" "$id" || return 1
   fm_pr_poll_retirement_recover_one "$state_dir" "$id" "$SCRIPT_DIR/fm-pr-poll.sh" || return 1
   fm_pr_poll_merge_notified_remove "$state_dir" "$id" || return 1
+  # The task's resume watch (bin/fm-resume-watch.sh) can only ever steer this
+  # task, so it retires with the task's other PR artifacts.
+  FM_STATE_OVERRIDE="$state_dir" "$SCRIPT_DIR/fm-resume-watch.sh" retire "$id" >/dev/null || return 1
   rm -f "$state_dir/$id.check.sh" "$state_dir/$id.pr-poll" \
     "$state_dir/$id.pr-poll-registration" "$state_dir/$id.pr-poll-retirement" \
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" \
@@ -3570,6 +3606,7 @@ cleanup_firstmate_home_children() {
     status_retire_presentation_task "$sub_state" "$child_id" || return 1
     fm_backlog_atomic_transition remove "$sub_state/$child_id.meta" "task record" "$sub_state" || return 1
     rm -f "$sub_state/$child_id.turn-ended" "$sub_state/$child_id.progress" \
+      "$(fm_wake_signal_seen_path "$sub_state" "$sub_state/$child_id.turn-ended")" \
       "$sub_state/$child_id.pi-ext.ts" "$sub_state/$child_id.omp-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token" \
       "$sub_state/$child_id.muse-session" "$sub_state/$child_id.muse-session-current" \
@@ -4022,7 +4059,11 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 status_retire_presentation_task "$STATE" "$ID" || exit 1
+# The turn-end signal file and the watcher's seen marker for it
+# (bin/fm-wake-lib.sh fm_wake_signal_seen_path) retire together, so no
+# leftover record names this task once it is gone.
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
+  "$(fm_wake_signal_seen_path "$STATE" "$STATE/$ID.turn-ended")" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.omp-ext.ts" "$STATE/$ID.grok-turnend-token" \
   "$STATE/$ID.kimi-turnend-token" "$STATE/$ID.muse-session" \
   "$STATE/$ID.muse-session-current" "$STATE/$ID.cursor-session" \

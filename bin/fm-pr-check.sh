@@ -332,6 +332,12 @@ fm_pr_poll_publish_prepared || {
 # than merged out of order, so it is reported, not fatal.
 FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-merge-line.sh" enqueue "$URL" \
   || printf 'actionable: PR %s is armed but could not join its merge line; it stays held until it is added\n' "$URL" >&2
+# A worker paused on this PR resumes when it lands without a firstmate turn:
+# bin/fm-resume-watch.sh owns the watch, its form, and its retirement, and
+# re-arming the same PR is a no-op. A failed arm leaves the merge poll intact
+# and only loses the automatic resume, so it is reported, not fatal.
+FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-resume-watch.sh" arm "$ID" "$URL" >/dev/null \
+  || printf 'actionable: PR %s is armed but its resume watch is not; a worker waiting on it needs a manual go-ahead when it lands\n' "$URL" >&2
 # The contribution observer uses the same authenticated check mechanism and
 # owns verdict freshness, required actors and external feedback separately from
 # the exact merged-state poll. Registration is local and performs no forge read.

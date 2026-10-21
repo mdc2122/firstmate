@@ -66,7 +66,7 @@ fm_verify_block() {  # [observation]
   cat <<'EOF'
 This section extends the Definition of done above and outranks its "stop" and "You are finished" wording: the task is finished only when you have made the observation on the `verify:` line yourself, on the live surface it names, and recorded it.
 The ready line the Definition of done asks for (`done: PR ...` or `done: ready in branch ...`) hands the change over for merge; after appending it, end your turn and wait rather than treating the task as complete.
-When firstmate tells you through your instruction inbox that the change has landed, make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
+When an instruction-inbox record tells you the change has landed - a firstmate steer, or a `Resume fact (watch):` record a resume watch sends when your PR merges or goes live - make the observation and append `done: verified: {what you observed, with its evidence}` to the status file, then stop.
 If the live surface does not show it, append `blocked: verify: {what you saw instead}` and stop; never record `done: verified:` for an observation you did not make.
 Teardown refuses to close this task until that `done: verified:` line exists.
 EOF

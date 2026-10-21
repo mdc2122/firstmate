@@ -329,7 +329,7 @@ test_empty_queue_does_not_swallow_later_signal_annotation() {
   state="$dir/state"
   out="$dir/drain.out"
   status="$state/task-delayed.status"
-  printf 'done: shipped before watcher published signal\n' > "$status"
+  printf 'working: packaging the release\ndone: shipped before watcher published signal\n' > "$status"
 
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" \
     || fail "empty-queue drain failed before delayed signal publication"
@@ -340,9 +340,12 @@ test_empty_queue_does_not_swallow_later_signal_annotation() {
     || fail "publishing the delayed status signal failed"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$out" \
     || fail "drain failed after delayed signal publication"
-  grep -F 'latest wake-EVENT observed at drain, not current state: task-delayed.status: done: shipped before watcher published signal' "$out" >/dev/null \
-    || fail "the empty-queue drain acknowledged an event before its signal annotation: $(cat "$out")"
-  pass "an empty-queue backstop presentation still preserves the status for its later signal annotation"
+  grep -F 'task-delayed.status: working: packaging the release' "$out" >/dev/null \
+    || fail "the empty-queue drain acknowledged unread status context before its signal annotation: $(cat "$out")"
+  if grep -F 'shipped before watcher published signal' "$out" >/dev/null; then
+    fail "the delayed signal re-presented the terminal event the backstop already presented: $(cat "$out")"
+  fi
+  pass "an empty-queue backstop presentation keeps the rest of the status for its later signal annotation without repeating the presented event"
 }
 
 test_routine_working_and_covered_done_stay_silent_on_the_empty_queue() {

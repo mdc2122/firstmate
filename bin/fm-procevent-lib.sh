@@ -344,6 +344,22 @@ fm_procevent_source_lock_acquire() {
   fm_lock_acquire_wait "$(fm_procevent_source_lock_path "$id")"
 }
 
+# fm_procevent_source_lock_acquire_bounded <source-id> [seconds]
+# Reconcile's acquisition: wait at most the configured bound, then fail this
+# source for the pass and leave it for the next reconcile. A wedged or foreign
+# lock holder must never stall the watcher behind it.
+fm_procevent_source_lock_acquire_bounded() {  # <source-id> [seconds]
+  local id=$1 seconds=${2:-${FM_PROCEVENT_SOURCE_LOCK_TIMEOUT:-5}} root
+  fm_procevent_source_id_valid "$id" || return 1
+  root=$(fm_procevent_claim_root)
+  (umask 077; mkdir -p "$root") || return 1
+  [ -d "$root" ] && [ ! -L "$root" ] || return 1
+  case "$seconds" in
+    ''|*[!0-9]*|0) seconds=5 ;;
+  esac
+  fm_lock_acquire_wait_bounded "$(fm_procevent_source_lock_path "$id")" "$seconds"
+}
+
 # fm_procevent_source_lock_try_acquire <source-id>
 # Non-blocking acquisition for release_start_claim in bin/fm-procevent.sh;
 # that caller owns the exit-cleanup lock-order invariant.
