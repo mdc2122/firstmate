@@ -102,6 +102,14 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
+      - name: Ensure pinned actionlint
+        run: |
+          set -eu
+          current=$(actionlint --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$current" != "1.7.12" ]; then
+            bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
       - name: Run actionlint over every workflow
         run: bin/fm-lint-workflows.sh
 
@@ -133,6 +141,31 @@ jobs:
             bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
             echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           fi
+      - name: Ensure Node.js and npm
+        # Self-hosted and burst runners are not guaranteed to have Node on the
+        # service PATH. Discover an existing install first, then fall back to a
+        # pinned portable Node under RUNNER_TEMP; no root and no system change.
+        run: |
+          set -eu
+          if command -v npm >/dev/null 2>&1; then
+            npm --version
+            exit 0
+          fi
+          for candidate in "$HOME"/.nvm/versions/node/*/bin /usr/local/node/bin /opt/node/bin; do
+            [ -x "$candidate/npm" ] || continue
+            echo "$candidate" >> "$GITHUB_PATH"
+            export PATH="$candidate:$PATH"
+            npm --version
+            exit 0
+          done
+          version=v22.14.0
+          mkdir -p "$RUNNER_TEMP/node"
+          curl -fsSL "https://nodejs.org/dist/${version}/node-${version}-linux-x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/node" --strip-components=1
+          echo "$RUNNER_TEMP/node/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/node/bin:$PATH"
+          node --version
+          npm --version
       - name: Install tasks-axi
         run: |
           set -eu
@@ -188,6 +221,31 @@ jobs:
             bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
             echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           fi
+      - name: Ensure Node.js and npm
+        # Self-hosted and burst runners are not guaranteed to have Node on the
+        # service PATH. Discover an existing install first, then fall back to a
+        # pinned portable Node under RUNNER_TEMP; no root and no system change.
+        run: |
+          set -eu
+          if command -v npm >/dev/null 2>&1; then
+            npm --version
+            exit 0
+          fi
+          for candidate in "$HOME"/.nvm/versions/node/*/bin /usr/local/node/bin /opt/node/bin; do
+            [ -x "$candidate/npm" ] || continue
+            echo "$candidate" >> "$GITHUB_PATH"
+            export PATH="$candidate:$PATH"
+            npm --version
+            exit 0
+          done
+          version=v22.14.0
+          mkdir -p "$RUNNER_TEMP/node"
+          curl -fsSL "https://nodejs.org/dist/${version}/node-${version}-linux-x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/node" --strip-components=1
+          echo "$RUNNER_TEMP/node/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/node/bin:$PATH"
+          node --version
+          npm --version
       - name: Install tasks-axi
         run: |
           set -eu
@@ -255,6 +313,31 @@ jobs:
             exit 1
           }
           tmux -V
+      - name: Ensure Node.js and npm
+        # Self-hosted and burst runners are not guaranteed to have Node on the
+        # service PATH. Discover an existing install first, then fall back to a
+        # pinned portable Node under RUNNER_TEMP; no root and no system change.
+        run: |
+          set -eu
+          if command -v npm >/dev/null 2>&1; then
+            npm --version
+            exit 0
+          fi
+          for candidate in "$HOME"/.nvm/versions/node/*/bin /usr/local/node/bin /opt/node/bin; do
+            [ -x "$candidate/npm" ] || continue
+            echo "$candidate" >> "$GITHUB_PATH"
+            export PATH="$candidate:$PATH"
+            npm --version
+            exit 0
+          done
+          version=v22.14.0
+          mkdir -p "$RUNNER_TEMP/node"
+          curl -fsSL "https://nodejs.org/dist/${version}/node-${version}-linux-x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP/node" --strip-components=1
+          echo "$RUNNER_TEMP/node/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/node/bin:$PATH"
+          node --version
+          npm --version
       - name: Install tasks-axi for backlog-handoff delegation
         run: |
           set -eu
