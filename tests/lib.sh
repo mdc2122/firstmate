@@ -127,6 +127,26 @@ FM_TEST_OWNER_IDENTITY=$(fm_test_pid_identity "$$") || {
 
 FM_TEST_PROCEVENT_REGISTRY=$(mktemp "${TMPDIR:-/tmp}/.fm-test-procevent.$$.XXXXXX") || return 1
 
+# Unit tests must never write the machine-wide process-event claim root: stale
+# claims there are shared by every home, and reconcile must settle only the
+# claims its own home owns. Every test shell gets a private sandbox, and an
+# explicit real root is refused rather than trusted.
+_fm_real_claim_root="${XDG_STATE_HOME:-$HOME/.local/state}/firstmate/procevent-claims"
+if [ -n "${FM_PROCEVENT_CLAIM_ROOT:-}" ]; then
+  case "$FM_PROCEVENT_CLAIM_ROOT" in
+    "$_fm_real_claim_root"|"$HOME/.local/state/firstmate/procevent-claims")
+      printf 'tests: refusing to run with the machine-wide procevent claim root: %s\n' \
+        "$FM_PROCEVENT_CLAIM_ROOT" >&2
+      exit 1
+      ;;
+  esac
+else
+  FM_PROCEVENT_CLAIM_ROOT="${TMPDIR:-/tmp}/fm-test-claims.$$"
+  export FM_PROCEVENT_CLAIM_ROOT
+  FM_TEST_CLEANUP_DIRS+=("$FM_PROCEVENT_CLAIM_ROOT")
+fi
+unset _fm_real_claim_root
+
 fm_test_track_procevent_home() {  # <home> [claim-root]
   [ -n "${1:-}" ] || return 1
   printf '%s\t%s\n' "$1" "${2-}" >> "$FM_TEST_PROCEVENT_REGISTRY"
