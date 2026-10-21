@@ -26,9 +26,9 @@
 #                                        session home (read-only on the host)
 #   fm-fleet.sh resume <task-id>         relaunch omp on the same host and
 #                                        worktree from its saved session
-#   fm-fleet.sh release <task-id>        fetch, then stop and free the slot;
-#                                        refuses while unfetched uncommitted
-#                                        work remains
+#   fm-fleet.sh release <task-id>        stop the worker, fetch, then free
+#                                        the slot; refuses while unfetched
+#                                        uncommitted work remains
 #
 # Opt-in: nothing here runs unless config/fleet-hosts exists; the config
 # grammar and placement rule are owned by bin/fm-fleet-lib.sh, and the
@@ -37,10 +37,11 @@
 #
 # What runs where:
 # - The worker runs on the host in the endpoint its host record names
-#   (session=herdr: a workspace fm-<id> on the host's own `fm-fleet` Herdr
-#   server, which this machine's Herdr shows under the saved machine
-#   fleet-<host>; session=tmux: a detached tmux session fm-<id>). Either way
-#   it outlives every SSH disconnect. Running work never moves between hosts.
+#   (session=herdr, the default: a workspace fm-<id> on the host's own
+#   `fm-fleet` Herdr server, which this machine's Herdr shows under the saved
+#   machine fleet-<host>; session=tmux, only for a host whose record gives a
+#   tmux_reason=: a detached tmux session fm-<id>). Either way it outlives
+#   every SSH disconnect. Running work never moves between hosts.
 # - The worktree is a git worktree of a host-local bare mirror under
 #   <root>/repos, filled from this machine over SSH, so hosts need no GitHub
 #   credential. Results come back the same way (`fetch`); hosts never push.
@@ -62,7 +63,9 @@
 # reservation (host plus deadline) before releasing the lock, so two
 # concurrent launches can never both take a host's last slot. `launch` drops
 # the reservation once the worker's pid appears in the host's own sample; a
-# launch that dies first frees the slot at the deadline.
+# launch that dies first frees the slot at the deadline. `launch` writes the
+# task record before it creates anything task-specific on the host, so a
+# launch that fails part way still leaves a record that stop and release use.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -211,7 +214,7 @@ EOF
     name=${rec%% *}
     sample=$(cat "$tmp/$name")
     avail=$(fm_fleet_availability "$FLEET_STATE/$name.availability" "$rec" "$sample" "$now")
-    fm_fleet_evaluate "$rec" "$sample" "$avail" "$(pending_on "$name" "$exclude")"
+    printf '%s%s\n' "$(fm_fleet_evaluate "$rec" "$sample" "$avail" "$(pending_on "$name" "$exclude")")" "$(tmux_note "$rec")"
   done <<EOF
 $records
 EOF
@@ -292,16 +295,25 @@ EOF
 
 # --- worker endpoint: Herdr (visible in studio2's Herdr view) or tmux -------
 #
-# session=herdr hosts the worker in a workspace of the host's own
-# `fm-fleet` Herdr server, driven from this machine through the saved-machine
-# profile fleet-<host> (`herdr --machine fleet-<host> ...`), so the worker
-# shows in this machine's Herdr sidebar under that machine with no SSH command.
-# session=tmux (the default and the fallback) hosts it in a detached tmux
-# session fm-<id> on the host. The endpoint string recorded as fleet_endpoint=
-# is `herdr:<workspace-id>/<pane-id>` or `tmux:fm-<id>`.
+# session=herdr (the default) hosts the worker in a workspace of the host's
+# own `fm-fleet` Herdr server, driven from this machine through the
+# saved-machine profile fleet-<host> (`herdr --machine fleet-<host> ...`), so
+# the worker shows in this machine's Herdr sidebar under that machine with no
+# SSH command. session=tmux is only the fallback for a host that cannot run
+# Herdr; its record carries tmux_reason=, which every verdict and launch
+# prints. It hosts the worker in a detached tmux session fm-<id> on the host.
+# The endpoint string recorded as fleet_endpoint= is
+# `herdr:<workspace-id>/<pane-id>` or `tmux:fm-<id>`.
 
 host_session() {  # <record>
-  fm_fleet_host_field "$1" session tmux
+  fm_fleet_host_field "$1" session herdr
+}
+
+# tmux_note <record>: " (session=tmux: <reason>)" for a tmux-fallback host,
+# nothing for a Herdr host.
+tmux_note() {
+  [ "$(host_session "$1")" = tmux ] || return 0
+  printf ' (session=tmux, not in the Herdr view: %s)' "$(fm_fleet_host_field "$1" tmux_reason)"
 }
 
 herdr_machine() {  # <record> -> saved-machine label
@@ -467,49 +479,19 @@ cmd_launch() {
   local repo_name; repo_name=$(basename "$proj")
   local r_repo="$root/repos/$repo_name.git"
 
-  # 1. Host-side bare mirror + worktree on a fresh branch at the local HEAD.
+  # 1. Host-side bare mirror holding a fresh branch at the local HEAD.
   fleet_ssh "$alias" "set -e
 mkdir -p $(sq "$root/repos") $(sq "$root/worktrees") $(sq "$root/run") $(sq "$R_TASK/inbox/handled") $(sq "$R_SESS")
+touch $(sq "$R_TASK/status")
 [ -d $(sq "$r_repo") ] || git init -q --bare $(sq "$r_repo")
 " || { rm -f "$FLEET_STATE/$id.reservation"; die "could not prepare $host"; }
   git -C "$proj" push -q "$alias:$r_repo" "+$base:refs/heads/$branch" \
     || { rm -f "$FLEET_STATE/$id.reservation"; die "could not push $proj to $host"; }
-  fleet_ssh "$alias" "set -e
-cd $(sq "$r_repo")
-[ -e $(sq "$R_WT") ] && { echo 'worktree path already exists' >&2; exit 1; }
-git worktree add -q $(sq "$R_WT") $(sq "$branch")
-git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.name || echo firstmate-fleet)\" || true
-" || { rm -f "$FLEET_STATE/$id.reservation"; die "could not create the worktree on $host"; }
 
-  # 2. Brief and extension into the host's task dir.
-  remote_brief "$id" "$R_TASK" | fleet_ssh_put "$alias" "$R_TASK/brief.md"
-  remote_extension "$R_TASK" | fleet_ssh_put "$alias" "$R_TASK/omp-ext.ts"
-  cat "$FM_ROOT/.omp/fm-worker-overlay.yml" | fleet_ssh_put "$alias" "$R_TASK/overlay.yml"
-
-  # 3. Start the worker in the host's session (Herdr or tmux, per session=).
-  launch_sh=$(remote_launch_script "$id" "$model" "$effort" "")
-  printf '%s\n' "$launch_sh" | fleet_ssh_put "$alias" "$R_TASK/launch.sh"
-  fleet_ssh "$alias" "chmod 700 $(sq "$R_TASK/launch.sh")" \
-    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not stage the worker launcher on $host"; }
-  local endpoint
-  endpoint=$(endpoint_start "$rec" "$id") \
-    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not start the worker on $host"; }
-  # The worker counts in the host's own sample once its pid file exists, so
-  # the reservation is released then; a worker that never starts leaves the
-  # reservation to expire at its deadline instead.
-  local started=0 _
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    if fleet_ssh "$alias" "pid=\$(cat $(sq "$R_PID") 2>/dev/null) && kill -0 \"\$pid\" 2>/dev/null" 2>/dev/null; then
-      started=1
-      break
-    fi
-    sleep 1
-  done
-  [ "$started" = 1 ] || die "the worker on $host did not start ($endpoint); its reservation expires on its own"
-  rm -f "$FLEET_STATE/$id.reservation"
-
-  # 4. Record the task in this home: a meta that ordinary tools read, plus an
-  # empty status log and inbox the mirror keeps current.
+  # 2. Record the task in this home before anything task-specific exists on
+  # the host: a meta that ordinary tools read, plus an empty status log and
+  # inbox the mirror keeps current. From here on a failed launch keeps this
+  # record, so stop and release can clean up the host.
   mkdir -p "$STATE"
   meta=$(meta_of "$id")
   tmp="$STATE/.$id.meta.fleet.$$"
@@ -527,7 +509,6 @@ git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.na
     echo "fleet_host=$host"
     echo "fleet_os=$os"
     echo "fleet_session=$(host_session "$rec")"
-    echo "fleet_endpoint=$endpoint"
     echo "fleet_branch=$branch"
     echo "fleet_base=$base"
     echo "model=${model:-default}"
@@ -536,10 +517,47 @@ git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.na
   mv "$tmp" "$meta"
   touch "$STATE/$id.status"
   mkdir -p "$STATE/$id.inbox/handled"
+
+  # 3. Host-side worktree on the fresh branch.
+  fleet_ssh "$alias" "set -e
+cd $(sq "$r_repo")
+[ -e $(sq "$R_WT") ] && { echo 'worktree path already exists' >&2; exit 1; }
+git worktree add -q $(sq "$R_WT") $(sq "$branch")
+git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.name || echo firstmate-fleet)\" || true
+" || { rm -f "$FLEET_STATE/$id.reservation"; die "could not create the worktree on $host; inspect $R_WT there, then release $id"; }
+
+  # 4. Brief, extension, overlay and launcher into the host's task dir.
+  launch_sh=$(remote_launch_script "$id" "$model" "$effort" "")
+  { remote_brief "$id" "$R_TASK" | fleet_ssh_put "$alias" "$R_TASK/brief.md" &&
+    remote_extension "$R_TASK" | fleet_ssh_put "$alias" "$R_TASK/omp-ext.ts" &&
+    fleet_ssh_put "$alias" "$R_TASK/overlay.yml" <"$FM_ROOT/.omp/fm-worker-overlay.yml" &&
+    printf '%s\n' "$launch_sh" | fleet_ssh_put "$alias" "$R_TASK/launch.sh" &&
+    fleet_ssh "$alias" "chmod 700 $(sq "$R_TASK/launch.sh")"; } \
+    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not stage the worker launcher on $host; release $id to remove its worktree"; }
+
+  # 5. Start the worker in the host's session (Herdr, or the tmux fallback).
+  [ -z "$(tmux_note "$rec")" ] || echo "fm-fleet: $host$(tmux_note "$rec")" >&2
+  local endpoint
+  endpoint=$(endpoint_start "$rec" "$id") \
+    || { rm -f "$FLEET_STATE/$id.reservation"; die "could not start the worker on $host; release $id to remove its worktree"; }
+  set_task_field "$id" fleet_endpoint "$endpoint"
   # Arm the busy-state contract the mirror in `sync` feeds; the launch brief is
   # a submitted turn, so the seed record reads busy.
   "$SCRIPT_DIR/fm-busy-event.sh" arm "$STATE" "$id" --source omp-ext --event launch-brief >/dev/null \
     || echo "fm-fleet: warning: busy-state record for $id could not be armed; its busy state reads unknown" >&2
+  # The worker counts in the host's own sample once its pid file exists, so
+  # the reservation is released then; a worker that never starts leaves the
+  # reservation to expire at its deadline instead.
+  local started=0 _
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if fleet_ssh "$alias" "pid=\$(cat $(sq "$R_PID") 2>/dev/null) && kill -0 \"\$pid\" 2>/dev/null" 2>/dev/null; then
+      started=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$started" = 1 ] || die "the worker on $host did not start ($endpoint); its reservation expires on its own and its record stays for state, stop and release"
+  rm -f "$FLEET_STATE/$id.reservation"
   echo "launched $id on $host worktree=$R_WT endpoint=$endpoint"
 }
 
@@ -602,13 +620,20 @@ EOF
 
 # --- sync (status, turn-end, busy, inbox) -----------------------------------
 
+# One sync per task at a time (the watcher's cycle and every fm-send ring both
+# sync): the mirror reads the local length, fetches the tail past it, and
+# appends, so overlapping syncs would duplicate or skip status bytes. A sync
+# that dies holding the lock frees it through the lock's dead-owner recovery.
 cmd_sync() {
-  local id=$1 rec alias root out local_len remote_len section line
+  local id=$1 rec alias root out local_len remote_len section line lock
   require_fleet
   rec=$(task_host_record "$id")
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
+  mkdir -p "$FLEET_STATE"
+  lock="$FLEET_STATE/.$id.sync.lock"
+  fm_lock_acquire_wait "$lock"
   local_len=$(wc -c <"$STATE/$id.status" 2>/dev/null | tr -d ' ') || local_len=0
   # Deliver home-side steering records the host has not seen yet: stage the
   # body under a dot name (fleet_ssh_put reads it from stdin), then rename it
@@ -628,7 +653,7 @@ echo \"busy=\$(cat $(sq "$R_TASK/busy") 2>/dev/null)\"
 echo \"handled=\$(ls $(sq "$R_TASK/inbox/handled") 2>/dev/null | tr '\n' ' ')\"
 echo '--status'
 tail -c +$((local_len + 1)) \"\$s\"
-") || { echo "unreachable"; return 3; }
+") || { fm_lock_release "$lock"; echo "unreachable"; return 3; }
   remote_len=$(printf '%s\n' "$out" | sed -n 's/^len=//p' | head -n 1)
   section=$(printf '%s\n' "$out" | sed '1,/^--status$/d')
   if [ "${remote_len:-0}" -lt "$local_len" ]; then
@@ -661,6 +686,7 @@ tail -c +$((local_len + 1)) \"\$s\"
   for base in $(printf '%s\n' "$out" | sed -n 's/^handled=//p'); do
     [ -f "$STATE/$id.inbox/$base" ] && mv "$STATE/$id.inbox/$base" "$STATE/$id.inbox/handled/$base"
   done
+  fm_lock_release "$lock"
   echo "synced $id: status=${remote_len:-0}B busy=$(cut -d' ' -f1 "$FLEET_STATE/$id.busy" 2>/dev/null || echo unknown)"
 }
 
@@ -707,12 +733,25 @@ cmd_stop() {
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   remote_paths "$root" "$id"
-  fleet_ssh "$alias" "
-pid=\$(cat $(sq "$R_PID") 2>/dev/null)
-case \"\$pid\" in ''|*[!0-9]*) ;; *) kill \"\$pid\" 2>/dev/null || true ;; esac
-rm -f $(sq "$R_PID")
-" || die "could not reach $(task_field "$id" fleet_host) to stop $id"
+  stop_worker "$alias" || die "could not reach $(task_field "$id" fleet_host) to stop $id"
   endpoint_close "$rec" "$(endpoint_of "$id")"
+}
+
+# stop_worker <alias>: end the omp recorded in $R_PID and wait (up to 10 s)
+# for it to exit, so nothing writes to the worktree afterwards.
+stop_worker() {
+  fleet_ssh "$1" "
+pid=\$(cat $(sq "$R_PID") 2>/dev/null)
+case \"\$pid\" in
+  ''|*[!0-9]*) ;;
+  *)
+    kill \"\$pid\" 2>/dev/null || true
+    n=0
+    while kill -0 \"\$pid\" 2>/dev/null && [ \$n -lt 50 ]; do sleep 0.2; n=\$((n + 1)); done
+    ;;
+esac
+rm -f $(sq "$R_PID")
+"
 }
 
 cmd_peek() {
@@ -817,16 +856,12 @@ cmd_release() {
   proj=$(task_field "$id" project)
   remote_paths "$root" "$id"
   r_repo="$root/repos/$(basename "$proj").git"
+  stop_worker "$alias" || die "could not reach the host to release $id; its slot is still held"
   cmd_fetch "$id"
   patch="$DATA/$id/fleet/uncommitted.patch"
   if [ -s "$patch" ] && [ "${FM_FLEET_RELEASE_DISCARD:-0}" != 1 ]; then
-    die "task $id has uncommitted work on its host (saved to $patch); have the worker commit it, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough"
+    die "task $id has uncommitted work on its host (saved to $patch); the worker is stopped: resume it to commit the work, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough"
   fi
-  fleet_ssh "$alias" "
-pid=\$(cat $(sq "$R_PID") 2>/dev/null)
-case \"\$pid\" in ''|*[!0-9]*) ;; *) kill \"\$pid\" 2>/dev/null || true ;; esac
-rm -f $(sq "$R_PID")
-" || die "could not reach the host to release $id; its slot is still held"
   endpoint_close "$rec" "$(endpoint_of "$id")"
   fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
     || die "could not remove the worktree on $(task_field "$id" fleet_host); the work stays there and $id is not released"

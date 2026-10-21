@@ -94,13 +94,43 @@ assert_contains "$out" "no a rising: cpu 90% > 50% for 0s" "a spike inside the b
 assert_contains "$(cat "$home/state/fleet/a.availability")" "state=available" "the spike alone leaves the host available"
 sample "$home" a linux 32 5 1 1 100000 normal 12 -
 assert_contains "$(fleet "$home" hosts)" "ok a" "the spike ended inside the hold: no flap to busy"
-sample "$home" a linux 32 90 20 3 100000 normal 12 -
-assert_contains "$(fleet "$home" hosts)" "no a busy cpu 90% > 50%" "a 1-minute load over the ceiling turns the host busy at once"
+sample "$home" a linux 32 5 20 3 100000 normal 12 -
+assert_contains "$(fleet "$home" hosts)" "no a rising: load 20.00 > 50% of 32 cores for 0s" \
+  "a 1-minute load over the ceiling is a rising signal, not busy at once"
+now=$(date +%s)
+printf 'state=available over_since=%s last_busy=- last=%s\n' "$((now - 20))" "$((now - 10))" > "$home/state/fleet/a.availability"
+sample "$home" a linux 32 5 1 1 100000 normal 12 -
+assert_contains "$(fleet "$home" hosts)" "ok a" "a 20-second load burst that clears never turns the host busy"
+sample "$home" a linux 32 5 20 3 100000 normal 12 -
+fleet "$home" hosts >/dev/null
+now=$(date +%s)
+printf 'state=available over_since=%s last_busy=- last=%s\n' "$((now - 61))" "$((now - 30))" > "$home/state/fleet/a.availability"
+assert_contains "$(fleet "$home" hosts)" "no a busy load 20.00 > 50% of 32 cores" \
+  "a load over the ceiling across samples for 60 s turns the host busy"
 sample "$home" a linux 32 5 1 3 100000 normal 12 -
 assert_contains "$(fleet "$home" hosts)" "no a busy clear for" "a busy host stays busy until the clear hold passes"
 FM_FLEET_CLEAR_HOLD=0 FM_HOME="$home" FM_FLEET_SAMPLE_CMD="$home/sample" FM_FAKE_SAMPLES="$home/samples" \
   "$ROOT/bin/fm-fleet.sh" hosts > "$home/clear.out"
 assert_contains "$(cat "$home/clear.out")" "ok a" "after the clear hold a quiet host is available again"
+
+# --- endpoint: Herdr by default, tmux only with a stated reason -------------
+home=$(make_home endpoint)
+printf 'a ssh=a os=linux root=/srv/fm session=tmux\n' > "$home/config/fleet-hosts"
+out=$(fleet "$home" hosts 2>&1)
+expect_code 1 $? "a session=tmux host without a reason is refused"
+assert_contains "$out" "session=tmux without tmux_reason=" "the refusal asks for the reason"
+printf 'a ssh=a os=linux root=/srv/fm tmux_reason=no-gui\n' > "$home/config/fleet-hosts"
+fleet "$home" hosts >/dev/null 2>&1
+expect_code 1 $? "a tmux reason on a Herdr host is refused"
+printf 'a ssh=a os=linux root=/srv/fm session=tmux tmux_reason=no-gui\nb ssh=b os=linux root=/srv/fm\n' \
+  > "$home/config/fleet-hosts"
+sample "$home" a linux 32 5 1 1 100000 normal 12 -
+sample "$home" b linux 32 5 1 1 100000 normal 12 -
+out=$(fleet "$home" hosts)
+assert_contains "$out" "ok a spare_cpu=27.00 spare_mem_gb=90.66 (session=tmux, not in the Herdr view: no-gui)" \
+  "a tmux fallback host shows its reason in its verdict"
+assert_equals "ok b spare_cpu=27.00 spare_mem_gb=90.66" "$(printf '%s\n' "$out" | grep '^ok b')" \
+  "a host with no session= is a plain Herdr host"
 
 # --- memory pressure, busy processes, unreachable ---------------------------
 home=$(make_home signals)

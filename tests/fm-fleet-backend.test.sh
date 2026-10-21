@@ -4,8 +4,11 @@
 # recovery-grade agent state a donor host reports (alive, dead, missing, and
 # unreadable when the host does not answer - never dead), capture absence only
 # on the host's own positive verdict, endpoint metadata validation, and the
-# status mirror that appends only the host log's new bytes. ssh and herdr are
-# PATH fakes driven by files under the fixture, so no host is contacted.
+# status mirror that appends only the host log's new bytes even when syncs
+# overlap, release stopping the worker before it snapshots the worktree, and a
+# failed launch keeping a record that release can clean up. ssh, herdr and
+# tmux are PATH fakes driven by files under the fixture, so no host is
+# contacted.
 set -u
 
 # shellcheck source=tests/lib.sh disable=SC1091
@@ -56,7 +59,8 @@ case "$1 $2" in
   *) exit 0 ;;
 esac
 SH
-chmod +x "$FAKEBIN/ssh" "$FAKEBIN/herdr"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$FAKEBIN/tmux"
+chmod +x "$FAKEBIN/ssh" "$FAKEBIN/herdr" "$FAKEBIN/tmux"
 
 dispatch() {  # <function> <args...>: one fm-backend dispatch call for the home
   FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" bash -c '
@@ -102,6 +106,15 @@ FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync t1 >/dev/
 assert_equals "$(printf 'working: first\ndone: second')" "$(cat "$HOME_DIR/state/t1.status")" \
   "two syncs mirror the host log once, in order"
 
+# --- overlapping syncs mirror each status byte once -------------------------
+printf 'working: third\n' >> "$HOST_ROOT/tasks/t1/status"
+for _ in 1 2 3 4 5 6; do
+  FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync t1 >/dev/null 2>&1 &
+done
+wait
+assert_equals "$(cat "$HOST_ROOT/tasks/t1/status")" "$(cat "$HOME_DIR/state/t1.status")" \
+  "concurrent syncs neither duplicate nor skip status lines"
+
 # --- steering record delivery and acknowledgement ---------------------------
 printf 'schema=fm-task-inbox.v1\n--\nhello\n' > "$HOME_DIR/state/t1.inbox/001.msg"
 FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync t1 >/dev/null
@@ -118,4 +131,46 @@ expect_code 1 $? "teardown refuses a fleet task that was not released"
 assert_contains "$out" "run bin/fm-fleet.sh release t1 first" "the refusal names the release command"
 assert_present "$HOME_DIR/state/t1.meta" "the refused teardown keeps the task record"
 
-pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate"
+# --- a failed launch keeps a record that release cleans up ------------------
+PROJ="$TMP_ROOT/proj"
+git init -q "$PROJ"
+git -C "$PROJ" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
+fleet_cmd() {
+  FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" FM_FLEET_SAMPLE_CMD="$TMP_ROOT/sample" "$ROOT/bin/fm-fleet.sh" "$@"
+}
+printf '#!/usr/bin/env bash\necho "os=linux cpus=32 cpu_pct=1 load1=0 load5=0 mem_avail_mb=100000 mem_pressure=normal hour=12 busy=- workers=0"\n' \
+  > "$TMP_ROOT/sample"
+chmod +x "$TMP_ROOT/sample"
+mkdir -p "$HOME_DIR/data/t2"
+printf 'do the thing\n' > "$HOME_DIR/data/t2/brief.md"
+out=$(fleet_cmd launch t2 "$PROJ" 2>&1)
+expect_code 1 $? "a launch whose Herdr workspace does not start fails"
+assert_contains "$out" "could not start the worker on h1" "the failure names the host"
+assert_equals h1 "$(sed -n 's/^fleet_host=//p' "$HOME_DIR/state/t2.meta")" "the failed launch still records its host"
+assert_present "$HOST_ROOT/worktrees/t2" "the host worktree the failed launch made is still there"
+assert_absent "$HOME_DIR/state/fleet/t2.reservation" "the failed launch frees its slot"
+out=$(fleet_cmd release t2 2>&1)
+expect_code 0 $? "release cleans up after the failed launch: $out"
+assert_absent "$HOST_ROOT/worktrees/t2" "release removes the orphan worktree"
+
+# --- release stops the worker before it snapshots the worktree --------------
+fm_write_meta "$HOME_DIR/state/t3.meta" \
+  "window=fleet:t3" "endpoint_task_id=t3" "worktree=$HOST_ROOT/worktrees/t3" "project=$PROJ" \
+  "harness=omp" "kind=ship" "mode=local-only" "yolo=off" "backend=fleet" "spawn_gen=f3" \
+  "fleet_host=h1" "fleet_endpoint=herdr:w3/w3:p1"
+git -C "$HOST_ROOT/repos/proj.git" branch fm/t3 fm/t2
+git -C "$HOST_ROOT/repos/proj.git" worktree add -q "$HOST_ROOT/worktrees/t3" fm/t3
+mkdir -p "$HOST_ROOT/tasks/t3" "$HOST_ROOT/sessions/t3"
+touch "$HOST_ROOT/tasks/t3/status"
+sh -c 'trap "echo late > \"$1/late.txt\"; exit 0" TERM; while :; do sleep 0.1; done' _ "$HOST_ROOT/worktrees/t3" &
+WORKER_PID=$!
+printf '%s\n' "$WORKER_PID" > "$HOST_ROOT/run/t3.pid"
+out=$(fleet_cmd release t3 2>&1)
+expect_code 1 $? "release refuses when the stopping worker leaves uncommitted work"
+assert_contains "$out" "has uncommitted work" "the refusal names the uncommitted work"
+assert_contains "$(cat "$HOME_DIR/data/t3/fleet/uncommitted.patch")" "late.txt" \
+  "the saved patch holds what the worker wrote while stopping"
+assert_present "$HOST_ROOT/worktrees/t3/late.txt" "the host worktree keeps the unsaved work"
+kill "$WORKER_PID" 2>/dev/null; wait "$WORKER_PID" 2>/dev/null
+
+pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order"

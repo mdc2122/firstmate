@@ -11,7 +11,8 @@
 #
 # The availability model follows Crabbox's `serve` availability gating
 # (github.com/openclaw/crabbox docs/providers/serve.md, MIT): host CPU above a
-# ceiling or memory pressure at warn must persist before a host turns busy,
+# ceiling (sampled CPU fraction or 1-minute load per core) or memory pressure
+# at warn must persist before a host turns busy,
 # all signals must stay clear for five minutes before it turns available
 # again, an unknown signal blocks new placement at once, and a busy host only
 # stops new work - nothing here ever moves or stops a running worker.
@@ -25,9 +26,13 @@
 #   os=         darwin or linux; checked against the live sample.
 #   root=       absolute directory on the host that holds Firstmate's fleet
 #               files: bin/omp, the agent dir, clones, worktrees, sessions.
-#   session=    herdr or tmux: what hosts the worker on that host (default
-#               tmux). herdr requires the host's Herdr readiness
-#               (docs/fleet-placement.md "Herdr view").
+#   session=    herdr (default) or tmux: what hosts the worker on that host.
+#               herdr requires the host's Herdr readiness
+#               (docs/fleet-placement.md "Herdr view"); tmux is only the
+#               fallback for a host that cannot run Herdr and requires
+#               tmux_reason=.
+#   tmux_reason=<token>  why a session=tmux host cannot run Herdr
+#               ([A-Za-z0-9._-]+); shown in every verdict and launch.
 #   slots=      most fleet workers at once on this host (default 1).
 #   max_cpu=    host CPU ceiling as a percent of all cores (default 50).
 #   reserve_cpus=      cores kept free for the host's own workloads (default 2).
@@ -111,6 +116,7 @@ fm_fleet_hosts() {
         ssh) case "$val" in ''|*[!A-Za-z0-9._@-]*) echo "error: $file:$n: ssh=$val is not an SSH alias" >&2; return 1 ;; esac ;;
         os) case "$val" in darwin|linux) ;; *) echo "error: $file:$n: os= must be darwin or linux" >&2; return 1 ;; esac ;;
         session) case "$val" in herdr|tmux) ;; *) echo "error: $file:$n: session= must be herdr or tmux" >&2; return 1 ;; esac ;;
+        tmux_reason) case "$val" in ''|*[!A-Za-z0-9._-]*) echo "error: $file:$n: tmux_reason=$val must be [A-Za-z0-9._-]+" >&2; return 1 ;; esac ;;
         root)
           case "$val" in
             /*) case "$val" in *[!A-Za-z0-9._/-]*) echo "error: $file:$n: root=$val has unsupported characters" >&2; return 1 ;; esac ;;
@@ -141,6 +147,12 @@ fm_fleet_hosts() {
       [ -n "$(fm_fleet_host_field "$line" "$key")" ] \
         || { echo "error: $file:$n: host $name is missing $key=" >&2; return 1; }
     done
+    if [ "$(fm_fleet_host_field "$line" session herdr)" = tmux ]; then
+      [ -n "$(fm_fleet_host_field "$line" tmux_reason)" ] \
+        || { echo "error: $file:$n: host $name has session=tmux without tmux_reason= (why it cannot run Herdr)" >&2; return 1; }
+    elif [ -n "$(fm_fleet_host_field "$line" tmux_reason)" ]; then
+      echo "error: $file:$n: host $name has tmux_reason= without session=tmux" >&2; return 1
+    fi
     printf '%s\n' "$line"
   done < "$file"
 }
@@ -267,14 +279,15 @@ fm_fleet_pressure_reason() {
 # State file: one line
 #   state=<available|busy> over_since=<epoch|-> last_busy=<epoch|-> last=<epoch>
 # Rules (Crabbox serve's gating; Firstmate samples on demand, so the kernel's
-# own 1- and 5-minute load averages stand in for the samples it did not take):
+# own 5-minute load average stands in for the samples it did not take while
+# clearing):
 # - unreachable or unreadable signals: unknown now, state unchanged;
 # - a busy process: busy now, no hold;
-# - over a ceiling: busy once observed over for FM_FLEET_BUSY_HOLD, or at once
-#   when the 1-minute load average itself is over the ceiling, because that
-#   average already spans the hold. Persistence is judged across consecutive
-#   samples; a gap longer than FM_FLEET_CLEAR_HOLD since the previous sample
-#   restarts the run, since such a gap proves nothing either way;
+# - over a ceiling (sampled CPU, 1-minute load per core, or memory pressure):
+#   busy only once observed over for FM_FLEET_BUSY_HOLD. Persistence is judged
+#   across consecutive samples; a gap longer than FM_FLEET_CLEAR_HOLD since the
+#   previous sample restarts the run, since such a gap proves nothing either
+#   way;
 # - clear: a busy host turns available only when FM_FLEET_CLEAR_HOLD has
 #   passed since it was last observed busy and the 5-minute load average is
 #   under the ceiling, so a burst inside an unsampled gap still holds it busy;
@@ -282,7 +295,7 @@ fm_fleet_pressure_reason() {
 #   5-minute load average is under the ceiling.
 fm_fleet_availability() {
   local file=$1 rec=$2 s=$3 now=$4 state=available over=- last_busy=- prev='' reason
-  local max cpus load1 load5 load1_over=0 load5_over=0 last proc
+  local max cpus load5 load5_over=0 last proc
   if [ -f "$file" ]; then
     prev=$(cat "$file")
     state=$(fm_fleet_host_field "$prev" state available)
@@ -303,9 +316,7 @@ fm_fleet_availability() {
   fi
   max=$(fm_fleet_host_field "$rec" max_cpu "$FM_FLEET_DEFAULT_MAX_CPU")
   cpus=$(fm_fleet_host_field "$s" cpus)
-  load1=$(fm_fleet_host_field "$s" load1)
   load5=$(fm_fleet_host_field "$s" load5)
-  awk -v l="$load1" -v c="$cpus" -v m="$max" 'BEGIN { exit !(l * 100 / c > m) }' && load1_over=1
   awk -v l="$load5" -v c="$cpus" -v m="$max" 'BEGIN { exit !(l * 100 / c > m) }' && load5_over=1
   proc=$(fm_fleet_host_field "$s" busy -)
   if [ "$proc" != - ]; then
@@ -313,7 +324,7 @@ fm_fleet_availability() {
     reason="$proc running"
   elif reason=$(fm_fleet_pressure_reason "$rec" "$s"); then
     [ "$over" != - ] || over=$now
-    if [ "$state" = busy ] || [ "$((now - over))" -ge "$FM_FLEET_BUSY_HOLD" ] || [ "$load1_over" = 1 ]; then
+    if [ "$state" = busy ] || [ "$((now - over))" -ge "$FM_FLEET_BUSY_HOLD" ]; then
       state=busy
       last_busy=$now
     else

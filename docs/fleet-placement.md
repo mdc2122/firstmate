@@ -41,7 +41,7 @@ When no host is eligible, `place` and `launch` exit 4 and print every host's rea
 
 The availability state copies the gating idea of Crabbox's `serve` provider ([openclaw/crabbox](https://github.com/openclaw/crabbox) `docs/providers/serve.md`, MIT), adapted to on-demand sampling:
 
-- CPU over the host's `max_cpu=` ceiling (default 50% of all cores) or memory pressure at warn or worse turns a host busy only after it persists across samples for 60 seconds, or at once when the kernel's 1-minute load average is itself over the ceiling.
+- CPU over the host's `max_cpu=` ceiling (default 50% of all cores, judged by both the sampled CPU fraction and the 1-minute load per core) or memory pressure at warn or worse turns a host busy only after it persists across samples for 60 seconds; a shorter burst never turns it busy.
 - A busy host turns available again only after 5 minutes with no busy observation and a 5-minute load average under the ceiling.
 - A `busy_procs=` process makes the host busy at once.
 - An unreachable host or an unreadable signal blocks new placement without changing the recorded state.
@@ -55,7 +55,7 @@ Placement runs under one lock, so concurrent launches never take the same last s
 
 ## Host setup
 
-Each donor needs SSH from this machine with public-key auth, `git`, `jq` here, and `tmux` or Herdr there.
+Each donor needs SSH from this machine with public-key auth, `git`, `jq` here, and Herdr there (or `tmux` for a `session=tmux` fallback host).
 `fm-fleet.sh setup <host>` then installs the omp release binary matching this machine's omp version into `<root>/bin/omp` (checked against the release `SHA256SUMS.txt`) and writes `<root>/agent/models.yml` with only this home's providers that go through the studio1 gateway.
 API keys in that file are the `CLIPROXY_KEY` environment reference; setup writes the key once to `<root>/agent/gateway.env` (mode 0600) from this machine's environment.
 Setup touches nothing outside `<root>`: no shell profile, no `~/.omp`, and no Claude, Codex, or pi credentials, and no OAuth session is ever copied.
@@ -88,7 +88,9 @@ WantedBy=default.target
 # plus LimitLoadToSessionType=Aqua, RunAtLoad, KeepAlive={SuccessfulExit=false}, ThrottleInterval=10
 ```
 
-A host that cannot meet these keeps `session=tmux`; its workers run in a detached tmux session `fm-<id>` and `fm-fleet.sh attach <id>` prints the SSH command that opens it.
+`session=herdr` is the default: a host record with no `session=` uses Herdr.
+A host that cannot meet these may fall back to `session=tmux`, and its record must then say why with `tmux_reason=<token>` (for example `tmux_reason=no-gui-session`); a `session=tmux` record without a reason is refused.
+Its workers run in a detached tmux session `fm-<id>` that is not in the Herdr view, `fm-fleet.sh hosts`, `place`, and `launch` print the reason next to that host, and `fm-fleet.sh attach <id>` prints the SSH command that opens it.
 
 ## Launch
 
@@ -98,11 +100,12 @@ bin/fm-fleet.sh launch <task-id> <project-dir> --model <provider/id> --effort <l
 
 The task's brief must already exist at `data/<task-id>/brief.md`.
 Launch places the task, pushes the project's current `HEAD` into a bare mirror on the host as branch `fm/<task-id>`, creates the worktree, prepends fleet worker paths to the brief, and starts omp there with the session directory `<root>/sessions/<task-id>`.
-It records the task as `state/<task-id>.meta` with `backend=fleet` and `mode=local-only`: hosts hold no GitHub credential and never push, and results come home through `fetch`.
+It records the task as `state/<task-id>.meta` with `backend=fleet` and `mode=local-only` before it creates the host worktree, so a launch that fails part way still leaves a record that `state`, `stop`, and `release` work on: hosts hold no GitHub credential and never push, and results come home through `fetch`.
 
 ## Monitoring and steering
 
 When `config/fleet-hosts` exists the watcher runs one detached `fm-fleet.sh sync` each cycle.
+Syncs of one task run one at a time, so the watcher's sync and the one each `fm-send` rings never mirror the same status bytes twice.
 Sync mirrors the host's status log into `state/<id>.status`, turn-end markers into `state/<id>.turn-ended`, and the worker's busy and idle events into the ordinary busy-state record, so the watcher, `bin/fm-crew-state.sh`, and the fleet view treat a remote worker like a local one.
 `bin/fm-send.sh <id> '<text>'` writes the usual durable inbox record, delivers it to the host's inbox, and rings the doorbell in the worker's pane; the worker's move into `handled/` on the host is mirrored back as the acknowledgement.
 `bin/fm-peek.sh <id>` reads the remote pane, and `fm-fleet.sh state <id>` reports `alive`, `dead`, `missing`, or `unreadable` (an unreachable host is never treated as a dead worker).
@@ -113,7 +116,7 @@ Sync mirrors the host's status log into `state/<id>.status`, turn-end markers in
 - Agent exit or crash: `fm-fleet.sh resume <id>` relaunches omp in the same host endpoint and worktree with `--resume` on the saved session, so the conversation history continues; it refuses while the old omp is alive or the host does not answer.
 - Results: `fm-fleet.sh fetch <id>` fetches `fm/<id>` into the project as `refs/fleet/<id>`, saves the uncommitted diff (tracked and untracked) to `data/<id>/fleet/uncommitted.patch`, and archives the omp session and status log to `data/<id>/fleet/session.tar`, without touching the host worktree or index.
 - Host lost: fetch what the host still serves, then launch the work again as a new task; placement chooses another host.
-- Release: `fm-fleet.sh release <id>` fetches first, refuses while uncommitted work exists (set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), then stops the worker, closes its endpoint, and removes the host worktree while keeping the branch on both sides.
+- Release: `fm-fleet.sh release <id>` stops the worker first, so nothing changes after the snapshot, then fetches, refuses while uncommitted work exists (resume the worker to commit it, or set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), and otherwise closes its endpoint and removes the host worktree while keeping the branch on both sides.
 - Cleanup: `bin/fm-teardown.sh` refuses a fleet task until it has been released, because its local landed-work checks cannot see a worktree on another host; `--force` does not lift that refusal.
 
 ## Host removal
