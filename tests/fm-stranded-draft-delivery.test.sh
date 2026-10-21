@@ -111,6 +111,23 @@ test_submit_that_does_not_free_the_composer_is_not_recovered() {
   pass "stranded draft: a submit that left the composer pending skips without typing the doorbell"
 }
 
+test_an_unproven_post_submit_state_never_receives_the_doorbell() {
+  # After Enter, a failed capture or an ambiguous screen must not be read as
+  # "composer free". The pre-fix code fell through both case arms and typed
+  # the doorbell into a composer that may still hold the stranded draft.
+  local dir out verdict
+  for verdict in unknown pending-unproven; do
+    dir=$(ring_with_stubs "ring-post-$verdict" pending "$verdict" \
+      "$(printf '⁣FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: stale: sess:fm-t1')")
+    out=$(cat "$dir/out")
+    printf '%s' "$out" | grep -q 'rc=1' \
+      || fail "post-submit state $verdict must skip with 1: $out"
+    [ "$(cat "$dir/send.log")" = 'KEY Enter' ] \
+      || fail "the doorbell was typed after post-submit state $verdict: $(cat "$dir/send.log")"
+  done
+  pass "stranded draft: unknown and pending-unproven after Enter skip without the doorbell"
+}
+
 test_draft_rendered_without_its_mark_is_recovered() {
   # Real pi (and tmux at column 0) draws a typed draft WITHOUT its zero-width
   # U+2063 mark, so the composer screen holds only the visible header.
@@ -178,6 +195,7 @@ test_unreadable_composer_content_is_refused() {
 }
 
 test_recoverable_draft_returns_4_when_the_composer_is_freed
+test_an_unproven_post_submit_state_never_receives_the_doorbell
 test_submit_that_does_not_free_the_composer_is_not_recovered
 test_draft_rendered_without_its_mark_is_recovered
 test_legacy_carrier_is_refused

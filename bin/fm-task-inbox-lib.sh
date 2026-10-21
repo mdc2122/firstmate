@@ -360,7 +360,11 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
         # append it to whatever the composer now holds and submit both.
         case "$cstate" in
           empty) return 4 ;;
-          pending) return 1 ;;
+          # Any other post-Enter verdict (pending, pending-unproven, unknown,
+          # or a capture failure) means the composer may still hold the draft.
+          # Never fall through to the doorbell: it would be appended to that
+          # text and both would be submitted.
+          *) return 1 ;;
         esac
       else
         return 1
