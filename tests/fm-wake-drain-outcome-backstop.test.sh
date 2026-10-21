@@ -186,15 +186,21 @@ test_drain_does_not_scan_append_only_outcome_history() {
   pass "drain cost and suppression are independent of append-only outcome history"
 }
 
+# The 2026-10-20 13:57/13:59 repeat: a drain's STATUS OUTCOME BACKSTOP printed
+# a worker's done line, and the next drain carrying that worker's signal row
+# printed the same line again as a wake annotation. The backstop receipt now
+# keeps that one line out of a later annotation, while the delayed signal still
+# annotates every other unread line, including ones appended after the receipt.
 test_successful_backstop_is_idempotent_without_consuming_delayed_annotation() {
-  local dir state first_out second_out signal_out
+  local dir state first_out second_out signal_out later_out
   dir=$(make_case idempotent-receipt)
   state="$dir/state"
   first_out="$dir/first.out"
   second_out="$dir/second.out"
   signal_out="$dir/signal.out"
+  later_out="$dir/later.out"
 
-  printf 'done: keyless completion awaiting recovery\n' > "$state/receipt-task.status"
+  printf 'working: lane one\ndone: keyless completion awaiting recovery\n' > "$state/receipt-task.status"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$first_out" \
     || fail "first keyless backstop drain failed"
   grep -F 'receipt-task done: keyless completion awaiting recovery' "$first_out" >/dev/null \
@@ -209,9 +215,23 @@ test_successful_backstop_is_idempotent_without_consuming_delayed_annotation() {
     || fail "could not publish the delayed signal"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$signal_out" 2>/dev/null \
     || fail "delayed-signal drain failed"
-  grep -F 'latest wake-EVENT observed at drain, not current state: receipt-task.status: done: keyless completion awaiting recovery' "$signal_out" >/dev/null \
-    || fail "the backstop receipt consumed the delayed signal annotation: $(cat "$signal_out")"
-  pass "backstop receipts prevent repeats without consuming delayed signal annotations"
+  if grep -F 'done: keyless completion awaiting recovery' "$signal_out" >/dev/null; then
+    fail "a delayed signal re-presented the done line the backstop already presented: $(cat "$signal_out")"
+  fi
+  grep -F 'receipt-task.status: working: lane one' "$signal_out" >/dev/null \
+    || fail "the backstop receipt consumed the delayed signal's other unread status context: $(cat "$signal_out")"
+
+  printf 'working: lane two\n' >> "$state/receipt-task.status"
+  append_wake "$state" signal receipt-task.status 'signal: receipt-task.status' \
+    || fail "could not publish the later signal"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$later_out" 2>/dev/null \
+    || fail "later-signal drain failed"
+  grep -F 'receipt-task.status: working: lane two' "$later_out" >/dev/null \
+    || fail "a line appended after the backstop receipt lost its annotation: $(cat "$later_out")"
+  if grep -F 'done: keyless completion awaiting recovery' "$later_out" >/dev/null; then
+    fail "a later signal re-presented the backstop-presented done line: $(cat "$later_out")"
+  fi
+  pass "a backstop-presented done line is shown once: a delayed signal annotates its other unread lines but not that line"
 }
 
 test_output_failure_does_not_commit_the_backstop_receipt() {
@@ -546,6 +566,40 @@ test_annotated_done_line_is_not_reprinted_by_the_backstop() {
   pass "a done line the drain's own annotation presented is not re-printed by the backstop, while a later unwoken captain event still is"
 }
 
+# The exact 2026-10-20 ab-beads-experiment sequence. 13:57:16: the drain's
+# backstop printed the stow `done` line (no signal row was queued for it).
+# 13:59:45: the next drain carried that task's signal row, still annotating
+# the earlier seller `done` line its last presentation left unread, and
+# printed the stow line a second time. Across both drains each line must be
+# presented exactly once.
+test_backstop_then_signal_presents_each_done_line_once() {
+  local dir state first_out signal_out err old
+  dir=$(make_case backstop-then-signal)
+  state="$dir/state"
+  first_out="$dir/first.out"
+  signal_out="$dir/signal.out"
+  err="$dir/signal.err"
+  old=$(( $(date +%s) - 20 ))
+
+  printf 'done: seller recording cannot be recorded\ndone: stow pass done\n' > "$state/ab.status"
+  set_mtime "$old" "$state/ab.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$first_out" 2>/dev/null \
+    || fail "backstop drain failed"
+  backstop_body "$first_out" | grep -F 'ab done: stow pass done' >/dev/null \
+    || fail "the first drain's backstop did not present the latest done line: $(cat "$first_out")"
+
+  append_wake "$state" signal ab.status 'signal: ab.status' \
+    || fail "could not queue the later signal row"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$signal_out" 2> "$err" \
+    || fail "signal drain failed: $(cat "$err")"
+  if grep -F 'stow pass done' "$signal_out" >/dev/null; then
+    fail "the signal drain re-presented the done line the backstop presented: $(cat "$signal_out")"
+  fi
+  [ "$(cat "$first_out" "$signal_out" | grep -cF 'seller recording cannot be recorded')" -eq 1 ] \
+    || fail "the earlier done line was not presented exactly once across both drains: $(cat "$first_out" "$signal_out")"
+  pass "a backstop-presented done line is not re-annotated by the next drain's signal, and the earlier unread done line is still presented once"
+}
+
 test_uncovered_keyless_captain_events_surface_on_the_next_main_drain
 test_newer_task_outcome_and_routine_latest_events_stay_silent
 test_older_or_other_task_outcome_cannot_hide_a_new_captain_event
@@ -565,3 +619,4 @@ test_index_self_heal_runs_under_the_outcome_lock
 test_overbound_routine_event_stays_silent
 test_backstop_output_is_bounded
 test_annotated_done_line_is_not_reprinted_by_the_backstop
+test_backstop_then_signal_presents_each_done_line_once
