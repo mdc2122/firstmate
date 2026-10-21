@@ -47,6 +47,11 @@ umask 022
 # strips this to verify real refusal.
 export FM_GATE_REFUSE_BYPASS=1
 
+# Leave host full-suite pytest runs out of the validations lane
+# (bin/fm-wip-caps-lib.sh HOST SUITES), so a suite running elsewhere on a busy
+# host never refuses a fixture spawn. tests/fm-wip-caps.test.sh restores it.
+export FM_WIP_HOST_SUITES=off
+
 # Clear the task-worker marker bin/fm-spawn.sh exports into ship and scout
 # panes. This suite builds git-init fixture repositories whose primary checkout
 # it runs a copied bin/fm-test-run.sh in, and that runner refuses the primary

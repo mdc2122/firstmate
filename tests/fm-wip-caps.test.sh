@@ -552,7 +552,115 @@ test_a_review_scout_enters_the_reviews_lane() {
   pass "a scout from a review backlog item takes the reviews lane, and a refusal leaves it Queued"
 }
 
+# fake_suite <dir> <cwd> <pytest args...>: a real process shaped like a pytest
+# run another agent started - a python interpreter running a pytest script with
+# two xdist-style workers that repeat its command line - launched from <cwd>.
+# Prints the run's pid. The interpreter is bash under the name python3, so no
+# python or pytest install is needed.
+fake_suite() {
+  local dir=$1 cwd=$2 pid
+  shift 2
+  mkdir -p "$dir" "$cwd"
+  ln -sf "$(command -v bash)" "$dir/python3"
+  cat > "$dir/pytest" <<'SH'
+#!/usr/bin/env bash
+if [ -z "${FM_FAKE_XDIST_WORKER:-}" ]; then
+  FM_FAKE_XDIST_WORKER=1 "${0%/*}/python3" "$0" "$@" &
+  FM_FAKE_XDIST_WORKER=1 "${0%/*}/python3" "$0" "$@" &
+fi
+sleep "$FM_TEST_STUB_MAX_BLOCK_SECONDS" &
+wait
+SH
+  chmod +x "$dir/pytest"
+  (cd "$cwd" && exec "$dir/python3" "$dir/pytest" "$@") >/dev/null 2>&1 &
+  pid=$!
+  printf '%s\n' "$pid"
+}
+
+kill_tree() {  # <pid>
+  local child
+  for child in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
+  kill "$1" 2>/dev/null || true
+}
+
+# host_scan <home>: scan <home> with host suites counted, leaving the
+# validations count and occupants in HOST_COUNT and HOST_OCCUPANTS.
+host_scan() {
+  local count=FM_WIP_COUNT_validations occupants=FM_WIP_OCCUPANTS_validations
+  FM_WIP_HOST_SUITES=on fm_wip_scan "$1/state"
+  HOST_COUNT=${!count}
+  HOST_OCCUPANTS=${!occupants}
+}
+
+# wait_for_suite <home> <want>: poll until the scan counts <want>, up to 5s.
+wait_for_suite() {
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    host_scan "$1"
+    [ "$HOST_COUNT" = "$2" ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+test_host_full_suites_count_once_toward_validations() {
+  local home base full targeted own count records=FM_WIP_COUNT_validations
+  home=$(new_home host-count)
+  occupy "$home" own-ship "worktree=$home/own-wt"
+  host_scan "$home"
+  base=$HOST_COUNT
+  [ "$base" -ge 1 ] || fail "the home's own validating ship must hold a slot"
+
+  full=$(fake_suite "$home/foreign/venv/bin" "$home/foreign/repo" -n 2 -p no:cacheprovider tests/)
+  wait_for_suite "$home" $((base + 1)) \
+    || fail "a foreign full suite with two workers must add exactly one; base $base, got $HOST_COUNT"
+  assert_contains "$HOST_OCCUPANTS" "pytest-$full [full test suite in $home/foreign/repo:" \
+    "the foreign suite must be listed with its pid and working directory"
+
+  targeted=$(fake_suite "$home/foreign/venv/bin" "$home/foreign/repo" tests/test_one.py)
+  own=$(fake_suite "$home/foreign/venv/bin" "$home/own-wt/sub" tests)
+  sleep 1
+  host_scan "$home"
+  count=$HOST_COUNT
+  [ "$count" = $((base + 1)) ] \
+    || fail "a targeted run and the home's own suite must add nothing; want $((base + 1)), got $count: $HOST_OCCUPANTS"
+  assert_not_contains "$HOST_OCCUPANTS" "pytest-$targeted " "a targeted run is not a full suite"
+  assert_not_contains "$HOST_OCCUPANTS" "pytest-$own " "a suite in the home's own worktree is already counted"
+
+  FM_WIP_HOST_SUITES=off fm_wip_scan "$home/state"
+  [ "${!records}" = 1 ] || fail "FM_WIP_HOST_SUITES=off must leave only the home's records"
+  kill_tree "$full"; kill_tree "$targeted"; kill_tree "$own"
+  wait_for_suite "$home" "$base" || fail "a finished suite must free its count"
+  pass "a foreign full suite counts once toward validations; workers, targeted runs, and own-worktree runs add nothing"
+}
+
+test_a_foreign_full_suite_refuses_dispatch_at_cap() {
+  local home base suite out rc
+  home=$(new_home host-refuse)
+  occupy "$home" ship-a
+  host_scan "$home"
+  base=$HOST_COUNT
+  printf 'validations=%s\n' $((base + 1)) > "$home/config/wip-caps"
+
+  suite=$(fake_suite "$home/board/venv/bin" "$home/board/repo" tests)
+  wait_for_suite "$home" $((base + 1)) || fail "the foreign suite never appeared in the scan"
+  out=$(FM_WIP_HOST_SUITES=on spawn_ship "$home" new-b); rc=$?
+  expect_code 5 "$rc" "a dispatch while a foreign full suite fills the lane"$'\n'"$out"
+  assert_contains "$out" "lane validations is at its cap of $((base + 1)) with $((base + 1)) in flight" \
+    "the refusal keeps its lane, cap, and occupancy format"
+  assert_contains "$out" "pytest-$suite [full test suite in $home/board/repo:" "the refusal names the foreign suite"
+  assert_absent "$home/state/new-b.meta" "a refused dispatch must not publish a task record"
+
+  kill_tree "$suite"
+  wait_for_suite "$home" "$base" || fail "the finished suite must leave the scan"
+  out=$(FM_WIP_HOST_SUITES=on spawn_ship "$home" new-b); rc=$?
+  expect_code 0 "$rc" "a dispatch once the foreign suite finishes"$'\n'"$out"
+  pass "a foreign full suite at the validations cap refuses dispatch, and its finish admits it"
+}
+
 test_at_cap_refusal_names_lane_cap_and_occupants_and_creates_nothing
+test_host_full_suites_count_once_toward_validations
+test_a_foreign_full_suite_refuses_dispatch_at_cap
 test_a_finish_frees_exactly_one_slot
 test_a_green_pr_moves_the_ship_from_validations_to_merges
 test_merge_notification_is_scoped_to_the_current_pr
