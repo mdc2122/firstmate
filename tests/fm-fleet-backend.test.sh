@@ -206,8 +206,29 @@ assert_absent "$HOST_ROOT/run/t3.pid" "the pid file goes only with the worker"
 printf '%s' "$(date +%s)" > "$HOST_ROOT/tasks/t2/turn-ended"
 rm -f "$HOME_DIR/state/t2.turn-ended"
 FM_HOME="$HOME_DIR" PATH="$FAKEBIN:$PATH" "$ROOT/bin/fm-fleet.sh" sync >/dev/null 2>&1
-fleet_cmd sync t2 >/dev/null 2>&1
-expect_code 0 $? "syncing a released task is a quiet no-op"
+expect_code 0 $? "the every-task sync skips a released task"
+out=$(fleet_cmd sync t2 2>&1)
+expect_code 5 $? "syncing one released task refuses"
+assert_contains "$out" "t2 was released" "the refusal names the release"
 assert_absent "$HOME_DIR/state/t2.turn-ended" "a released task's host turn marker raises no wake"
 
-pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order, stop escalation, released sync"
+# --- a released task's saved work is never overwritten ----------------------
+printf 'diff --git a/saved b/saved\nsaved work\n' > "$HOME_DIR/data/t2/fleet/uncommitted.patch"
+cp "$HOME_DIR/data/t2/fleet/uncommitted.patch" "$TMP_ROOT/t2.patch.before"
+for c in fetch release resume stop; do
+  fleet_cmd "$c" t2 >/dev/null 2>&1
+  expect_code 5 $? "$c refuses a released task"
+done
+dispatch fm_backend_kill fleet fleet:t2 >/dev/null 2>&1
+expect_code 0 $? "closing a released task's endpoint for teardown succeeds"
+cmp -s "$TMP_ROOT/t2.patch.before" "$HOME_DIR/data/t2/fleet/uncommitted.patch"
+expect_code 0 $? "the released task's saved patch is byte-identical"
+
+# --- a failed fetch keeps the earlier saved copies --------------------------
+printf 'older saved patch\n' > "$HOME_DIR/data/t3/fleet/uncommitted.patch"
+FM_FAKE_SSH_FAIL_ON="tar -cf" fleet_cmd fetch t3 >/dev/null 2>&1
+expect_code 1 $? "a fetch whose session archive drops fails"
+assert_equals "older saved patch" "$(cat "$HOME_DIR/data/t3/fleet/uncommitted.patch")" \
+  "a failed fetch leaves the earlier saved patch in place"
+
+pass "fleet backend: validation, agent state, capture, status mirror, steering, teardown gate, launch record, release order, stop escalation, released task refusal, atomic fetch"

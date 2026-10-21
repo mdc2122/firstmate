@@ -60,11 +60,12 @@ fm_backend_fleet_send_text_submit() {  # <target> <text> ...
 
 # fm_backend_fleet_kill: stop the worker and close its endpoint without
 # discarding anything: the host worktree, branch, and omp session stay until
-# `fm-fleet.sh release` fetches them home.
+# `fm-fleet.sh release` fetches them home. A released task (stop exits 5) was
+# already stopped and closed by its release.
 fm_backend_fleet_kill() {  # <target>
   local id
   id=$(fm_backend_fleet_id "$1") || return 1
-  fm_backend_fleet_cli stop "$id"
+  fm_backend_fleet_cli stop "$id" || [ "$?" -eq 5 ]
 }
 
 # fm_backend_fleet_agent_state: the recovery-grade vocabulary of

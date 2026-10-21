@@ -30,6 +30,9 @@
 #                                        the slot; refuses while unfetched
 #                                        uncommitted work remains
 #
+# sync <id>, ring, key, type, stop, fetch, resume, and release exit 5 for a
+# released task (fleet_released= in its record) and change nothing.
+#
 # Opt-in: nothing here runs unless config/fleet-hosts exists; the config
 # grammar and placement rule are owned by bin/fm-fleet-lib.sh, and the
 # operator contract (setup, launch, monitoring, recovery, removal) by
@@ -135,6 +138,17 @@ set_task_field() {  # <id> <key> <value>: replace one meta field atomically
   meta=$(meta_of "$1")
   tmp="$STATE/.$1.meta.fleet.$$"
   { grep -v "^$2=" "$meta" || true; printf '%s=%s\n' "$2" "$3"; } >"$tmp" && mv "$tmp" "$meta"
+}
+
+# require_unreleased <id>: refuse, with exit 5, any command that acts on a
+# released task's host state; its worktree is gone and data/<id>/fleet holds
+# the only copy of what it saved.
+require_unreleased() {
+  local at
+  at=$(task_field "$1" fleet_released)
+  [ -n "$at" ] || return 0
+  echo "fm-fleet: task $1 was released at $at; its saved work is in $DATA/$1/fleet and nothing was changed" >&2
+  exit 5
 }
 
 task_host_record() {  # <id>
@@ -814,7 +828,8 @@ if kill -0 \"\$pid\" 2>/dev/null; then echo alive; else echo dead; fi
 
 # fetch: bring the worker's branch home as refs/fleet/<id> in the local
 # project, and save its uncommitted diff (tracked and untracked) plus a
-# session archive under data/<id>/fleet/. Never touches the host worktree. A
+# session archive under data/<id>/fleet/, replacing the saved copies only when
+# every read succeeded. Never touches the host worktree. A
 # worktree the host reports absent (a launch that failed before creating it)
 # has nothing uncommitted, so its patch is empty.
 cmd_fetch() {
@@ -830,11 +845,14 @@ cmd_fetch() {
   mkdir -p "$out"
   git -C "$proj" fetch -q "$alias:$r_repo" "+refs/heads/fm/$id:refs/fleet/$id" \
     || die "could not fetch fm/$id from $(task_field "$id" fleet_host)"
-  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/uncommitted.patch" \
-    || die "could not read the uncommitted diff from the host"
-  fleet_ssh "$alias" "cd $(sq "$R_ROOT") && tar -cf - $(sq "sessions/$id") $(sq "tasks/$id/status")" >"$out/session.tar" \
-    || die "could not archive the omp session from the host"
-  git -C "$proj" rev-parse "refs/fleet/$id" >"$out/head"
+  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/.uncommitted.patch.$$" \
+    || { rm -f "$out/.uncommitted.patch.$$"; die "could not read the uncommitted diff from the host"; }
+  fleet_ssh "$alias" "cd $(sq "$R_ROOT") && tar -cf - $(sq "sessions/$id") $(sq "tasks/$id/status")" >"$out/.session.tar.$$" \
+    || { rm -f "$out/.uncommitted.patch.$$" "$out/.session.tar.$$"; die "could not archive the omp session from the host"; }
+  git -C "$proj" rev-parse "refs/fleet/$id" >"$out/.head.$$"
+  mv "$out/.uncommitted.patch.$$" "$out/uncommitted.patch"
+  mv "$out/.session.tar.$$" "$out/session.tar"
+  mv "$out/.head.$$" "$out/head"
   echo "fetched $id: branch refs/fleet/$id at $(cut -c1-12 <"$out/head") ($(wc -c <"$out/uncommitted.patch" | tr -d ' ') bytes uncommitted) into $out"
 }
 
@@ -984,15 +1002,23 @@ case "$cmd" in
       for meta in "$STATE"/*.meta; do
         [ -f "$meta" ] || continue
         [ "$(fm_meta_get "$meta" backend)" = fleet ] || continue
+        [ -z "$(fm_meta_get "$meta" fleet_released)" ] || continue
         sid=${meta##*/}
         ( cmd_sync "${sid%.meta}" ) || echo "fm-fleet: sync ${sid%.meta}: host unreachable" >&2
       done
       exit 0
     fi
     valid_id "$1" || die "invalid task id '$1'"
+    require_unreleased "$1"
     cmd_sync "$1"
     ;;
-  ring|key|type|stop|peek|attach|state|fetch|resume|release)
+  ring|key|type|stop|fetch|resume|release)
+    [ "$#" -ge 1 ] || die "usage: $cmd <task-id>"
+    valid_id "$1" || die "invalid task id '$1'"
+    require_unreleased "$1"
+    "cmd_$cmd" "$@"
+    ;;
+  peek|attach|state)
     [ "$#" -ge 1 ] || die "usage: $cmd <task-id>"
     valid_id "$1" || die "invalid task id '$1'"
     "cmd_$cmd" "$@"
