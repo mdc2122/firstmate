@@ -52,10 +52,12 @@
 #   state/<id>.status and state/<id>.inbox, so the watcher, fm-crew-state,
 #   and fm-send see a remote worker exactly like a local one.
 #
-# Reservations: `place` takes this home's fleet lock, counts live
-# reservations under state/fleet/, samples every host, and writes the
-# winner's reservation before releasing the lock, so two concurrent launches
-# can never both take a host's last slot. `release` removes the reservation.
+# Reservations: `place` takes this home's fleet lock, samples every host,
+# counts this home's unexpired reservations, and writes the winner's
+# reservation (host plus deadline) before releasing the lock, so two
+# concurrent launches can never both take a host's last slot. `launch` drops
+# the reservation once the worker's pid appears in the host's own sample; a
+# launch that dies first frees the slot at the deadline.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -121,19 +123,47 @@ task_host_record() {  # <id>
 }
 
 # --- reservations -----------------------------------------------------------
+#
+# A reservation is state/fleet/<id>.reservation holding one line
+# "host=<name> deadline=<epoch>". It holds a slot only until the worker
+# starts (its pid file then counts in the host's sample) or the deadline
+# passes, so a launch that dies before starting frees its slot on its own.
+# FM_FLEET_RESERVATION_TTL (seconds, default 600) sets the deadline.
 
-reservations_on() {  # <host> -> count of live reservations held by this home
-  local host=$1 n=0 f
+RESERVATION_TTL=${FM_FLEET_RESERVATION_TTL:-600}
+
+reservation_host() {  # <id> -> host name of an unexpired reservation
+  local f="$FLEET_STATE/$1.reservation" line deadline
+  [ -f "$f" ] || return 1
+  line=$(cat "$f")
+  deadline=$(fm_fleet_host_field "$line" deadline 0)
+  case "$deadline" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$deadline" -gt "$(date +%s)" ] || return 1
+  fm_fleet_host_field "$line" host
+}
+
+pending_on() {  # <host> [<exclude-id>] -> unexpired, not-yet-started reservations
+  local host=$1 exclude=${2:-} n=0 f id
   [ -d "$FLEET_STATE" ] || { printf 0; return 0; }
   for f in "$FLEET_STATE"/*.reservation; do
     [ -f "$f" ] || continue
-    [ "$(cat "$f")" = "$host" ] && n=$((n + 1))
+    id=${f##*/}
+    id=${id%.reservation}
+    [ "$id" != "$exclude" ] || continue
+    [ "$(reservation_host "$id" 2>/dev/null)" = "$host" ] && n=$((n + 1))
   done
   printf '%s' "$n"
 }
 
-sample_host() {  # <record> -> sample line or empty
+# sample_host <record>: one sample line, or empty when the host did not
+# answer. FM_FLEET_SAMPLE_CMD, when set, is run as `<cmd> <host-name>` in place
+# of the SSH probe (the portable test seam); its stdout is the sample.
+sample_host() {
   local rec=$1 alias root tz procs
+  if [ -n "${FM_FLEET_SAMPLE_CMD:-}" ]; then
+    "$FM_FLEET_SAMPLE_CMD" "${rec%% *}" 2>/dev/null | tail -n 1 || true
+    return 0
+  fi
   alias=$(fm_fleet_host_field "$rec" ssh)
   root=$(fm_fleet_host_field "$rec" root)
   tz=$(fm_fleet_host_field "$rec" tz)
@@ -141,28 +171,32 @@ sample_host() {  # <record> -> sample line or empty
   fleet_ssh "$alias" "$(fm_fleet_probe_script "$root" "$tz" "$procs")" 2>/dev/null | tail -n 1 || true
 }
 
-# verdicts [<exclude-task-id>]: one fm_fleet_evaluate line per host. The
-# reservation count passed in subtracts the host's own live workers already
-# visible in its sample, so a placement still mid-launch is counted once.
+# verdicts [<exclude-task-id>]: sample every host in parallel, advance each
+# host's availability state (state/fleet/<host>.availability), and print one
+# fm_fleet_evaluate line per host.
 verdicts() {
-  local exclude=${1:-} records rec name sample held seen pending
+  local exclude=${1:-} records rec name tmp now sample avail
   records=$(fm_fleet_hosts "$HOSTS_FILE") || exit 1
+  mkdir -p "$FLEET_STATE"
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-fleet.XXXXXX")
   while IFS= read -r rec; do
     [ -n "$rec" ] || continue
-    name=${rec%% *}
-    sample=$(sample_host "$rec")
-    held=$(reservations_on "$name")
-    if [ -n "$exclude" ] && [ "$(cat "$FLEET_STATE/$exclude.reservation" 2>/dev/null)" = "$name" ]; then
-      held=$((held - 1))
-    fi
-    seen=$(fm_fleet_sample_field "$sample" workers)
-    case "$seen" in ''|*[!0-9]*) seen=0 ;; esac
-    pending=$((held - seen))
-    [ "$pending" -ge 0 ] || pending=0
-    fm_fleet_evaluate "$rec" "$sample" "$pending"
+    sample_host "$rec" >"$tmp/${rec%% *}" &
   done <<EOF
 $records
 EOF
+  wait
+  now=$(date +%s)
+  while IFS= read -r rec; do
+    [ -n "$rec" ] || continue
+    name=${rec%% *}
+    sample=$(cat "$tmp/$name")
+    avail=$(fm_fleet_availability "$FLEET_STATE/$name.availability" "$rec" "$sample" "$now")
+    fm_fleet_evaluate "$rec" "$sample" "$avail" "$(pending_on "$name" "$exclude")"
+  done <<EOF
+$records
+EOF
+  rm -rf "$tmp"
 }
 
 cmd_hosts() {
@@ -170,25 +204,28 @@ cmd_hosts() {
   verdicts
 }
 
+# place: exit 0 printing the host, exit 4 when no host has headroom (the task
+# stays queued; nothing ever overloads a host).
 cmd_place() {
   local id=$1 lock out host
   require_fleet
   valid_id "$id" || die "invalid task id '$id'"
   mkdir -p "$FLEET_STATE"
-  if [ -f "$FLEET_STATE/$id.reservation" ]; then
-    cat "$FLEET_STATE/$id.reservation"
+  if host=$(reservation_host "$id"); then
+    printf '%s\n' "$host"
     return 0
   fi
   lock="$FLEET_STATE/.place.lock"
   fm_lock_acquire_wait "$lock"
   out=$(verdicts "$id")
   if ! host=$(fm_fleet_pick "$out"); then
+    rm -f "$FLEET_STATE/$id.reservation"
     fm_lock_release "$lock"
     printf '%s\n' "$out" >&2
-    echo "fm-fleet: no host has headroom for $id; leave it queued and retry later" >&2
+    echo "fm-fleet: no host has headroom for $id; it stays queued - retry later" >&2
     return 4
   fi
-  printf '%s\n' "$host" >"$FLEET_STATE/$id.reservation"
+  printf 'host=%s deadline=%s\n' "$host" "$(( $(date +%s) + RESERVATION_TTL ))" >"$FLEET_STATE/$id.reservation"
   fm_lock_release "$lock"
   printf '%s\n' "$out" >&2
   printf '%s\n' "$host"
@@ -293,6 +330,19 @@ tmux has-session -t $(sq "=fm-$id") 2>/dev/null && { echo 'tmux session already 
 tmux new-session -d -s $(sq "fm-$id") -c $(sq "$R_WT") $(sq "$R_TASK/launch.sh")
 tmux set-option -t $(sq "fm-$id") remain-on-exit on >/dev/null
 " || { rm -f "$FLEET_STATE/$id.reservation"; die "could not start the worker on $host"; }
+  # The worker counts in the host's own sample once its pid file exists, so
+  # the reservation is released then; a worker that never starts leaves the
+  # reservation to expire at its deadline instead.
+  local started=0 _
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if fleet_ssh "$alias" "pid=\$(cat $(sq "$R_PID") 2>/dev/null) && kill -0 \"\$pid\" 2>/dev/null" 2>/dev/null; then
+      started=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$started" = 1 ] || die "the worker on $host did not start; its reservation expires on its own (inspect: ssh -t $alias tmux attach -t =fm-$id)"
+  rm -f "$FLEET_STATE/$id.reservation"
 
   # 4. Record the task in this home: a meta that ordinary tools read, plus an
   # empty status log and inbox the mirror keeps current.
@@ -367,6 +417,8 @@ EOF
       "$(sq "$R_ROOT/bin/omp")" "$(sq "$R_TASK/overlay.yml")" "$(sq "$R_SESS")" "$(sq "$resume")" "$flags" \
       "$(sq "$R_TASK/omp-ext.ts")" "$(sq "Firstmate restarted you on the same host and worktree after an interruption. Re-read $R_TASK/brief.md, check git status and your inbox, and continue the task.")"
   else
+    # The $(cat ...) is literal launcher text: the host shell reads the brief.
+    # shellcheck disable=SC2016
     printf 'exec %s --config %s --auto-approve --session-dir %s%s -e %s "$(cat %s)"\n' \
       "$(sq "$R_ROOT/bin/omp")" "$(sq "$R_TASK/overlay.yml")" "$(sq "$R_SESS")" "$flags" \
       "$(sq "$R_TASK/omp-ext.ts")" "$(sq "$R_TASK/brief.md")"
