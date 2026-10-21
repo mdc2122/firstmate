@@ -3738,6 +3738,8 @@ wait "$local_reconcile_pid" 2>/dev/null || true
 wait "$HOLDER_PID" 2>/dev/null || true
 assert_contains "$(cat "$LOCAL_OUT")" "started=0" \
   "a lock held past the bound defers the source instead of starting it"
+assert_contains "$(cat "$LOCAL_OUT")" "uncertain=1" \
+  "a bounded-acquire deferral is reported through the existing uncertain count"
 assert_absent "$FM_PROCEVENT_CLAIM_ROOT/local-held-src.claim" \
   "a deferred source owns no claim"
 pe "$HLOCAL" reconcile >/dev/null

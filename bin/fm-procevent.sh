@@ -1335,10 +1335,16 @@ cmd_reconcile() {
     # by another home is not ours to settle, and taking its lock is what makes
     # a dead home's leftover claim stall this pass for everyone.
     if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
+      # Claims are written atomically, so an unreadable one is real corruption.
+      # Keep it visible instead of silently skipping it.
+      uncertain=$((uncertain + 1))
       continue
     fi
     fm_procevent_claim_owned_by_state "$STATE" "$FM_HOME" || continue
-    fm_procevent_source_lock_acquire_bounded "$id" || continue
+    fm_procevent_source_lock_acquire_bounded "$id" || {
+      uncertain=$((uncertain + 1))
+      continue
+    }
     # Re-read under the lock: ownership or the registration may have moved
     # between the snapshot above and this point.
     if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
@@ -1380,7 +1386,10 @@ cmd_reconcile() {
       [ -e "$rec" ] || continue
       id=${rec##*/}; id=${id%.source}
       fm_procevent_source_id_valid "$id" || continue
-      fm_procevent_source_lock_acquire_bounded "$id" || continue
+      fm_procevent_source_lock_acquire_bounded "$id" || {
+        uncertain=$((uncertain + 1))
+        continue
+      }
       if [ -f "$(source_file "$id")" ] && [ ! -L "$(source_file "$id")" ]; then
         fm_procevent_claim_state_locked "$id"
         claim_state=$?
