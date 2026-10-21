@@ -3,16 +3,17 @@
 Thanks for wanting to contribute.
 One rule up front:
 
-**Human-authored pull requests targeting `main` must be raised through [`no-mistakes`](https://github.com/kunchenguid/no-mistakes).**
-We require this to reduce the maintainer's burden of reviewing and merging contributions.
+**Pull requests targeting `main` merge through the fast gate: green lint/tests and one independent review for code.**
+[`no-mistakes`](https://github.com/kunchenguid/no-mistakes) stays available as an optional, advisory pipeline.
 
 `no-mistakes` puts a local git proxy in front of your real remote.
 Pushing through it runs an AI-driven review/test/lint pipeline in an isolated worktree, forwards the push upstream only after every check passes, and opens a clean PR automatically.
 
-A GitHub Actions check (`Require no-mistakes`) runs on PRs targeting `main` and requires both the deterministic signature and a parseable structured attestation from no-mistakes v1.46.0 or newer.
-The attestation must bind to the current PR head commit and report the review, test, and document steps as completed, so a stale attestation, a missing `head_sha`, or a skipped required step fails.
-It evaluates every PR opening and body edit independently, reruns after head synchronization or reopening, and prevents a later edit from replacing an earlier pending compliance check.
-GitHub Actions and Dependabot are exempt so their automation keeps working, but other contributor PRs that do not satisfy the attestation contract will not be reviewed or merged.
+`no-mistakes` is **advisory, not a per-PR gate** (prime-root v3, BRIEF-v3 section 4).
+The former `Require no-mistakes` GitHub Actions check is retired: it is not run on pull requests, and a red mark on an old PR that still shows it is historical.
+The gate on this fork is the fast gate: lint and the affected tests must be green, plus one independent review for code changes; docs, tests, and config may merge on green alone.
+The tracked `.no-mistakes.yaml` stays for the nightly/advisory audit and for high-risk changes that the maintainer chooses to route through the pipeline.
+Contributors may still run `git push no-mistakes`; doing so is welcome, not required.
 
 GitHub can stop running workflows on a fork without changing any workflow or setting the REST API reports, so a fork that registers no new runs after a push or PR event may still show every workflow `active` and Actions enabled.
 Check the fork's Actions tab for the banner "Workflows are not currently being run on this fork due to the scale of GitHub Actions usage"; only a repository maintainer can clear it, from that page in the web UI, and the workflow-enable and Actions-permissions API calls do not.
@@ -66,7 +67,7 @@ See the [no-mistakes quick start](https://kunchenguid.github.io/no-mistakes/star
 
 ## Development
 
-Tracked changes to firstmate itself - `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and `skills/` - ship through the `no-mistakes` pipeline on a feature branch and require an explicit merge approval.
+Tracked changes to firstmate itself - `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `.tasks.toml`, `.github/workflows/`, `bin/`, `.agents/skills/`, and `skills/` - ship through the fast gate on a feature branch and require an explicit merge approval.
 Before making any such change, load the agent-only `firstmate-coding-guidelines` skill (`.agents/skills/firstmate-coding-guidelines/SKILL.md`).
 It has the knowledge-placement rules that keep `AGENTS.md` from regrowing after each diet pass.
 There is no reliable way for `bin/fm-brief.sh`'s scaffold to detect that a task's repo is firstmate itself, so firstmate adds this skill's load line to firstmate-repo briefs by hand.
