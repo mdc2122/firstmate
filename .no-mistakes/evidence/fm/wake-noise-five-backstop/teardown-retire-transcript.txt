@@ -1,0 +1,33 @@
+### Scenario E: teardown retirement with a multi-endpoint backstop row
+--- drain 1
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+keep done: other task done
+two done: A shipped
+[exit 0]
+--- drain 2
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+two done: B shipped
+[exit 0]
+--- manifest before retire:
+keep	strong:16777229:1038317603:1792560653.990390735	0	22
+two	strong:16777229:1038317602:1792560653.990051778	0	34,68
+--- status_retire_presentation_task $S two (the call fm-teardown.sh makes)
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5E5KA4WVR96DE6YCZEYCB29/bin/fm-classify-lib.sh: line 1294: fm_lock_acquire_wait: command not found
+[rc 1]
+--- manifest after retire:
+keep	strong:16777229:1038317603:1792560653.990390735	0	22
+two	strong:16777229:1038317602:1792560653.990051778	0	34,68
+--- retry with fm-lock-lib.sh sourced first, as fm-teardown.sh does
+/Users/studio2/.no-mistakes/worktrees/662ae98237ac/01M5E5KA4WVR96DE6YCZEYCB29/bin/fm-classify-lib.sh: line 1294: fm_lock_acquire_wait: command not found
+[rc 1]
+--- manifest after retire:
+keep	strong:16777229:1038317603:1792560653.990390735	0	22
+two	strong:16777229:1038317602:1792560653.990051778	0	34,68
+--- next drain (keep task backstop row unchanged, no repeat)
+[exit 0]
+--- retry with fm-wake-lib.sh (owner of fm_lock_acquire_wait) sourced, as the teardown process has it
+[rc 0]
+--- manifest after retire:
+keep	strong:16777229:1038317603:1792560653.990390735	0	22
+--- next drain
+[exit 0]

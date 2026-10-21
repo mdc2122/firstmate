@@ -1,0 +1,74 @@
+### Scenario A: incident sequence (backstop presents stow done, then delayed signal)
+--- drain 1 (no signal row)
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+ab done: stow pass done
+[exit 0]
+--- worker signal row arrives late
+--- drain 2
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560469	1	signal	ab.status	signal: ab.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 46566.1792560470.cPdzcd
+wake annotation: unread wake-EVENT since last drain, not current state: ab.status: done: seller recording cannot be recorded
+[exit 0]
+--- drain 3 (turn-ended-like re-drain, no new status bytes)
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 46566.1792560470.cPdzcd
+[exit 0]
+
+### Scenario B: two backstops (done: A, then done: B) before delayed signal
+--- drain 1
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 46566.1792560470.cPdzcd
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+two done: A shipped
+[exit 0]
+--- drain 2
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 46566.1792560470.cPdzcd
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+two done: B shipped
+[exit 0]
+--- drain 3 (delayed signal)
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+1792560529	3	signal	two.status	signal: two.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 46566.1792560470.cPdzcd
+wake annotation: unread wake-EVENT since last drain, not current state: two.status: working: lane one
+wake annotation: unread wake-EVENT since last drain, not current state: two.status: working: lane two
+[exit 0]
+--- presentation manifest rows:
+$S/.status-presentation-cursor
+ab	strong:16777229:1038299987:1792560445.477465748	63	63
+two	strong:16777229:1038302758:1792560500.999753009	68	68
+
+### Scenario C: unterminated final done line
+--- drain 1
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+1792560529	3	signal	two.status	signal: two.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 3 --recovery-generation 46566.1792560470.cPdzcd
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+unt done: unterminated final completion
+[exit 0]
+--- drain 2
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+1792560529	3	signal	two.status	signal: two.status
+1792560556	4	signal	unt.status	signal: unt.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 4 --recovery-generation 46566.1792560470.cPdzcd
+wake annotation: unread wake-EVENT since last drain, not current state: unt.status: working: lane one
+[exit 0]
+
+### Scenario D: genuinely new done line after backstop still arrives
+--- drain (no signal)
+$ FM_STATE_OVERRIDE=$S bin/fm-wake-drain.sh
+1792560483	2	signal	ab.status	signal: ab.status
+1792560529	3	signal	two.status	signal: two.status
+1792560556	4	signal	unt.status	signal: unt.status
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 4 --recovery-generation 46566.1792560470.cPdzcd
+wake annotation: latest wake-EVENT observed at drain, not current state: two.status: done: C new real completion
+[exit 0]
