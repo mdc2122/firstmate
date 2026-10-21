@@ -1,0 +1,37 @@
+$ ruby -ryaml: parse .no-mistakes.yaml at target vs base
+-- 9324a472
+agent=["claude", "pi"] primary=claude fallbacks=["pi"] disable_project_settings=true commands.test=nil
+-- 2a0e39c8
+agent=["pi", "claude"] primary=pi fallbacks=["claude"] disable_project_settings=true commands.test=nil
+
+$ bash tests/fm-gate-refuse.test.sh
+ok - fm-gate-refuse-lib: refuses when NO_MISTAKES_GATE is set
+ok - fm-gate-refuse-lib: refuses when NO_MISTAKES_GATE is set empty
+ok - fm-gate-refuse-lib: refuses from a gate worktree via git-common-dir (marker unset)
+ok - fm-gate-refuse-lib: no-op for a normal session (neither signal, set -eu clean)
+ok - fm-spawn: refuses on marker and gate-worktree backstop; a normal crew spawn is unaffected
+ok - fm-send: refuses on marker and gate-worktree backstop; a normal steer uses the inbox
+ok - fm-teardown: refuses on marker and gate-worktree backstop; a normal teardown is unaffected
+exit=
+
+$ bash tests/fm-nm-test-contract.test.sh
+ok - no-mistakes does not configure commands.test
+exit=
+
+$ docs/configuration.md Gate defaults section
+## Gate defaults (.no-mistakes.yaml)
+
+The tracked `.no-mistakes.yaml` selects `agent: [pi, claude]`, matching the global review seat order: Pi (the `surplus-dsv41-flash-1017-max` DeepSeek V4.1 Flash seat) first, with Claude as fallback.
+Both agents have verified project-instruction neutralization controls, as required for every fallback member by this repository's `disable_project_settings: true` guard.
+Cursor is omitted because its ACP adapter has no verified neutralization control; including it makes the guard refuse the chain before the first step.
+The `agent` override is trusted-only and read from the default-branch copy, so a branch changing it is still validated with the default branch's current selection.
+[Architecture](architecture.md#no-mistakes-gate-authority-boundary) owns the gate's authority boundary and layered fleet-mutation refusal.
+The tracked `.no-mistakes.yaml` also sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh`, the same owner CI invokes.
+
+$ head -6 .no-mistakes.yaml
+# Per-repo no-mistakes overrides.
+# Agent selection and fallback constraints: docs/configuration.md "Gate defaults".
+# Every fallback member must satisfy the project-instruction neutralization guard.
+# Order matches the global review seat.
+agent: [pi, claude]
+
