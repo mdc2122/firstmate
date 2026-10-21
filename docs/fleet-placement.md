@@ -117,6 +117,7 @@ Sync mirrors the host's status log into `state/<id>.status`, turn-end markers in
 - Results: `fm-fleet.sh fetch <id>` fetches `fm/<id>` into the project as `refs/fleet/<id>`, saves the uncommitted diff (tracked and untracked) to `data/<id>/fleet/uncommitted.patch`, and archives the omp session and status log to `data/<id>/fleet/session.tar`, without touching the host worktree or index.
 - Host lost: fetch what the host still serves, then launch the work again as a new task; placement chooses another host.
 - Release: `fm-fleet.sh release <id>` stops the worker first, so nothing changes after the snapshot, then fetches, refuses while uncommitted work exists (resume the worker to commit it, or set `FM_FLEET_RELEASE_DISCARD=1` once the saved patch suffices), and otherwise closes its endpoint and removes the host worktree while keeping the branch on both sides.
+  A launch that failed before its worktree existed releases the same way: the missing worktree yields an empty patch and nothing to remove.
 - Cleanup: `bin/fm-teardown.sh` refuses a fleet task until it has been released, because its local landed-work checks cannot see a worktree on another host; `--force` does not lift that refusal.
 
 ## Host removal

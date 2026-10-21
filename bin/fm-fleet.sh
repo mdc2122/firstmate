@@ -524,7 +524,7 @@ cd $(sq "$r_repo")
 [ -e $(sq "$R_WT") ] && { echo 'worktree path already exists' >&2; exit 1; }
 git worktree add -q $(sq "$R_WT") $(sq "$branch")
 git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.name || echo firstmate-fleet)\" || true
-" || { rm -f "$FLEET_STATE/$id.reservation"; die "could not create the worktree on $host; inspect $R_WT there, then release $id"; }
+" || { rm -f "$FLEET_STATE/$id.reservation"; die "could not create the worktree on $host; release $id to clear its record (inspect $R_WT there first if it exists)"; }
 
   # 4. Brief, extension, overlay and launcher into the host's task dir.
   launch_sh=$(remote_launch_script "$id" "$model" "$effort" "")
@@ -803,7 +803,9 @@ if kill -0 \"\$pid\" 2>/dev/null; then echo alive; else echo dead; fi
 
 # fetch: bring the worker's branch home as refs/fleet/<id> in the local
 # project, and save its uncommitted diff (tracked and untracked) plus a
-# session archive under data/<id>/fleet/. Never touches the host worktree.
+# session archive under data/<id>/fleet/. Never touches the host worktree. A
+# worktree the host reports absent (a launch that failed before creating it)
+# has nothing uncommitted, so its patch is empty.
 cmd_fetch() {
   local id=$1 rec alias root proj r_repo out
   require_fleet
@@ -817,7 +819,7 @@ cmd_fetch() {
   mkdir -p "$out"
   git -C "$proj" fetch -q "$alias:$r_repo" "+refs/heads/fm/$id:refs/fleet/$id" \
     || die "could not fetch fm/$id from $(task_field "$id" fleet_host)"
-  fleet_ssh "$alias" "cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/uncommitted.patch" \
+  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$R_WT") && i=\$(mktemp) && cp \"\$(git rev-parse --git-path index)\" \"\$i\" && GIT_INDEX_FILE=\$i git add -A -N . && GIT_INDEX_FILE=\$i git diff --binary HEAD; r=\$?; rm -f \"\$i\"; exit \$r" >"$out/uncommitted.patch" \
     || die "could not read the uncommitted diff from the host"
   fleet_ssh "$alias" "cd $(sq "$R_ROOT") && tar -cf - $(sq "sessions/$id") $(sq "tasks/$id/status")" >"$out/session.tar" \
     || die "could not archive the omp session from the host"
@@ -863,7 +865,7 @@ cmd_release() {
     die "task $id has uncommitted work on its host (saved to $patch); the worker is stopped: resume it to commit the work, or set FM_FLEET_RELEASE_DISCARD=1 once the saved patch is enough"
   fi
   endpoint_close "$rec" "$(endpoint_of "$id")"
-  fleet_ssh "$alias" "cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
+  fleet_ssh "$alias" "[ -e $(sq "$R_WT") ] || exit 0; cd $(sq "$r_repo") && git worktree remove --force $(sq "$R_WT")" \
     || die "could not remove the worktree on $(task_field "$id" fleet_host); the work stays there and $id is not released"
   rm -f "$FLEET_STATE/$id.reservation" "$FLEET_STATE/$id.turn" "$FLEET_STATE/$id.busy"
   # bin/fm-teardown.sh refuses a fleet task until this marker exists.

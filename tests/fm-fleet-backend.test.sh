@@ -31,7 +31,8 @@ mkdir -p "$HOME_DIR/state/t1.inbox/handled"
 
 # Fake ssh: `ssh [opts] <alias> sh -s` runs stdin locally (the host is this
 # fixture); `ssh [opts] <alias> <cmd>` runs <cmd>. FM_FAKE_SSH_DOWN makes every
-# connection fail like an unreachable host.
+# connection fail like an unreachable host; FM_FAKE_SSH_FAIL_ON fails like a
+# dropped connection any `sh -s` script containing that text.
 cat > "$FAKEBIN/ssh" <<'SH'
 #!/usr/bin/env bash
 [ -z "${FM_FAKE_SSH_DOWN:-}" ] || exit 255
@@ -39,7 +40,11 @@ while [ "$#" -gt 0 ]; do
   case "$1" in -o) shift 2 ;; -t|-T) shift ;; *) break ;; esac
 done
 shift
-if [ "$*" = "sh -s" ]; then exec sh -s; fi
+if [ "$*" = "sh -s" ]; then
+  script=$(cat)
+  case "$script" in *"${FM_FAKE_SSH_FAIL_ON:-}"*) [ -z "${FM_FAKE_SSH_FAIL_ON:-}" ] || exit 255 ;; esac
+  printf '%s\n' "$script" | exec sh -s
+fi
 exec sh -c "$*"
 SH
 # Fake herdr: answers `pane get` from FM_FAKE_PANE (present|gone|error) and
@@ -152,6 +157,19 @@ assert_absent "$HOME_DIR/state/fleet/t2.reservation" "the failed launch frees it
 out=$(fleet_cmd release t2 2>&1)
 expect_code 0 $? "release cleans up after the failed launch: $out"
 assert_absent "$HOST_ROOT/worktrees/t2" "release removes the orphan worktree"
+
+# --- a launch that fails before its worktree exists is still releasable -----
+mkdir -p "$HOME_DIR/data/t4"
+printf 'do the thing\n' > "$HOME_DIR/data/t4/brief.md"
+out=$(FM_FAKE_SSH_FAIL_ON="git worktree add" fleet_cmd launch t4 "$PROJ" 2>&1)
+expect_code 1 $? "a launch whose worktree step drops fails"
+assert_contains "$out" "release t4 to clear its record" "the failure points at release"
+assert_present "$HOME_DIR/state/t4.meta" "the failed launch keeps its record"
+assert_absent "$HOST_ROOT/worktrees/t4" "no worktree was created"
+out=$(fleet_cmd release t4 2>&1)
+expect_code 0 $? "release succeeds with no host worktree: $out"
+assert_equals 0 "$(wc -c < "$HOME_DIR/data/t4/fleet/uncommitted.patch" | tr -d ' ')" "the missing worktree saves an empty patch"
+assert_contains "$(cat "$HOME_DIR/state/t4.meta")" "fleet_released=" "the record is marked released for teardown"
 
 # --- release stops the worker before it snapshots the worktree --------------
 fm_write_meta "$HOME_DIR/state/t3.meta" \
