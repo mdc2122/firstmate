@@ -334,6 +334,10 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": "docs/fork-sync-2026-10-21.md",
+      "audience": "maintainer-verification"
+    },
+    {
       "path": "docs/incident-lock-refused-bun-launcher-2026-09-16.md",
       "audience": "maintainer-verification"
     },
