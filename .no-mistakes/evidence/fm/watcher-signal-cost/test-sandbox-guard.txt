@@ -1,0 +1,6 @@
+$ FM_PROCEVENT_CLAIM_ROOT=$HOME/.local/state/firstmate/procevent-claims bash -c ". tests/lib.sh; echo SHOULD-NOT-REACH"
+tests: refusing to run with the machine-wide procevent claim root: ~/.local/state/firstmate/procevent-claims
+rc=
+$ env -u FM_PROCEVENT_CLAIM_ROOT bash -c ". tests/lib.sh; echo \$FM_PROCEVENT_CLAIM_ROOT"
+sandboxed claim root: /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-test-claims.20860
+rc=0

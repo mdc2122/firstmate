@@ -1,0 +1,21 @@
+=== [base 634d4a4d] /var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-base.uOOfPy ===
+--- A: foreign home's leftover claim, its lock held by a live process
+  [holder pid 45936 holds the machine-wide lock for source 'foreign-src']
+  reconcile  -> rc=142 elapsed=26.8s  ** KILLED at 25s cap: still blocked on the lock **
+    output: 
+  reconcile FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=60 -> rc=142 elapsed=26.5s  ** KILLED at 25s cap: still blocked on the lock **
+    output: 
+  foreign claim left in place for its own home: yes
+--- B: this home's registered source, its lock held past the bound
+  [holder pid 75896 holds the machine-wide lock for source 'own-src']
+  reconcile  -> rc=142 elapsed=26.7s  ** KILLED at 25s cap: still blocked on the lock **
+    output: 
+  reconcile FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=2 -> rc=142 elapsed=26.8s  ** KILLED at 25s cap: still blocked on the lock **
+    output: 
+  claim present while held: no (deferred)
+  reconcile  -> rc=1 elapsed=16.6s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=1
+  after release, next pass started the source (claim present): yes
+--- C: a captured result pending publish, its source lock held
+  [holder pid 11465 holds the machine-wide lock for source 'pub-src']
+  (base scenario C never returned: the run stayed blocked on the held pub-src lock past the 25s alarm cap until the harness killed it after 10 minutes)

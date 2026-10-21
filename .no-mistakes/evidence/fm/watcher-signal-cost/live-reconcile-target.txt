@@ -1,0 +1,25 @@
+=== [target] 68c3100a ===
+--- A: foreign home's leftover claim, its lock held by a live process
+  [holder pid 95761 holds the machine-wide lock for source 'foreign-src']
+  reconcile  -> rc=0 elapsed=2.2s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+  reconcile FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=60 -> rc=0 elapsed=2.2s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+  foreign claim left in place for its own home: yes
+--- B: this home's registered source, its lock held past the bound
+  [holder pid 3739 holds the machine-wide lock for source 'own-src']
+  reconcile  -> rc=0 elapsed=9.6s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+  reconcile FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=2 -> rc=0 elapsed=6.9s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+  claim present while held: no (deferred)
+  reconcile  -> rc=1 elapsed=13.7s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=1
+  after release, next pass started the source (claim present): yes
+--- C: a captured result pending publish, its source lock held
+  [holder pid 23755 holds the machine-wide lock for source 'pub-src']
+  reconcile FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=2 -> rc=0 elapsed=5.0s
+    output: reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+  reconcile  -> rc=0 elapsed=5.7s
+    output: reconciled: published=1 started=0 stopped=0 uncertain=0 failed=0
+  wake queue payloads: check: procevent lavish pub-src 3;

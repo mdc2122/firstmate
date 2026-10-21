@@ -1,0 +1,3 @@
+before: FM_PROCEVENT_CLAIM_ROOT=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-test-claims.67940
+ok - teardown retires the task's resume watch
+after:  FM_PROCEVENT_CLAIM_ROOT=/var/folders/fz/2bhb771x1yj3xhpjvgknp_hh0000gn/T//fm-test-claims.67940

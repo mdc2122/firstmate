@@ -1,0 +1,6 @@
+ok - reconcile skips a foreign claim without taking its source lock
+ok - reconcile bounds a held source lock and retries that source next pass
+ok - reconcile bounds a held source lock while publishing a pending result
+
+all procevent tests passed
+bash tests/.tmp-new-procevent.sh  3.97s user 7.97s system 21% cpu 55.204 total

@@ -1,0 +1,6 @@
+=== [target 68c3100a CONTROL (no locks held)] fm-watch.sh with source locks held (); FM_POLL=1, default lock timeout ===
+  watcher exited at t=36s: check: process-event source failed to start: procevent:own-src:launch-failed:16777229-1037367182-745521019
+  beacon age (s) sampled each second: -1 -1 -1 -1 -1 -1 1 2 3 4 6 7 8 1 2 3 4 6 7 8 9 11 12 14 15 16 18 19 20 22 23 24 26 27 28 30
+  max beacon age over 36s: 30s
+  foreign claim untouched: yes
+/Users/studio2/.no-mistakes/evidence/01M5E90E2KDVNG2EMM66P92XC8/drive-watcher.sh: line 57: holders[@]: unbound variable

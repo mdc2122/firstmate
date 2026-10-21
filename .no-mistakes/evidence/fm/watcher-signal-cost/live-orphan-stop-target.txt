@@ -1,0 +1,5 @@
+=== [target] orphaned-runner stop, 4 iterations, load: 71.79 79.90 81.20
+  #1 runner=62017 elapsed=21.8s -> reconciled: published=0 started=0 stopped=1 uncertain=0 failed=0
+  #2 runner=78998 elapsed=5.9s -> reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+  #3 runner=89991 elapsed=6.9s -> reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+  #4 runner=8199 elapsed=8.6s -> reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0

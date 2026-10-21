@@ -1,0 +1,1 @@
+ok - forced teardown locks a descendant whose state directory was absent
