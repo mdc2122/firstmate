@@ -3750,4 +3750,40 @@ wait_for "$FM_PROCEVENT_CLAIM_ROOT/local-held-src.claim" \
 pe "$HLOCAL" retire local-held-src >/dev/null
 pass "reconcile bounds a held source lock and retries that source next pass"
 
+# --- reconcile bounds a held source lock while publishing a pending result ---
+HPUB="$TMP_ROOT/reconcile-held-publish"; new_home "$HPUB"
+mkdir -p "$HPUB/state/procevent-inbox"
+printf 'held result\n' > "$HPUB/state/procevent-inbox/pub-held-src.3.result"
+printf 'lavish\n' > "$HPUB/state/procevent-inbox/pub-held-src.3.adapter"
+chmod 0600 "$HPUB/state/procevent-inbox/pub-held-src.3.result" "$HPUB/state/procevent-inbox/pub-held-src.3.adapter"
+PUB_READY="$TMP_ROOT/pub-held-ready"; PUB_RELEASE="$TMP_ROOT/pub-held-release"
+hold_source_lock pub-held-src "$PUB_READY" "$PUB_RELEASE"
+wait_for "$PUB_READY" || fail "the held-publish fixture could not hold its source lock"
+PUB_RC="$TMP_ROOT/pub-reconcile.rc"; PUB_OUT="$TMP_ROOT/pub-reconcile.out"
+(
+  FM_PROCEVENT_SOURCE_LOCK_TIMEOUT=1 pe "$HPUB" reconcile > "$PUB_OUT" 2>&1
+  printf '%s\n' "$?" > "$PUB_RC"
+) &
+pub_reconcile_pid=$!
+pub_deadline=$((SECONDS + 15))
+while kill -0 "$pub_reconcile_pid" 2>/dev/null && [ "$SECONDS" -lt "$pub_deadline" ]; do
+  sleep 0.1
+done
+if kill -0 "$pub_reconcile_pid" 2>/dev/null; then
+  : > "$PUB_RELEASE"
+  wait "$pub_reconcile_pid" 2>/dev/null || true
+  wait "$HOLDER_PID" 2>/dev/null || true
+  fail "reconcile waited without bound on a held lock while publishing a pending result"
+fi
+: > "$PUB_RELEASE"
+wait "$pub_reconcile_pid" 2>/dev/null || true
+wait "$HOLDER_PID" 2>/dev/null || true
+assert_contains "$(cat "$PUB_OUT")" "published=0" \
+  "a pending result behind a held lock is deferred, not announced"
+out=$(pe "$HPUB" reconcile)
+assert_contains "$out" "published=1" "the deferred result is announced on the next reconcile"
+assert_contains "$(wake_payloads "$HPUB")" "procevent lavish pub-held-src 3" \
+  "the deferred result keeps its identity when it is finally announced"
+pass "reconcile bounds a held source lock while publishing a pending result"
+
 printf '\nall procevent tests passed\n'

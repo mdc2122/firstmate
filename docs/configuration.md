@@ -1004,12 +1004,12 @@ Both signals are durable evidence a runner claimed: ownership is the only eviden
 A healthy launch therefore confirms on the first poll and the window only bounds a launch that has not yet proved itself - one that died before claiming, or one merely too slow to claim inside the window; confirmation cannot tell those apart, and a launch that proves itself on a later cycle closes its failure episode without a retraction wake.
 A launch whose registration is retired or replaced before it confirms counts as neither started nor failed and raises or closes no failure episode, because the runner correctly declines a generation that no longer exists.
 All of a cycle's launches share one window, so a home full of sources that cannot start costs the same bounded wait as one.
-`FM_PROCEVENT_SOURCE_LOCK_TIMEOUT` (default 5, whole seconds) bounds how long `reconcile` waits for one source's lock before leaving that source for the next pass, so a wedged or foreign holder can never stall the watcher.
-Claims owned by another home are skipped before any lock is taken.
-
-Keep this window well below `FM_POLL`.
+Keep the confirm window well below `FM_POLL`.
 `bin/fm-watch.sh` runs `reconcile` once per supervision cycle, so a source that cannot start makes every cycle wait up to the confirm window before the rest of that cycle runs.
 Raising the confirm window lengthens every supervision cycle and delays wake delivery by up to that much.
+
+`FM_PROCEVENT_SOURCE_LOCK_TIMEOUT` (default 5, whole seconds) bounds how long `reconcile` waits for one source's lock, whether publishing a pending result or settling a claim, before leaving that source for the next pass, so a wedged or foreign holder can never stall the watcher.
+Claims owned by another home are skipped before any lock is taken.
 
 A source that can never start is reported as `failed=` with a non-zero exit on every `reconcile`, rather than counted as `started` and retried silently as though it were healthy, so a wedged source stays visible instead of presenting as armed.
 That count reaches only whoever runs the command, because `bin/fm-watch.sh` discards `reconcile`'s output and exit status, so an unconfirmed launch is also announced through the wake queue: `reconcile` publishes a durable `check` wake (`procevent:<id>:launch-failed:<registration-identity>-<episode-nonce>`) once per failure episode, and later cycles stay silent for that episode until a launch of that source confirms, after which a fresh failure announces again under a fresh key, because the watcher never re-surfaces a key it has already surfaced.
