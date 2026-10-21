@@ -223,6 +223,13 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Fleet placement (config/fleet-hosts)
+
+The optional local, gitignored `config/fleet-hosts` lists donor hosts on which `bin/fm-fleet.sh` may place bounded omp ship workers; its absence keeps every fleet command refused and every task on this machine.
+Placement state lives under `state/fleet/` (per-host availability and per-task reservations), and fleet task records carry `backend=fleet` plus `fleet_*` fields that `bin/fm-fleet.sh` writes.
+The file is home-local and is not inherited by secondmate homes.
+[`fleet-placement.md`](fleet-placement.md) owns setup, launch, monitoring, recovery, and removal; `bin/fm-fleet-lib.sh`'s header owns the line grammar, defaults, and placement rule.
+
 ## Gate defaults (.no-mistakes.yaml)
 
 The tracked `.no-mistakes.yaml` selects `agent: [claude, pi]`: Opus (Claude) first, with Sol (Pi) as fallback.

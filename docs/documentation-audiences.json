@@ -31,7 +31,8 @@
     "docs/zellij-backend.md",
     "docs/orca-backend.md",
     "docs/cmux-backend.md",
-    "docs/remote-secondmates.md"
+    "docs/remote-secondmates.md",
+    "docs/fleet-placement.md"
   ],
   "requiredOwnerPointers": [
     {
@@ -355,6 +356,10 @@
     {
       "path": "docs/examples/wedge-alarm",
       "audience": "operator-example"
+    },
+    {
+      "path": "docs/fleet-placement.md",
+      "audience": "operator-current"
     },
     {
       "path": "docs/fm-test-isolation-proof.md",

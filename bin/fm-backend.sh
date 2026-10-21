@@ -66,7 +66,11 @@ FM_BACKEND_CONFIG_DIR="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # cmux is EXPERIMENTAL and spawn-capable, session-provider-only like
 # herdr/zellij - verified against the real 0.64.17 binary (docs/cmux-backend.md).
 # codex-app remains deliberately absent; see docs/codex-app-backend.md.
-FM_BACKEND_KNOWN="tmux herdr zellij orca cmux"
+# fleet is the record-only adapter for omp workers bin/fm-fleet.sh placed on a
+# donor host (docs/fleet-placement.md): known so every reader dispatches to
+# bin/backends/fleet.sh, never spawn-capable here because only
+# `fm-fleet.sh launch` creates such a task.
+FM_BACKEND_KNOWN="tmux herdr zellij orca cmux fleet"
 FM_BACKEND_SPAWN="tmux herdr zellij orca cmux"
 
 # fm_backend_list_contains: whitespace-delimited membership without relying on
@@ -315,6 +319,7 @@ fm_backend_required_tools() {  # <backend>
     zellij) printf '%s' 'zellij jq treehouse' ;;
     cmux)   printf '%s' 'cmux jq treehouse' ;;
     orca)   printf '%s' 'orca' ;;
+    fleet)  printf '%s' 'ssh jq' ;;
     *) return 1 ;;
   esac
 }
@@ -553,6 +558,13 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
         return 1
       fi
       ;;
+    fleet)
+      [ "$binding" = "$id" ] && [ "$window" = "fleet:$id" ] \
+        && [ -n "$(fm_backend_meta_exact_value "$meta" fleet_host 2>/dev/null)" ] || {
+        echo "REFUSED: fleet endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
+        return 1
+      }
+      ;;
   esac
   # shellcheck disable=SC2034 # Output globals are consumed by sourcing callers.
   FM_BACKEND_VALIDATED_BACKEND=$backend
@@ -661,6 +673,13 @@ fm_backend_source() {  # <name>
         _FM_BACKEND_CMUX_SOURCED=1
       fi
       ;;
+    fleet)
+      if [ -z "${_FM_BACKEND_FLEET_SOURCED:-}" ]; then
+        # shellcheck source=/dev/null
+        . "$FM_BACKEND_LIB_DIR/backends/fleet.sh" || return 1
+        _FM_BACKEND_FLEET_SOURCED=1
+      fi
+      ;;
   esac
 }
 
@@ -740,6 +759,7 @@ fm_backend_capture() {  # <backend> <target> <lines> [expected-label]
     zellij) fm_backend_zellij_capture "$@" ;;
     orca) fm_backend_orca_capture "$@" ;;
     cmux) fm_backend_cmux_capture "$@" ;;
+    fleet) fm_backend_fleet_capture "$@" ;;
     *) echo "error: no capture implementation for backend '$backend'" >&2; return 1 ;;
   esac
 }
@@ -755,6 +775,7 @@ fm_backend_send_key() {  # <backend> <target> <key> [expected-label]
     zellij) fm_backend_zellij_send_key "$@" ;;
     orca) fm_backend_orca_send_key "$@" ;;
     cmux) fm_backend_cmux_send_key "$@" ;;
+    fleet) fm_backend_fleet_send_key "$@" ;;
     *) echo "error: no send-key implementation for backend '$backend'" >&2; return 1 ;;
   esac
 }
@@ -772,6 +793,7 @@ fm_backend_send_text_submit() {  # <backend> <target> <text> <retries> <enter-sl
     zellij) fm_backend_zellij_send_text_submit "$@" ;;
     orca) fm_backend_orca_send_text_submit "$@" ;;
     cmux) fm_backend_cmux_send_text_submit "$@" ;;
+    fleet) fm_backend_fleet_send_text_submit "$@" ;;
     *) echo "error: no send-text implementation for backend '$backend'" >&2; return 1 ;;
   esac
 }
@@ -799,6 +821,7 @@ fm_backend_kill() {  # <backend> <target>
     zellij) fm_backend_zellij_kill "$@" ;;
     orca) fm_backend_orca_kill "$@" ;;
     cmux) fm_backend_cmux_kill "$@" ;;
+    fleet) fm_backend_fleet_kill "$@" ;;
     *) echo "error: no kill implementation for backend '$backend'" >&2; return 1 ;;
   esac
 }
@@ -939,6 +962,10 @@ fm_backend_target_exists() {  # <backend> <target> [expected-label]
       fm_backend_source cmux || return 1
       fm_backend_cmux_target_ready "$target" "$expected_label"
       ;;
+    fleet)
+      fm_backend_source fleet || return 1
+      fm_backend_fleet_target_exists "$target"
+      ;;
     *)
       return 1
       ;;
@@ -962,7 +989,9 @@ fm_backend_target_exists() {  # <backend> <target> [expected-label]
 # which verifies a registered agent against `pane process-info` and the real
 # process table, so a registration Herdr kept over a shell-only pane reads
 # `dead` here (issue #4115) - then maps a positively stopped session server to
-# `missing` only in this recovery-grade view. Zellij remains unverified because
+# `missing` only in this recovery-grade view. The fleet adapter asks the donor
+# host (bin/fm-fleet.sh state): the recorded omp pid plus the host endpoint.
+# Zellij remains unverified because
 # its secondmate ghost-tab and agent-process recovery path has not been
 # empirically validated. Orca and cmux do not support secondmate spawns.
 fm_backend_agent_state() {  # <backend> <target>
@@ -971,6 +1000,7 @@ fm_backend_agent_state() {  # <backend> <target>
   case "$backend" in
     tmux) fm_backend_tmux_agent_state "$target" ;;
     herdr) fm_backend_herdr_agent_state "$target" ;;
+    fleet) fm_backend_fleet_agent_state "$target" ;;
     *) printf 'unverified' ;;
   esac
 }

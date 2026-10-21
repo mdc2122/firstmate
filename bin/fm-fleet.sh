@@ -3,32 +3,32 @@
 #
 # Usage:
 #   fm-fleet.sh setup <host> [--omp-version V]
-#                                          install omp and the gateway-only
-#                                          model config under the host's root
-#   fm-fleet.sh hosts                      sample every configured host and print
-#                                          one eligibility verdict per host
-#   fm-fleet.sh place <task-id>            pick a host and hold a reservation;
-#                                          prints the host name, exit 4 when no
-#                                          host has headroom (the task stays
-#                                          queued - never overloads a host)
-#   fm-fleet.sh launch <task-id> <project-dir> [--model M] [--effort E]
-#                                          place, then start the worker on the
-#                                          chosen host and record the task
-#   fm-fleet.sh sync <task-id>             mirror the worker's status, turn-end
-#                                          and busy state home; deliver pending
-#                                          steering records to the host
-#   fm-fleet.sh peek <task-id> [lines]     print the worker's pane
-#   fm-fleet.sh attach <task-id>           print the ssh command that attaches
-#                                          the worker's tmux session
-#   fm-fleet.sh state <task-id>            alive|dead|missing|unreadable
-#   fm-fleet.sh fetch <task-id>            commit-safe copy of the worker's
-#                                          branch and uncommitted diff into
-#                                          the local project clone and data/
-#   fm-fleet.sh resume <task-id>           relaunch omp on the same host and
-#                                          worktree with its saved session
-#   fm-fleet.sh release <task-id>          fetch, then stop the worker and free
-#                                          its slot; refuses while unfetched
-#                                          work exists on the host
+#                       install omp and the gateway-only model config under
+#                       the host's root
+#   fm-fleet.sh hosts   sample every configured host; one verdict per host
+#   fm-fleet.sh place <task-id>
+#                       pick a host and hold a deadline-bound reservation;
+#                       prints the host, exit 4 when no host has headroom (the
+#                       task stays queued - a host is never overloaded)
+#   fm-fleet.sh launch <task-id> <project-dir> [--model M] [--effort E] [--yolo on|off]
+#                       place, then start the worker on the chosen host and
+#                       record the task (backend=fleet, mode=local-only)
+#   fm-fleet.sh sync [<task-id>]
+#                       mirror status, turn-end and busy home and deliver
+#                       pending steering records; no id = every fleet task
+#   fm-fleet.sh ring|key|type <task-id> ...
+#                       steering doorbell, one named key, or literal text
+#   fm-fleet.sh peek <task-id> [lines]   print the worker's pane
+#   fm-fleet.sh attach <task-id>         how to open the worker
+#   fm-fleet.sh state <task-id>          alive|dead|missing|unreadable
+#   fm-fleet.sh stop <task-id>           end omp, close the endpoint, keep work
+#   fm-fleet.sh fetch <task-id>          branch, uncommitted diff and omp
+#                                        session home (read-only on the host)
+#   fm-fleet.sh resume <task-id>         relaunch omp on the same host and
+#                                        worktree from its saved session
+#   fm-fleet.sh release <task-id>        fetch, then stop and free the slot;
+#                                        refuses while unfetched uncommitted
+#                                        work remains
 #
 # Opt-in: nothing here runs unless config/fleet-hosts exists; the config
 # grammar and placement rule are owned by bin/fm-fleet-lib.sh, and the
@@ -36,24 +36,26 @@
 # docs/fleet-placement.md.
 #
 # What runs where:
-# - The worker runs on the host inside a detached tmux session named
-#   fm-<task-id> on that host's own tmux server, so it survives every SSH
-#   disconnect, and `fm-fleet.sh attach` is the human view of it.
-# - The worktree is a git worktree of a host-local clone under <root>/repos,
-#   fetched from this machine over SSH (`git push` from the local project to
-#   the host), so hosts need no GitHub credential. Results come back the same
-#   way (`fetch`), from this machine, never pushed by the host.
+# - The worker runs on the host in the endpoint its host record names
+#   (session=herdr: a workspace fm-<id> on the host's own `fm-fleet` Herdr
+#   server, which this machine's Herdr shows under the saved machine
+#   fleet-<host>; session=tmux: a detached tmux session fm-<id>). Either way
+#   it outlives every SSH disconnect. Running work never moves between hosts.
+# - The worktree is a git worktree of a host-local bare mirror under
+#   <root>/repos, filled from this machine over SSH, so hosts need no GitHub
+#   credential. Results come back the same way (`fetch`); hosts never push.
 # - omp runs from <root>/bin/omp with PI_CODING_AGENT_DIR=<root>/agent, an
 #   isolated agent dir holding only a models.yml whose providers point at the
 #   studio1 gateway, so the host's own omp/pi/claude configs are untouched and
-#   no OAuth session is copied. The gateway key is the host's existing
-#   cliproxy key, written once at setup with mode 0600.
+#   no OAuth session is copied. The gateway key is written once by setup with
+#   mode 0600.
 # - omp sessions live in <root>/sessions/<task-id>, outside the worktree, so
 #   `resume` continues the same conversation with `--resume <file>`.
 # - The worker appends status lines and acknowledges steering records inside
 #   <root>/tasks/<task-id>/, mirrored home by `sync` into this home's ordinary
-#   state/<id>.status and state/<id>.inbox, so the watcher, fm-crew-state,
-#   and fm-send see a remote worker exactly like a local one.
+#   state/<id>.status, state/<id>.inbox, and state/<id>.turn-ended. The task
+#   record's backend=fleet routes fm-send, fm-peek, fm-crew-state, fm-control
+#   and fm-teardown to bin/backends/fleet.sh, which calls back into this file.
 #
 # Reservations: `place` takes this home's fleet lock, samples every host,
 # counts this home's unexpired reservations, and writes the winner's
@@ -389,6 +391,20 @@ endpoint_type_line() {  # <record> <endpoint> <text>: literal text, then Enter
   esac
 }
 
+endpoint_send_key() {  # <record> <endpoint> <Escape|Enter|C-c>
+  local rec=$1 ep=$2 key=$3 hk tk
+  case "$key" in
+    Escape|escape|esc) hk=esc tk=Escape ;;
+    Enter|enter) hk=enter tk=Enter ;;
+    C-c|ctrl+c) hk=ctrl+c tk=C-c ;;
+    *) echo "fm-fleet: unsupported key '$key'" >&2; return 1 ;;
+  esac
+  case "$ep" in
+    herdr:*) fleet_herdr "$rec" pane send-keys "${ep##*/}" "$hk" >/dev/null ;;
+    tmux:*) fleet_ssh "$(fm_fleet_host_field "$rec" ssh)" "tmux send-keys -t $(sq "=${ep#tmux:}:") $tk" ;;
+  esac
+}
+
 endpoint_close() {  # <record> <endpoint>
   local rec=$1 ep=$2
   case "$ep" in
@@ -421,11 +437,12 @@ endpoint_relaunch() {
 cmd_launch() {
   local id=$1 proj=$2
   shift 2
-  local model='' effort='' host rec alias root os brief branch base launch_sh meta tmp
+  local model='' effort='' yolo=off mode=local-only host rec alias root os brief branch base launch_sh meta tmp
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --model) model=${2:?--model needs a value}; shift 2 ;;
       --effort) effort=${2:?--effort needs a value}; shift 2 ;;
+      --yolo) yolo=${2:?--yolo needs on or off}; shift 2 ;;
       *) die "unknown launch option '$1'" ;;
     esac
   done
@@ -437,6 +454,7 @@ cmd_launch() {
   [ -f "$brief" ] || die "no brief at $brief; scaffold it with bin/fm-brief.sh first"
   [ ! -e "$(meta_of "$id")" ] || die "task $id already has a record; use resume or release"
   case "$effort" in ''|low|medium|high|xhigh|max) ;; *) die "--effort must be low, medium, high, xhigh, or max" ;; esac
+  case "$yolo" in on|off) ;; *) die "--yolo must be on or off" ;; esac
 
   host=$(cmd_place "$id") || return $?
   rec=$(fm_fleet_host_record "$HOSTS_FILE" "$host")
@@ -496,24 +514,32 @@ git -C $(sq "$R_WT") config user.name \"\$(git -C $(sq "$r_repo") config user.na
   meta=$(meta_of "$id")
   tmp="$STATE/.$id.meta.fleet.$$"
   {
-    echo "window=fm-$id"
+    echo "window=fleet:$id"
     echo "endpoint_task_id=$id"
     echo "worktree=$R_WT"
     echo "project=$proj"
     echo "harness=omp"
     echo "kind=ship"
+    echo "mode=$mode"
+    echo "yolo=$yolo"
+    echo "backend=fleet"
+    echo "spawn_gen=f$(date +%s).$$.$RANDOM"
     echo "fleet_host=$host"
     echo "fleet_os=$os"
     echo "fleet_session=$(host_session "$rec")"
     echo "fleet_endpoint=$endpoint"
     echo "fleet_branch=$branch"
     echo "fleet_base=$base"
-    [ -z "$model" ] || echo "model=$model"
-    [ -z "$effort" ] || echo "effort=$effort"
+    echo "model=${model:-default}"
+    echo "effort=${effort:-default}"
   } >"$tmp"
   mv "$tmp" "$meta"
   touch "$STATE/$id.status"
   mkdir -p "$STATE/$id.inbox/handled"
+  # Arm the busy-state contract the mirror in `sync` feeds; the launch brief is
+  # a submitted turn, so the seed record reads busy.
+  "$SCRIPT_DIR/fm-busy-event.sh" arm "$STATE" "$id" --source omp-ext --event launch-brief >/dev/null \
+    || echo "fm-fleet: warning: busy-state record for $id could not be armed; its busy state reads unknown" >&2
   echo "launched $id on $host worktree=$R_WT endpoint=$endpoint"
 }
 
@@ -617,12 +643,25 @@ tail -c +$((local_len + 1)) \"\$s\"
     printf '%s' "$line" >"$FLEET_STATE/$id.turn"
     touch "$STATE/$id.turn-ended"
   fi
-  printf '%s\n' "$out" | sed -n 's/^busy=//p' | head -n 1 >"$FLEET_STATE/$id.busy"
+  # Busy: the host marker is "<busy|idle> <event> <epoch>". A changed marker
+  # becomes one ordinary omp-ext event in this home's busy-state record
+  # (bin/fm-busy-lib.sh owns the contract; launch armed its gen), so the
+  # watcher and fm-crew-state classify a fleet worker like a local omp one.
+  line=$(printf '%s\n' "$out" | sed -n 's/^busy=//p' | head -n 1)
+  if [ -n "$line" ] && [ "$line" != "$(cat "$FLEET_STATE/$id.busy" 2>/dev/null)" ]; then
+    printf '%s\n' "$line" >"$FLEET_STATE/$id.busy"
+    case "${line%% *}" in
+      busy|idle)
+        "$SCRIPT_DIR/fm-busy-event.sh" apply "$STATE" "$id" "${line%% *}" --current-gen \
+          --source omp-ext --event "$(printf '%s' "$line" | awk '{print $2}')" >/dev/null 2>&1 || true
+        ;;
+    esac
+  fi
   # Acknowledgements made on the host move the home-side record too.
   for base in $(printf '%s\n' "$out" | sed -n 's/^handled=//p'); do
     [ -f "$STATE/$id.inbox/$base" ] && mv "$STATE/$id.inbox/$base" "$STATE/$id.inbox/handled/$base"
   done
-  echo "synced $id: status=${remote_len:-0}B busy=$(cut -d' ' -f1 <"$FLEET_STATE/$id.busy")"
+  echo "synced $id: status=${remote_len:-0}B busy=$(cut -d' ' -f1 "$FLEET_STATE/$id.busy" 2>/dev/null || echo unknown)"
 }
 
 # ring <id>: type the constant steering doorbell (bin/fm-task-inbox-lib.sh's
@@ -637,6 +676,43 @@ cmd_ring() {
   remote_paths "$root" "$id"
   line=$(fm_task_inbox_doorbell_line "$R_TASK/inbox/x.msg") || die "could not build the doorbell line"
   endpoint_type_line "$rec" "$(endpoint_of "$id")" "$line"
+}
+
+# key <id> <Escape|Enter|C-c>: one named key into the worker's pane.
+cmd_key() {
+  local id=$1 rec
+  [ "$#" -eq 2 ] || die "usage: key <task-id> <Escape|Enter|C-c>"
+  require_fleet
+  rec=$(task_host_record "$id")
+  endpoint_send_key "$rec" "$(endpoint_of "$id")" "$2"
+}
+
+# type <id> <text>: literal text into the worker's pane, then Enter. Lifecycle
+# words never ride this path; use key, stop, or resume.
+cmd_type() {
+  local id=$1 rec
+  [ "$#" -eq 2 ] || die "usage: type <task-id> <text>"
+  require_fleet
+  rec=$(task_host_record "$id")
+  endpoint_type_line "$rec" "$(endpoint_of "$id")" "$2"
+}
+
+# stop <id>: end the worker's omp and close its endpoint. The host worktree,
+# branch, and omp session stay, so `fetch` and `resume` still work; `release`
+# is what removes them after fetching.
+cmd_stop() {
+  local id=$1 rec alias root
+  require_fleet
+  rec=$(task_host_record "$id")
+  alias=$(fm_fleet_host_field "$rec" ssh)
+  root=$(fm_fleet_host_field "$rec" root)
+  remote_paths "$root" "$id"
+  fleet_ssh "$alias" "
+pid=\$(cat $(sq "$R_PID") 2>/dev/null)
+case \"\$pid\" in ''|*[!0-9]*) ;; *) kill \"\$pid\" 2>/dev/null || true ;; esac
+rm -f $(sq "$R_PID")
+" || die "could not reach $(task_field "$id" fleet_host) to stop $id"
+  endpoint_close "$rec" "$(endpoint_of "$id")"
 }
 
 cmd_peek() {
@@ -847,7 +923,23 @@ case "$cmd" in
   setup) [ "$#" -ge 1 ] || die "usage: setup <host> [--omp-version V]"; cmd_setup "$@" ;;
   place) [ "$#" -eq 1 ] || die "usage: place <task-id>"; cmd_place "$1" ;;
   launch) [ "$#" -ge 2 ] || die "usage: launch <task-id> <project-dir> [--model M] [--effort E]"; cmd_launch "$@" ;;
-  sync|ring|peek|attach|state|fetch|resume|release)
+  sync)
+    if [ "$#" -eq 0 ]; then
+      # Every fleet task in this home; a host that does not answer is
+      # reported and skipped so one dead host never stalls the others.
+      [ -f "$HOSTS_FILE" ] || exit 0
+      for meta in "$STATE"/*.meta; do
+        [ -f "$meta" ] || continue
+        [ "$(fm_meta_get "$meta" backend)" = fleet ] || continue
+        sid=${meta##*/}
+        ( cmd_sync "${sid%.meta}" ) || echo "fm-fleet: sync ${sid%.meta}: host unreachable" >&2
+      done
+      exit 0
+    fi
+    valid_id "$1" || die "invalid task id '$1'"
+    cmd_sync "$1"
+    ;;
+  ring|key|type|stop|peek|attach|state|fetch|resume|release)
     [ "$#" -ge 1 ] || die "usage: $cmd <task-id>"
     valid_id "$1" || die "invalid task id '$1'"
     "cmd_$cmd" "$@"

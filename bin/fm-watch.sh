@@ -2494,6 +2494,26 @@ home_summary_refresh_detached() {
   HOME_SUMMARY_PID=$!
 }
 
+# Fleet workers (bin/fm-fleet.sh, docs/fleet-placement.md) write their status,
+# turn-end and busy markers on their donor host. When this home opts in with
+# config/fleet-hosts, one detached `fm-fleet.sh sync` per cycle mirrors them
+# into this home's ordinary state files, so the signal scan below sees a
+# remote worker exactly like a local one. A still-running sync is never
+# doubled, and a slow or unreachable host never delays this loop.
+FLEET_SYNC_PID=
+fleet_sync_detached() {
+  [ -f "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/fleet-hosts" ] || return 0
+  if [ -n "$FLEET_SYNC_PID" ]; then
+    if kill -0 "$FLEET_SYNC_PID" 2>/dev/null; then
+      return 0
+    fi
+    wait "$FLEET_SYNC_PID" 2>/dev/null || true
+    FLEET_SYNC_PID=
+  fi
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-fleet.sh" sync </dev/null >/dev/null 2>&1 &
+  FLEET_SYNC_PID=$!
+}
+
 RECONCILE_REQUEST_PID=
 reconcile_requests_pending() {
   local request
@@ -3282,6 +3302,9 @@ while :; do
   if [ "$(age_of "$STATE/home-summary.json")" -ge "$HOME_SUMMARY_INTERVAL" ]; then
     home_summary_refresh_detached
   fi
+
+  # Mirror fleet workers' remote status home (no-op without config/fleet-hosts).
+  fleet_sync_detached
 
   # Bearings publishes reconcile asks as local one-shot request files and
   # returns before any mate delivery. Supervision owns their later delivery;
