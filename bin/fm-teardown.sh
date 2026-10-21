@@ -1095,6 +1095,17 @@ fi
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ -n "$MODE" ] || MODE=no-mistakes
 
+# A fleet task's worktree, branch, and omp session live on its donor host, so
+# none of the local landed-work checks below can see them. Teardown therefore
+# refuses until `bin/fm-fleet.sh release <id>` has fetched the work home and
+# freed the host (docs/fleet-placement.md "Recovery"); a release leaves
+# fleet_released= in the record. --force does not lift this: discarding remote
+# work is a release with FM_FLEET_RELEASE_DISCARD=1, never a teardown.
+if [ "$BACKEND" = fleet ] && [ -z "$(fm_meta_get "$META" fleet_released)" ]; then
+  echo "REFUSED: fleet task $ID still holds its work on $(fm_meta_get "$META" fleet_host); run bin/fm-fleet.sh release $ID first (it fetches the branch, uncommitted diff, and omp session home). Nothing was changed." >&2
+  exit 1
+fi
+
 # A record accepted as a legacy incarnation (no spawn_gen, --legacy-record
 # given) may be torn down only when its recorded endpoint is confidently gone
 # or agent-less; only the recovery-grade classifier's dead and missing license

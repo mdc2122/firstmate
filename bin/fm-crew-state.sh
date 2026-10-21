@@ -159,12 +159,15 @@ WT=$(meta_value worktree)
 KIND=$(meta_value kind)
 HARNESS=$(meta_value harness)
 REMOTE_HOST=$(meta_value remote_host)
+FLEET_HOST=$(meta_value fleet_host)
 [ -n "$KIND" ] || KIND=ship
 
 # A torn-down (or never-created) worktree has no current state to read. A
-# remote secondmate's recorded worktree is a path on ITS host, so the local
-# probe proves nothing for it - the remote arm below reads the true source.
-if [ -z "$REMOTE_HOST" ] && { [ -z "$WT" ] || [ ! -d "$WT" ]; }; then
+# remote secondmate's or fleet worker's recorded worktree is a path on ITS
+# host, so the local probe proves nothing for it - the endpoint state read
+# below (the remote arm, or the fleet backend's host-side verdict) is the
+# true source.
+if [ -z "$REMOTE_HOST" ] && [ -z "$FLEET_HOST" ] && { [ -z "$WT" ] || [ ! -d "$WT" ]; }; then
   emit unknown none "worktree gone (torn down?)"
 fi
 
