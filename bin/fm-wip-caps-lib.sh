@@ -15,7 +15,8 @@
 # LANES. Every live task record in this home's state/*.meta holds exactly one
 # lane slot, or none:
 #   validations     a ship task with no recorded pull request yet (pr= unset):
-#                   implementing and validating, up to the green PR
+#                   implementing and validating, up to the green PR; this lane
+#                   also counts every host suite (HOST SUITES below)
 #   merges          a ship task whose pull request is recorded (pr= set by
 #                   bin/fm-pr-check.sh at its ready line) and whose merge outcome
 #                   has not been delivered for that canonical PR identity
@@ -29,6 +30,25 @@
 # blocked, paused, parked, or decision-waiting task therefore still holds its
 # slot, so a cap cannot be gamed by parking work. A local-only ship has no pull
 # request and holds a validations slot until cleanup.
+#
+# HOST SUITES. Validation load is a machine resource, not a home one: full test
+# suites started by secondmate homes, other agents on the host (for example
+# pytest run by a board engineer), and no-mistakes pipelines under
+# ~/.no-mistakes/worktrees are invisible to this home's records yet compete for
+# the same CPU. So every scan also reads the host process table once
+# (ps -Ao pid,ppid,args) and adds each live full-suite pytest run to the
+# validations count, listed as pytest-<pid> [full test suite in <cwd>: <args>].
+# A process is a pytest run when its command is pytest or py.test (directly or
+# as the script a python interpreter runs) or python -m pytest. It is a full
+# suite unless it targets a subset: a -k expression or any path argument other
+# than a tests or test directory or "." (option values are not paths). A run
+# is counted once: a match with a full-suite ancestor (an xdist worker, or a
+# wrapper's re-invocation) folds into that ancestor. A suite whose working
+# directory is inside the worktree of one of this home's validations tasks is
+# that task's own and adds nothing more. Linux reads the working directory
+# from /proc and macOS from lsof; an unknown one counts the suite as foreign.
+# An unreadable process table adds nothing. FM_WIP_HOST_SUITES=off skips the
+# host read; tests/lib.sh sets it so the suite's own runs never fill a lane.
 #
 # CAPS. The defaults below are the measured ones; the optional local, gitignored
 # config/wip-caps overrides any of them, one `<lane>=<positive integer>` per
@@ -236,7 +256,7 @@ fm_wip_record_lane() {
 # FM_WIP_OCCUPANTS_<lane> ("id [detail], ..."). <exclude-id> is the task being
 # dispatched, which never occupies a slot against itself.
 fm_wip_scan() {  # <state-dir> [exclude-id]
-  local state=$1 exclude=${2:-} lane meta id last detail var
+  local state=$1 exclude=${2:-} lane meta id last detail var wt worktrees=
   for lane in $FM_WIP_LANES; do
     printf -v "FM_WIP_COUNT_$lane" '%s' 0
     printf -v "FM_WIP_OCCUPANTS_$lane" '%s' ''
@@ -249,6 +269,10 @@ fm_wip_scan() {  # <state-dir> [exclude-id]
     fm_wip_task_lane "$state" "$id"
     lane=$FM_WIP_TASK_LANE
     [ -n "$lane" ] || continue
+    if [ "$lane" = validations ]; then
+      wt=$(sed -n 's/^worktree=//p' "$meta" 2>/dev/null | tail -n 1)
+      [ -z "$wt" ] || worktrees="$worktrees$wt"$'\n'
+    fi
     detail=
     if [ -s "$state/$id.status" ]; then
       last=$(tail -n 1 "$state/$id.status" 2>/dev/null | sed 's/[]:[ ].*//')
@@ -263,6 +287,101 @@ fm_wip_scan() {  # <state-dir> [exclude-id]
     var="FM_WIP_OCCUPANTS_$lane"
     printf -v "$var" '%s' "${!var:+${!var}, }$id${detail:+ [$detail]}"
   done
+  fm_wip_host_suites_add "$worktrees"
+}
+
+# The full-suite pytest runs live on this host (HOST SUITES above), one
+# "<pid>\t<args>" line each, xdist workers and wrapped re-invocations folded
+# into the outermost run. Prints nothing when the process table is unreadable.
+fm_wip_host_suites() {
+  LC_ALL=C ps -Ao pid=,ppid=,args= 2>/dev/null | awk '
+    function base(s) { sub(/\/+$/, "", s); sub(/.*\//, "", s); return s }
+    function python(s) { return base(s) ~ /^python[0-9.]*$/ }
+    # 1 when the tokens from <start> select the whole suite, 0 when they target
+    # a subset (a -k expression or any path other than a tests dir or .).
+    function whole(start,   j, t, letter) {
+      for (j = start; j <= n; j++) {
+        t = tok[j]
+        if (t == "&&" || t == "||" || t == ";" || t == "|") break
+        if (t ~ /^--/) {
+          if (t !~ /=/ && t ~ /^--(rootdir|ignore|ignore-glob|deselect|maxfail|tb|durations|junitxml|junit-xml|cov|cov-report|dist|basetemp|confcutdir|import-mode|log-level|override-ini|pyargs|numprocesses|tx|max-worker-restart)$/) j++
+          continue
+        }
+        if (t ~ /^-./) {
+          letter = substr(t, 2, 1)
+          if (letter == "k") return 0
+          if (length(t) == 2 && index("mpcoWrn", letter)) j++
+          continue
+        }
+        sub(/;$/, "", t)
+        if (t != "." && base(t) != "tests" && base(t) != "test") return 0
+      }
+      return 1
+    }
+    {
+      pid = $1; parent[pid] = $2
+      n = NF - 2
+      for (i = 1; i <= n; i++) tok[i] = $(i + 2)
+      for (i = 1; i <= n; i++) {
+        b = base(tok[i])
+        if ((b == "pytest" || b == "py.test") && (i == 1 || python(tok[i - 1]))) {
+          if (whole(i + 1)) { suite[pid] = 1; line[pid] = $0 }
+          break
+        }
+        if (tok[i] == "-m" && (tok[i + 1] == "pytest" || tok[i + 1] == "py.test") && python(tok[1])) {
+          if (whole(i + 2)) { suite[pid] = 1; line[pid] = $0 }
+          break
+        }
+      }
+    }
+    END {
+      for (pid in suite) {
+        p = parent[pid]
+        for (depth = 0; depth < 64 && p != "" && p > 1; depth++) {
+          if (p in suite) break
+          p = parent[p]
+        }
+        if (p in suite) continue
+        args = line[pid]
+        sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", args)
+        printf "%s\t%s\n", pid, substr(args, 1, 120)
+      }
+    }
+  '
+}
+
+fm_wip_process_cwd() {  # <pid>
+  local cwd
+  cwd=$(readlink "/proc/$1/cwd" 2>/dev/null) && [ -n "$cwd" ] && { printf '%s\n' "$cwd"; return 0; }
+  command -v lsof >/dev/null 2>&1 || return 1
+  lsof -a -d cwd -p "$1" -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1
+}
+
+# Add every host suite not running inside one of <worktrees> (newline-separated
+# validations worktrees of this home, whose own record already holds the slot)
+# to the validations lane.
+fm_wip_host_suites_add() {  # <worktrees>
+  local worktrees=$1 pid args cwd wt own detail count=FM_WIP_COUNT_validations occupants=FM_WIP_OCCUPANTS_validations
+  [ "${FM_WIP_HOST_SUITES:-on}" != off ] || return 0
+  while IFS="$(printf '\t')" read -r pid args; do
+    [ -n "$pid" ] || continue
+    cwd=$(fm_wip_process_cwd "$pid") || cwd=
+    own=
+    if [ -n "$cwd" ]; then
+      while IFS= read -r wt; do
+        [ -n "$wt" ] || continue
+        case "$cwd/" in "${wt%/}/"*) own=1; break ;; esac
+      done <<EOF
+$worktrees
+EOF
+    fi
+    [ -z "$own" ] || continue
+    detail="full test suite${cwd:+ in $cwd}: $args"
+    printf -v "$count" '%s' $((${!count} + 1))
+    printf -v "$occupants" '%s' "${!occupants:+${!occupants}, }pytest-$pid [$detail]"
+  done <<EOF
+$(fm_wip_host_suites)
+EOF
 }
 
 # A full merges lane also counts every queued PR registration, since each one

@@ -402,6 +402,7 @@ The [Claude adapter reference](../.agents/skills/harness-adapters/references/har
 
 Each home caps work in progress per lane: validations (a ship before its pull request), merges (a ship whose pull request awaits its merge), reviews, and investigations.
 `bin/fm-spawn.sh` refuses a fresh ship or scout whose lane is at its cap, naming the lane, the cap, and every task occupying it, and leaves the backlog item Queued; `bin/fm-queue-zero.sh` lists a ready row for dispatch only while its lane has a free slot.
+The validations lane also counts every live full-suite pytest run on the machine, including runs from secondmate homes, other agents, and no-mistakes pipelines, so a host already busy with suites refuses new validation work.
 Scout promotion also enforces lane admission before changing task metadata; when refused, finish existing work and retry rather than starting replacement work.
 A ship registering its PR enters the merges lane only while that lane has a free slot; otherwise `bin/fm-pr-check.sh` arms nothing and queues the registration, and queued registrations arm in order as merges finish, after cleanup, and on each PR sweep, each with its own notification.
 A merge ordered through `bin/fm-pr-merge.sh` records its PR without that check, so a completion is never queued behind the cap.
