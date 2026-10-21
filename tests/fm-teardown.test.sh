@@ -4143,7 +4143,7 @@ test_teardown_archives_status_and_inbox_into_data() {
 test_teardown_retires_the_resume_watch() {
   local case_dir rc name sid
   case_dir=$(make_case resume-watch-retire)
-  export FM_PROCEVENT_CLAIM_ROOT="$case_dir/claims"
+  local -x FM_PROCEVENT_CLAIM_ROOT="$case_dir/claims"
   write_meta "$case_dir" local-only ship
   wt_commit "$case_dir" "landed work"
   add_fork_with_pushed_branch "$case_dir"
@@ -4159,7 +4159,6 @@ test_teardown_retires_the_resume_watch() {
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
-  unset FM_PROCEVENT_CLAIM_ROOT
 
   expect_code 0 "$rc" "resume-watch-retire: teardown of landed work should succeed ($(grep -v '^●' "$case_dir/stderr" | tail -5))"
   assert_absent "$case_dir/state/procevent/$sid.source" "resume-watch-retire: the watch registration survived teardown"
