@@ -233,6 +233,21 @@ test_successful_backstop_is_idempotent_without_consuming_delayed_annotation() {
   if grep -F 'done: keyless completion awaiting recovery' "$later_out" >/dev/null; then
     fail "a later signal re-presented the backstop-presented done line: $(cat "$later_out")"
   fi
+
+  dir=$(make_case unterminated-receipt)
+  state="$dir/state"
+  printf 'working: lane one\ndone: unterminated final completion' > "$state/unterminated-task.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/backstop.out" \
+    || fail "unterminated-line backstop drain failed"
+  grep -F 'unterminated-task done: unterminated final completion' "$dir/backstop.out" >/dev/null \
+    || fail "the backstop did not present an unterminated final done line: $(cat "$dir/backstop.out")"
+  append_wake "$state" signal unterminated-task.status 'signal: unterminated-task.status' \
+    || fail "could not publish the unterminated-line signal"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/signal.out" 2>/dev/null \
+    || fail "unterminated-line signal drain failed"
+  if grep -F 'unterminated final completion' "$dir/signal.out" >/dev/null; then
+    fail "a signal re-presented the backstop-presented unterminated done line: $(cat "$dir/signal.out")"
+  fi
   pass "a backstop-presented done line is shown once: a delayed signal annotates its other unread lines but not that line"
 }
 

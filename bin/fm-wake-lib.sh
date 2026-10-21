@@ -2437,12 +2437,13 @@ fm_wake_unread_events() {  # <validated-status-path> <unused-tail-byte-cap> <min
   [ -n "$chunk" ] || return 1
   [ "$min_offset" -lt "$size" ] || return 1
   chunk_start=$min_offset
-  tagged=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" '
+  tagged=$(printf '%s' "$chunk" | LC_ALL=C awk -v start="$chunk_start" -v min="$min_offset" -v skip="$skip_end" -v end="$size" '
     BEGIN { pos = start + 0 }
     {
       line_start = pos
       pos += length($0) + 1
-      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((skip + 0 > 0 && pos == skip + 0) ? "-" : "+") $0
+      line_end = (pos > end + 0) ? end + 0 : pos
+      if ($0 ~ /[^[:space:]]/ && line_start >= min) print ((skip + 0 > 0 && line_end == skip + 0) ? "-" : "+") $0
     }
   ') || return 1
   FM_WAKE_UNREAD_LINES=$(printf '%s\n' "$tagged" | LC_ALL=C sed -n 's/^+//p')
