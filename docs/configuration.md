@@ -232,7 +232,7 @@ The file is home-local and is not inherited by secondmate homes.
 
 ## Gate defaults (.no-mistakes.yaml)
 
-The tracked `.no-mistakes.yaml` selects `agent: [claude, pi]`: Opus (Claude) first, with Sol (Pi) as fallback.
+The tracked `.no-mistakes.yaml` selects `agent: [pi, claude]`, matching the global review seat order: Pi (the `surplus-dsv41-flash-1017-max` DeepSeek V4.1 Flash seat) first, with Claude as fallback.
 Both agents have verified project-instruction neutralization controls, as required for every fallback member by this repository's `disable_project_settings: true` guard.
 Cursor is omitted because its ACP adapter has no verified neutralization control; including it makes the guard refuse the chain before the first step.
 The `agent` override is trusted-only and read from the default-branch copy, so a branch changing it is still validated with the default branch's current selection.
